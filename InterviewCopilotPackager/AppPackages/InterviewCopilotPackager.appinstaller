@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+	Uri="https://coopilotxai.com/InterviewCopilotPackager.appinstaller"
+	Version="1.0.10.0" xmlns="http://schemas.microsoft.com/appx/appinstaller/2017/2">
+	<MainBundle
+		Name="2fc37bc6-4936-47c4-982b-3f02ee0cab60"
+		Version="1.0.10.0"
+		Publisher="CN=krish"
+		Uri="https://coopilotxai.com/InterviewCopilotPackager_1.0.10.0_Test/InterviewCopilotPackager_1.0.10.0_x64.msixbundle" />
+	<UpdateSettings>
+		<OnLaunch
+			HoursBetweenUpdateChecks="0" />
+	</UpdateSettings>
+</AppInstaller>

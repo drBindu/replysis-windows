@@ -1,0 +1,16 @@
+# Build output
+bin/
+obj/
+AppxPackages/
+
+# Visual Studio
+.vs/
+*.user
+
+# Temp key — never commit real certs
+*.pfx
+
+# Large binaries
+*.msixbundle
+*.msix
+*.appxbundle

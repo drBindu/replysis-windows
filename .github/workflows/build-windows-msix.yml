@@ -1,0 +1,161 @@
+name: Build Windows MSIX
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        shell: powershell
+        run: |
+          nuget restore InterviewCopilotPackager\InterviewCopilotPackager.wapproj
+
+      # ── Certificate ────────────────────────────────────────────────────────
+      - name: Import OV Certificate
+        shell: powershell
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $pfxBytes = [Convert]::FromBase64String($env:WINDOWS_CERT_PFX)
+          $pfxPath  = "$env:RUNNER_TEMP\cert.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+
+          $securePass = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePass
+
+          echo "CERT_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+          echo "PFX_PATH=$pfxPath"                   >> $env:GITHUB_ENV
+          echo "Imported cert: $($cert.Subject)"
+
+      # ── Version ────────────────────────────────────────────────────────────
+      - name: Set version
+        shell: powershell
+        run: |
+          $version = "1.0.${{ github.run_number }}.0"
+          echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+          echo "Version: $version"
+
+      - name: Update version in Package.appxmanifest
+        shell: powershell
+        run: |
+          $path     = "InterviewCopilotPackager\Package.appxmanifest"
+          $content  = Get-Content $path -Raw
+          $content  = $content -replace 'Version="\d+\.\d+\.\d+\.\d+"', "Version=`"${{ env.APP_VERSION }}`""
+          Set-Content $path $content -Encoding UTF8
+
+      # ── Build ──────────────────────────────────────────────────────────────
+      - name: Build and sign MSIX
+        shell: powershell
+        run: |
+          msbuild InterviewCopilotPackager\InterviewCopilotPackager.wapproj `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:AppxBundle=Always `
+            /p:AppxBundlePlatforms=x64 `
+            /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateThumbprint="${{ env.CERT_THUMBPRINT }}" `
+            /p:PackageCertificateKeyFile="${{ env.PFX_PATH }}" `
+            /p:PackageCertificatePassword="${{ secrets.WINDOWS_CERT_PASSWORD }}" `
+            /p:GenerateTestArtifacts=false `
+            /p:AppxPackageDir=".\AppxPackages\"
+
+      # ── Package ────────────────────────────────────────────────────────────
+      - name: Rename bundle to clean name
+        shell: powershell
+        run: |
+          $bundle = Get-ChildItem -Path "AppxPackages" -Filter "*.msixbundle" -Recurse | Select-Object -First 1
+          if (-not $bundle) { throw "No .msixbundle found in AppxPackages" }
+          Copy-Item $bundle.FullName "InterviewCopilot.msixbundle"
+          echo "Bundle: $($bundle.Name) ($([math]::Round($bundle.Length / 1MB, 1)) MB)"
+
+      - name: Generate .appinstaller
+        shell: powershell
+        run: |
+          $version   = "${{ env.APP_VERSION }}"
+          $publisher = "${{ secrets.WINDOWS_CERT_PUBLISHER }}"
+          $repo      = "${{ github.repository }}"
+          $runNum    = "${{ github.run_number }}"
+          $bundleUrl = "https://github.com/$repo/releases/download/windows-v$version/InterviewCopilot.msixbundle"
+
+          $xml = @"
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+    Uri="https://coopilotxai.com/InterviewCopilot.appinstaller"
+    Version="$version"
+    xmlns="http://schemas.microsoft.com/appx/appinstaller/2017/2">
+  <MainBundle
+      Name="2fc37bc6-4936-47c4-982b-3f02ee0cab60"
+      Version="$version"
+      Publisher="$publisher"
+      Uri="$bundleUrl" />
+  <UpdateSettings>
+    <OnLaunch HoursBetweenUpdateChecks="0" />
+  </UpdateSettings>
+</AppInstaller>
+"@
+          Set-Content "InterviewCopilot.appinstaller" $xml -Encoding UTF8
+          echo "Bundle URL: $bundleUrl"
+
+      # ── GitHub Release ─────────────────────────────────────────────────────
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-v${{ env.APP_VERSION }}
+          name: Interview Copilot Windows v${{ env.APP_VERSION }}
+          body: |
+            ## Install
+            **Option 1 (recommended):** Download `InterviewCopilot.appinstaller` — installs and auto-updates automatically.
+            **Option 2:** Download `InterviewCopilot.msixbundle` — manual install, no auto-update.
+          files: |
+            InterviewCopilot.msixbundle
+            InterviewCopilot.appinstaller
+
+      # ── Deploy to Oracle Cloud ─────────────────────────────────────────────
+      - name: Setup SSH key
+        shell: powershell
+        env:
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+        run: |
+          $keyPath = "$env:RUNNER_TEMP\oracle_key.pem"
+          Set-Content -Path $keyPath -Value $env:ORACLE_SSH_KEY -Encoding ASCII
+          icacls $keyPath /inheritance:r | Out-Null
+          icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
+          echo "SSH_KEY_PATH=$keyPath" >> $env:GITHUB_ENV
+
+      - name: Deploy .appinstaller to website
+        shell: powershell
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+        run: |
+          $key  = "${{ env.SSH_KEY_PATH }}"
+          $host = $env:ORACLE_HOST
+          $dest = "ubuntu@${host}"
+
+          # Upload .appinstaller to server /tmp/
+          scp -i $key -o StrictHostKeyChecking=no `
+            "InterviewCopilot.appinstaller" `
+            "${dest}:/tmp/InterviewCopilot.appinstaller"
+
+          # Copy directly into running Docker container — no rebuild needed
+          $remoteCmd = "docker cp /tmp/InterviewCopilot.appinstaller coopilotx-frontend:/app/public/InterviewCopilot.appinstaller && rm /tmp/InterviewCopilot.appinstaller && echo 'Deployed OK'"
+          ssh -i $key -o StrictHostKeyChecking=no $dest $remoteCmd

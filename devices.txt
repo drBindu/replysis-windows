@@ -1,0 +1,22 @@
+0|Microsoft Sound Mapper - Input
+1|SteelSeries Sonar - Microphone 
+2|CABLE Output (VB-Audio Virtual 
+3|Microphone Array (2- Intel® Sma
+13|Primary Sound Capture Driver
+14|SteelSeries Sonar - Microphone (SteelSeries Sonar Virtual Audio Device)
+15|CABLE Output (VB-Audio Virtual Cable)
+16|Microphone Array (2- Intel® Smart Sound Technology for Digital Microphones)
+34|CABLE Output (VB-Audio Virtual Cable)
+35|Microphone Array (2- Intel® Smart Sound Technology for Digital Microphones)
+36|SteelSeries Sonar - Microphone (SteelSeries Sonar Virtual Audio Device)
+37|Microphone (Realtek HD Audio Mic input)
+40|PC Speaker (Realtek HD Audio 2nd output with SST)
+41|[SYSTEM] Stereo Mix (Realtek HD Audio Stereo input)
+44|PC Speaker (Realtek HD Audio output with SST)
+47|Input (VB-Audio Point)
+48|CABLE Output (VB-Audio Point)
+52|SteelSeries Sonar - Stream (SteelSeries_Sonar_VAD Stream Wave)
+54|SteelSeries Sonar - Microphone (SteelSeries_Sonar_VAD Chat Capture Wave)
+58|Input ()
+59|Microphone Array 1 ()
+60|Microphone Array 2 ()
