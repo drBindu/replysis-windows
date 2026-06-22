@@ -86,6 +86,10 @@ namespace InterviewCopilot
 
             this.Loaded += async (s, e) =>
             {
+                // Report presence to Firestore so the admin dashboard shows
+                // accurate Live/last-seen (self-guards while logged out)
+                PresenceTracker.Start();
+
                 try { IntroPlayer.Play(); } catch { IntroLayer.Visibility = Visibility.Collapsed; }
 
                 try
