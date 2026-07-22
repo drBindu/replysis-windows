@@ -228,7 +228,7 @@
             BorderBrush="#40FFFFFF" BorderThickness="1"
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <Border.Background>
-            <SolidColorBrush Color="#3808091A"/>
+            <SolidColorBrush Color="#22060810"/>
         </Border.Background>
         <Border.Effect>
             <DropShadowEffect BlurRadius="40" ShadowDepth="10" Opacity="0.55" Color="#04040E"/>
@@ -241,7 +241,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- HEADER -->
-                <Border Grid.Row="0" Background="#B008091A" CornerRadius="18,18,0,0"
+                <Border Grid.Row="0" Background="#A0060810" CornerRadius="18,18,0,0"
                         BorderBrush="#30FFFFFF" BorderThickness="0,0,0,1">
                     <Grid Margin="22,0">
                         <Grid.ColumnDefinitions>
@@ -353,10 +353,10 @@
                                     MouseLeftButtonDown="CreditsBadge_Click"
                                     ToolTip="Credits · Click for account menu">
                                 <Border.Background>
-                                    <SolidColorBrush x:Name="CreditsBadgeBg" Color="#0f2a1a"/>
+                                    <SolidColorBrush x:Name="CreditsBadgeBg" Color="#08080E"/>
                                 </Border.Background>
                                 <Border.BorderBrush>
-                                    <SolidColorBrush x:Name="CreditsBadgeBorder" Color="#1a6b3a"/>
+                                    <SolidColorBrush x:Name="CreditsBadgeBorder" Color="#202028"/>
                                 </Border.BorderBrush>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock x:Name="CreditsIcon" Text="⚡" FontSize="10"
@@ -432,7 +432,7 @@
                             <!-- Tabs -->
                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                 <Border x:Name="ResumeTabBorder"
-                                        Background="#C008091A" CornerRadius="8"
+                                        Background="#A0060810" CornerRadius="8"
                                         BorderBrush="#55FFFFFF" BorderThickness="1"
                                         Cursor="Hand" MouseLeftButtonDown="ResumeTabBtn_Click"
                                         Padding="11,5" Margin="0,0,4,0">
@@ -440,7 +440,7 @@
                                                Foreground="#DDDDDD" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                 </Border>
                                 <Border x:Name="JobTabBorder"
-                                        Background="#A008091A" CornerRadius="8"
+                                        Background="#80060810" CornerRadius="8"
                                         BorderBrush="#20FFFFFF" BorderThickness="1"
                                         Cursor="Hand" MouseLeftButtonDown="JobTabBtn_Click"
                                         Padding="11,5">
@@ -468,7 +468,7 @@
 
                         <!-- ── RESUME TAB CONTENT ────────────────────────────── -->
                         <Grid x:Name="ResumeTabPanel" Grid.Row="1">
-                            <Border x:Name="ResumeDropBorder" Background="#D008091A" CornerRadius="14"
+                            <Border x:Name="ResumeDropBorder" Background="#B0060810" CornerRadius="14"
                                     BorderBrush="#28FFFFFF" BorderThickness="1"
                                     AllowDrop="True"
                                     DragEnter="ResumeDropBorder_DragEnter"
@@ -536,7 +536,7 @@
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="COMPANY" Foreground="#3d4d5f" FontSize="8"
                                            FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                <Border Grid.Row="1" Background="#CC0D1117" CornerRadius="8"
+                                <Border Grid.Row="1" Background="#CC08080E" CornerRadius="8"
                                         BorderBrush="#22FFFFFF" BorderThickness="1">
                                     <Grid>
                                         <TextBox x:Name="CompanyNameBox" Background="Transparent"
@@ -559,7 +559,7 @@
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="JOB DESCRIPTION" Foreground="#3d4d5f" FontSize="8"
                                            FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                <Border Grid.Row="1" Background="#D008091A" CornerRadius="14"
+                                <Border Grid.Row="1" Background="#B0060810" CornerRadius="14"
                                         BorderBrush="#28FFFFFF" BorderThickness="1">
                                     <Border.Effect>
                                         <DropShadowEffect BlurRadius="14" ShadowDepth="4" Opacity="0.16" Color="Black"/>
@@ -582,8 +582,8 @@
 
                         <!-- ── RESUME LOADED BADGE (shown when content is auto-collapsed) ── -->
                         <Border x:Name="ResumeLoadedBadge" Grid.Row="1"
-                                Background="#091520" CornerRadius="8"
-                                BorderBrush="#1a4030" BorderThickness="1"
+                                Background="#08080E" CornerRadius="8"
+                                BorderBrush="#202028" BorderThickness="1"
                                 Visibility="Collapsed" Padding="12,9" Margin="0,4,0,6"
                                 Cursor="Hand" MouseLeftButtonDown="ResumeLoadedBadge_Click"
                                 ToolTip="Click to expand and edit resume">
@@ -598,7 +598,7 @@
                         </Border>
 
                         <!-- ── ASK or GUIDE ──────────────────────────────────── -->
-                        <Border Grid.Row="2" Background="#D008091A" CornerRadius="12"
+                        <Border Grid.Row="2" Background="#B0060810" CornerRadius="12"
                                 BorderBrush="#28FFFFFF" BorderThickness="1" Margin="0,10,0,0">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.28" Color="Black"/>
@@ -622,7 +622,7 @@
                                 </StackPanel>
 
                                 <!-- Input -->
-                                <Border Grid.Row="1" Background="#A008091A" CornerRadius="8"
+                                <Border Grid.Row="1" Background="#80060810" CornerRadius="8"
                                         BorderBrush="#20FFFFFF" BorderThickness="1">
                                     <Grid>
                                         <TextBox x:Name="AskBox" TextWrapping="Wrap" AcceptsReturn="True"
@@ -699,7 +699,7 @@
                         </Border>
 
                         <!-- ── Save path ─────────────────────────────────────── -->
-                        <Border Grid.Row="3" Margin="0,8,0,0" Background="#3008091A"
+                        <Border Grid.Row="3" Margin="0,8,0,0" Background="#20060810"
                                 CornerRadius="10" Padding="10,8">
                             <TextBlock x:Name="SavePathLabel" Foreground="#2a3a4a"
                                        FontSize="9" TextWrapping="Wrap"/>
@@ -715,7 +715,7 @@
                         </Grid.RowDefinitions>
 
                         <!-- AI Answer Box — top panel, larger -->
-                        <Border Grid.Row="0" Background="#D008091A" CornerRadius="14"
+                        <Border Grid.Row="0" Background="#B0060810" CornerRadius="14"
                                 BorderBrush="#28FFFFFF" BorderThickness="1" Padding="22,18" Margin="0,0,0,14">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.18" Color="Black"/>
@@ -798,7 +798,7 @@
                         </Border>
 
                         <!-- Transcript Box — bottom panel, smaller -->
-                        <Border Grid.Row="1" Background="#D008091A" CornerRadius="14"
+                        <Border Grid.Row="1" Background="#B0060810" CornerRadius="14"
                                 BorderBrush="#28FFFFFF" BorderThickness="1" Padding="22,18">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.18" Color="Black"/>
@@ -823,15 +823,15 @@
                                             <TextBlock Text="SPACE · listen → answer" Foreground="#DDDDDD"
                                                        FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                                         </Border>
-                                        <Border Background="#0D2E0D" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
+                                        <Border Background="#08080E" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
                                             <TextBlock Text="F8 · all screens" Foreground="#4ade80"
                                                        FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                                         </Border>
-                                        <Border Background="#0D2E0D" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
+                                        <Border Background="#08080E" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
                                             <TextBlock Text="F9 · primary" Foreground="#86efac"
                                                        FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                                         </Border>
-                                        <Border Background="#1a0f2e" CornerRadius="5" Padding="8,3">
+                                        <Border Background="#08080E" CornerRadius="5" Padding="8,3">
                                             <TextBlock Text="F12 · debug" Foreground="#DDDDDD"
                                                        FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                                         </Border>
@@ -871,7 +871,7 @@
 
             <!-- CAMERA MODE -->
             <Grid x:Name="CameraModeGrid" Visibility="Collapsed" VerticalAlignment="Top" Height="110">
-                <Border Background="#E6080C14" CornerRadius="0,0,14,14" BorderBrush="#55FFFFFF" BorderThickness="0,0,0,1">
+                <Border Background="#E606080E" CornerRadius="0,0,14,14" BorderBrush="#55FFFFFF" BorderThickness="0,0,0,1">
                     <Grid Margin="20,10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -991,10 +991,10 @@
                         <Border x:Name="PopupCreditsCard" Margin="12,10,12,10" CornerRadius="8"
                                 BorderThickness="1" Padding="12,10">
                             <Border.Background>
-                                <SolidColorBrush x:Name="PopupCreditsBg" Color="#0f2a1a"/>
+                                <SolidColorBrush x:Name="PopupCreditsBg" Color="#08080E"/>
                             </Border.Background>
                             <Border.BorderBrush>
-                                <SolidColorBrush x:Name="PopupCreditsBorder" Color="#1a6b3a"/>
+                                <SolidColorBrush x:Name="PopupCreditsBorder" Color="#202028"/>
                             </Border.BorderBrush>
                             <Grid>
                                 <Grid.ColumnDefinitions>
