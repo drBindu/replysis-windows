@@ -108,10 +108,10 @@ namespace InterviewCopilot
             scriptFolder = FindScriptFolder(projectRoot);
             this.PreviewKeyDown += Window_PreviewKeyDown;
 
-            // Position top-right on the primary screen, 16px from edges
+            // Position top-center on the primary screen
             var workArea = SystemParameters.WorkArea;
-            this.Left = workArea.Right - this.Width - 16;
-            this.Top  = workArea.Top + 16;
+            this.Left = workArea.Left + (workArea.Width - this.Width) / 2;
+            this.Top  = workArea.Top + 12;
 
             this.Loaded += async (s, e) =>
             {
