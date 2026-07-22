@@ -225,13 +225,13 @@
     </Window.Resources>
 
     <Border x:Name="MainAppBorder" CornerRadius="18"
-            BorderBrush="#8040C878" BorderThickness="1"
+            BorderBrush="#40FFFFFF" BorderThickness="1"
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <Border.Background>
-            <SolidColorBrush Color="#380A2012"/>
+            <SolidColorBrush Color="#3808091A"/>
         </Border.Background>
         <Border.Effect>
-            <DropShadowEffect BlurRadius="40" ShadowDepth="10" Opacity="0.55" Color="#040E06"/>
+            <DropShadowEffect BlurRadius="40" ShadowDepth="10" Opacity="0.55" Color="#04040E"/>
         </Border.Effect>
         <Grid>
             <Grid x:Name="NormalModeGrid">
@@ -241,8 +241,8 @@
                 </Grid.RowDefinitions>
 
                 <!-- HEADER -->
-                <Border Grid.Row="0" Background="#B0164028" CornerRadius="18,18,0,0"
-                        BorderBrush="#7040C878" BorderThickness="0,0,0,1">
+                <Border Grid.Row="0" Background="#B008091A" CornerRadius="18,18,0,0"
+                        BorderBrush="#30FFFFFF" BorderThickness="0,0,0,1">
                     <Grid Margin="22,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -432,16 +432,16 @@
                             <!-- Tabs -->
                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                 <Border x:Name="ResumeTabBorder"
-                                        Background="#C00A2818" CornerRadius="8"
-                                        BorderBrush="#A040E888" BorderThickness="1"
+                                        Background="#C008091A" CornerRadius="8"
+                                        BorderBrush="#55FFFFFF" BorderThickness="1"
                                         Cursor="Hand" MouseLeftButtonDown="ResumeTabBtn_Click"
                                         Padding="11,5" Margin="0,0,4,0">
                                     <TextBlock x:Name="ResumeTabLabel" Text="Resume" FontSize="11" FontWeight="SemiBold"
                                                Foreground="#DDDDDD" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                 </Border>
                                 <Border x:Name="JobTabBorder"
-                                        Background="#A0081408" CornerRadius="8"
-                                        BorderBrush="#5030B060" BorderThickness="1"
+                                        Background="#A008091A" CornerRadius="8"
+                                        BorderBrush="#20FFFFFF" BorderThickness="1"
                                         Cursor="Hand" MouseLeftButtonDown="JobTabBtn_Click"
                                         Padding="11,5">
                                     <TextBlock x:Name="JobTabLabel" Text="Target Role" FontSize="11" FontWeight="SemiBold"
@@ -468,8 +468,8 @@
 
                         <!-- ── RESUME TAB CONTENT ────────────────────────────── -->
                         <Grid x:Name="ResumeTabPanel" Grid.Row="1">
-                            <Border x:Name="ResumeDropBorder" Background="#D00A2012" CornerRadius="14"
-                                    BorderBrush="#6040D078" BorderThickness="1"
+                            <Border x:Name="ResumeDropBorder" Background="#D008091A" CornerRadius="14"
+                                    BorderBrush="#28FFFFFF" BorderThickness="1"
                                     AllowDrop="True"
                                     DragEnter="ResumeDropBorder_DragEnter"
                                     DragOver="ResumeDropBorder_DragOver"
@@ -492,7 +492,7 @@
                                     </TextBlock>
                                     <!-- Drag-over overlay -->
                                     <Border x:Name="ResumeDragOverlay" CornerRadius="14"
-                                            Background="#5040E888" BorderBrush="#A040D878" BorderThickness="2"
+                                            Background="#40FFFFFF" BorderBrush="#80FFFFFF" BorderThickness="2"
                                             Visibility="Collapsed" IsHitTestVisible="False">
                                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                             <TextBlock Text="⬇" FontSize="28" Foreground="#CCCCCC"
@@ -559,8 +559,8 @@
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="JOB DESCRIPTION" Foreground="#3d4d5f" FontSize="8"
                                            FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                <Border Grid.Row="1" Background="#D00A2012" CornerRadius="14"
-                                        BorderBrush="#6040D078" BorderThickness="1">
+                                <Border Grid.Row="1" Background="#D008091A" CornerRadius="14"
+                                        BorderBrush="#28FFFFFF" BorderThickness="1">
                                     <Border.Effect>
                                         <DropShadowEffect BlurRadius="14" ShadowDepth="4" Opacity="0.16" Color="Black"/>
                                     </Border.Effect>
@@ -598,8 +598,8 @@
                         </Border>
 
                         <!-- ── ASK or GUIDE ──────────────────────────────────── -->
-                        <Border Grid.Row="2" Background="#D00A2012" CornerRadius="12"
-                                BorderBrush="#6040D078" BorderThickness="1" Margin="0,10,0,0">
+                        <Border Grid.Row="2" Background="#D008091A" CornerRadius="12"
+                                BorderBrush="#28FFFFFF" BorderThickness="1" Margin="0,10,0,0">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.28" Color="Black"/>
                             </Border.Effect>
@@ -622,8 +622,8 @@
                                 </StackPanel>
 
                                 <!-- Input -->
-                                <Border Grid.Row="1" Background="#A0081408" CornerRadius="8"
-                                        BorderBrush="#5030B060" BorderThickness="1">
+                                <Border Grid.Row="1" Background="#A008091A" CornerRadius="8"
+                                        BorderBrush="#20FFFFFF" BorderThickness="1">
                                     <Grid>
                                         <TextBox x:Name="AskBox" TextWrapping="Wrap" AcceptsReturn="True"
                                                  Background="Transparent" Foreground="#E4ECF8"
@@ -699,7 +699,7 @@
                         </Border>
 
                         <!-- ── Save path ─────────────────────────────────────── -->
-                        <Border Grid.Row="3" Margin="0,8,0,0" Background="#300A1A0C"
+                        <Border Grid.Row="3" Margin="0,8,0,0" Background="#3008091A"
                                 CornerRadius="10" Padding="10,8">
                             <TextBlock x:Name="SavePathLabel" Foreground="#2a3a4a"
                                        FontSize="9" TextWrapping="Wrap"/>
@@ -715,8 +715,8 @@
                         </Grid.RowDefinitions>
 
                         <!-- AI Answer Box — top panel, larger -->
-                        <Border Grid.Row="0" Background="#D00A2012" CornerRadius="14"
-                                BorderBrush="#6040D078" BorderThickness="1" Padding="22,18" Margin="0,0,0,14">
+                        <Border Grid.Row="0" Background="#D008091A" CornerRadius="14"
+                                BorderBrush="#28FFFFFF" BorderThickness="1" Padding="22,18" Margin="0,0,0,14">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.18" Color="Black"/>
                             </Border.Effect>
@@ -798,8 +798,8 @@
                         </Border>
 
                         <!-- Transcript Box — bottom panel, smaller -->
-                        <Border Grid.Row="1" Background="#D00A2012" CornerRadius="14"
-                                BorderBrush="#6040D078" BorderThickness="1" Padding="22,18">
+                        <Border Grid.Row="1" Background="#D008091A" CornerRadius="14"
+                                BorderBrush="#28FFFFFF" BorderThickness="1" Padding="22,18">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.18" Color="Black"/>
                             </Border.Effect>
