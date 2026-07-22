@@ -81,10 +81,10 @@
             </Setter>
         </Style>
         <Style x:Key="GhostBtn" TargetType="Button">
-            <Setter Property="Background" Value="#110a24"/>
-            <Setter Property="Foreground" Value="#c4b5fd"/>
+            <Setter Property="Background" Value="#111111"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#27164a"/>
+            <Setter Property="BorderBrush" Value="#252525"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="12"/>
@@ -98,11 +98,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1e1040"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#7c5cbf"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#1A1A1A"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#777777"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#0a0718"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#0A0A0A"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
@@ -113,10 +113,10 @@
             </Setter>
         </Style>
         <Style x:Key="BlueBtn" TargetType="Button">
-            <Setter Property="Background" Value="#5b21b6"/>
+            <Setter Property="Background" Value="#2A2A2A"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#a78bfa"/>
+            <Setter Property="BorderBrush" Value="#DDDDDD"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -131,11 +131,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#6d28d9"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#c4b5fd"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#383838"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#CCCCCC"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#4c1d95"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#1E1E1E"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
@@ -147,7 +147,7 @@
         </Style>
         <Style x:Key="MicBtnStyle" TargetType="Button">
             <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="BorderBrush" Value="#a78bfa"/>
+            <Setter Property="BorderBrush" Value="#DDDDDD"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Width" Value="50"/>
             <Setter Property="Height" Value="50"/>
@@ -164,8 +164,8 @@
                             <Border x:Name="Bd" CornerRadius="22" Margin="3">
                                 <Border.Background>
                                     <RadialGradientBrush Center="0.5,0.3" GradientOrigin="0.5,0.2" RadiusX="0.85" RadiusY="0.85">
-                                        <GradientStop Color="#1e0a40" Offset="0"/>
-                                        <GradientStop Color="#0a0720" Offset="1"/>
+                                        <GradientStop Color="#1A1A1A" Offset="0"/>
+                                        <GradientStop Color="#0A0A0A" Offset="1"/>
                                     </RadialGradientBrush>
                                 </Border.Background>
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -176,8 +176,8 @@
                                 <Setter TargetName="Bd" Property="Background">
                                     <Setter.Value>
                                         <RadialGradientBrush Center="0.5,0.3" GradientOrigin="0.5,0.2" RadiusX="0.85" RadiusY="0.85">
-                                            <GradientStop Color="#3d1b7a" Offset="0"/>
-                                            <GradientStop Color="#1a0840" Offset="1"/>
+                                            <GradientStop Color="#303030" Offset="0"/>
+                                            <GradientStop Color="#141414" Offset="1"/>
                                         </RadialGradientBrush>
                                     </Setter.Value>
                                 </Setter>
@@ -186,8 +186,8 @@
                                 <Setter TargetName="Bd" Property="Background">
                                     <Setter.Value>
                                         <RadialGradientBrush Center="0.5,0.3" GradientOrigin="0.5,0.2" RadiusX="0.85" RadiusY="0.85">
-                                            <GradientStop Color="#1a0840" Offset="0"/>
-                                            <GradientStop Color="#08041a" Offset="1"/>
+                                            <GradientStop Color="#141414" Offset="0"/>
+                                            <GradientStop Color="#080808" Offset="1"/>
                                         </RadialGradientBrush>
                                     </Setter.Value>
                                 </Setter>
@@ -198,8 +198,8 @@
             </Setter>
         </Style>
         <Style x:Key="ArrowToggleBtn" TargetType="Button">
-            <Setter Property="Background" Value="#110a24"/>
-            <Setter Property="Foreground" Value="#c4b5fd"/>
+            <Setter Property="Background" Value="#111111"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -214,8 +214,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1e1040"/>
-                                <Setter Property="Foreground" Value="#c4b5fd"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#1A1A1A"/>
+                                <Setter Property="Foreground" Value="#CCCCCC"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -228,10 +228,10 @@
             BorderBrush="#28FFFFFF" BorderThickness="1"
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <Border.Background>
-            <SolidColorBrush Color="#D0060408"/>
+            <SolidColorBrush Color="#C8080808"/>
         </Border.Background>
         <Border.Effect>
-            <DropShadowEffect BlurRadius="40" ShadowDepth="10" Opacity="0.55" Color="#000000"/>
+            <DropShadowEffect BlurRadius="40" ShadowDepth="10" Opacity="0.60" Color="#000000"/>
         </Border.Effect>
         <Grid>
             <Grid x:Name="NormalModeGrid">
@@ -252,14 +252,14 @@
 
                         <!-- LEFT: Logo -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="#2e1065" CornerRadius="10" Width="38" Height="38" Margin="0,0,11,0"
-                                    BorderBrush="#7c3aed" BorderThickness="1">
-                                <TextBlock Text="CX" Foreground="#e9d5ff" FontWeight="Bold" FontSize="12"
+                            <Border Background="#222222" CornerRadius="10" Width="38" Height="38" Margin="0,0,11,0"
+                                    BorderBrush="#AAAAAA" BorderThickness="1">
+                                <TextBlock Text="CX" Foreground="#FFFFFF" FontWeight="Bold" FontSize="12"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="CoopilotX" Foreground="#F4F7FB" FontSize="15" FontWeight="SemiBold"/>
-                                <TextBlock Text="INTERVIEW INTELLIGENCE" Foreground="#9880c4" FontSize="8" FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                <TextBlock Text="INTERVIEW INTELLIGENCE" Foreground="#888888" FontSize="8" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                             </StackPanel>
                         </StackPanel>
 
@@ -297,8 +297,8 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock x:Name="AnalyzeIcon" Text="🔍" FontSize="12" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="AnalyzeLabel" Text="Analyze" FontSize="11" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                    <Border Background="#1e0f40" CornerRadius="4" Padding="4,2" Margin="5,0,0,0">
-                                        <TextBlock Text="F9" Foreground="#a78bfa" FontSize="9" FontWeight="Bold" FontFamily="Segoe UI Mono"/>
+                                    <Border Background="#1A1A1A" CornerRadius="4" Padding="4,2" Margin="5,0,0,0">
+                                        <TextBlock Text="F9" Foreground="#DDDDDD" FontSize="9" FontWeight="Bold" FontFamily="Segoe UI Mono"/>
                                     </Border>
                                 </StackPanel>
                             </Button>
@@ -321,9 +321,9 @@
                             </Button>
 
                             <!-- Session Timer — visible while a session is active -->
-                            <Border x:Name="SessionTimerBadge" Background="#0d091a" CornerRadius="8"
+                            <Border x:Name="SessionTimerBadge" Background="#0D0D0D" CornerRadius="8"
                                     Padding="9,5" Margin="0,0,6,0" VerticalAlignment="Center"
-                                    BorderBrush="#1e0f40" BorderThickness="1"
+                                    BorderBrush="#1A1A1A" BorderThickness="1"
                                     Visibility="Collapsed" ToolTip="Session duration">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse Width="6" Height="6" Fill="#ef4444" Margin="0,0,5,0"
@@ -341,7 +341,7 @@
                                         </Ellipse.Triggers>
                                     </Ellipse>
                                     <TextBlock x:Name="SessionTimerLabel" Text="0:00"
-                                               Foreground="#a78bfa" FontSize="11"
+                                               Foreground="#DDDDDD" FontSize="11"
                                                FontWeight="Bold" FontFamily="Segoe UI Mono"/>
                                 </StackPanel>
                             </Border>
@@ -373,13 +373,13 @@
                             <!-- Profile Badge — always visible (GU = Guest User when not signed in) -->
                             <Border x:Name="ProfileBadge" CornerRadius="20" Padding="8,5"
                                     Margin="0,0,6,0" VerticalAlignment="Center"
-                                    Background="#0f0a1e" BorderBrush="#1e0f40" BorderThickness="1"
+                                    Background="#0F0F0F" BorderBrush="#1A1A1A" BorderThickness="1"
                                     Cursor="Hand" MouseLeftButtonDown="ProfileBadge_Click"
                                     ToolTip="Account menu">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Border Width="26" Height="26" CornerRadius="13" Background="#1e0f40" Margin="0,0,6,0">
+                                    <Border Width="26" Height="26" CornerRadius="13" Background="#1A1A1A" Margin="0,0,6,0">
                                         <TextBlock x:Name="AvatarInitials" Text="GU"
-                                                   Foreground="#a78bfa" FontSize="9" FontWeight="Bold"
+                                                   Foreground="#DDDDDD" FontSize="9" FontWeight="Bold"
                                                    FontFamily="Segoe UI" HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"/>
                                     </Border>
@@ -432,16 +432,16 @@
                             <!-- Tabs -->
                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                 <Border x:Name="ResumeTabBorder"
-                                        Background="#0d091a" CornerRadius="8"
-                                        BorderBrush="#1e0f40" BorderThickness="1"
+                                        Background="#0D0D0D" CornerRadius="8"
+                                        BorderBrush="#1A1A1A" BorderThickness="1"
                                         Cursor="Hand" MouseLeftButtonDown="ResumeTabBtn_Click"
                                         Padding="11,5" Margin="0,0,4,0">
                                     <TextBlock x:Name="ResumeTabLabel" Text="Resume" FontSize="11" FontWeight="SemiBold"
-                                               Foreground="#a78bfa" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                               Foreground="#DDDDDD" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                 </Border>
                                 <Border x:Name="JobTabBorder"
-                                        Background="#09091a" CornerRadius="8"
-                                        BorderBrush="#130d28" BorderThickness="1"
+                                        Background="#090909" CornerRadius="8"
+                                        BorderBrush="#131313" BorderThickness="1"
                                         Cursor="Hand" MouseLeftButtonDown="JobTabBtn_Click"
                                         Padding="11,5">
                                     <TextBlock x:Name="JobTabLabel" Text="Target Role" FontSize="11" FontWeight="SemiBold"
@@ -468,8 +468,8 @@
 
                         <!-- ── RESUME TAB CONTENT ────────────────────────────── -->
                         <Grid x:Name="ResumeTabPanel" Grid.Row="1">
-                            <Border x:Name="ResumeDropBorder" Background="#0f0a1e" CornerRadius="14"
-                                    BorderBrush="#2d1b50" BorderThickness="1"
+                            <Border x:Name="ResumeDropBorder" Background="#0F0F0F" CornerRadius="14"
+                                    BorderBrush="#303030" BorderThickness="1"
                                     AllowDrop="True"
                                     DragEnter="ResumeDropBorder_DragEnter"
                                     DragOver="ResumeDropBorder_DragOver"
@@ -492,10 +492,10 @@
                                     </TextBlock>
                                     <!-- Drag-over overlay -->
                                     <Border x:Name="ResumeDragOverlay" CornerRadius="14"
-                                            Background="#33561beb" BorderBrush="#7c3aed" BorderThickness="2"
+                                            Background="#33FFFFFF" BorderBrush="#AAAAAA" BorderThickness="2"
                                             Visibility="Collapsed" IsHitTestVisible="False">
                                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <TextBlock Text="⬇" FontSize="28" Foreground="#c4b5fd"
+                                            <TextBlock Text="⬇" FontSize="28" Foreground="#CCCCCC"
                                                        HorizontalAlignment="Center" Margin="0,0,0,8"/>
                                             <TextBlock Text="Drop to load resume" Foreground="White"
                                                        FontSize="12" FontWeight="Bold" FontFamily="Segoe UI"
@@ -545,7 +545,7 @@
                                                  CaretBrush="White"
                                                  TextChanged="CompanyNameBox_TextChanged"/>
                                         <TextBlock x:Name="CompanyNameWatermark" Text="e.g.  Stripe, Google, Citi…"
-                                                   Foreground="#1e1040" FontSize="12" FontStyle="Italic"
+                                                   Foreground="#1A1A1A" FontSize="12" FontStyle="Italic"
                                                    Margin="10,8,10,8" FontFamily="Segoe UI"
                                                    IsHitTestVisible="False" VerticalAlignment="Center"/>
                                     </Grid>
@@ -559,8 +559,8 @@
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="JOB DESCRIPTION" Foreground="#3d4d5f" FontSize="8"
                                            FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                <Border Grid.Row="1" Background="#0f0a1e" CornerRadius="14"
-                                        BorderBrush="#2d1b50" BorderThickness="1">
+                                <Border Grid.Row="1" Background="#0F0F0F" CornerRadius="14"
+                                        BorderBrush="#303030" BorderThickness="1">
                                     <Border.Effect>
                                         <DropShadowEffect BlurRadius="14" ShadowDepth="4" Opacity="0.16" Color="Black"/>
                                     </Border.Effect>
@@ -590,7 +590,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="✓" Foreground="#4ade80" FontSize="11" FontWeight="Bold"
                                            Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Resume loaded" Foreground="#a78bfa" FontSize="10"
+                                <TextBlock Text="Resume loaded" Foreground="#DDDDDD" FontSize="10"
                                            FontWeight="SemiBold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                 <TextBlock Text="  — tap to edit" Foreground="#2a4a5a" FontSize="10"
                                            FontFamily="Segoe UI" VerticalAlignment="Center"/>
@@ -598,8 +598,8 @@
                         </Border>
 
                         <!-- ── ASK or GUIDE ──────────────────────────────────── -->
-                        <Border Grid.Row="2" Background="#120d20" CornerRadius="12"
-                                BorderBrush="#3d2568" BorderThickness="1" Margin="0,10,0,0">
+                        <Border Grid.Row="2" Background="#111111" CornerRadius="12"
+                                BorderBrush="#333333" BorderThickness="1" Margin="0,10,0,0">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.28" Color="Black"/>
                             </Border.Effect>
@@ -622,8 +622,8 @@
                                 </StackPanel>
 
                                 <!-- Input -->
-                                <Border Grid.Row="1" Background="#0d091a" CornerRadius="8"
-                                        BorderBrush="#40306b" BorderThickness="1">
+                                <Border Grid.Row="1" Background="#0D0D0D" CornerRadius="8"
+                                        BorderBrush="#404040" BorderThickness="1">
                                     <Grid>
                                         <TextBox x:Name="AskBox" TextWrapping="Wrap" AcceptsReturn="True"
                                                  Background="Transparent" Foreground="#E4ECF8"
@@ -715,8 +715,8 @@
                         </Grid.RowDefinitions>
 
                         <!-- AI Answer Box — top panel, larger -->
-                        <Border Grid.Row="0" Background="#0f0a1e" CornerRadius="14"
-                                BorderBrush="#3b1f82" BorderThickness="1" Padding="22,18" Margin="0,0,0,14">
+                        <Border Grid.Row="0" Background="#0F0F0F" CornerRadius="14"
+                                BorderBrush="#282828" BorderThickness="1" Padding="22,18" Margin="0,0,0,14">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.18" Color="Black"/>
                             </Border.Effect>
@@ -730,8 +730,8 @@
                                 <!-- ACTION TOOLBAR: Copy · Clear · New Session -->
                                 <DockPanel Grid.Row="0" Margin="0,0,0,10">
                                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                                        <Border Background="#08041a" CornerRadius="6" Padding="8,4">
-                                            <TextBlock Text="🤖  AI Answer" Foreground="#a78bfa"
+                                        <Border Background="#080808" CornerRadius="6" Padding="8,4">
+                                            <TextBlock Text="🤖  AI Answer" Foreground="#DDDDDD"
                                                        FontSize="9" FontWeight="Bold" FontFamily="Segoe UI"/>
                                         </Border>
                                         <Border x:Name="StarBadge" Visibility="Collapsed"
@@ -768,7 +768,7 @@
                                 <StackPanel x:Name="ThinkingPanel" Grid.Row="1" Orientation="Horizontal"
                                             Visibility="Collapsed" Margin="0,0,0,10">
                                     <TextBlock x:Name="ThinkingLabel" Text="Thinking..."
-                                               Foreground="#a78bfa" FontSize="12" FontStyle="Italic"
+                                               Foreground="#DDDDDD" FontSize="12" FontStyle="Italic"
                                                VerticalAlignment="Center"/>
                                     <TextBlock x:Name="ThinkingHintLabel" Text=" · F8 all screens  ·  F9 primary"
                                                Foreground="#334466" FontSize="11"
@@ -798,8 +798,8 @@
                         </Border>
 
                         <!-- Transcript Box — bottom panel, smaller -->
-                        <Border Grid.Row="1" Background="#0a0715" CornerRadius="14"
-                                BorderBrush="#2d1b50" BorderThickness="1" Padding="22,18">
+                        <Border Grid.Row="1" Background="#0A0A0A" CornerRadius="14"
+                                BorderBrush="#303030" BorderThickness="1" Padding="22,18">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.18" Color="Black"/>
                             </Border.Effect>
@@ -819,8 +819,8 @@
                                                FontWeight="Bold" FontFamily="Segoe UI"
                                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                        <Border Background="#0d091a" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
-                                            <TextBlock Text="SPACE · listen → answer" Foreground="#a78bfa"
+                                        <Border Background="#0D0D0D" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
+                                            <TextBlock Text="SPACE · listen → answer" Foreground="#DDDDDD"
                                                        FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                                         </Border>
                                         <Border Background="#0D2E0D" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
@@ -832,7 +832,7 @@
                                                        FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                                         </Border>
                                         <Border Background="#1a0f2e" CornerRadius="5" Padding="8,3">
-                                            <TextBlock Text="F12 · debug" Foreground="#a78bfa"
+                                            <TextBlock Text="F12 · debug" Foreground="#DDDDDD"
                                                        FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                                         </Border>
                                     </StackPanel>
@@ -848,16 +848,16 @@
                                                 VerticalAlignment="Center" HorizontalAlignment="Center"
                                                 IsHitTestVisible="False" Visibility="Visible">
                                         <Border Width="44" Height="44" CornerRadius="22"
-                                                Background="#0d091a" BorderBrush="#2a1450" BorderThickness="1"
+                                                Background="#0D0D0D" BorderBrush="#222222" BorderThickness="1"
                                                 HorizontalAlignment="Center" Margin="0,0,0,14">
-                                            <TextBlock Text="🎙" FontSize="18" Foreground="#a78bfa"
+                                            <TextBlock Text="🎙" FontSize="18" Foreground="#DDDDDD"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <StackPanel HorizontalAlignment="Center">
-                                            <TextBlock Text="Ready when you are" Foreground="#5b3a8c" FontSize="14"
+                                            <TextBlock Text="Ready when you are" Foreground="#666666" FontSize="14"
                                                        FontWeight="SemiBold" FontFamily="Segoe UI"
                                                        HorizontalAlignment="Center" Margin="0,0,0,3"/>
-                                            <TextBlock Text="Your conversation will appear here" Foreground="#2d1b50"
+                                            <TextBlock Text="Your conversation will appear here" Foreground="#303030"
                                                        FontSize="11" FontFamily="Segoe UI"
                                                        HorizontalAlignment="Center"/>
                                         </StackPanel>
@@ -895,7 +895,7 @@
                    Placement="Bottom" StaysOpen="True"
                    AllowsTransparency="True" PopupAnimation="Fade"
                    VerticalOffset="4">
-                <Border Background="#120d22" BorderBrush="#1e1230" BorderThickness="1"
+                <Border Background="#111111" BorderBrush="#1C1C1C" BorderThickness="1"
                         CornerRadius="12" MinWidth="224" Margin="0,0,0,12">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.55" Color="Black"/>
@@ -908,25 +908,25 @@
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1e1230"/>
+                                            <Setter Property="Background" Value="#1C1C1C"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
-                                           Foreground="#a78bfa" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                           Foreground="#DDDDDD" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="Save current resume" Foreground="#e6edf3"
                                            FontSize="12" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
 
-                        <Border Height="1" Background="#1e1230"/>
+                        <Border Height="1" Background="#1C1C1C"/>
 
                         <!-- Dynamic saved resume entries -->
                         <StackPanel x:Name="SavedResumesListPanel"/>
 
-                        <Border Height="1" Background="#1e1230" x:Name="ClearSeparator" Visibility="Collapsed"/>
+                        <Border Height="1" Background="#1C1C1C" x:Name="ClearSeparator" Visibility="Collapsed"/>
 
                         <!-- Clear action -->
                         <Border x:Name="ClearResumesPopupItem" Padding="14,10" Cursor="Hand"
@@ -956,7 +956,7 @@
                    Placement="Bottom" StaysOpen="True"
                    AllowsTransparency="True" PopupAnimation="Fade"
                    HorizontalOffset="-200" VerticalOffset="6">
-                <Border Background="#120d22" BorderBrush="#2d1b50" BorderThickness="1"
+                <Border Background="#111111" BorderBrush="#303030" BorderThickness="1"
                         CornerRadius="12" Width="296" Margin="0,0,0,12">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.5" Color="Black"/>
@@ -970,8 +970,8 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Border Width="46" Height="46" CornerRadius="23"
-                                    Background="#1e0f40" Margin="0,0,12,0" VerticalAlignment="Center">
-                                <TextBlock x:Name="PopupAvatarInitials" Text="GU" Foreground="#a78bfa"
+                                    Background="#1A1A1A" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="PopupAvatarInitials" Text="GU" Foreground="#DDDDDD"
                                            FontSize="16" FontWeight="Bold" FontFamily="Segoe UI"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
@@ -985,7 +985,7 @@
                             </StackPanel>
                         </Grid>
 
-                        <Border Height="1" Background="#2d1b50"/>
+                        <Border Height="1" Background="#303030"/>
 
                         <!-- Credits card -->
                         <Border x:Name="PopupCreditsCard" Margin="12,10,12,10" CornerRadius="8"
@@ -1019,12 +1019,12 @@
                                         FontWeight="SemiBold" Padding="0">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
-                                            <Border x:Name="Bd" Background="#5b21b6" CornerRadius="6" Padding="12,6">
+                                            <Border x:Name="Bd" Background="#2A2A2A" CornerRadius="6" Padding="12,6">
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Bd" Property="Background" Value="#6d28d9"/>
+                                                    <Setter TargetName="Bd" Property="Background" Value="#383838"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
@@ -1034,7 +1034,7 @@
                             </Grid>
                         </Border>
 
-                        <Border Height="1" Background="#2d1b50"/>
+                        <Border Height="1" Background="#303030"/>
 
                         <!-- Window + Eye mode opacity (shared) -->
                         <StackPanel Margin="16,12,16,10">
@@ -1047,7 +1047,7 @@
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <TextBlock x:Name="PopupOpacityLabel" Text="80%"
-                                           Foreground="#a78bfa" FontSize="13" FontWeight="Bold"
+                                           Foreground="#DDDDDD" FontSize="13" FontWeight="Bold"
                                            FontFamily="Segoe UI" HorizontalAlignment="Right"
                                            VerticalAlignment="Center"/>
                             </Grid>
@@ -1055,7 +1055,7 @@
                                     ValueChanged="PopupOpacitySlider_ValueChanged"/>
                         </StackPanel>
 
-                        <Border Height="1" Background="#2d1b50"/>
+                        <Border Height="1" Background="#303030"/>
 
                         <!-- Settings row -->
                         <Border Cursor="Hand" MouseLeftButtonDown="PopupSettings_Click" Padding="16,12">
@@ -1063,7 +1063,7 @@
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1e1230"/>
+                                            <Setter Property="Background" Value="#1C1C1C"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
@@ -1080,7 +1080,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Height="1" Background="#2d1b50" Margin="16,0"/>
+                        <Border Height="1" Background="#303030" Margin="16,0"/>
 
                         <!-- Past Sessions row -->
                         <Border Cursor="Hand" MouseLeftButtonDown="PopupSessions_Click" Padding="16,12">
@@ -1088,7 +1088,7 @@
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1e1230"/>
+                                            <Setter Property="Background" Value="#1C1C1C"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
@@ -1105,7 +1105,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Height="1" Background="#2d1b50" Margin="16,0"/>
+                        <Border Height="1" Background="#303030" Margin="16,0"/>
 
                         <!-- Sign In row (guest) -->
                         <Border x:Name="PopupSignInRow" Cursor="Hand"
@@ -1114,7 +1114,7 @@
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1e1230"/>
+                                            <Setter Property="Background" Value="#1C1C1C"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
