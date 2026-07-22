@@ -626,7 +626,10 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         // STEALTH MODE
         // ══════════════════════════════════════════════════════════════════════
-        private void StealthBtn_Click(object sender, RoutedEventArgs e)
+        private void StealthBtn_Click(object sender, RoutedEventArgs e) => ToggleStealth();
+        private void StealthToggle_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => ToggleStealth();
+
+        private void ToggleStealth()
         {
             _stealthMode = !_stealthMode;
             try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
@@ -635,18 +638,16 @@ namespace InterviewCopilot
 
         private void UpdateStealthBtn()
         {
-            if (StealthIcon == null) return;
+            if (StealthTogglePill == null) return;
             if (_stealthMode)
             {
-                StealthLabel.Text = "Stealth ON";
-                StealthLabel.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4ade80"));
-                StealthIcon.Text = "🛡";
+                StealthTogglePill.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4ade80"));
+                StealthToggleText.Text = "ON";
             }
             else
             {
-                StealthLabel.Text = "Stealth OFF";
-                StealthLabel.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#ef4444"));
-                StealthIcon.Text = "👁‍🗨";
+                StealthTogglePill.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#ef4444"));
+                StealthToggleText.Text = "OFF";
             }
         }
 
@@ -1779,21 +1780,30 @@ namespace InterviewCopilot
             // Guard: don't double-fire while already processing
             if (isProcessing || _isScreenAnalyzing) return;
 
-            // Must be logged in
-            if (!UserSession.IsLoggedIn)
+            // Credits check — guests get 100 credits/month (tracked by device ID)
+            if (!UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold)
             {
-                AiAnswerBox.Text = "⚠ Please sign in to use Screen Analysis.\n\nClick the Sign In button in the top right.";
+                int remaining = UserSession.Credits;
+                bool isGuest = !UserSession.IsLoggedIn;
+                AiAnswerBox.Text = isGuest
+                    ? $"Your guest session has {remaining} credit{(remaining == 1 ? "" : "s")} remaining.\n\n" +
+                      "Screen AI and all features are available on a free account.\n\n" +
+                      "Create your free account at coopilotxai.com to get 100 credits/month,\n" +
+                      "or upgrade to Pro for 5,000 credits/month with priority processing."
+                    : $"Insufficient credits ({remaining} remaining).\n\n" +
+                      "Upgrade your plan at coopilotxai.com/pricing to continue\n" +
+                      "using Screen AI and other advanced features.";
                 return;
             }
 
-            // Must have a vision API key
+            // Must have a vision API key configured
             if (string.IsNullOrWhiteSpace(SettingsWindow.GetApiKey()))
             {
-                AiAnswerBox.Text = "⚠ Screen Analysis needs an API key.\n\n" +
-                                   "• Open ⚙ Settings → paste your key\n" +
-                                   "• Groq key (gsk_…) → free, uses Llama 4 Scout vision\n" +
-                                   "• OpenAI key (sk-…) → GPT-4o Vision\n" +
-                                   "• Speech-to-text answers still work without a vision key";
+                AiAnswerBox.Text = "Screen AI requires an API key to analyze visual content.\n\n" +
+                                   "To enable:  Open Settings and add your key.\n\n" +
+                                   "  Groq  (gsk_…)  — Free tier · Llama 4 Scout Vision\n" +
+                                   "  OpenAI (sk-…)  — GPT-4o Vision · Higher accuracy\n\n" +
+                                   "Note: Voice-based answers work without a vision key.";
                 return;
             }
 
