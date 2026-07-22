@@ -306,8 +306,24 @@
                             <!-- Camera / Eye toggle -->
                             <Button Style="{StaticResource GhostBtn}"
                                     Click="CameraMode_Click" Padding="9,6" Margin="0,0,6,0"
-                                    ToolTip="Toggle camera overlay mode">
-                                <TextBlock Text="👁" FontSize="14"/>
+                                    ToolTip="Camera overlay — hides main window, shows a tiny floating answer bar for in-person interviews">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="👁" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Overlay" FontSize="10" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Stealth mode toggle — default ON -->
+                            <Button x:Name="StealthBtn"
+                                    Style="{StaticResource GhostBtn}"
+                                    Click="StealthBtn_Click"
+                                    Padding="9,6" Margin="0,0,6,0"
+                                    ToolTip="Stealth mode: hides app from OBS, Teams, Meet, and screen recorders. ON by default for security.">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="StealthIcon" Text="🛡" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="StealthLabel" Text="Stealth ON" FontSize="10"
+                                               FontFamily="Segoe UI" VerticalAlignment="Center" Foreground="#4ade80"/>
+                                </StackPanel>
                             </Button>
 
                             <!-- My Sessions (icon only) — visible when logged in -->

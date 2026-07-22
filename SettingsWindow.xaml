@@ -1,331 +1,260 @@
 <Window x:Class="InterviewCopilot.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Settings" Height="920" Width="560"
-        Background="Transparent" WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize" WindowStyle="None" AllowsTransparency="True">
+        Title="Settings" Width="460" Height="560" MinWidth="420" MinHeight="460"
+        Background="Transparent" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" WindowStyle="None" AllowsTransparency="True"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
 
-	<Window.Resources>
-		<ControlTemplate x:Key="DarkComboToggle" TargetType="ToggleButton">
-			<Grid>
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition/>
-					<ColumnDefinition Width="28"/>
-				</Grid.ColumnDefinitions>
-				<Border x:Name="Border" Grid.ColumnSpan="2" Background="#1e222a" BorderBrush="#333842" BorderThickness="1" CornerRadius="6"/>
-				<Path x:Name="Arrow" Grid.Column="1" Fill="#6b7280" HorizontalAlignment="Center" VerticalAlignment="Center"
-                      Data="M 0 0 L 5 5 L 10 0 Z"/>
-			</Grid>
-			<ControlTemplate.Triggers>
-				<Trigger Property="IsMouseOver" Value="True">
-					<Setter TargetName="Border" Property="BorderBrush" Value="#60a5fa"/>
-				</Trigger>
-			</ControlTemplate.Triggers>
-		</ControlTemplate>
+    <Window.Resources>
+        <Style x:Key="InvisibleRadio" TargetType="RadioButton">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <ContentPresenter/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SectionLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#93A4BA"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+    </Window.Resources>
 
-		<Style x:Key="DarkCombo" TargetType="ComboBox">
-			<Setter Property="Foreground" Value="#e2e8f0"/>
-			<Setter Property="FontSize" Value="13"/>
-			<Setter Property="Height" Value="36"/>
-			<Setter Property="Padding" Value="10,6"/>
-			<Setter Property="VerticalContentAlignment" Value="Center"/>
-			<Setter Property="Template">
-				<Setter.Value>
-					<ControlTemplate TargetType="ComboBox">
-						<Grid>
-							<ToggleButton Template="{StaticResource DarkComboToggle}"
-                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                                          Focusable="False" ClickMode="Press"/>
-							<ContentPresenter IsHitTestVisible="False"
-                                              Content="{TemplateBinding SelectionBoxItem}"
-                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                                              Margin="12,0,28,0" VerticalAlignment="Center" HorizontalAlignment="Left"/>
-							<Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
-                                   AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
-								<Border Background="#1a1d24" BorderBrush="#333842" BorderThickness="1"
-                                        CornerRadius="6" Margin="0,2,0,0" Padding="4">
-									<ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
-										<StackPanel IsItemsHost="True"/>
-									</ScrollViewer>
-								</Border>
-							</Popup>
-						</Grid>
-					</ControlTemplate>
-				</Setter.Value>
-			</Setter>
-		</Style>
+    <Border Background="#08091A" BorderBrush="#40FFFFFF" BorderThickness="1" CornerRadius="18">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="1"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-		<Style TargetType="ComboBoxItem">
-			<Setter Property="Foreground" Value="#cbd5e1"/>
-			<Setter Property="FontSize" Value="13"/>
-			<Setter Property="Padding" Value="10,7"/>
-			<Setter Property="Cursor" Value="Hand"/>
-			<Setter Property="Template">
-				<Setter.Value>
-					<ControlTemplate TargetType="ComboBoxItem">
-						<Border x:Name="Bd" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
-							<ContentPresenter/>
-						</Border>
-						<ControlTemplate.Triggers>
-							<Trigger Property="IsHighlighted" Value="True">
-								<Setter TargetName="Bd" Property="Background" Value="#2563eb"/>
-								<Setter Property="Foreground" Value="White"/>
-							</Trigger>
-							<Trigger Property="IsSelected" Value="True">
-								<Setter TargetName="Bd" Property="Background" Value="#1e3a5f"/>
-								<Setter Property="Foreground" Value="#60a5fa"/>
-							</Trigger>
-						</ControlTemplate.Triggers>
-					</ControlTemplate>
-				</Setter.Value>
-			</Setter>
-		</Style>
+            <!-- HEADER -->
+            <Grid Grid.Row="0" Margin="22,18,22,14">
+                <TextBlock Text="Settings" Foreground="#F4F7FB" FontSize="18"
+                           FontWeight="SemiBold" FontFamily="Segoe UI"
+                           VerticalAlignment="Center"/>
+                <Button Content="Done" Click="SaveBtn_Click"
+                        HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Background="Transparent" BorderThickness="0"
+                        Foreground="#38BDF8" FontSize="15" FontWeight="SemiBold"
+                        FontFamily="Segoe UI" Cursor="Hand" Padding="0"/>
+            </Grid>
+            <Border Grid.Row="1" Background="#25FFFFFF"/>
 
-		<Style x:Key="DarkInput" TargetType="TextBox">
-			<Setter Property="Background" Value="#1e222a"/>
-			<Setter Property="Foreground" Value="#e2e8f0"/>
-			<Setter Property="BorderBrush" Value="#333842"/>
-			<Setter Property="BorderThickness" Value="1"/>
-			<Setter Property="FontSize" Value="12.5"/>
-			<Setter Property="FontFamily" Value="Consolas"/>
-			<Setter Property="Height" Value="36"/>
-			<Setter Property="Padding" Value="10,6"/>
-			<Setter Property="VerticalContentAlignment" Value="Center"/>
-			<Setter Property="CaretBrush" Value="#60a5fa"/>
-		</Style>
+            <!-- CONTENT -->
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Padding="22,20,14,20">
+                <StackPanel>
 
-		<Style x:Key="SectionLabel" TargetType="TextBlock">
-			<Setter Property="Foreground" Value="#6b7280"/>
-			<Setter Property="FontSize" Value="10"/>
-			<Setter Property="FontWeight" Value="Bold"/>
-			<Setter Property="Margin" Value="2,0,0,5"/>
-			<Setter Property="FontFamily" Value="Segoe UI"/>
-		</Style>
+                <!-- ── AI MODEL ──────────────────────────────────────── -->
+                <TextBlock Text="AI MODEL" Style="{StaticResource SectionLabel}"/>
 
-		<Style x:Key="HintLabel" TargetType="TextBlock">
-			<Setter Property="Foreground" Value="#3d4d5f"/>
-			<Setter Property="FontSize" Value="10"/>
-			<Setter Property="Margin" Value="4,2,0,0"/>
-			<Setter Property="FontFamily" Value="Segoe UI"/>
-		</Style>
-	</Window.Resources>
+                <!-- Groq card -->
+                <RadioButton x:Name="ModelGroqRadio" GroupName="ModelGroup"
+                             Style="{StaticResource InvisibleRadio}"
+                             Margin="0,0,0,8" Cursor="Hand"
+                             Checked="ModelRadio_Checked">
+                    <Border x:Name="GroqCard" CornerRadius="10" Padding="14,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10"
+                                    BorderBrush="#38BDF8" BorderThickness="2"
+                                    Margin="0,0,12,0" VerticalAlignment="Center"
+                                    Background="Transparent">
+                                <Ellipse x:Name="GroqDot" Width="10" Height="10"
+                                         Fill="#38BDF8" HorizontalAlignment="Center"
+                                         VerticalAlignment="Center" Visibility="Collapsed"/>
+                            </Border>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Groq (Llama — Fast &amp; Free)"
+                                           Foreground="White" FontSize="13"
+                                           FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                <TextBlock Text="Fast responses, completely free, great for practice"
+                                           Foreground="#6b7280" FontSize="11"
+                                           FontFamily="Segoe UI" Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </RadioButton>
 
-	<Border Background="#12151c" BorderBrush="#2a2f3a" BorderThickness="1" CornerRadius="14">
-		<Grid>
-			<Grid.RowDefinitions>
-				<RowDefinition Height="Auto"/>
-				<RowDefinition Height="*"/>
-				<RowDefinition Height="Auto"/>
-			</Grid.RowDefinitions>
+                <!-- OpenAI card -->
+                <RadioButton x:Name="ModelOpenAiRadio" GroupName="ModelGroup"
+                             Style="{StaticResource InvisibleRadio}"
+                             Margin="0,0,0,24" Cursor="Hand"
+                             Checked="ModelRadio_Checked">
+                    <Border x:Name="OpenAiCard" CornerRadius="10" Padding="14,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10"
+                                    BorderBrush="#38BDF8" BorderThickness="2"
+                                    Margin="0,0,12,0" VerticalAlignment="Center"
+                                    Background="Transparent">
+                                <Ellipse x:Name="OpenAiDot" Width="10" Height="10"
+                                         Fill="#38BDF8" HorizontalAlignment="Center"
+                                         VerticalAlignment="Center" Visibility="Collapsed"/>
+                            </Border>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="OpenAI (GPT-4o — More Accurate)"
+                                           Foreground="White" FontSize="13"
+                                           FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                <TextBlock Text="Higher accuracy for real interviews, uses your credits"
+                                           Foreground="#6b7280" FontSize="11"
+                                           FontFamily="Segoe UI" Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </RadioButton>
 
-			<!-- HEADER -->
-			<Border Grid.Row="0" Background="#0f1219" CornerRadius="14,14,0,0" Padding="22,16,22,14"
-                    BorderBrush="#1e232d" BorderThickness="0,0,0,1">
-				<DockPanel>
-					<StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-						<Border Background="#1e3a5f" CornerRadius="6" Width="28" Height="28" Margin="0,0,10,0">
-							<TextBlock Text="⚙" Foreground="#60a5fa" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-						</Border>
-						<StackPanel>
-							<TextBlock Text="Settings" Foreground="White" FontSize="16" FontWeight="SemiBold" FontFamily="Segoe UI"/>
-							<TextBlock Text="AI Model, Keys, Audio, Account, Transparency" Foreground="#4b5563" FontSize="10" FontFamily="Segoe UI"/>
-						</StackPanel>
-					</StackPanel>
-					<Button Content="✕" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Top"
-                            Click="CancelBtn_Click" Foreground="#4b5563" Background="Transparent"
-                            BorderThickness="0" FontSize="16" Cursor="Hand" Padding="4,0"/>
-				</DockPanel>
-			</Border>
+                <Border Height="1" Background="#25FFFFFF" Margin="0,0,0,20"/>
 
-			<!-- CONTENT -->
-			<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="22,16,22,8">
-				<StackPanel>
+                <TextBlock Text="PRIVACY" Style="{StaticResource SectionLabel}"/>
+                <CheckBox x:Name="CloudSyncCheckBox" Margin="2,0,0,20"
+                          Foreground="#CBD5E1" Cursor="Hand">
+                    <StackPanel>
+                        <TextBlock Text="Back up session history to my account" FontSize="13" FontWeight="SemiBold"/>
+                        <TextBlock Text="Sends interview questions, answers, and a short resume snippet to CoopilotX so they appear on your other signed-in devices."
+                                   Foreground="#6b7280" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </CheckBox>
 
-					<!-- AI MODEL -->
-					<TextBlock Text="AI MODEL" Style="{StaticResource SectionLabel}"/>
-					<ComboBox x:Name="ModelCombo" Style="{StaticResource DarkCombo}">
-						<ComboBoxItem Content="GPT-4.1 (OpenAI — Best Quality)" IsSelected="True"/>
-						<ComboBoxItem Content="GPT-4o-mini (OpenAI — Fast + Cheap)"/>
-						<ComboBoxItem Content="GPT-4o (OpenAI — Balanced)"/>
-						<ComboBoxItem Content="Llama 3.3 70B (Groq — Free)"/>
-						<ComboBoxItem Content="Gemini 2.0 Flash (Google)"/>
-					</ComboBox>
-					<TextBlock Text="GPT-4.1 recommended for interviews. Groq/Gemini = free but weaker." Style="{StaticResource HintLabel}" Margin="4,2,0,16"/>
+                <!-- ── AUDIO CAPTURE ──────────────────────────────── -->
+                <TextBlock Text="AUDIO CAPTURE" Style="{StaticResource SectionLabel}"/>
 
-					<!-- AI API KEY -->
-					<TextBlock Text="AI API KEY" Style="{StaticResource SectionLabel}"/>
-					<TextBox x:Name="ApiKeyBox" Style="{StaticResource DarkInput}"/>
-					<TextBlock Style="{StaticResource HintLabel}" Margin="4,2,0,4">
-						<Run Text="OpenAI: sk-..."/>
-						<Run Text="  |  " Foreground="#2a2f3a"/>
-						<Run Text="Groq: gsk_..."/>
-						<Run Text="  |  " Foreground="#2a2f3a"/>
-						<Run Text="Gemini: AIza..."/>
-					</TextBlock>
-					<!-- Screen Analysis note -->
-					<Border Background="#081a08" CornerRadius="6" Padding="8,5" Margin="0,0,0,16"
-                            BorderBrush="#1a4a1a" BorderThickness="1">
-						<TextBlock Foreground="#4ade80" FontSize="10" FontFamily="Segoe UI">
-							<Run Text="🔍 "/>
-							<Run Text="Screen Analysis (F8) uses your key + selected model:" FontWeight="SemiBold"/>
-							<LineBreak/>
-							<Run Text="    Groq (gsk_…) → Llama 4 Scout Vision  •  OpenAI (sk-…) → GPT-4o Vision"/>
-						</TextBlock>
-					</Border>
+                <!-- System only -->
+                <RadioButton x:Name="MicSystemRadio" GroupName="MicMode"
+                             Style="{StaticResource InvisibleRadio}"
+                             Margin="0,0,0,8" Cursor="Hand"
+                             Checked="MicRadio_Checked">
+                    <Border x:Name="MicSystemCard" CornerRadius="10" Padding="14,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10"
+                                    BorderBrush="#38BDF8" BorderThickness="2"
+                                    Margin="0,0,12,0" VerticalAlignment="Top"
+                                    Background="Transparent">
+                                <Ellipse x:Name="MicSystemDot" Width="10" Height="10"
+                                         Fill="#38BDF8" HorizontalAlignment="Center"
+                                         VerticalAlignment="Center" Visibility="Collapsed"/>
+                            </Border>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="System audio only"
+                                           Foreground="White" FontSize="13"
+                                           FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                <TextBlock Text="Uses system audio only. Your microphone is not accessed in this mode."
+                                           Foreground="#6b7280" FontSize="11"
+                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </RadioButton>
 
-					<Border Height="1" Background="#1e232d" Margin="0,4,0,16"/>
+                <!-- System + voice -->
+                <RadioButton x:Name="MicBothRadio" GroupName="MicMode"
+                             Style="{StaticResource InvisibleRadio}"
+                             Margin="0,0,0,24" Cursor="Hand"
+                             Checked="MicRadio_Checked">
+                    <Border x:Name="MicBothCard" CornerRadius="10" Padding="14,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10"
+                                    BorderBrush="#38BDF8" BorderThickness="2"
+                                    Margin="0,0,12,0" VerticalAlignment="Top"
+                                    Background="Transparent">
+                                <Ellipse x:Name="MicBothDot" Width="10" Height="10"
+                                         Fill="#38BDF8" HorizontalAlignment="Center"
+                                         VerticalAlignment="Center" Visibility="Collapsed"/>
+                            </Border>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="System audio + my voice"
+                                           Foreground="White" FontSize="13"
+                                           FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                <TextBlock Text="Includes your microphone only while you are actively listening."
+                                           Foreground="#6b7280" FontSize="11"
+                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </RadioButton>
 
-					<!-- SPEECHMATICS KEY -->
-					<TextBlock Text="SPEECHMATICS API KEY" Style="{StaticResource SectionLabel}"/>
-					<TextBox x:Name="SpeechmaticsKeyBox" Style="{StaticResource DarkInput}"/>
-					<TextBlock Text="For real-time speech-to-text. Get from speechmatics.com" Style="{StaticResource HintLabel}" Margin="4,2,0,16"/>
+                <Border Height="1" Background="#25FFFFFF" Margin="0,0,0,20"/>
 
-					<!-- BACKEND URL -->
-					<TextBlock Text="BACKEND URL (fallback key fetch)" Style="{StaticResource SectionLabel}"/>
-					<TextBox x:Name="BackendUrlBox" Style="{StaticResource DarkInput}" FontFamily="Segoe UI"/>
-					<TextBlock Text="Optional: Fetches Speechmatics key from your deployed backend" Style="{StaticResource HintLabel}" Margin="4,2,0,16"/>
+                <!-- ── ABOUT ──────────────────────────────────────── -->
+                <TextBlock Text="ABOUT" Style="{StaticResource SectionLabel}"/>
+                <StackPanel Margin="2,0,0,0">
+                    <Grid Margin="0,0,0,7">
+                        <TextBlock Text="Version"  Foreground="#6b7280" FontSize="12" FontFamily="Segoe UI"/>
+                        <TextBlock x:Name="VersionLabel" Foreground="#94a3b8" FontSize="12" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,7">
+                        <TextBlock Text="Backend"  Foreground="#6b7280" FontSize="12" FontFamily="Segoe UI"/>
+                        <TextBlock Text="https://coopilotxai.com" Foreground="#94a3b8" FontSize="12" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,7">
+                        <TextBlock Text="Account"  Foreground="#6b7280" FontSize="12" FontFamily="Segoe UI"/>
+                        <TextBlock x:Name="AccountLabel" Foreground="#94a3b8" FontSize="12" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,14">
+                        <TextBlock Text="Credits"  Foreground="#6b7280" FontSize="12" FontFamily="Segoe UI"/>
+                        <TextBlock x:Name="CreditsAboutLabel" Foreground="#4ade80" FontSize="12" FontFamily="Segoe UI" FontWeight="SemiBold" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <Button x:Name="SignInSettingsBtn" Content="Sign in for more credits"
+                            Click="SignInSettingsBtn_Click"
+                            Background="Transparent" BorderThickness="0"
+                            Foreground="#38BDF8" FontSize="12" FontFamily="Segoe UI"
+                            HorizontalAlignment="Left" Cursor="Hand" Padding="0,0,0,6"
+                            Visibility="Collapsed"/>
+                    <Button Content="Check for Updates…"
+                            Click="CheckUpdatesBtn_Click"
+                            Background="Transparent" BorderThickness="0"
+                            Foreground="#38BDF8" FontSize="12" FontFamily="Segoe UI"
+                            HorizontalAlignment="Left" Cursor="Hand" Padding="0"/>
+                </StackPanel>
 
-					<Border Height="1" Background="#1e232d" Margin="0,4,0,16"/>
+                </StackPanel>
+            </ScrollViewer>
 
-					<!-- COOPILOTX ACCOUNT -->
-					<Border Background="#0a1628" CornerRadius="10" Padding="14,12" Margin="0,0,0,12"
-                            BorderBrush="#1e3a5f" BorderThickness="1">
-						<StackPanel>
-							<StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-								<Border Background="#1e3a5f" CornerRadius="6" Width="24" Height="24" Margin="0,0,8,0">
-									<TextBlock Text="⚡" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-								</Border>
-								<StackPanel VerticalAlignment="Center">
-									<TextBlock Text="CoopilotX Account" Foreground="#60a5fa" FontSize="12" FontWeight="Bold" FontFamily="Segoe UI"/>
-									<TextBlock Text="Sync your credits with coopilotxai.com" Foreground="#3d4d5f" FontSize="10" FontFamily="Segoe UI"/>
-								</StackPanel>
-							</StackPanel>
-							<TextBlock Text="ACCOUNT EMAIL" Style="{StaticResource SectionLabel}"/>
-							<TextBox x:Name="CoopilotEmailBox" Style="{StaticResource DarkInput}" FontFamily="Segoe UI"
-                                     Height="36" Padding="10,6"/>
-							<TextBlock Text="Enter your coopilotxai.com login email to show credits in the app"
-                                       Style="{StaticResource HintLabel}" Margin="4,4,0,0"/>
-						</StackPanel>
-					</Border>
+            <!-- Footer -->
+            <StackPanel Grid.Row="3">
+                <Border Height="1" Background="#25FFFFFF"/>
+            <TextBlock Text="Config saved locally · coopilotxai.com"
+                       Foreground="#64748B" FontSize="10" FontFamily="Segoe UI"
+                       Margin="22,10,22,14"/>
 
-					<Border Height="1" Background="#1e232d" Margin="0,4,0,16"/>
+            <!-- Hidden fields — preserve config round-trip -->
+            </StackPanel>
 
-					<!-- AUDIO DEVICE -->
-					<TextBlock Text="AUDIO INPUT DEVICE" Style="{StaticResource SectionLabel}"/>
-					<ComboBox x:Name="AudioDeviceCombo" Style="{StaticResource DarkCombo}"/>
-					<TextBlock Text="Use headset mic for best accuracy. Run engine first to populate list." Style="{StaticResource HintLabel}" Margin="4,2,0,16"/>
+            <ComboBox x:Name="ModelCombo"          Visibility="Collapsed"/>
+            <ComboBox x:Name="AudioDeviceCombo"    Visibility="Collapsed"/>
+            <TextBox  x:Name="ApiKeyBox"            Visibility="Collapsed"/>
+            <TextBox  x:Name="SpeechmaticsKeyBox"  Visibility="Collapsed"/>
+            <TextBox  x:Name="BackendUrlBox"        Visibility="Collapsed"/>
+            <TextBox  x:Name="CoopilotEmailBox"     Visibility="Collapsed"/>
+            <Slider   x:Name="TempSlider"           Visibility="Collapsed" Value="0.2"/>
+            <TextBlock x:Name="TempLabel"           Visibility="Collapsed"/>
+            <Slider   x:Name="MainOpacitySlider"    Visibility="Collapsed" Value="50" Minimum="1" Maximum="100" ValueChanged="MainOpacitySlider_ValueChanged"/>
+            <TextBlock x:Name="MainOpacityLabel"    Visibility="Collapsed"/>
+            <Slider   x:Name="OverlayOpacitySlider" Visibility="Collapsed" Value="50" Minimum="1" Maximum="100" ValueChanged="OverlayOpacitySlider_ValueChanged"/>
+            <TextBlock x:Name="OverlayOpacityLabel" Visibility="Collapsed"/>
 
-					<Border Height="1" Background="#1e232d" Margin="0,4,0,16"/>
-
-					<!-- TRANSPARENCY -->
-					<TextBlock Text="TRANSPARENCY" Style="{StaticResource SectionLabel}"/>
-
-					<DockPanel Margin="0,4,0,4">
-						<TextBlock Text="Main Window" Foreground="#94a3b8" FontSize="12" FontFamily="Segoe UI"
-                                   DockPanel.Dock="Left" VerticalAlignment="Center" Width="120"/>
-						<Border DockPanel.Dock="Right" Background="#1e3a5f" CornerRadius="4" Padding="8,2" HorizontalAlignment="Right">
-							<TextBlock x:Name="MainOpacityLabel" Text="98%" Foreground="#60a5fa" FontSize="12" FontWeight="Bold" FontFamily="Consolas"/>
-						</Border>
-					</DockPanel>
-					<Slider x:Name="MainOpacitySlider" Minimum="10" Maximum="100" Value="98"
-                            TickFrequency="5" IsSnapToTickEnabled="True"
-                            ValueChanged="MainOpacitySlider_ValueChanged" Margin="0,0,0,4"/>
-					<DockPanel Margin="4,0,4,12">
-						<TextBlock Text="10% — Nearly hidden" Foreground="#3d4d5f" FontSize="9" DockPanel.Dock="Left"/>
-						<TextBlock Text="100% — Fully visible" Foreground="#3d4d5f" FontSize="9" DockPanel.Dock="Right" HorizontalAlignment="Right"/>
-					</DockPanel>
-
-					<DockPanel Margin="0,4,0,4">
-						<TextBlock Text="Camera Overlay" Foreground="#94a3b8" FontSize="12" FontFamily="Segoe UI"
-                                   DockPanel.Dock="Left" VerticalAlignment="Center" Width="120"/>
-						<Border DockPanel.Dock="Right" Background="#1e3a5f" CornerRadius="4" Padding="8,2" HorizontalAlignment="Right">
-							<TextBlock x:Name="OverlayOpacityLabel" Text="90%" Foreground="#60a5fa" FontSize="12" FontWeight="Bold" FontFamily="Consolas"/>
-						</Border>
-					</DockPanel>
-					<Slider x:Name="OverlayOpacitySlider" Minimum="10" Maximum="100" Value="90"
-                            TickFrequency="5" IsSnapToTickEnabled="True"
-                            ValueChanged="OverlayOpacitySlider_ValueChanged" Margin="0,0,0,4"/>
-					<DockPanel Margin="4,0,4,12">
-						<TextBlock Text="10% — Ghost overlay" Foreground="#3d4d5f" FontSize="9" DockPanel.Dock="Left"/>
-						<TextBlock Text="100% — Fully opaque" Foreground="#3d4d5f" FontSize="9" DockPanel.Dock="Right" HorizontalAlignment="Right"/>
-					</DockPanel>
-
-					<Border Height="1" Background="#1e232d" Margin="0,4,0,16"/>
-
-					<!-- TEMPERATURE -->
-					<DockPanel Margin="0,0,0,6">
-						<TextBlock Text="TEMPERATURE" Style="{StaticResource SectionLabel}" DockPanel.Dock="Left" VerticalAlignment="Center"/>
-						<Border DockPanel.Dock="Right" Background="#1e3a5f" CornerRadius="4" Padding="8,2" HorizontalAlignment="Right">
-							<TextBlock x:Name="TempLabel" Text="0.2" Foreground="#60a5fa" FontSize="12" FontWeight="Bold" FontFamily="Consolas"/>
-						</Border>
-					</DockPanel>
-					<Slider x:Name="TempSlider" Minimum="0" Maximum="1" Value="0.2"
-                            TickFrequency="0.1" IsSnapToTickEnabled="True"
-                            ValueChanged="TempSlider_ValueChanged" Margin="0,0,0,4"/>
-					<DockPanel Margin="4,0,4,12">
-						<TextBlock Text="0.0 — Precise" Foreground="#3d4d5f" FontSize="9" DockPanel.Dock="Left"/>
-						<TextBlock Text="1.0 — Creative" Foreground="#3d4d5f" FontSize="9" DockPanel.Dock="Right" HorizontalAlignment="Right"/>
-					</DockPanel>
-
-					<!-- QUICK GUIDE -->
-					<Border Background="#0d1117" CornerRadius="8" Padding="14,10" Margin="0,4,0,8"
-                            BorderBrush="#1e232d" BorderThickness="1">
-						<StackPanel>
-							<TextBlock Text="💡 Quick Guide" Foreground="#60a5fa" FontSize="11" FontWeight="Bold" Margin="0,0,0,6"/>
-							<TextBlock Foreground="#4b5563" FontSize="10.5" TextWrapping="Wrap" LineHeight="18" FontFamily="Segoe UI">
-								<Run Text="• SPACE — toggle mic (listen → answer)"/>
-								<LineBreak/>
-								<Run Text="• F8 — analyze what's on your screen (needs OpenAI key)"/>
-								<LineBreak/>
-								<Run Text="• F12 — toggle debug log"/>
-								<LineBreak/>
-								<Run Text="• Ctrl+Shift+F4 — emergency close (stealth mode)"/>
-								<LineBreak/>
-								<LineBreak/>
-								<Run Text="• For interviews: GPT-4.1 + temp 0.2 = sharp, consistent answers"/>
-								<LineBreak/>
-								<Run Text="• For practice: GPT-4o-mini + temp 0.4 = fast and cheap"/>
-								<LineBreak/>
-								<Run Text="• Free option: Groq Llama 3.3 (rate limited, weaker quality)"/>
-								<LineBreak/>
-								<Run Text="• Keys saved locally — never sent anywhere except the AI provider"/>
-							</TextBlock>
-						</StackPanel>
-					</Border>
-
-				</StackPanel>
-			</ScrollViewer>
-
-			<!-- FOOTER -->
-			<Border Grid.Row="2" Background="#0f1219" CornerRadius="0,0,14,14" Padding="22,14"
-                    BorderBrush="#1e232d" BorderThickness="0,1,0,0">
-				<DockPanel>
-					<TextBlock Text="Config saved to %AppData%\InterviewCopilot" Foreground="#2a2f3a" FontSize="9"
-                               DockPanel.Dock="Left" VerticalAlignment="Center" FontFamily="Segoe UI"/>
-					<StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
-						<Button Content="Cancel" Click="CancelBtn_Click" Width="80" Height="34"
-                                Background="Transparent" Foreground="#6b7280" BorderThickness="0"
-                                Cursor="Hand" FontSize="13" FontFamily="Segoe UI"/>
-						<Button x:Name="SaveBtn" Content="Save &amp; Apply" Click="SaveBtn_Click"
-                                Width="130" Height="34" Cursor="Hand" FontSize="13"
-                                FontWeight="SemiBold" Foreground="White" FontFamily="Segoe UI">
-							<Button.Template>
-								<ControlTemplate TargetType="Button">
-									<Border x:Name="Bd" Background="#2563eb" CornerRadius="8" Padding="14,6">
-										<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-									</Border>
-									<ControlTemplate.Triggers>
-										<Trigger Property="IsMouseOver" Value="True">
-											<Setter TargetName="Bd" Property="Background" Value="#3b82f6"/>
-										</Trigger>
-									</ControlTemplate.Triggers>
-								</ControlTemplate>
-							</Button.Template>
-						</Button>
-					</StackPanel>
-				</DockPanel>
-			</Border>
-
-		</Grid>
-	</Border>
+        </Grid>
+    </Border>
 </Window>

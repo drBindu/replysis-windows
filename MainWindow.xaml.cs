@@ -49,6 +49,7 @@ namespace InterviewCopilot
         private bool _newSessionInProgress;
         private bool _resumeCollapsed = false;
         private bool _isCameraMode = false;
+        private bool _stealthMode = true;
         private int _audioDeviceId = -1;
         private bool _justStartedListening = false;  // suppress stale reads for 400ms after unmute
         private int  _listenStartTicks = 0;
@@ -122,7 +123,8 @@ namespace InterviewCopilot
                 try
                 {
                     NuclearKillOldProcesses();
-                    // try { WindowStealth.SetStealthMode(this, true); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); } // TEMP disabled for screenshot
+                    try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
+                    UpdateStealthBtn();
 
                     answerWindow = new AnswerWindow();
                     answerWindow.ShowInTaskbar = false;
@@ -622,6 +624,32 @@ namespace InterviewCopilot
         }
 
         // ══════════════════════════════════════════════════════════════════════
+        // STEALTH MODE
+        // ══════════════════════════════════════════════════════════════════════
+        private void StealthBtn_Click(object sender, RoutedEventArgs e)
+        {
+            _stealthMode = !_stealthMode;
+            try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
+            UpdateStealthBtn();
+        }
+
+        private void UpdateStealthBtn()
+        {
+            if (StealthIcon == null) return;
+            if (_stealthMode)
+            {
+                StealthLabel.Text = "Stealth ON";
+                StealthLabel.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4ade80"));
+                StealthIcon.Text = "🛡";
+            }
+            else
+            {
+                StealthLabel.Text = "Stealth OFF";
+                StealthLabel.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#ef4444"));
+                StealthIcon.Text = "👁‍🗨";
+            }
+        }
+
         // CAMERA MODE
         // ══════════════════════════════════════════════════════════════════════
         private void CameraMode_Click(object sender, RoutedEventArgs e)
