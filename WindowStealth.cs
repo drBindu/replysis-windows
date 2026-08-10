@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -25,34 +25,89 @@ namespace InterviewCopilot
         private const int WS_EX_APPWINDOW = 0x00040000;
         #endregion
 
+        /// <summary>
+        /// Apply (or clear) screen-capture exclusion on a raw HWND. WPF Popups (dropdowns,
+        /// menus) live in their OWN top-level window, so the main window's stealth does NOT
+        /// cover them — without this they flash into screen recordings even in stealth mode.
+        /// </summary>
+        public static void SetCaptureExclusion(IntPtr hwnd, bool enable)
+        {
+            if (hwnd == IntPtr.Zero) return;
+            try { SetWindowDisplayAffinity(hwnd, enable ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE); }
+            catch (Exception ex) { DebugWindow.Log("STEALTH", "SetCaptureExclusion error: " + ex.Message); }
+        }
+
         public static void SetStealthMode(Window window, bool enable)
         {
-            var helper = new WindowInteropHelper(window);
-            IntPtr hwnd = helper.Handle;
-            if (hwnd == IntPtr.Zero) return;
-
-            if (enable)
+            if (window == null) return;
+            try
             {
-                window.ShowInTaskbar = false;
+                // Always set WPF property immediately (works even before HWND handle creation)
+                window.ShowInTaskbar = !enable;
 
-                int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                exStyle = (exStyle | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
-                SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+                void ApplyHwndStealth()
+                {
+                    try
+                    {
+                        var helper = new WindowInteropHelper(window);
+                        IntPtr hwnd = helper.Handle;
+                        if (hwnd == IntPtr.Zero) return;
 
-                // Exclude from screen capture (OBS, Teams, screen share, etc.)
-                SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+                        if (enable)
+                        {
+                            window.ShowInTaskbar = false;
+                            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                            exStyle = (exStyle | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
+                            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+
+                            // Exclude from screen capture (OBS, Teams, screen share, etc.)
+                            if (SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) == 0)
+                            {
+                                DebugWindow.Log("STEALTH",
+                                    $"SetWindowDisplayAffinity failed (err {Marshal.GetLastWin32Error()}) — " +
+                                    "window may be visible in screen capture. Requires Windows 10 v2004+.");
+                            }
+                        }
+                        else
+                        {
+                            // If window is AnswerWindow, keep ShowInTaskbar = false
+                            if (!(window is AnswerWindow))
+                            {
+                                window.ShowInTaskbar = true;
+                            }
+                            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                            exStyle = (exStyle & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW;
+                            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+
+                            SetWindowDisplayAffinity(hwnd, WDA_NONE);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugWindow.Log("STEALTH", "ApplyHwndStealth error: " + ex.Message);
+                    }
+                }
+
+                var helper = new WindowInteropHelper(window);
+                if (helper.Handle == IntPtr.Zero)
+                {
+                    EventHandler? handler = null;
+                    handler = (s, e) =>
+                    {
+                        window.SourceInitialized -= handler;
+                        ApplyHwndStealth();
+                    };
+                    window.SourceInitialized += handler;
+                }
+                else
+                {
+                    ApplyHwndStealth();
+                }
             }
-            else
+            catch (Exception ex)
             {
-                window.ShowInTaskbar = true;
-
-                int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                exStyle = (exStyle & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW;
-                SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-
-                // Restore normal capture visibility
-                SetWindowDisplayAffinity(hwnd, WDA_NONE);
+                DebugWindow.Log("STEALTH", "SetStealthMode error: " + ex.Message);
             }
         }
-   }
+    }
 }
