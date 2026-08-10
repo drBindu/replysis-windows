@@ -30,6 +30,13 @@ namespace InterviewCopilot
             _ = LoopAsync(_cts.Token);
         }
 
+        public static void Stop()
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
+        }
+
         private static async Task LoopAsync(CancellationToken ct)
         {
             bool firstBeatSent = false;
@@ -77,14 +84,14 @@ namespace InterviewCopilot
                 if (!res.IsSuccessStatusCode)
                 {
                     string body = await res.Content.ReadAsStringAsync();
-                    System.Diagnostics.Debug.WriteLine($"[PRESENCE] HTTP {(int)res.StatusCode}: {body.Substring(0, Math.Min(body.Length, 160))}");
+                    DebugWindow.Log("PRESENCE", $"HTTP {(int)res.StatusCode}: {body[..Math.Min(body.Length, 160)]}");
                     return false;
                 }
                 return true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[PRESENCE] beat failed: {ex.Message}");
+                DebugWindow.Log("PRESENCE", $"beat failed: {ex.Message}");
                 return false;
             }
         }

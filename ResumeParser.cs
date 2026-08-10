@@ -28,6 +28,16 @@ namespace InterviewCopilot
         private static int NOW_YEAR  => DateTime.Now.Year;
         private static int NOW_MONTH => DateTime.Now.Month;
 
+        // Cache: avoid re-parsing the same resume text on every AI call
+        private static string? _cachedResumeText;
+        private static string? _cachedFacts;
+
+        public static void InvalidateCache()
+        {
+            _cachedResumeText = null;
+            _cachedFacts = null;
+        }
+
         /// <summary>
         /// Returns a clean summary of real resume facts for use in AI prompts.
         /// </summary>
@@ -35,6 +45,9 @@ namespace InterviewCopilot
         {
             if (string.IsNullOrWhiteSpace(resume) || resume.Length < 50)
                 return "No resume provided.";
+
+            if (_cachedResumeText == resume && _cachedFacts != null)
+                return _cachedFacts;
 
             var sb = new StringBuilder();
 
@@ -47,8 +60,8 @@ namespace InterviewCopilot
                 string tl = t.ToLower();
                 if (t.Length > 2 && t.Length < 50 && !t.Contains(":") && !t.StartsWith("•")
                     && !System.Array.Exists(nameSkip, w => tl.Contains(w))
-                    && !Regex.IsMatch(t, @"^\d") // skip lines starting with a number
-                    && !Regex.IsMatch(t, @"[@|/\\]")) // skip lines with email/url characters
+                    && !RxStartsWithDigit.IsMatch(t)
+                    && !RxEmailOrUrlChar.IsMatch(t))
                 {
                     sb.AppendLine("Name: " + t);
                     break;
@@ -81,7 +94,9 @@ namespace InterviewCopilot
                     sb.AppendLine("  - " + t.TrimStart('•', '-', ' ', '\t'));
             }
 
-            return sb.ToString();
+            _cachedResumeText = resume;
+            _cachedFacts = sb.ToString();
+            return _cachedFacts;
         }
 
         // ── Job extraction ──────────────────────────────────────────
@@ -94,6 +109,9 @@ namespace InterviewCopilot
             public int StartIdx { get; set; }
             public int EndIdx { get; set; }
         }
+
+        private static readonly Regex RxStartsWithDigit = new(@"^\d",      RegexOptions.Compiled);
+        private static readonly Regex RxEmailOrUrlChar   = new(@"[@|/\\]", RegexOptions.Compiled);
 
         private static readonly Regex DatePattern = new Regex(
             @"([A-Za-z]{3,9})\s+(\d{4})\s*[-–—]\s*(Present|Till\s*Date|[A-Za-z]{3,9}\s+\d{4})",

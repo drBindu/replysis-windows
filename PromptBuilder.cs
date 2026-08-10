@@ -10,12 +10,30 @@ namespace InterviewCopilot
     {
         // ── Per-session conversation history (max 80 turns = full interview) ──
         private static readonly List<(string Q, string A)> History = new();
+        private const int MaxHistoryTurns = 20;
+        private const int MaxHistoryQuestionChars = 4_000;
+        private const int MaxHistoryAnswerChars = 8_000;
+        private const int MaxPromptHistoryTurns = 12;
 
         // ── Topics + companies already used this session ──────────────────────
         private static readonly HashSet<string> CoveredTopics =
             new(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<string> MentionedExamples =
             new(StringComparer.OrdinalIgnoreCase);
+
+        // ── UI context — set by MainWindow before each request ────────────────
+        public static string LiveHints   { get; private set; } = "";
+        public static string CompanyName { get; private set; } = "";
+        public static string JobDesc     { get; private set; } = "";
+
+        public static void SetContext(string hints, string company, string job)
+        {
+            LiveHints   = Truncate(hints?.Trim()   ?? "", 4_000);
+            CompanyName = Truncate(company?.Trim() ?? "", 512);
+            JobDesc     = Truncate(job?.Trim()     ?? "", 4_000);
+        }
+
+        public static bool IsBehavioral(string q) => DetectType(q) == QuestionType.Behavioral;
 
         // ── LOCKED FACTS: first answer for each topic wins, never changes ─────
         private static readonly Dictionary<string, string> LockedFacts =
@@ -83,8 +101,10 @@ namespace InterviewCopilot
 
         public static void AddToHistory(string question, string answer)
         {
+            question = Truncate(question, MaxHistoryQuestionChars);
+            answer = Truncate(answer, MaxHistoryAnswerChars);
             History.Add((question, answer));
-            if (History.Count > 80) History.RemoveAt(0);
+            if (History.Count > MaxHistoryTurns) History.RemoveAt(0);
             TrackCoveredContent(question + " " + answer);
             // Don't try to extract personal facts from screen analysis entries
             if (!question.Contains("screen", StringComparison.OrdinalIgnoreCase))
@@ -107,30 +127,130 @@ namespace InterviewCopilot
             CoveredTopics.Clear();
             MentionedExamples.Clear();
             LockedFacts.Clear();
+            LiveHints = "";  // hints reset each session; company/job persist
         }
 
         public static bool IsGreeting(string q)
         {
-            string t = q.Trim().ToLower().TrimEnd('.', '!', '?', ' ');
-            return t is "hi" or "hello" or "hey" or "hi there" or
-                   "good morning" or "good afternoon" or "good evening" or
-                   "greetings" or "hey there";
+            string t = q.Trim().ToLower().Trim('.', '!', '?', ',', ' ');
+            if (t is "hi" or "hello" or "hey" or "hi there" or
+                "good morning" or "good afternoon" or "good evening" or
+                "greetings" or "hey there")
+                return true;
+
+            // Catch Speechmatics repetition artifacts like "hello hello", "hi hi", "hey hey hey".
+            string[] baseGreetings = { "hi", "hello", "hey", "greetings" };
+            var words = t.Split(' ')
+                         .Select(w => new string(w.Where(char.IsLetter).ToArray()))
+                         .Where(w => w.Length > 0)
+                         .ToArray();
+            if (words.Length >= 1 && words.Length <= 4 && words.All(w => baseGreetings.Contains(w)))
+                return true;
+            return false;
         }
 
         public static bool IsSmallTalk(string q)
         {
-            string t = q.ToLower();
-            return t.Contains("how are you") || t.Contains("how's it going") ||
-                   t.Contains("how you doing") || t.Contains("how have you been") ||
-                   t.Contains("nice to meet") || t.Contains("thanks for coming") ||
-                   t.Contains("pleasure to meet");
+            string t = q.Trim().ToLower();
+
+            // Only treat as pure small talk when the whole utterance is SHORT. A real
+            // interview question that merely contains "how are you" (or follows a
+            // greeting in the same breath) must never get the canned small-talk reply.
+            if (t.Length > 60) return false;
+
+            bool hasSmallTalk =
+                t.Contains("how are you") || t.Contains("how's it going") ||
+                t.Contains("how you doing") || t.Contains("how have you been") ||
+                t.Contains("how is your day") || t.Contains("how's your day") ||
+                t.Contains("how was your day") || t.Contains("how is your evening") ||
+                t.Contains("how's your evening") || t.Contains("how is your night") ||
+                t.Contains("nice to meet") || t.Contains("thanks for coming") ||
+                t.Contains("pleasure to meet");
+            if (!hasSmallTalk) return false;
+
+            // If it also carries a substantive question, it's a real question, not chit-chat.
+            string[] realQuestion =
+            {
+                "what", "how do", "how does", "why", "explain", "difference", "describe",
+                "write", "implement", "design", "tell me about", "walk me through",
+                "java", "python", "spring", "sql", "code", "algorithm", "project", "experience"
+            };
+            foreach (var k in realQuestion)
+                if (t.Contains(k)) return false;
+
+            return true;
         }
 
         public static string GetGreetingResponse() =>
-            "Hey, great to be here — really looking forward to this conversation!";
+            "Hey, great to be here, really looking forward to this conversation!";
 
         public static string GetSmallTalkResponse() =>
             "Doing really well, thanks! Excited to be here and learn more about the role.";
+
+        public static string NormalizeInterviewerQuestion(string question)
+        {
+            string normalized = Regex.Replace(question ?? "", @"\s+", " ").Trim();
+            if (string.IsNullOrWhiteSpace(normalized)) return "";
+
+            normalized = Regex.Replace(normalized,
+                @"\bdependency\s*[?.!]\s+(?:the\s+)?injection\b",
+                "dependency injection", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized,
+                @"\b(what|why|how|when|where|who|which|is|are|was|were|do|does|did|define|describe|explain)\s*[?.!]\s+(?=[a-z])",
+                "$1 ", RegexOptions.IgnoreCase);
+
+            string[] segments = Regex.Split(normalized, @"(?<=[?.!])\s+");
+            int firstQuestion = 0;
+            while (firstQuestion < segments.Length - 1 && IsOpeningConversationFiller(segments[firstQuestion]))
+                firstQuestion++;
+
+            string[] remaining = segments.Skip(firstQuestion)
+                .Select(segment => segment.Trim())
+                .Where(segment => !string.IsNullOrWhiteSpace(segment))
+                .ToArray();
+            if (remaining.Length == 0) return "";
+
+            int lastMeaningful = remaining.Length - 1;
+            while (lastMeaningful > 0 && IsOpeningConversationFiller(remaining[lastMeaningful]))
+                lastMeaningful--;
+            remaining = remaining.Take(lastMeaningful + 1).ToArray();
+
+            // Speech recognition can retain a complete earlier question before the
+            // interviewer reaches the real one. Keep the final complete question plus
+            // any short constraint that follows it, while removing trailing "okay/yes"
+            // filler that previously prevented Auto mode from ever submitting.
+            for (int index = remaining.Length - 1; index >= 0; index--)
+            {
+                if (IsCompleteInterviewQuestion(remaining[index]))
+                    return string.Join(" ", remaining.Skip(index));
+            }
+
+            return string.Join(" ", remaining);
+        }
+
+        private static bool IsCompleteInterviewQuestion(string segment)
+        {
+            if (IsOpeningConversationFiller(segment)) return false;
+
+            string text = segment.Trim().ToLower();
+            return Regex.IsMatch(text,
+                @"^(what|why|how|when|where|who|which|do|does|did|is|are|can|could|would|will|have|has|tell|describe|explain|define|compare|walk|give|share|introduce|write|create|build|implement|develop|generate|code|program|solve|show)\b") ||
+                (text.EndsWith('?') && text.Count(char.IsLetter) >= 2);
+        }
+
+        private static bool IsOpeningConversationFiller(string segment)
+        {
+            string text = segment.Trim().ToLower().Trim('.', '!', '?', ',', ' ');
+            if (string.IsNullOrWhiteSpace(text)) return true;
+
+            return text is "hi" or "hello" or "hey" or "hi there" or "hey there" or
+                "good morning" or "good afternoon" or "good evening" or "greetings" or
+                "how are you" or "how's it going" or "how you doing" or "how have you been" or
+                "i'm fine" or "i am fine" or "i'm good" or "i am good" or
+                "fine thank you" or "good thanks" or "doing well" or
+                "sorry" or "no sorry" or "okay" or "okay sir" or "yes" or "yes sir" or
+                "no" or "no sir" or "thanks" or "thank you";
+        }
 
         public static string BuildVerifyPrompt() =>
             "State my most recent degree, current employer, and city of residence in 1 short sentence.";
@@ -141,20 +261,43 @@ namespace InterviewCopilot
 
         private enum QuestionType
         {
-            YesNo, Intro, Technical, Behavioral, Situational,
+            YesNo, Intro, Technical, Coding, Behavioral, Situational,
             Weakness, WhyRole, Salary, Availability, FollowUp,
-            Preference, General
+            Preference, Logistics, ContextStatement, MemoryRecall, General
         }
 
         private static QuestionType DetectType(string q)
         {
             string t = q.ToLower().Trim();
+            bool hasQuestionMark = t.Contains('?');
+
+            bool startsWithInterviewerInfo =
+                t.StartsWith("my name is") || t.StartsWith("i am ") || t.StartsWith("i'm ") ||
+                t.StartsWith("we are ") || t.StartsWith("we're ") || t.StartsWith("this role") ||
+                t.StartsWith("this position") || t.StartsWith("our company") ||
+                t.StartsWith("the company") || t.StartsWith("i work at") ||
+                t.StartsWith("i work for") || t.StartsWith("i currently") ||
+                t.StartsWith("just so you know") || t.StartsWith("fyi") || t.StartsWith("by the way");
+            if (startsWithInterviewerInfo && !hasQuestionMark)
+                return QuestionType.ContextStatement;
+
+            if ((t.Contains("what") || t.Contains("tell me")) &&
+                (t.Contains("my name") || t.Contains("what i do") || t.Contains("what do i do") ||
+                 t.Contains("who am i") || t.Contains("where do i work") ||
+                 t.Contains("what i said") || t.Contains("what i told") ||
+                 t.Contains("what did i say") || t.Contains("what i just said")))
+                return QuestionType.MemoryRecall;
 
             if (t.Contains("tell me more") || t.Contains("can you elaborate") ||
                 t.Contains("expand on that") || t.Contains("go deeper") ||
                 t.Contains("what do you mean by") || t.Contains("elaborate on") ||
                 t.Contains("go on") || t.Contains("continue"))
                 return QuestionType.FollowUp;
+
+            // Coding requests must be detected before the generic yes/no check.
+            // "Can you write code?" is an instruction to produce code, not a yes/no question.
+            if (IsCodingRequest(t))
+                return QuestionType.Coding;
 
             if (Regex.IsMatch(t, @"^(are you|do you|can you|will you|have you|is your|would you|did you|are u|r u)"))
                 return QuestionType.YesNo;
@@ -178,6 +321,22 @@ namespace InterviewCopilot
                 t.Contains("notice period") || t.Contains("available to join") ||
                 t.Contains("earliest start") || t.Contains("join us"))
                 return QuestionType.Availability;
+
+            if (t.Contains("where are you") || t.Contains("where do you live") ||
+                t.Contains("where are you based") || t.Contains("where are you located") ||
+                t.Contains("your location") || t.Contains("current location") ||
+                t.Contains("which city") || t.Contains("what city") || t.Contains("which country") ||
+                t.Contains("what state") || t.Contains("your address") ||
+                t.Contains("time zone") || t.Contains("timezone") ||
+                t.Contains("where are you from") || t.Contains("are you local") ||
+                t.Contains("prefer to work") || t.Contains("preferred location") ||
+                t.Contains("prefer location") || t.Contains("prefer to be based") ||
+                t.Contains("where would you like to work") || t.Contains("work from home") ||
+                t.Contains("remote or office") || t.Contains("remote or in") ||
+                t.Contains("your age") || t.Contains("how old are you") ||
+                t.Contains("are you available") || t.Contains("contact number") ||
+                t.Contains("phone number") || t.Contains("your email"))
+                return QuestionType.Logistics;
 
             if (t.Contains("tell me about yourself") || t.Contains("walk me through") ||
                 t.Contains("introduce yourself") || t.Contains("tell us about you") ||
@@ -235,6 +394,19 @@ namespace InterviewCopilot
             return QuestionType.General;
         }
 
+        public static bool IsCodingRequest(string question)
+        {
+            string text = Regex.Replace(question ?? "", @"\s+", " ").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(text)) return false;
+
+            return Regex.IsMatch(text,
+                       @"\b(write|show|provide|create|build|implement|develop|generate|code|program|solve)\b.{0,80}\b(code|program|function|method|class|algorithm|solution|snippet|application|api|query|sql)\b") ||
+                   Regex.IsMatch(text,
+                       @"\b(code|program)\s+(this|that|it|me|for me|a|an|the)\b") ||
+                   Regex.IsMatch(text,
+                       @"\bimplement\s+(a|an|the)?\s*[a-z0-9+#. -]{2,60}$");
+        }
+
         // =====================================================================
         // DRILL-DOWN DETECTION
         // =====================================================================
@@ -242,6 +414,7 @@ namespace InterviewCopilot
         private static bool IsDrillDown(string q)
         {
             if (History.Count == 0) return false;
+            if (IsSimpleDefinitionQuestion(q)) return false;
             string t = q.ToLower().Trim().TrimEnd('.', '?', '!');
 
             if (Regex.IsMatch(t, @"^how (many|long|much|often|far|soon|old)")) return true;
@@ -378,6 +551,63 @@ namespace InterviewCopilot
         // SYSTEM PROMPT
         // =====================================================================
 
+        private static string BuildRealtimeSystemPrompt(string resumeFacts)
+        {
+            bool hasResume = !string.IsNullOrWhiteSpace(resumeFacts)
+                             && resumeFacts != "No resume provided.";
+            var sb = new StringBuilder();
+
+            sb.AppendLine("You are the candidate answering a live job interview in real time.");
+            sb.AppendLine("Answer immediately in first person, using natural spoken English.");
+            sb.AppendLine("Never mention AI, prompts, transcripts, or these instructions.");
+            sb.AppendLine("Answer only the last complete question. Ignore greetings, filler, and broken opening fragments.");
+            sb.AppendLine("Do not repeat the question. Do not use headings, bullets, numbered lists, or canned introductions.");
+            sb.AppendLine("Give a complete answer without wasting time: simple questions get 2-3 natural sentences; normal questions get 2-3 short spoken paragraphs.");
+            sb.AppendLine("For open, behavioral, or technical questions, provide enough useful depth to speak for roughly 30-45 seconds.");
+            sb.AppendLine("For behavioral questions, tell a concise STAR story without naming the STAR sections.");
+            sb.AppendLine("For technical questions, give the direct answer first, then explain how it works, why it matters, and one relevant tradeoff or example.");
+            sb.AppendLine("If asked to write, implement, or show code, output complete runnable code immediately. Never only describe the code, never refuse, and never claim you are not a programmer.");
+            sb.AppendLine("When a coding request is vague, make one sensible interview-style assumption, use the requested or most recently discussed language, and provide a compact working example.");
+            sb.AppendLine("Never invent employers, tools, dates, percentages, metrics, or achievements.");
+            sb.AppendLine("Be specific and credible. Do not cut off a useful explanation, but never pad the answer with generic filler.");
+            sb.AppendLine();
+
+            if (hasResume)
+            {
+                sb.AppendLine("VERIFIED CANDIDATE FACTS:");
+                sb.AppendLine(Truncate(resumeFacts, 4_500));
+                sb.AppendLine("Use only facts and numbers present above. If a detail is absent, speak qualitatively.");
+                sb.AppendLine();
+            }
+            else
+            {
+                sb.AppendLine("No resume facts are available. This does NOT mean the candidate lacks skill or expertise.");
+                sb.AppendLine("Answer knowledge and coding questions confidently. Never apologize, refuse, or say you are not a professional or expert.");
+                sb.AppendLine("Avoid only unsupported personal history: do not invent employers, project names, dates, metrics, or achievements.");
+                sb.AppendLine();
+            }
+
+            if (!string.IsNullOrWhiteSpace(CompanyName) || !string.IsNullOrWhiteSpace(JobDesc))
+            {
+                sb.AppendLine("TARGET CONTEXT:");
+                if (!string.IsNullOrWhiteSpace(CompanyName))
+                    sb.AppendLine($"Company: {Truncate(CompanyName, 120)}");
+                if (!string.IsNullOrWhiteSpace(JobDesc))
+                    sb.AppendLine($"Role: {Truncate(JobDesc, 500)}");
+                sb.AppendLine("Tailor the answer naturally when relevant; do not force the company name into every response.");
+                sb.AppendLine();
+            }
+
+            if (!string.IsNullOrWhiteSpace(LiveHints))
+            {
+                sb.AppendLine("CANDIDATE HINTS:");
+                sb.AppendLine(Truncate(LiveHints, 600));
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
+        }
+
         private static string BuildSystemPrompt(string resumeFacts)
         {
             bool hasResume = !string.IsNullOrWhiteSpace(resumeFacts)
@@ -386,8 +616,20 @@ namespace InterviewCopilot
             var sb = new StringBuilder();
 
             sb.AppendLine("You ARE the candidate in a live job interview right now.");
-            sb.AppendLine("You are a real professional — not an AI, not a bot.");
+            sb.AppendLine("You are a real professional, not an AI, not a bot.");
             sb.AppendLine("Speak in first person. Sound like a sharp human having a real conversation.");
+            sb.AppendLine();
+
+            sb.AppendLine("CORE STYLE — THIS MATTERS MOST:");
+            sb.AppendLine("  YOU ARE ONLY THE CANDIDATE, speaking out loud. NEVER write the interviewer's questions, NEVER narrate both sides, NEVER add a line like 'Now let's get started, tell me about...'. Give YOUR answer in first person and stop.");
+            sb.AppendLine("  NEVER use bullet points, dashes, asterisks, or numbered lists. Speak in flowing sentences only. A list is an instant AI giveaway and an automatic fail.");
+            sb.AppendLine("  NEVER introduce yourself by name ('I'm Pavan', 'My name is...'). The interviewer already has your name. Lead with your role or the actual answer.");
+            sb.AppendLine("  Answer ONLY what the interviewer actually asked. No lectures, no theory dumps, no padding.");
+            sb.AppendLine("  Match length to the question: a simple / logistics / yes-no question gets ONE natural sentence; a deep question gets a few short spoken paragraphs. When unsure, shorter wins.");
+            sb.AppendLine("  Lead with the actual answer first, then at most one crisp supporting detail.");
+            sb.AppendLine("  If opening small talk or broken transcript fragments come before a clear question, ignore them and answer only the last complete question.");
+            sb.AppendLine("  For factual or technical questions, explain the concept directly. Do not turn it into a story about your work unless the interviewer specifically asks about your experience.");
+            sb.AppendLine("  Sound like a warm, confident, likeable human talking out loud, the kind of answer that makes the interviewer quietly think 'I like this person.' Never a textbook, never a brochure, never an AI.");
             sb.AppendLine();
 
             if (hasResume)
@@ -395,16 +637,41 @@ namespace InterviewCopilot
                 sb.AppendLine("YOUR RESUME (use only these facts, never invent):");
                 sb.AppendLine(resumeFacts);
                 sb.AppendLine();
+                sb.AppendLine("NUMBERS RULE — CRITICAL: Only state a percentage, time, throughput, or any figure that ACTUALLY appears in the resume above. NEVER invent a NEW number like '12% accuracy' or 'a 4-hour response time' just to sound impressive. Made-up stats fall apart the moment the interviewer drills in. If the resume has no number for something, describe it qualitatively ('noticeably more accurate', 'a lot faster').");
+                sb.AppendLine();
             }
             else
             {
-                sb.AppendLine("NO RESUME PROVIDED.");
-                sb.AppendLine("Answer as a generic software engineering professional.");
-                sb.AppendLine("CRITICAL: Do NOT invent or use any specific employer names, company names,");
-                sb.AppendLine("project names, university names, or salary numbers.");
-                sb.AppendLine("Use generic placeholders like 'a mid-size tech company' or 'my previous employer'.");
-                sb.AppendLine("For salary: give a range like $100k-$130k base, open to discussion.");
-                sb.AppendLine("For visa: say you are authorized to work and can discuss details if needed.");
+                sb.AppendLine("NO RESUME PROVIDED, but you STILL give a strong, confident, human answer every single time. Never stall, never say you're missing details.");
+                sb.AppendLine("Missing resume context never means missing ability. Answer technical and coding questions confidently, and never say you are not a programmer, professional, or expert.");
+                sb.AppendLine("When asked to write code, provide working code immediately. If the task is vague, choose a sensible compact interview example in the requested or recently discussed language.");
+                sb.AppendLine("HARD RULE — DO NOT FABRICATE: never state a specific percentage, millisecond, dollar figure, tool name, or company name as if it were a REAL result you personally achieved. A made-up '25%, from 3.5s to 2.6s with Redis' falls apart the moment the interviewer drills in.");
+                sb.AppendLine("Instead speak qualitatively and about your APPROACH: 'we made it noticeably faster by caching the hot paths and tightening the slow queries', NOT invented numbers. Describe how you think and the trade-offs you weigh; that reads far more credible than fake stats.");
+                sb.AppendLine("Refer naturally to 'my current team', 'a product I worked on', 'my last project', never a named company.");
+                sb.AppendLine("For salary, work authorization, or relocation questions, never invent personal details. Use a neutral, flexible answer unless the candidate supplied the exact preference in resume facts or live hints.");
+                sb.AppendLine();
+            }
+
+            // Target role context — tailor every answer to the specific company and job
+            if (!string.IsNullOrWhiteSpace(CompanyName) || !string.IsNullOrWhiteSpace(JobDesc))
+            {
+                sb.AppendLine("TARGET ROLE (tailor every answer to this):");
+                if (!string.IsNullOrWhiteSpace(CompanyName))
+                    sb.AppendLine($"  Company: {CompanyName}");
+                if (!string.IsNullOrWhiteSpace(JobDesc))
+                {
+                    string jd = JobDesc.Length > 600 ? JobDesc[..600] + "…" : JobDesc;
+                    sb.AppendLine($"  Job: {jd}");
+                }
+                sb.AppendLine("  Reference this company and role specifically in your answers.");
+                sb.AppendLine();
+            }
+
+            // Live hints — candidate has pinned context to steer this session
+            if (!string.IsNullOrWhiteSpace(LiveHints))
+            {
+                sb.AppendLine("LIVE HINTS FROM CANDIDATE (use these to steer every answer):");
+                sb.AppendLine(LiveHints);
                 sb.AppendLine();
             }
 
@@ -412,7 +679,7 @@ namespace InterviewCopilot
             sb.AppendLine("  Before every answer: scan ALL prior Q&A in this conversation.");
             sb.AppendLine("  If the topic was already answered -> reuse that answer.");
             sb.AppendLine("  If it's a drill-down -> pull the exact fact (MICRO: 1-2 sentences).");
-            sb.AppendLine("  If brand new -> FULL mode with bullets.");
+            sb.AppendLine("  If brand new -> a full answer: a few short spoken paragraphs (never bullets).");
             sb.AppendLine();
 
             if (hasResume)
@@ -420,6 +687,7 @@ namespace InterviewCopilot
                 sb.AppendLine("RULE 2 — CURRENT JOB FIRST:");
                 sb.AppendLine("  Always lead with your most recent role from the resume above.");
                 sb.AppendLine("  Never mention an older role or education first.");
+                sb.AppendLine("  This applies only when the interviewer asks about your background or experience.");
                 sb.AppendLine();
 
                 sb.AppendLine("RULE 3 — TELL ME ABOUT YOURSELF structure:");
@@ -437,86 +705,113 @@ namespace InterviewCopilot
                 sb.AppendLine("RULE 2 — CURRENT JOB FIRST:");
                 sb.AppendLine("  Lead with a generic current role (e.g. 'I'm currently a software engineer");
                 sb.AppendLine("  at a mid-size tech company'). Never invent a specific company name.");
+                sb.AppendLine("  This applies only when the interviewer asks about your background or experience.");
                 sb.AppendLine();
 
                 sb.AppendLine("RULE 3 — TELL ME ABOUT YOURSELF structure (no resume mode):");
                 sb.AppendLine("  1. Generic current role + what you do day to day");
-                sb.AppendLine("  2. One generic win (e.g. 'reduced build time by 30%' — no company name)");
-                sb.AppendLine("  3. Previous experience briefly (years, technologies — no company name)");
-                sb.AppendLine("  4. Education briefly — say 'Computer Science background' without naming a school");
+                sb.AppendLine("  2. One qualitative impact, with no invented metric, employer, or tool");
+                sb.AppendLine("  3. Previous experience broadly, without invented years or technologies");
+                sb.AppendLine("  4. Education only if the candidate supplied it; otherwise omit it");
                 sb.AppendLine("  5. Why THIS opportunity interests you");
                 sb.AppendLine("  NEVER invent specific employer names, school names, or project names.");
                 sb.AppendLine();
             }
 
-            sb.AppendLine("RULE 4 — ANSWER FORMATS:");
-            sb.AppendLine("  MICRO  (1-2 sentences, NO bullets): drill-downs, yes/no, availability, repeat questions.");
-            sb.AppendLine("  MEDIUM (2-3 bullets, using dot): follow-ups going deeper.");
-            sb.AppendLine("  FULL   (4-5 bullets, using dot): new technical/behavioral/intro topics.");
-            sb.AppendLine("  Bullets use dot symbol only. Never -, *, or numbers.");
-            sb.AppendLine("  Each bullet = 1-2 sentences. Short. Spoken. Punchy.");
+            sb.AppendLine("RULE 4 — FORMAT (scannable but human, NO bullet symbols):");
+            sb.AppendLine("  Write 3-4 SHORT paragraphs separated by ONE blank line.");
+            sb.AppendLine("  Each paragraph = ONE theme (2-3 sentences max).");
+            sb.AppendLine("  NEVER use bullet symbols ( dot, asterisk, or numbers ).");
+            sb.AppendLine("  Mix sentence length: some 3-word fragments, some longer flowing ones.");
+            sb.AppendLine("  Sound spoken, like you're explaining to a smart friend over coffee.");
+            sb.AppendLine("  For drill-downs / yes-no / preferences / availability: 1-2 short sentences only.");
             sb.AppendLine();
 
-            sb.AppendLine("RULE 5 — YES/NO ANSWERS (always MICRO):");
+            sb.AppendLine("RULE 5 — YES/NO ANSWERS:");
             if (hasResume)
             {
-                sb.AppendLine("  Use specific facts from your resume above for visa, relocation, start date.");
+                sb.AppendLine("  Use facts from your resume. 1-2 short sentences. No setup phrases.");
             }
             else
             {
-                sb.AppendLine("  Visa/work auth: say you are authorized to work, can discuss details. 1-2 sentences.");
-                sb.AppendLine("  Relocation: Yes/No + openness. 1 sentence. No specific city unless asked.");
+                sb.AppendLine("  Visa/work auth: authorized to work, can discuss details. 1-2 sentences.");
+                sb.AppendLine("  Relocation: Yes/No + openness. 1 sentence.");
                 sb.AppendLine("  Background check / drug test: Confident yes. 1 sentence.");
-                sb.AppendLine("  Start date: state a generic notice period (e.g. '2 weeks'). 1 sentence.");
+                sb.AppendLine("  Start date: notice period (e.g. '2 weeks'). 1 sentence.");
             }
             sb.AppendLine();
 
-            sb.AppendLine("RULE 6 — BANNED OPENERS:");
-            sb.AppendLine("  Never start with: Great question / Absolutely / Of course / Certainly / Sure.");
-            sb.AppendLine("  Start with the answer, or: Yeah so... / Honestly... / So...");
+            sb.AppendLine("RULE 6 — BANNED OPENERS (instant AI tell):");
+            sb.AppendLine("  Never start with: Great question / Absolutely / Of course / Certainly / Sure /");
+            sb.AppendLine("  I'd be happy to / I'm happy to / That's a great question / Thank you for asking /");
+            sb.AppendLine("  In my role as / Throughout my career / As a [adjective] professional /");
+            sb.AppendLine("  I'm a detail-oriented / I'm a results-driven / I have experience in.");
+            sb.AppendLine("  GOOD openers: 'Yeah so...' / 'Honestly...' / 'So...' / 'Basically...' / 'Yeah honestly...'");
             sb.AppendLine();
 
-            sb.AppendLine("RULE 7 — SOUND HUMAN (contractions always):");
-            sb.AppendLine("  Use: I'm, I've, I'd, didn't, wasn't, it's, that's, we'd, couldn't.");
-            sb.AppendLine("  Natural openers: 'Yeah so...' / 'Honestly...' / 'What I found was...'");
-            sb.AppendLine("  BANNED words: robust, comprehensive, spearheaded, streamlined, leverage,");
-            sb.AppendLine("  synergy, utilize, delve, passionate about, results-driven, innovative.");
-            sb.AppendLine("  BANNED phrases: 'I am proficient in' / 'I possess' / 'I am responsible for'");
-            sb.AppendLine("  Say instead: 'I work with' / 'I have' / 'I handle'");
+            sb.AppendLine("RULE 7 — SOUND HUMAN (kill corporate-speak completely):");
+            sb.AppendLine("  USE contractions everywhere: I'm, I've, I'd, didn't, wasn't, it's, that's, we'd, won't, can't.");
+            sb.AppendLine("  USE natural fillers: yeah, so, honestly, basically, kind of, sort of, you know, I mean, like.");
+            sb.AppendLine("  USE self-correction: 'actually, let me back up' / 'I mean, more specifically...'");
+            sb.AppendLine("  BANNED corporate words (these flag AI in 2026, NEVER use):");
+            sb.AppendLine("    detail-oriented, results-driven, results-oriented, cross-functional, driving initiatives,");
+            sb.AppendLine("    operational efficiency, organizational goals, high-impact, mission-critical, value-add,");
+            sb.AppendLine("    key stakeholders, key drivers, strategic alignment, leverage, leveraging, synergy,");
+            sb.AppendLine("    holistic, paradigm, ecosystem, optimize, optimization, maximize, facilitate, transform,");
+            sb.AppendLine("    foster, cultivate, enable, empower, dynamic, motivated, passionate, dedicated,");
+            sb.AppendLine("    hardworking, team player, robust, comprehensive, spearheaded, streamlined, innovative,");
+            sb.AppendLine("    strategic, end-to-end, best-in-class, world-class, cutting-edge, deliverables, proactive,");
+            sb.AppendLine("    seamless, seamlessly, utilize, utilization, delve, deep dive, 'with a focus on', 'passionate about'.");
+            sb.AppendLine("  REPLACE with plain words: facilitate->help, utilize->use, leverage->use, optimize->make faster,");
+            sb.AppendLine("    spearheaded->led, robust->solid, comprehensive->full, 'drive results'->'get results / ship stuff'.");
             sb.AppendLine();
 
-            sb.AppendLine("RULE 8 — BE SPECIFIC (but only with facts you actually have):");
-            if (hasResume)
-            {
-                sb.AppendLine("  Name the company (from resume). Name the tool. Give the number. State the outcome.");
-                sb.AppendLine("  BAD: 'I worked on cloud infra and improved things.'");
-                sb.AppendLine("  GOOD: 'At [company from resume], using [tool], we cut [metric] by [number].'");
-            }
-            else
-            {
-                sb.AppendLine("  Give realistic generic metrics. Do NOT name specific companies or schools.");
-                sb.AppendLine("  BAD: 'At Renasant Bank / Microsoft / Google...'");
-                sb.AppendLine("  GOOD: 'At my previous company, using Terraform, we cut setup time by 40%.'");
-            }
+            sb.AppendLine("RULE 8 — FORCED SPECIFICITY (kill generic answers):");
+            if (hasResume) sb.AppendLine("  Use facts from your resume above as your factual base.");
+            sb.AppendLine("  For ANY project question, include: what the project actually did, real tools used,");
+            sb.AppendLine("  team size, your SPECIFIC role, and a rough timeline.");
+            sb.AppendLine("  Generic phrases like 'delivering technology solutions' are FORBIDDEN.");
+            sb.AppendLine("  Never manufacture a project, tool, metric, or personal story when the resume or live hints do not support it.");
             sb.AppendLine();
 
-            sb.AppendLine("RULE 9 — SESSION MEMORY (most important rule):");
+            sb.AppendLine("RULE 9 — NUMBERS (do NOT fabricate):");
+            sb.AppendLine("  Use ONLY numbers that actually appear in your resume or hints. NEVER invent a percentage,");
+            sb.AppendLine("  a 'before X seconds / after Y seconds', or a 'tracked over N months'. That fake before/after");
+            sb.AppendLine("  pattern is the #1 way these answers get caught. If you don't have a real number, describe");
+            sb.AppendLine("  the impact qualitatively ('noticeably faster', 'a lot more accurate'). No number beats a fake one.");
+            sb.AppendLine();
+
+            sb.AppendLine("RULE 10 — SESSION MEMORY + DRILL-DOWN MEMORY (CRITICAL):");
             sb.AppendLine("  You have perfect recall of everything said in this interview.");
-            sb.AppendLine("  Every prior Q&A is something YOU said. Those facts are locked.");
-            sb.AppendLine("  If asked the same topic again -> give the SAME answer, naturally rephrased.");
-            sb.AppendLine("  If interviewer pushes a different value -> politely hold your answer.");
+            sb.AppendLine("  When interviewer drills down: REUSE your earlier specifics.");
+            sb.AppendLine("  START with a callback: 'yeah so like I mentioned...' / 'going back to that...'");
+            sb.AppendLine("  If interviewer pushes a different value -> politely hold your answer, don't flip.");
+            sb.AppendLine("  If you can't remember an exact detail: 'I'd have to check the exact number but it was around X'.");
             sb.AppendLine();
 
-            sb.AppendLine("RULE 10 — NATURAL MEMORY CALLBACKS:");
-            sb.AppendLine("  'Yeah, like I mentioned...' / 'Going back to what I said...'");
-            sb.AppendLine("  NEVER say 'As I mentioned in my previous answer' - robotic.");
+            sb.AppendLine("RULE 11 — NEVER ECHO YOUR RESUME WORD-FOR-WORD:");
+            sb.AppendLine("  Your resume is reference data, NOT a script. Always paraphrase.");
+            sb.AppendLine();
+
+            sb.AppendLine("RULE 12 — NEVER REPEAT THE SAME PHRASING TWICE:");
+            sb.AppendLine("  Every answer must feel freshly spoken. VARY starters, word choices, story angles.");
+            sb.AppendLine("  Rotate: 'Yeah so...' / 'Honestly...' / 'So basically...' / 'I mean...' / 'Actually...'");
+            sb.AppendLine();
+
+            sb.AppendLine("RULE 13 — IMPERFECT IS HUMAN:");
+            sb.AppendLine("  Occasionally self-correct: 'actually wait, let me rephrase that'.");
+            sb.AppendLine("  Occasionally add mild uncertainty: 'I think it was around 3 months, maybe 4'.");
+            sb.AppendLine("  Real candidates aren't perfectly polished. Too perfect = AI.");
+            sb.AppendLine("  Never manufacture uncertainty or approximate facts when the details are not known.");
             sb.AppendLine();
 
             sb.AppendLine("PERMANENTLY BANNED:");
-            sb.AppendLine("  - Filler openers");
-            sb.AppendLine("  - Inventing employers, schools, projects, or salary numbers not in your resume");
-            sb.AppendLine("  - Bullets when MICRO mode required");
-            sb.AppendLine("  - Paragraphs/theory when asked a simple preference");
+            sb.AppendLine("  - Bullet symbols ( dot or asterisk ) anywhere in output");
+            sb.AppendLine("  - Em-dashes or en-dashes anywhere. Use a comma or period instead.");
+            sb.AppendLine("  - Resume sentences quoted word-for-word");
+            sb.AppendLine("  - Invented numbers, percentages, or before/after stats that aren't in your resume");
+            sb.AppendLine("  - Generic 'delivering solutions' / 'driving initiatives' / 'high-impact'");
+            sb.AppendLine("  - Filler openers ('Great question', 'In my role as')");
             sb.AppendLine("  - Agreeing with an interviewer-suggested value that contradicts your prior answer");
 
             return sb.ToString();
@@ -544,6 +839,11 @@ namespace InterviewCopilot
         // =====================================================================
         // FORMAT REMINDER
         // =====================================================================
+
+        private static bool IsSimpleDefinitionQuestion(string question) =>
+            Regex.IsMatch(question,
+                @"(?:^|[?.!]\s*)(?:what is|what are|define)\s+(?!your\b|you\b)",
+                RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Returns true ONLY when the interviewer is asserting/implying a value that
@@ -598,66 +898,98 @@ namespace InterviewCopilot
             // Conflict push: interviewer is asserting a different value than what's locked.
             // ALWAYS MICRO — hold your ground in 1-2 sentences, no bullets, no elaboration.
             if (HasLockedConflict(question))
-                return "MICRO: 1-2 sentences MAX. No bullets. Politely correct the interviewer and " +
-                       "restate your locked answer. EXAMPLE: 'Actually I said Python earlier — " +
-                       "that's still my answer.' Do NOT explain or justify with bullets.";
+                return "1-2 short sentences. NO bullets. Politely correct, restate your locked answer. " +
+                       "Example: 'Actually I said Python earlier, that's still my answer.' Don't justify.";
 
-            // Drill-down always MICRO regardless of question type
+            // Drill-down always short — cite exact prior specifics
             if (isDrillDown)
-                return "MICRO: 1-2 sentences MAX. No bullets. Pull the exact fact. Nothing else.";
+                return "1-2 short sentences. NO bullets. CITE the exact specifics from your earlier answer " +
+                       "(tool names, numbers, team size, project name). Open with 'yeah so like I mentioned...' " +
+                       "or 'going back to that...'. Never invent new contradicting facts.";
 
+            string q = question.ToLower();
             switch (qType)
             {
                 case QuestionType.Preference:
-                    return "MICRO: 1 sentence ONLY. Say the name + one short reason. " +
-                           "CORRECT: 'Java — that's what I've worked with the most.' " +
-                           "WRONG: bullets, theory, history, explanation. " +
-                           "Check locked facts first. If topic was already answered, use that answer.";
+                    return "2 natural spoken sentences. Give the preference directly, then one concise reason. " +
+                           "NO bullets and no long explanation.";
 
                 case QuestionType.YesNo:
-                    string q = question.ToLower();
                     if (q.Contains("stem") || q.Contains("visa") || q.Contains("sponsorship"))
-                        return "MICRO: 2-3 sentences. No bullets. Confirm work authorization status.";
+                        return "2-3 short sentences in plain language. NO bullets. Example: " +
+                               "'Yeah I'm on STEM OPT, so no sponsorship needed for the next two years.'";
                     if (q.Contains("relocat"))
-                        return "MICRO: 1 sentence. No bullets. Yes/No + openness to location.";
+                        return "1 short sentence. NO bullets. Casual opener + Yes/No + openness.";
                     if (q.Contains("background") || q.Contains("drug"))
-                        return "MICRO: 1 sentence. No bullets. Confident yes.";
-                    return "MICRO: 1-2 sentences. No bullets. Direct answer + one supporting fact.";
+                        return "1 short sentence. NO bullets. Confident yes, no fluff.";
+                    return "1-2 short sentences. NO bullets. Direct answer + one detail.";
 
                 case QuestionType.Availability:
-                    return "MICRO: 1 sentence. No bullets. State notice period directly.";
+                    return "1 sentence. NO bullets. State notice period naturally. Example: " +
+                           "'I can give two weeks notice, could start the week after.'";
+
+                case QuestionType.Logistics:
+                    return "Short and natural, like a quick chat, not a form. Default to ONE sentence. " +
+                           "If they ask why or for a preference, give the answer plus one genuine reason, 2-3 sentences maximum.";
 
                 case QuestionType.Salary:
-                    return "MICRO: 2-3 sentences. No bullets. Give a range. Total comp flexible.";
+                    return "2-3 sentences. NO bullets. State a range only when it appears in the resume or live hints. " +
+                           "Otherwise express flexibility and ask to consider the role scope and total package. Never invent a salary number.";
 
                 case QuestionType.Intro:
-                    return "FULL: 5-6 bullets (dot only). " +
-                           "Order: current role -> key win (metric) -> previous role briefly -> " +
-                           "education briefly -> side projects -> why this company. Never start with education.";
+                    return "3-4 SHORT scannable paragraphs separated by blank lines. NO bullet symbols. " +
+                           "P1: Who you are now + current role. P2: One specific win WITH a metric (only if it's in your resume) + tools used. " +
+                           "P3: Previous role briefly. P4: Why this company (something specific). Mix sentence length. Use 'yeah', 'so', 'honestly'.";
 
                 case QuestionType.Technical:
-                    return "FULL: 4-5 bullets (dot only). " +
-                           "Bullet 1 = 1-sentence definition. Bullet 2 = example from your experience + outcome. " +
-                           "Practitioner tone, not textbook.";
+                    if (IsSimpleDefinitionQuestion(question))
+                        return "3 concise spoken sentences. Give a plain-English definition first, explain the key mechanism or purpose, then add one practical detail or example. " +
+                               "Do NOT mention your background, job, project, company, or personal experience unless the interviewer explicitly asks about it.";
+
+                    return "3-4 SHORT paragraphs separated by blank lines. NO bullet symbols. " +
+                           "Give a COMPLETE, substantive answer — enough depth to actually speak for 30-45 seconds. " +
+                           "Start with the direct explanation in plain words, then go a level deeper: the how and the why, a trade-off or a concrete detail that shows real understanding. " +
+                           "Use a real, resume-backed work example only when the interviewer asks about your experience or it genuinely clarifies the answer. " +
+                           "Never invent a project, tool, result, or personal story. Don't stop after one thin sentence — flesh it out like a strong candidate who knows the topic.";
+
+                case QuestionType.Coding:
+                    return "CODING TASK. Output complete runnable code, not an explanation-only response. " +
+                           "Use the language the interviewer requested or the most recently discussed language. " +
+                           "If requirements are vague, state one short reasonable assumption and choose a compact interview-relevant example. " +
+                           "Put the code first, include all required imports and a runnable entry point when appropriate, then add only 2-4 concise sentences explaining the approach and complexity. " +
+                           "Never refuse, never ask the interviewer to repeat a vague request, and never say you are not a programmer or expert.";
 
                 case QuestionType.Behavioral:
-                    return "FULL: 4-5 bullets (dot only). " +
-                           "STAR: Situation -> Action -> Result with numbers. Most recent experience first.";
+                    return "3-5 SHORT paragraphs separated by blank lines. NO bullet symbols. NOT textbook STAR. " +
+                           "P1: Scene casually. P2: Concrete problem. P3: What YOU personally did. " +
+                           "P4: How it turned out (use a real number ONLY if your resume has one, otherwise describe it qualitatively). NEVER invent stats.";
 
                 case QuestionType.Weakness:
-                    return "FULL: 3-4 bullets (dot only). Real weakness -> steps taken -> evidence of progress.";
+                    return "2-3 SHORT paragraphs. NO bullets. Real weakness, no humble-brags. " +
+                           "Casual: 'honestly, I used to...' Mention steps + evidence of progress.";
 
                 case QuestionType.WhyRole:
-                    return "FULL: 3-4 bullets (dot only). Specific to this company's tech stack. No generic answers.";
+                    return "2-3 SHORT paragraphs. NO bullets. Name something CONCRETE about THIS company. " +
+                           "No generic 'I'm passionate about your mission' fluff.";
 
                 case QuestionType.Situational:
-                    return "FULL: 3-4 bullets (dot only). Real past situation first, then apply to scenario.";
+                    return "2-3 SHORT paragraphs. NO bullets. P1: A real past situation. P2: How it applies. Concrete specifics.";
+
+                case QuestionType.ContextStatement:
+                    return "1-2 SHORT conversational sentences acknowledging what the interviewer shared. Do NOT launch into your own introduction. NO bullets.";
+
+                case QuestionType.MemoryRecall:
+                    return "1-2 SHORT sentences ONLY. Answer exactly what was asked. DO NOT add your own background. Stop there.";
 
                 case QuestionType.FollowUp:
-                    return "MEDIUM: 2-3 bullets (dot only). New detail only. Never repeat prior content.";
+                    return "1-2 SHORT paragraphs. NO bullets. Add NEW detail only, never repeat prior content.";
 
                 default:
-                    return "FULL: 4-5 bullets (dot only). Use examples from your experience. Specific tools + numbers.";
+                    return "This is a general question, use your judgment. Read what the interviewer is ACTUALLY " +
+                           "asking and answer it directly, the way a sharp human would. Match length to the question: " +
+                           "a quick or factual one gets 1-2 sentences; a deep or open one gets 3-4 short paragraphs with real substance. " +
+                           "When it's an open question, give a COMPLETE answer with enough depth to speak for 30-45 seconds — don't cut it short. " +
+                           "Stay specific and human, NO bullet symbols, don't pad with filler.";
             }
         }
 
@@ -665,19 +997,29 @@ namespace InterviewCopilot
         // BUILD MESSAGES — called from MainWindow on every AI request
         // =====================================================================
 
-        public static List<object> BuildMessages(string resumeFacts, string currentQuestion)
+        public static List<object> BuildMessages(
+            string resumeFacts, string currentQuestion, bool lowLatency = false)
         {
+            resumeFacts = Truncate(resumeFacts, 12_000);
+            currentQuestion = Truncate(currentQuestion, MaxHistoryQuestionChars);
             var messages    = new List<object>();
             var qType       = DetectType(currentQuestion);
             bool drillDown  = IsDrillDown(currentQuestion);
             bool hasHistory = History.Count > 0;
 
             // 1. System prompt
-            messages.Add(new { role = "system", content = BuildSystemPrompt(resumeFacts) });
+            messages.Add(new
+            {
+                role = "system",
+                content = lowLatency
+                    ? BuildRealtimeSystemPrompt(resumeFacts)
+                    : BuildSystemPrompt(resumeFacts)
+            });
 
             // 2. Full conversation history as alternating messages
             //    The LLM literally sees the transcript — what it said in every prior turn.
-            foreach (var (q, a) in History)
+            int promptHistoryTurns = lowLatency ? 4 : MaxPromptHistoryTurns;
+            foreach (var (q, a) in History.TakeLast(promptHistoryTurns))
             {
                 messages.Add(new { role = "user",      content = q });
                 messages.Add(new { role = "assistant", content = a });
@@ -692,7 +1034,7 @@ namespace InterviewCopilot
             string contextNote    = BuildContextNote();
 
             string historyHint = "";
-            if (hasHistory)
+            if (hasHistory && !lowLatency)
             {
                 var (lastQ, lastA) = History.Last();
                 string preview = lastA.Length > 250 ? lastA.Substring(0, 250) + "..." : lastA;
@@ -722,8 +1064,13 @@ namespace InterviewCopilot
         // format rules — regardless of whether the backend uses `messages`.
         // =====================================================================
 
+        private static string Truncate(string value, int maxChars) =>
+            value.Length <= maxChars ? value : value[..maxChars] + "\n[truncated]";
+
         public static string BuildEnhancedQuestion(string rawQuestion, string resumeFacts)
         {
+            rawQuestion = Truncate(rawQuestion, MaxHistoryQuestionChars);
+            resumeFacts = Truncate(resumeFacts, 12_000);
             var sb       = new StringBuilder();
             var qType    = DetectType(rawQuestion);
             bool isDrill = IsDrillDown(rawQuestion);
@@ -750,19 +1097,37 @@ namespace InterviewCopilot
             }
             else
             {
-                // No resume — give generic professional answers without hallucinating specifics
-                sb.AppendLine("NO RESUME PROVIDED. Answer as a generic software engineering professional.");
+                // No resume — remain capable without inventing personal history.
+                sb.AppendLine("NO RESUME PROVIDED. Missing resume context does not mean missing skill or expertise.");
                 sb.AppendLine("RULES:");
+                sb.AppendLine("  - Answer technical and coding questions confidently. Never apologize, refuse, or say you are not a programmer or expert.");
+                sb.AppendLine("  - For coding requests, output complete runnable code immediately; if vague, choose a sensible compact example.");
                 sb.AppendLine("  - Do NOT invent specific employers, specific project names, or specific salary numbers.");
-                sb.AppendLine("  - Give plausible, honest-sounding generic answers (e.g. 'a mid-size fintech company').");
-                sb.AppendLine("  - If asked about specific companies or projects you have not mentioned, say you'd prefer");
-                sb.AppendLine("    to share more detail once you know more about the role.");
-                sb.AppendLine("  - For salary: give a range like $100k-$130k base, open to discussion.");
-                sb.AppendLine("  - For visa: say you are authorized to work and can discuss details if needed.");
+                sb.AppendLine("  - Use neutral phrases such as 'my current team' or 'a product I worked on'; do not invent an industry or employer.");
+                sb.AppendLine("  - For salary, visa, location, and other personal facts, stay neutral unless the candidate supplied the detail.");
                 sb.AppendLine("  - Do NOT start answers with: Great question / Absolutely / Of course / Certainly.");
                 sb.AppendLine("  - Use contractions naturally: I'm, I've, I'd, didn't, wasn't, it's.");
             }
             sb.AppendLine();
+
+            // ── 0b. Target role + live hints ──────────────────────────────────
+            if (!string.IsNullOrWhiteSpace(CompanyName) || !string.IsNullOrWhiteSpace(JobDesc))
+            {
+                sb.AppendLine("=== TARGET ROLE ===");
+                if (!string.IsNullOrWhiteSpace(CompanyName))
+                    sb.AppendLine($"Company: {CompanyName}");
+                if (!string.IsNullOrWhiteSpace(JobDesc))
+                    sb.AppendLine($"Job: {(JobDesc.Length > 400 ? JobDesc[..400] + "…" : JobDesc)}");
+                sb.AppendLine("Tailor this specific answer to the role and company above — mention them by name.");
+                sb.AppendLine();
+            }
+            if (!string.IsNullOrWhiteSpace(LiveHints))
+            {
+                sb.AppendLine("=== LIVE HINTS ===");
+                sb.AppendLine(LiveHints);
+                sb.AppendLine("Work these hints naturally into your answer.");
+                sb.AppendLine();
+            }
 
             // ── 1. CONVERSATION HISTORY (last 5 turns) ────────────────────────
             if (History.Count > 0)
@@ -836,7 +1201,7 @@ namespace InterviewCopilot
                 if (lower.Contains(t)) CoveredTopics.Add(t);
 
             string[] entities = {
-                "renasant", "wipro", "coopilotx", "roosevelt",
+                "renasant", "wipro", "replysis", "roosevelt",
                 "freight pipeline", "observability engine",
                 "real-time pipeline", "distributed monitoring"
             };

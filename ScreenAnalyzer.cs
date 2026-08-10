@@ -23,6 +23,15 @@ namespace InterviewCopilot
     /// </summary>
     public static class ScreenAnalyzer
     {
+        // Pre-compiled markdown-strip patterns used in CleanContent (called after every SSE response)
+        private static readonly Regex RxBold     = new(@"\*{2}([^*\n]+)\*{2}", RegexOptions.Compiled);
+        private static readonly Regex RxItalic   = new(@"\*([^*\n]+)\*",       RegexOptions.Compiled);
+        private static readonly Regex RxUnder    = new(@"_{1,2}([^_\n]+)_{1,2}", RegexOptions.Compiled);
+        private static readonly Regex RxHeading  = new(@"(?m)^#{1,6}\s+",       RegexOptions.Compiled);
+        private static readonly Regex RxBlankRun = new(@"\n{3,}",               RegexOptions.Compiled);
+        private const int MaxResponseChars = 30_000;
+        private const int MaxResumeContextChars = 6_000;
+
         #region ── Win32 GDI (no System.Drawing required) ───────────────────────
         [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
@@ -87,19 +96,56 @@ namespace InterviewCopilot
         /// </summary>
         private static byte[] CaptureRegion(int srcX, int srcY, int srcW, int srcH, int maxW, int maxH)
         {
-            IntPtr screenDc = GetDC(IntPtr.Zero);
-            IntPtr memDc    = CreateCompatibleDC(screenDc);
-            IntPtr hBitmap  = CreateCompatibleBitmap(screenDc, srcW, srcH);
-            IntPtr oldObj   = SelectObject(memDc, hBitmap);
+            if (srcW <= 0 || srcH <= 0)
+                throw new InvalidOperationException("The requested screen region is invalid.");
 
-            BitBlt(memDc, 0, 0, srcW, srcH, screenDc, srcX, srcY, SRCCOPY);
+            IntPtr screenDc = GetDC(IntPtr.Zero);
+            if (screenDc == IntPtr.Zero)
+                throw new InvalidOperationException($"Could not access the desktop ({Marshal.GetLastWin32Error()}).");
+            IntPtr memDc    = CreateCompatibleDC(screenDc);
+            if (memDc == IntPtr.Zero)
+            {
+                ReleaseDC(IntPtr.Zero, screenDc);
+                throw new InvalidOperationException($"Could not create a memory device context ({Marshal.GetLastWin32Error()}).");
+            }
+            IntPtr hBitmap  = CreateCompatibleBitmap(screenDc, srcW, srcH);
+            if (hBitmap == IntPtr.Zero)
+            {
+                DeleteDC(memDc);
+                ReleaseDC(IntPtr.Zero, screenDc);
+                throw new InvalidOperationException($"Could not allocate a capture bitmap ({Marshal.GetLastWin32Error()}).");
+            }
+            IntPtr oldObj   = SelectObject(memDc, hBitmap);
+            if (oldObj == IntPtr.Zero || oldObj == new IntPtr(-1))
+            {
+                DeleteObject(hBitmap);
+                DeleteDC(memDc);
+                ReleaseDC(IntPtr.Zero, screenDc);
+                throw new InvalidOperationException($"Could not select the capture bitmap ({Marshal.GetLastWin32Error()}).");
+            }
+
+            if (!BitBlt(memDc, 0, 0, srcW, srcH, screenDc, srcX, srcY, SRCCOPY))
+            {
+                SelectObject(memDc, oldObj);
+                DeleteObject(hBitmap);
+                DeleteDC(memDc);
+                ReleaseDC(IntPtr.Zero, screenDc);
+                throw new InvalidOperationException($"Could not copy the screen image ({Marshal.GetLastWin32Error()}).");
+            }
             SelectObject(memDc, oldObj);
             DeleteDC(memDc);
             ReleaseDC(IntPtr.Zero, screenDc);
 
-            BitmapSource bmp = Imaging.CreateBitmapSourceFromHBitmap(
-                hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-            DeleteObject(hBitmap);
+            BitmapSource bmp;
+            try
+            {
+                bmp = Imaging.CreateBitmapSourceFromHBitmap(
+                    hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            }
+            finally
+            {
+                DeleteObject(hBitmap);
+            }
 
             // Scale down if needed — preserves aspect ratio
             if (srcW > maxW || srcH > maxH)
@@ -116,16 +162,10 @@ namespace InterviewCopilot
         }
 
         // ═════════════════════════════════════════════════════════════════════
-        // VISION PROVIDER
+        // VISION PROVIDER — server picks the actual model; client only says which
         // ═════════════════════════════════════════════════════════════════════
 
-        private static (string Endpoint, string Model) GetVisionProvider()
-        {
-            if (SettingsWindow.IsGroq())
-                return ("https://api.groq.com/openai/v1/chat/completions",
-                        "meta-llama/llama-4-scout-17b-16e-instruct"); // Llama 4 Scout — free, fast vision
-            return ("https://api.openai.com/v1/chat/completions", "gpt-4o");
-        }
+        private static string GetProvider() => SettingsWindow.IsGroq() ? "groq" : "openai";
 
         // ═════════════════════════════════════════════════════════════════════
         // PROMPT
@@ -133,11 +173,17 @@ namespace InterviewCopilot
 
         private static string BuildScreenPrompt(string? resumeContext)
         {
+            if (!string.IsNullOrWhiteSpace(resumeContext) && resumeContext.Length > MaxResumeContextChars)
+                resumeContext = resumeContext[..MaxResumeContextChars] + "\n[Candidate background truncated]";
+
             var sb = new StringBuilder();
 
             // ── Role ─────────────────────────────────────────────────────────
             sb.AppendLine("You are an expert interview coach helping a candidate in a live interview.");
             sb.AppendLine("Analyze the screenshot and respond using the EXACT structure shown below for the matching content type.");
+            sb.AppendLine("Base every claim on text or visuals that are actually visible. Never invent unreadable text, requirements, code, experience, or metrics.");
+            sb.AppendLine("Choose one matching content type before answering. Prioritize the interview prompt, code, error, or diagram over unrelated application chrome.");
+            sb.AppendLine("If the important text is unreadable or missing, say exactly what is visible and ask for a clearer capture instead of guessing.");
             sb.AppendLine();
 
             // ── Critical output rules ─────────────────────────────────────────
@@ -287,6 +333,12 @@ namespace InterviewCopilot
             raw = Regex.Replace(raw, @"_{1,2}([^_\n]+)_{1,2}", "$1"); // _italic_
             raw = Regex.Replace(raw, @"(?m)^#{1,6}\s+", "");          // ## headers
             raw = Regex.Replace(raw, @"```[a-zA-Z]*\r?\n?", "");      // code fences
+
+            // Rewrite AI-tell long dashes into plain human punctuation. The ━ (U+2501)
+            // used for section headers is a different character and is left untouched.
+            raw = Regex.Replace(raw, @"(\S)[ \t]*[—–][ \t]+", "$1, "); // mid-sentence break -> comma
+            raw = raw.Replace("—", "-").Replace("–", "-");             // any remaining -> hyphen
+
             raw = raw.Replace("\r\n", "\n").Replace("\r", "\n");
 
             // 2. Normalize section headers: ensure exactly one blank line above and below each
@@ -296,7 +348,8 @@ namespace InterviewCopilot
             for (int i = 0; i < lines.Length; i++)
             {
                 string line = lines[i].TrimEnd();
-                bool isHeader = line.StartsWith("━━━") && line.TrimEnd().EndsWith("━━━");
+                string trimmedLine = line.TrimStart();
+                bool isHeader = trimmedLine.StartsWith("━━━") && trimmedLine.EndsWith("━━━");
 
                 if (isHeader)
                 {
@@ -338,42 +391,30 @@ namespace InterviewCopilot
             byte[] imageBytes, string? resumeContext = null,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
-            // ── API key guard (safe to yield here — no try-catch in scope) ────
-            string apiKey = SettingsWindow.GetApiKey();
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                yield return "⚠ No API key found.\n\n" +
-                             "• Open ⚙ Settings → paste your key\n" +
-                             "• Groq key (gsk_…) → free screen analysis with Llama 4 Scout\n" +
-                             "• OpenAI key (sk-…) → GPT-4o Vision";
-                yield break;
-            }
-
-            var (endpoint, visionModel) = GetVisionProvider();
             string base64 = Convert.ToBase64String(imageBytes);
-            string prompt  = BuildScreenPrompt(resumeContext);
-            string payloadJson = BuildVisionPayloadJson(visionModel, base64, prompt);
+            string prompt = BuildScreenPrompt(resumeContext);
+            string provider = GetProvider();
+            string payloadJson = JsonSerializer.Serialize(new { image = base64, prompt, provider });
 
             // ── Send request via helper (never throws) ────────────────────────
-            var (res, sendError) = await SendVisionRequestSafeAsync(endpoint, apiKey, payloadJson, ct);
+            var (res, sendError) = await SendVisionRequestSafeAsync(payloadJson, ct);
             if (res == null)
             {
-                yield return sendError;
-                yield break;
+                throw new InvalidOperationException(sendError);
             }
 
             // ── Handle non-200 via helper (never throws) ──────────────────────
             if (!res.IsSuccessStatusCode)
             {
-                string errMsg = await ParseVisionErrorSafeAsync(res, ct);
+                string errMsg = DescribeVisionError(res.StatusCode);
                 res.Dispose();
-                yield return errMsg;
-                yield break;
+                throw new InvalidOperationException(errMsg);
             }
 
             // ── Stream SSE tokens ─────────────────────────────────────────────
             // yield inside try-finally is legal; only try-catch is forbidden.
             var accumulated = new StringBuilder();
+            int responseLength = 0;
             try
             {
                 using var stream = await res.Content.ReadAsStreamAsync(ct);
@@ -390,8 +431,17 @@ namespace InterviewCopilot
                     string token = ParseSseToken(data);
                     if (!string.IsNullOrEmpty(token))
                     {
+                        int remaining = MaxResponseChars - responseLength;
+                        if (remaining <= 0) break;
+                        if (token.Length > remaining) token = token[..remaining];
                         accumulated.Append(token);
+                        responseLength += token.Length;
                         yield return token;
+                        if (responseLength >= MaxResponseChars)
+                        {
+                            yield return "\n[Response truncated]";
+                            break;
+                        }
                     }
                 }
             }
@@ -405,18 +455,21 @@ namespace InterviewCopilot
         }
 
         /// <summary>
-        /// Sends the HTTP request; catches all exceptions and returns null on failure.
-        /// Returns a (response, errorMessage) tuple — error is "" on success, non-empty on failure.
-        /// This replaces the previous static _lastRequestError field (which was not thread-safe)
-        /// with a local result so concurrent analyses can never overwrite each other's errors.
+        /// Sends the screenshot and prompt to the secured backend (server-side Groq/OpenAI
+        /// keys, credits deducted server-side) — mirrors the /ask flow, no personal API key
+        /// ever required or accepted from the user. Catches all exceptions and returns null
+        /// on failure. Returns a (response, errorMessage) tuple — error is "" on success.
         /// </summary>
         private static async Task<(HttpResponseMessage? Response, string Error)>
-            SendVisionRequestSafeAsync(string endpoint, string apiKey, string payloadJson, CancellationToken ct)
+            SendVisionRequestSafeAsync(string payloadJson, CancellationToken ct)
         {
             try
             {
-                using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
-                req.Headers.Add("Authorization", $"Bearer {apiKey}");
+                using var req = new HttpRequestMessage(HttpMethod.Post,
+                    $"{SettingsWindow.GetBackendUrl()}/api/v1/interview/analyze-screen");
+                if (!string.IsNullOrEmpty(UserSession.IdToken))
+                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
+                req.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
                 req.Content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
                 var response = await SharedHttpClient.Http.SendAsync(
                     req, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -432,28 +485,15 @@ namespace InterviewCopilot
             }
         }
 
-        /// <summary>Reads and formats a non-200 error response; never throws.</summary>
-        private static async Task<string> ParseVisionErrorSafeAsync(
-            HttpResponseMessage res, CancellationToken ct)
+        /// <summary>Maps a non-200 status from the backend to a friendly message.</summary>
+        private static string DescribeVisionError(System.Net.HttpStatusCode status) => status switch
         {
-            try
-            {
-                string body = await res.Content.ReadAsStringAsync(ct);
-                using var doc = JsonDocument.Parse(body);
-                string msg   = doc.RootElement
-                    .GetProperty("error").GetProperty("message").GetString() ?? body;
-                if (msg.Contains("API key"))   return "⚠ Invalid API key. Open ⚙ Settings → check your key.";
-                if (msg.Contains("quota") || msg.Contains("billing"))
-                                               return "⚠ API quota exceeded. Check billing at the provider dashboard.";
-                if (msg.Contains("vision") || msg.Contains("image"))
-                                               return $"⚠ This model doesn't support vision. Switch to GPT-4o in Settings.\n{msg}";
-                return $"⚠ API error: {msg}";
-            }
-            catch
-            {
-                return $"⚠ Vision API error (HTTP {(int)res.StatusCode}). Check your API key in Settings.";
-            }
-        }
+            System.Net.HttpStatusCode.Unauthorized => "⚠ Please sign in to use Screen AI.",
+            System.Net.HttpStatusCode.PaymentRequired =>
+                "⚠ Insufficient credits.\n\nUpgrade your Replysis AI plan to continue using Screen AI.",
+            System.Net.HttpStatusCode.BadRequest => "⚠ Could not analyze this screenshot. Please try again.",
+            _ => "⚠ Screen AI is temporarily unavailable. Please try again."
+        };
 
         /// <summary>Parses one SSE data line; returns "" on any error (never throws).</summary>
         private static string ParseSseToken(string data)
@@ -462,7 +502,8 @@ namespace InterviewCopilot
             {
                 using var doc = JsonDocument.Parse(data);
                 if (doc.RootElement.TryGetProperty("error", out var errProp))
-                    return $"\n⚠ {errProp.GetString()}";
+                    throw new InvalidOperationException(errProp.GetString()
+                        ?? "Screen AI could not complete this request.");
                 var choices = doc.RootElement.GetProperty("choices");
                 if (choices.GetArrayLength() == 0) return "";
                 var delta = choices[0].GetProperty("delta");
@@ -470,32 +511,7 @@ namespace InterviewCopilot
                     return cp.GetString() ?? "";
                 return "";
             }
-            catch { return ""; }
-        }
-
-        /// <summary>Serializes the vision API request payload to JSON.</summary>
-        private static string BuildVisionPayloadJson(string model, string base64, string prompt)
-        {
-            var payload = new
-            {
-                model,
-                max_tokens = 4096,  // raised from 2000 — prevents code solutions being cut off mid-function
-                stream     = true,
-                messages   = new[]
-                {
-                    new
-                    {
-                        role    = "user",
-                        content = new object[]
-                        {
-                            new { type = "text", text = prompt },
-                            new { type = "image_url",
-                                  image_url = new { url = $"data:image/jpeg;base64,{base64}", detail = "high" } }
-                        }
-                    }
-                }
-            };
-            return JsonSerializer.Serialize(payload);
+            catch (JsonException) { return ""; }
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -517,12 +533,12 @@ namespace InterviewCopilot
         private static string CleanContent(string content)
         {
             if (string.IsNullOrEmpty(content)) return content;
-            content = Regex.Replace(content, @"\*{2}([^*\n]+)\*{2}", "$1");
-            content = Regex.Replace(content, @"\*([^*\n]+)\*",       "$1");
-            content = Regex.Replace(content, @"_{1,2}([^_\n]+)_{1,2}", "$1");
-            content = Regex.Replace(content, @"(?m)^#{1,6}\s+", "");
+            content = RxBold.Replace(content, "$1");
+            content = RxItalic.Replace(content, "$1");
+            content = RxUnder.Replace(content, "$1");
+            content = RxHeading.Replace(content, "");
             content = content.Replace("\r\n", "\n").Replace("\r", "\n");
-            content = Regex.Replace(content, @"\n{3,}", "\n\n");
+            content = RxBlankRun.Replace(content, "\n\n");
             return content.Trim();
         }
     }
