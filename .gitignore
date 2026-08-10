@@ -1,7 +1,17 @@
 # Build output
 bin/
 obj/
+
+# MSIX packaging output. The directory Visual Studio actually writes is
+# AppPackages/ — the old AppxPackages/ rule never matched anything.
+AppPackages/
 AppxPackages/
+BundleArtifacts/
+*.assets.cache
+
+# Python bytecode
+__pycache__/
+*.py[cod]
 
 # Visual Studio
 .vs/
@@ -14,3 +24,8 @@ AppxPackages/
 *.msixbundle
 *.msix
 *.appxbundle
+
+# Local runtime configuration
+.env
+.env.*
+!.env.example

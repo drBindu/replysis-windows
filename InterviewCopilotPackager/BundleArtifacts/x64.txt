@@ -1,6 +1,0 @@
-MainPackage=C:\Users\krish\Desktop\windowsNative\InterviewCopilotPackager\bin\x64\Release\InterviewCopilotPackager_1.0.10.0_x64.msix
-SymbolPackage=C:\Users\krish\Desktop\windowsNative\InterviewCopilotPackager\obj\x64\Release\Symbols\InterviewCopilotPackager_1.0.10.0_x64.appxsym
-ResourcePack=C:\Users\krish\Desktop\windowsNative\InterviewCopilotPackager\bin\x64\Release\InterviewCopilotPackager_1.0.10.0_scale-100.msix
-ResourcePack=C:\Users\krish\Desktop\windowsNative\InterviewCopilotPackager\bin\x64\Release\InterviewCopilotPackager_1.0.10.0_scale-125.msix
-ResourcePack=C:\Users\krish\Desktop\windowsNative\InterviewCopilotPackager\bin\x64\Release\InterviewCopilotPackager_1.0.10.0_scale-150.msix
-ResourcePack=C:\Users\krish\Desktop\windowsNative\InterviewCopilotPackager\bin\x64\Release\InterviewCopilotPackager_1.0.10.0_scale-400.msix
