@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -8,7 +9,13 @@ namespace InterviewCopilot
 {
     public partial class DebugWindow : Window
     {
-        private static DebugWindow? _instance;
+        // Mirrors every log line to disk so the full session's log survives past the
+        // UI's 200-line window (and can be inspected without screenshotting the app).
+        private static readonly string LogFilePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "InterviewCopilot", "debug.log");
+        private static readonly object _fileLock = new object();
+        private static volatile DebugWindow? _instance;
         private readonly List<string> _logs = new List<string>();
         private readonly DispatcherTimer _refreshTimer;
         private bool _allowClose = false;
@@ -33,16 +40,48 @@ namespace InterviewCopilot
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
 
+            var headerRow = new System.Windows.Controls.Grid { Margin = new Thickness(10, 10, 10, 5) };
+            headerRow.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            headerRow.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
+
             var header = new System.Windows.Controls.TextBlock
             {
                 Text = "SPACE KEY DEBUG LOG  (F12 to hide)",
                 Foreground = System.Windows.Media.Brushes.Cyan,
                 FontSize = 14,
                 FontWeight = FontWeights.Bold,
-                Margin = new Thickness(10, 10, 10, 5)
+                VerticalAlignment = VerticalAlignment.Center
             };
-            System.Windows.Controls.Grid.SetRow(header, 0);
-            grid.Children.Add(header);
+            System.Windows.Controls.Grid.SetColumn(header, 0);
+            headerRow.Children.Add(header);
+
+            var copyButton = new System.Windows.Controls.Button
+            {
+                Content = "Copy full log",
+                Padding = new Thickness(10, 3, 10, 3),
+                Background = System.Windows.Media.Brushes.DarkSlateGray,
+                Foreground = System.Windows.Media.Brushes.White,
+                BorderThickness = new Thickness(0)
+            };
+            copyButton.Click += (s, e) =>
+            {
+                try
+                {
+                    string fullLog;
+                    lock (_fileLock) { fullLog = File.Exists(LogFilePath) ? File.ReadAllText(LogFilePath) : string.Join("\n", _logs); }
+                    Clipboard.SetText(fullLog);
+                    copyButton.Content = "Copied!";
+                    var revertTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
+                    revertTimer.Tick += (s2, e2) => { copyButton.Content = "Copy full log"; revertTimer.Stop(); };
+                    revertTimer.Start();
+                }
+                catch (Exception ex) { copyButton.Content = "Copy failed"; System.Diagnostics.Debug.WriteLine(ex); }
+            };
+            System.Windows.Controls.Grid.SetColumn(copyButton, 1);
+            headerRow.Children.Add(copyButton);
+
+            System.Windows.Controls.Grid.SetRow(headerRow, 0);
+            grid.Children.Add(headerRow);
 
             var scroll = new System.Windows.Controls.ScrollViewer
             {
@@ -74,6 +113,13 @@ namespace InterviewCopilot
             Content = grid;
 
             _instance = this;
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
+                File.WriteAllText(LogFilePath, "");   // fresh file each app launch
+            }
+            catch { }
 
             _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _refreshTimer.Tick += (s, e) =>
@@ -118,6 +164,16 @@ namespace InterviewCopilot
         public static void Log(string source, string message)
         {
             string line = $"[{DateTime.Now:HH:mm:ss.fff}] [{source}] {message}";
+
+            try
+            {
+                lock (_fileLock)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
+                    File.AppendAllText(LogFilePath, line + Environment.NewLine);
+                }
+            }
+            catch { }
 
             // Capture local reference to avoid race condition
             var inst = _instance;

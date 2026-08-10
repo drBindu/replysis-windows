@@ -22,14 +22,18 @@ namespace InterviewCopilot
         private static string BackendUrl => SettingsWindow.GetBackendUrl();
 
         // ── Tunable constants (change here, takes effect everywhere) ──────────
-        private const int    TranscriptPollMs        = 150;   // how often to read latest.txt
+        private const int    TranscriptPollMs        = 60;    // how often to read latest.txt
         private const int    ThinkingAnimMs          = 800;   // thinking dot animation interval
         private const int    CreditRefreshMinutes    = 5;     // background credits refresh
         private const int    EngineMonitorSecs       = 3;     // how often to check engine health
         private const int    CreditsLowThreshold     = 20;    // amber warning below this
         private const int    CreditsCriticalThreshold= 5;     // red warning / block below this
-        private const int    TranscriptRetryCount    = 3;     // retries on torn file read
-        private const int    TranscriptRetryDelayMs  = 10;    // delay between retries
+        private const int    TranscriptRetryCount    = 5;     // retries on torn file read
+        private const int    TranscriptRetryDelayMs  = 5;     // delay between retries
+        private const int    AutoTurnPunctuatedSilenceMs = 650;  // complete sentence/question
+        private const int    AutoTurnNaturalSilenceMs    = 950;  // natural pause without punctuation
+        private const int    AutoTurnMinimumSpeechMs = 500;   // reject clicks/noise bursts
+        private const int    AutoTurnMinimumChars    = 4;     // reject empty or tiny fragments
         private const int    RecordingSaveTimeoutMs  = 10_000;
         private const long   MaxResumeFileBytes      = 10 * 1024 * 1024;
         private const int    MaxResumeTextChars      = 100_000;
@@ -48,11 +52,20 @@ namespace InterviewCopilot
         private bool isRecording = false;
         private bool _newSessionInProgress;
         private bool _resumeCollapsed = false;
+        private const double ResumePanelExpandedWidth = 260;
         private bool _isCameraMode = false;
-        private bool _stealthMode = true;
-        private int _audioDeviceId = -1;
+        private bool _stealthMode = SettingsWindow.GetStealthMode();
+        // Load the persisted mic choice so it survives restarts (-1 = Windows default).
+        private int _audioDeviceId = SettingsWindow.GetAudioDeviceIndex();
         private bool _justStartedListening = false;  // suppress stale reads for 400ms after unmute
         private int  _listenStartTicks = 0;
+        // Cancels the in-flight AI answer (and the transcript-flush grace window) so
+        // pressing Space mid-answer or mid-flush interrupts instantly and re-listens.
+        private System.Threading.CancellationTokenSource? _aiCts;
+        // True during the brief "flushing final transcript" window after you stop talking,
+        // before the AI fires. A Space press here must re-listen in ONE press, not be
+        // swallowed, so HandleSpacePress treats this exactly like the answering state.
+        private volatile bool _flushing = false;
 
         // ── Feature state ────────────────────────────────────────────────────
         private string _liveHints        = "";
@@ -60,12 +73,34 @@ namespace InterviewCopilot
         private string _jobDescription   = "";
         private List<(string Name, string Content)> _savedResumes = new();
         private bool _answerIsBehavioral = false;
+        private enum ListeningMode
+        {
+            Manual,
+            InterviewAuto,
+            PracticeAuto
+        }
+
+        private ListeningMode _listeningMode = ListeningMode.Manual;
+        private bool AutoModeEnabled => _listeningMode != ListeningMode.Manual;
+        private bool _autoTurnSubmitting;
+        private string _autoLastTranscript = "";
+        private string _lastAutoRejectedTranscript = "";
+        private string _lastAutoSubmittedQuestion = "";
+        private DateTime _lastAutoSubmitUtc = DateTime.MinValue;
+        private DateTime _autoTranscriptChangedUtc = DateTime.MinValue;
+        private DateTime _autoListeningStartedUtc = DateTime.MinValue;
 
         private DispatcherTimer? transcriptTimer;
         private DispatcherTimer? thinkingTimer;
         private DispatcherTimer? creditsRefreshTimer;
+        private DispatcherTimer? warmupTimer;
         private DispatcherTimer? _sessionTimer;
         private DispatcherTimer? _jobContextSaveTimer;
+        private DispatcherTimer? _autoModeNoticeTimer;
+        private readonly SemaphoreSlim _creditsFetchGate = new(1, 1);
+        private DateTime _lastCreditsFetchUtc = DateTime.MinValue;
+        private CreditsWindow? _creditsWindow;
+        private SessionsWindow? _sessionsWindow;
         private int _sessionSeconds = 0;
         private int thinkingStep = 0;
 
@@ -73,10 +108,24 @@ namespace InterviewCopilot
         private CancellationTokenSource _engineCts = new CancellationTokenSource();
         private int _engineStartGeneration;
         private bool _engineStarting;
+        private bool _engineRecoveryInProgress;
+        private bool _engineTokenRefreshAttempted;
+        private int _engineRestartCount;
+        private DateTime _nextEngineRestartUtc = DateTime.MinValue;
+        // True once the Python engine reports "STATUS: ONLINE" (Speechmatics session
+        // ready). Until then the transcriber can't hear anything, so the mic pill shows
+        // CONNECTING and we tell the user not to speak yet.
+        private volatile bool _engineOnline = false;
         private string projectRoot = "";
         private string scriptFolder = "";
         private AnswerWindow? answerWindow;
         private Action? _cameraModeClosedHandler;   // stored so we can -= it in OnClosed
+        private bool _guestTransitionInProgress;
+
+        private sealed class BackendRequestException : Exception
+        {
+            public BackendRequestException(string message) : base(message) { }
+        }
 
         private int sessionNumber = 1;
         private string sessionLogPath = "";
@@ -90,16 +139,15 @@ namespace InterviewCopilot
         private static HttpClient _backendClient => SharedHttpClient.Http;
         private static HttpClient _creditsClient => SharedHttpClient.HttpShort;
 
-        private string AppDataFolder
+        // Cached once — Directory.CreateDirectory on every access was a redundant syscall per tick
+        private readonly string AppDataFolder = InitAppDataFolder();
+        private static string InitAppDataFolder()
         {
-            get
-            {
-                var p = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "InterviewCopilot");
-                Directory.CreateDirectory(p);
-                return p;
-            }
+            var p = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "InterviewCopilot");
+            Directory.CreateDirectory(p);
+            return p;
         }
 
         public MainWindow()
@@ -107,7 +155,25 @@ namespace InterviewCopilot
             InitializeComponent();
             projectRoot = AppDomain.CurrentDomain.BaseDirectory;
             scriptFolder = FindScriptFolder(projectRoot);
+
+            // Bring the transcription engine up before this window is shown. A user
+            // can press Space as soon as the UI appears, so waiting for Loaded leaves
+            // the first words exposed to the key/Python/WebSocket startup race.
+            isMuted = true;
+            isListening = false;
+            WritePauseFlag();
+            NuclearKillOldProcesses();
+            _ = ResolvePythonExecutableAsync();
+
             this.PreviewKeyDown += Window_PreviewKeyDown;
+            this.PreviewKeyUp   += Window_PreviewKeyUp;
+
+            // Close floating popups the moment the app loses focus. These popups are
+            // StaysOpen=True (so an in-app click elsewhere doesn't dismiss them), but that
+            // also meant switching to another window (e.g. Claude) left them hovering on
+            // top of it. Deactivated fires when the whole app loses activation — dismiss
+            // them there so nothing bleeds over other apps.
+            this.Deactivated += (_, __) => CloseFloatingPopups();
 
             // Position top-center on the primary screen
             var workArea = SystemParameters.WorkArea;
@@ -122,7 +188,6 @@ namespace InterviewCopilot
 
                 try
                 {
-                    NuclearKillOldProcesses();
                     try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
                     UpdateStealthBtn();
 
@@ -133,26 +198,42 @@ namespace InterviewCopilot
                     answerWindow.CameraModeClosedByUser += _cameraModeClosedHandler;
                     answerWindow.AnalyzeRequested += () => Dispatcher.Invoke(() => _ = HandleScreenAnalysisAsync());
 
-                    isMuted = true;
-                    isListening = false;
-                    WritePauseFlag();
+                    _debugWindow = new DebugWindow();
+
                     SecurePendingAudioRecordings();
                     UpdateMicUi();
                     SavePathLabel.Text = AppDataFolder;
                     LoadHints(); LoadJobContext(); LoadSavedResumes();
                     UpdateSavedResumesButton();
-                    SwitchToResumeTab();
-                    _debugWindow = new DebugWindow();
-
+                    // Expand the resume panel WITHOUT focusing the resume text box.
+                    // SwitchToResumeTab() would call ResumeTextBox.Focus(), which left a
+                    // text field holding keyboard focus on startup — and the global Space
+                    // toggle bails out via IsTypingInTextField() whenever a text field is
+                    // focused. That's exactly why Space did nothing until the user clicked
+                    // somewhere else in the app first (which moved focus off the text box).
+                    ExpandResumeContent();
                     ApplyMainWindowOpacity();
-                    StartSpeechmaticsEngine();
 
                     IntPtr mainHwnd = new WindowInteropHelper(this).Handle;
+
+                    // Fix "first click only activates the window, doesn't reach the button"
+                    // — a well-known Windows quirk for borderless layered windows
+                    // (WindowStyle=None + AllowsTransparency=True, exactly this window).
+                    // Without this hook, WM_MOUSEACTIVATE consumes the very first click
+                    // purely to bring the window forward, and it never reaches whatever
+                    // control (mic button, Screen AI, etc.) was actually clicked — forcing
+                    // the user to click once to focus, then again to do anything.
+                    try
+                    {
+                        HwndSource.FromHwnd(mainHwnd)?.AddHook(WndProcActivateFix);
+                    }
+                    catch (Exception ex) { DebugWindow.Log("FOCUS_FIX", $"Mouse-activate hook failed: {ex.Message}"); }
+
                     try
                     {
                         _globalHotkey = new GlobalHotkey(
-                            onSpacePressed:                 () => Dispatcher.BeginInvoke(() => HandleSpaceDown("GLOBAL")),
-                            onSpaceReleased:                () => Dispatcher.BeginInvoke(() => HandleSpaceUp("GLOBAL")),
+                            onSpacePressed:                 () => Dispatcher.BeginInvoke(() => HandleSpacePress("GLOBAL")),
+                            onSpaceReleased:                null,
                             onF12Pressed:                   () => Dispatcher.BeginInvoke(() => ToggleDebugWindow()),
                             onKillPressed:                  () => Dispatcher.BeginInvoke(() => Close()),
                             onScreenAnalysisPressed:        () => _ = Dispatcher.InvokeAsync(async () =>
@@ -167,14 +248,18 @@ namespace InterviewCopilot
                             })
                         );
                         _globalHotkey.OwnerWindowHandle = mainHwnd;
-                        // If the app crashes before OnClosed fires, still release the system-wide hook
-                        Application.Current.DispatcherUnhandledException += (_, __) => _globalHotkey?.Dispose();
+                        // Cleanup is deliberately left to OnClosed rather than an
+                        // app-lifetime event. A DispatcherUnhandledException handler
+                        // would fire for recoverable errors and kill the Space hotkey
+                        // mid-session, and an AppDomain.ProcessExit handler would pin
+                        // this window in memory for the life of the process.
+                        // OnClosed disposes it, Dispose() is idempotent, and Windows
+                        // releases a WH_KEYBOARD_LL hook itself if the process dies.
                     }
                     catch (Exception ex) { DebugWindow.Log("HOTKEY_ERR", $"Global hotkey registration failed: {ex.Message}"); }
 
                     _engineMonitorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(EngineMonitorSecs) };
                     _engineMonitorTimer.Tick += (s2, e2) => MonitorEngine();
-                    _engineMonitorTimer.Start();
 
                     // ── Session restore with silent token refresh ─────────────────
                     // TryLoadFromDisk() returns false when the saved idToken is > 55 min old,
@@ -195,11 +280,8 @@ namespace InterviewCopilot
                     if (sessionRestored)
                     {
                         await FetchAndDisplayCreditsAsync();
-                        // Fetch SM key for logged-in user (backend returns server key)
-                        _ = UserSession.FetchSpeechmaticsKeyAsync(DeviceIdentity.Current).ContinueWith(
-                            t => { if (t.IsFaulted) DebugWindow.Log("STT_KEY", t.Exception?.GetBaseException().Message ?? "fetch failed"); },
-                            TaskScheduler.Default);
                         UpdateProfileUI();
+                        await InitializeSpeechPipelineAsync();
                         await StartNewSessionAsync(); // Auto-start recording immediately on app open
                     }
                     else
@@ -207,14 +289,13 @@ namespace InterviewCopilot
                         SetLoggedOutUI();
                         // Fetch real guest credits from backend using device ID.
                         // The backend tracks this device's monthly 100-credit allowance.
-                        _ = FetchAndDisplayCreditsAsync().ContinueWith(t => {
-                            if (t.IsFaulted) DebugWindow.Log("GUEST_CREDITS", t.Exception?.GetBaseException().Message ?? "fetch failed");
-                        }, TaskScheduler.Default);
+                        Task guestCreditsTask = FetchAndDisplayCreditsAsync();
                         // Fetch SM key for guest — backend identifies device via X-Device-Id.
-                        _ = UserSession.FetchSpeechmaticsKeyAsync(DeviceIdentity.Current).ContinueWith(
-                            t => { if (t.IsFaulted) DebugWindow.Log("STT_KEY", t.Exception?.GetBaseException().Message ?? "fetch failed"); },
-                            TaskScheduler.Default);
+                        await Task.WhenAll(guestCreditsTask, InitializeSpeechPipelineAsync());
+                        await StartNewSessionAsync();
                     }
+
+                    _engineMonitorTimer.Start();
 
                     creditsRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(CreditRefreshMinutes) };
                     creditsRefreshTimer.Tick += async (s2, e2) =>
@@ -223,6 +304,44 @@ namespace InterviewCopilot
                         catch (Exception ex) { DebugWindow.Log("CREDITS_TIMER", ex.Message); }
                     };
                     creditsRefreshTimer.Start();
+
+                    // KEEP-WARM: the answer backend spins its container down when idle, so the
+                    // first question after a quiet gap pays a 2-3s cold start ("thinking so long
+                    // sometimes"). Ping it every 75s — well under the idle timeout — so the
+                    // container stays hot and first-token stays at its ~0.7s warm number.
+                    _ = WarmBackendAsync();
+                    warmupTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(75) };
+                    warmupTimer.Tick += (s2, e2) => _ = WarmBackendAsync();
+                    warmupTimer.Start();
+
+                    // Defense-in-depth for the "Space does nothing until I click in the app"
+                    // bug: after ALL startup work settles, if keyboard focus still landed in
+                    // one of the text fields, move it to the window itself so the global Space
+                    // toggle isn't swallowed by IsTypingInTextField(). Runs at Input priority
+                    // so it fires after any focus changes queued during load.
+                    _ = Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        try
+                        {
+                            if (IsTypingInTextField())
+                            {
+                                this.Focusable = true;
+                                System.Windows.Input.Keyboard.Focus(this);
+                            }
+                        }
+                        catch (Exception ex) { DebugWindow.Log("FOCUS_RESET", ex.Message); }
+                    }), System.Windows.Threading.DispatcherPriority.Input);
+
+                    // Extend stealth (screen-capture exclusion) to the popups — they're
+                    // separate windows the main-window stealth doesn't reach.
+                    HookPopupStealth(ProfileDropdownPopup);
+                    HookPopupStealth(SavedResumesPopup);
+                    HookPopupStealth(ListeningModePopup);
+                    UpdateListeningModeUi();
+
+                    // First launch (no seen-flag yet): show the onboarding so new users
+                    // immediately understand the flow, resume/company setup and stealth.
+                    if (!File.Exists(OnboardingSeenPath)) ShowOnboarding();
                 }
                 catch (Exception ex)
                 {
@@ -265,10 +384,8 @@ namespace InterviewCopilot
                 {
                     UpdateProfileUI();
                     await FetchAndDisplayCreditsAsync();
-                    // Fetch SM key now that we have a valid token
-                    _ = UserSession.FetchSpeechmaticsKeyAsync(DeviceIdentity.Current).ContinueWith(
-                        t => { if (t.IsFaulted) DebugWindow.Log("STT_KEY", t.Exception?.GetBaseException().Message ?? "fetch failed"); },
-                        TaskScheduler.Default);
+                    await InitializeSpeechPipelineAsync();
+                    if (isRecording) EndSession();
                     await StartNewSessionAsync();
                     DebugWindow.Log("AUTH", $"Logged in: {UserSession.Email}");
                 }
@@ -295,6 +412,37 @@ namespace InterviewCopilot
             ProfileDropdownPopup.IsOpen = true;
         }
 
+        // Popups are their own top-level windows, so the main window's stealth doesn't cover
+        // them — apply capture-exclusion each time one opens (matching current stealth state)
+        // so dropdowns never flash into a screen recording during an interview.
+        private void HookPopupStealth(System.Windows.Controls.Primitives.Popup popup)
+        {
+            if (popup == null) return;
+            popup.Opened += (s, e) =>
+            {
+                try
+                {
+                    if (popup.Child != null &&
+                        PresentationSource.FromVisual(popup.Child) is HwndSource src)
+                        WindowStealth.SetCaptureExclusion(src.Handle, _stealthMode);
+                }
+                catch (Exception ex) { DebugWindow.Log("STEALTH", $"popup stealth failed: {ex.Message}"); }
+            };
+        }
+
+        // Dismiss every floating popup — called when the app loses focus so none of them
+        // stay painted on top of whatever window the user switched to.
+        private void CloseFloatingPopups()
+        {
+            try
+            {
+                if (SavedResumesPopup   != null) SavedResumesPopup.IsOpen   = false;
+                if (ProfileDropdownPopup != null) ProfileDropdownPopup.IsOpen = false;
+                if (ListeningModePopup  != null) ListeningModePopup.IsOpen  = false;
+            }
+            catch { }
+        }
+
         // Close popups when the user clicks anywhere outside them
         private void Window_PreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
@@ -306,6 +454,16 @@ namespace InterviewCopilot
                 bool insidePopup2 = spc != null && src2 != null && IsDescendantOf(src2, spc);
                 bool onBtn = src2 != null && IsDescendantOf(src2, SavedResumesBtn);
                 if (!insidePopup2 && !onBtn) SavedResumesPopup.IsOpen = false;
+            }
+
+            if (ListeningModePopup.IsOpen)
+            {
+                var modeSource = e.OriginalSource as DependencyObject;
+                var modePopupChild = ListeningModePopup.Child as FrameworkElement;
+                bool insideModePopup = modePopupChild != null && modeSource != null &&
+                                       IsDescendantOf(modeSource, modePopupChild);
+                bool onModePill = modeSource != null && IsDescendantOf(modeSource, AutoModePill);
+                if (!insideModePopup && !onModePill) ListeningModePopup.IsOpen = false;
             }
 
             if (!ProfileDropdownPopup.IsOpen) return;
@@ -338,17 +496,18 @@ namespace InterviewCopilot
             // Avatar + name + status
             string initials = loggedIn ? (UserSession.Initials ?? "?") : "GU";
             string name     = loggedIn ? (UserSession.Name ?? UserSession.Email ?? "User") : "Guest";
-            string status   = loggedIn ? (UserSession.Email ?? "") : "Free trial — not signed in";
+            string status   = loggedIn ? (UserSession.Email ?? "") : "Free trial (guest)";
 
             PopupAvatarInitials.Text  = initials;
             PopupProfileName.Text     = name;
             PopupProfileStatus.Text   = status;
+            ApplyAvatarPhoto();
 
             // Credits card — always use real backend value (guests get 100/month by device ID)
             if (loggedIn && UserSession.IsUnlimited)
             {
                 PopupCreditsAmount.Text = "Unlimited";
-                PopupCreditsAmount.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#a78bfa"));
+                PopupCreditsAmount.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFFFFF"));
                 PopupCreditsPlan.Text = $"{UserSession.Plan} plan";
                 PopupSignInCardBtn.Visibility = Visibility.Collapsed;
             }
@@ -369,7 +528,7 @@ namespace InterviewCopilot
                 int credits = UserSession.Credits;
                 string creditStr = credits >= 1000 ? $"{credits / 1000.0:F1}k credits" : credits > 0 ? $"{credits} credits" : "0 credits";
                 PopupCreditsAmount.Text = creditStr;
-                string color = credits > 20 ? "#4ade80" : credits > 5 ? "#f59e0b" : "#ef4444";
+                string color = credits > 5 ? "#FFFFFF" : "#F87171";
                 PopupCreditsAmount.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
                 PopupCreditsPlan.Text = loggedIn ? $"{UserSession.Plan} plan" : "Free trial";
                 PopupSignInCardBtn.Visibility = loggedIn ? Visibility.Collapsed : Visibility.Visible;
@@ -395,8 +554,7 @@ namespace InterviewCopilot
                 PopupOpacityLabel.Text = $"{(int)e.NewValue}%";
             // Slider maps to shared app opacity from 50%-100%.
             double opacity = 0.50 + (e.NewValue - 1) / 99.0 * 0.50;
-            this.Opacity = opacity;
-            answerWindow?.ApplyOverlayOpacity();
+            ApplyGlassOpacity(opacity);
             // Persist the shared preference for the main and eye-mode windows.
             var cfg = SettingsWindow.LoadConfig();
             cfg.MainWindowOpacity = Math.Round(opacity, 2);
@@ -422,20 +580,36 @@ namespace InterviewCopilot
             SignInHeaderBtn_Click(sender, new RoutedEventArgs());
         }
 
-        private void PopupSignOut_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private async void PopupSignOut_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             ProfileDropdownPopup.IsOpen = false;
             UserSession.Clear();
             _creditsFetched = false;  // reset so the popup shows Loading... then real guest credits
             SetLoggedOutUI();
-            _ = FetchAndDisplayCreditsAsync().ContinueWith(t => {
-                if (t.IsFaulted) DebugWindow.Log("CREDITS", t.Exception?.GetBaseException().Message ?? "refresh failed");
-            }, TaskScheduler.Default);
-            // Re-fetch SM key for the new guest session (same device, same key)
-            _ = UserSession.FetchSpeechmaticsKeyAsync(DeviceIdentity.Current).ContinueWith(
-                t => { if (t.IsFaulted) DebugWindow.Log("STT_KEY", t.Exception?.GetBaseException().Message ?? "fetch failed"); },
-                TaskScheduler.Default);
+            await Task.WhenAll(FetchAndDisplayCreditsAsync(), InitializeSpeechPipelineAsync());
+            await StartNewSessionAsync();
             DebugWindow.Log("AUTH", "Signed out");
+        }
+
+        private async Task SwitchToGuestSessionAsync()
+        {
+            if (_guestTransitionInProgress) return;
+            _guestTransitionInProgress = true;
+            try
+            {
+                _creditsFetched = false;
+                SetLoggedOutUI();
+                await Task.WhenAll(FetchAndDisplayCreditsAsync(), InitializeSpeechPipelineAsync());
+                await StartNewSessionAsync();
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("GUEST", $"Could not restore guest mode: {ex.Message}");
+            }
+            finally
+            {
+                _guestTransitionInProgress = false;
+            }
         }
 
         private void UpdateProfileUI()
@@ -443,7 +617,6 @@ namespace InterviewCopilot
             // Header profile badge — always visible
             ProfileBadge.Visibility    = Visibility.Visible;
             SignInHeaderBtn.Visibility = Visibility.Collapsed;
-            SessionsBtn.Visibility     = Visibility.Visible;
 
             string initials = UserSession.IsLoggedIn ? (UserSession.Initials ?? "?") : "GU";
             string firstName = UserSession.IsLoggedIn
@@ -451,13 +624,56 @@ namespace InterviewCopilot
                 : "";
             AvatarInitials.Text    = initials;
             ProfileNameLabel.Text  = firstName;
+            AvatarInitials.Foreground = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString("#FFFFFF"));
+            ApplyAvatarPhoto();
+        }
 
-            if (UserSession.IsLoggedIn && UserSession.IsUnlimited)
-                AvatarInitials.Foreground = new SolidColorBrush(
-                    (Color)ColorConverter.ConvertFromString("#a78bfa"));
-            else
-                AvatarInitials.Foreground = new SolidColorBrush(
-                    (Color)ColorConverter.ConvertFromString("#38BDF8"));
+        // ── Google/account profile photo ──────────────────────────────────────
+        private ImageBrush? _avatarBrush;
+        private string      _avatarBrushUrl = "";
+
+        private void ApplyAvatarPhoto()
+        {
+            string url = UserSession.IsLoggedIn ? (UserSession.PhotoUrl ?? "") : "";
+            if (string.IsNullOrWhiteSpace(url) ||
+                !Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+            {
+                HideAvatarPhoto();
+                return;
+            }
+            try
+            {
+                if (_avatarBrush == null || _avatarBrushUrl != url)
+                {
+                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreColorProfile;
+                    bmp.UriSource = uri;
+                    bmp.EndInit();
+                    _avatarBrush = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
+                    _avatarBrushUrl = url;
+                }
+                if (AvatarPhoto != null)        { AvatarPhoto.Fill = _avatarBrush;      AvatarPhoto.Visibility = Visibility.Visible; }
+                if (PopupAvatarPhoto != null)   { PopupAvatarPhoto.Fill = _avatarBrush; PopupAvatarPhoto.Visibility = Visibility.Visible; }
+                if (AvatarInitials != null)      AvatarInitials.Visibility = Visibility.Hidden;
+                if (PopupAvatarInitials != null) PopupAvatarInitials.Visibility = Visibility.Hidden;
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("AVATAR", $"photo load failed: {ex.Message}");
+                HideAvatarPhoto();
+            }
+        }
+
+        private void HideAvatarPhoto()
+        {
+            if (AvatarPhoto != null)         AvatarPhoto.Visibility = Visibility.Collapsed;
+            if (PopupAvatarPhoto != null)    PopupAvatarPhoto.Visibility = Visibility.Collapsed;
+            if (AvatarInitials != null)      AvatarInitials.Visibility = Visibility.Visible;
+            if (PopupAvatarInitials != null) PopupAvatarInitials.Visibility = Visibility.Visible;
         }
 
         private void SetLoggedOutUI()
@@ -465,18 +681,18 @@ namespace InterviewCopilot
             // Header — show guest profile badge (no separate Sign In button)
             ProfileBadge.Visibility    = Visibility.Visible;
             SignInHeaderBtn.Visibility = Visibility.Collapsed;
-            SessionsBtn.Visibility     = Visibility.Collapsed;
             AvatarInitials.Text        = "GU";
             ProfileNameLabel.Text      = "";
             AvatarInitials.Foreground  = new SolidColorBrush(
-                (Color)ColorConverter.ConvertFromString("#38BDF8"));
+                (Color)ColorConverter.ConvertFromString("#FFFFFF"));
+            HideAvatarPhoto();
 
             // Credits badge — show loading state; real value fetched from backend via device ID
             CreditsLabel.Text           = "⚡ ···";
             CreditsPlanLabel.Visibility = Visibility.Collapsed;
             CreditsIcon.Text            = "";
             CreditsLabel.Foreground     = new SolidColorBrush(
-                (Color)ColorConverter.ConvertFromString("#4ade80"));
+                (Color)ColorConverter.ConvertFromString("#FFFFFF"));
             SetCreditsBadgeStyle("#0f2a1a", "#1a6b3a");
 
             UserSession.IsGuestSession = true;
@@ -487,8 +703,15 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         // CREDITS
         // ══════════════════════════════════════════════════════════════════════
-        private async Task FetchAndDisplayCreditsAsync()
+        private async Task FetchAndDisplayCreditsAsync(bool force = false)
         {
+            await _creditsFetchGate.WaitAsync();
+            try
+            {
+                if (!force && _creditsFetched &&
+                    DateTime.UtcNow - _lastCreditsFetchUtc < TimeSpan.FromSeconds(2))
+                    return;
+
             // Refresh token for signed-in users only; guests have no token to refresh.
             if (UserSession.IsLoggedIn)
                 await UserSession.TryRefreshAsync();
@@ -511,13 +734,13 @@ namespace InterviewCopilot
                 // and enforce the monthly 100-credit limit per physical machine.
                 req.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
 
-                var res = await _creditsClient.SendAsync(req);
+                using var res = await _creditsClient.SendAsync(req);
                 string body = await res.Content.ReadAsStringAsync();
                 CLog($"HTTP {(int)res.StatusCode} body={body[..Math.Min(body.Length, 200)]}");
 
                 if (!res.IsSuccessStatusCode)
                 {
-                    Dispatcher.Invoke(() => { CreditsLabel.Text = "⚡ —"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
+                    Dispatcher.Invoke(() => { CreditsLabel.Text = "⚡"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
                     return;
                 }
 
@@ -528,6 +751,7 @@ namespace InterviewCopilot
 
                 UserSession.Credits = credits;
                 UserSession.Plan = plan;
+                UserSession.IsUnlimited = isUnlimited;
                 CLog($"Parsed: {credits} credits | {plan} | unlimited={isUnlimited}");
 
                 Dispatcher.Invoke(() =>
@@ -537,10 +761,10 @@ namespace InterviewCopilot
                     if (isUnlimited)
                     {
                         CreditsLabel.Text = "∞  Pro";
-                        CreditsIcon.Text = "👑";
-                        SetCreditsBadgeStyle("#1a0a2e", "#7c3aed");
+                        CreditsIcon.Text = "";
+                        SetCreditsBadgeStyle("", "");
                         CreditsLabel.Foreground = new SolidColorBrush(
-                            (Color)ColorConverter.ConvertFromString("#a78bfa"));
+                            (Color)ColorConverter.ConvertFromString("#FFFFFF"));
                     }
                     else
                     {
@@ -548,58 +772,67 @@ namespace InterviewCopilot
                         CreditsLabel.Text = $"⚡ {display}";
                         CreditsIcon.Text = "";
 
-                        if (credits > CreditsLowThreshold)
-                        {
-                            SetCreditsBadgeStyle("#0f2a1a", "#1a6b3a");
-                            CreditsLabel.Foreground = new SolidColorBrush(
-                                (Color)ColorConverter.ConvertFromString("#4ade80"));
-                        }
-                        else if (credits > CreditsCriticalThreshold)
-                        {
-                            SetCreditsBadgeStyle("#2a1a0a", "#6b4a1a");
-                            CreditsLabel.Foreground = new SolidColorBrush(
-                                (Color)ColorConverter.ConvertFromString("#f59e0b"));
-                        }
-                        else
-                        {
-                            SetCreditsBadgeStyle("#2a0a0a", "#6b1a1a");
-                            CreditsLabel.Foreground = new SolidColorBrush(
-                                (Color)ColorConverter.ConvertFromString("#ef4444"));
-                        }
+                        // Pure glass: badge stays neutral; only the numeral flips to soft
+                        // red when the balance is genuinely critical.
+                        SetCreditsBadgeStyle("", "");
+                        string creditColor = credits > CreditsCriticalThreshold ? "#FFFFFF" : "#F87171";
+                        CreditsLabel.Foreground = new SolidColorBrush(
+                            (Color)ColorConverter.ConvertFromString(creditColor));
                     }
                     CLog($"Badge set to: {CreditsLabel.Text}");
                 });
 
                 _creditsFetched = true;
+                _lastCreditsFetchUtc = DateTime.UtcNow;
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => { CreditsLabel.Text = "⚡ —"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
+                Dispatcher.Invoke(() => { CreditsLabel.Text = "⚡"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
                 CLog($"EXCEPTION {ex.GetType().Name}: {ex.Message}");
+            }
+            }
+            finally
+            {
+                _creditsFetchGate.Release();
             }
         }
 
         private void SetCreditsBadgeStyle(string bg, string border)
         {
-            CreditsBadge.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(bg));
-            CreditsBadge.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(border));
+            // Pure-glass theme: the credits badge is always neutral frosted glass,
+            // regardless of balance. (Status is conveyed by the numeral only.)
+            CreditsBadge.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0DFFFFFF"));
+            CreditsBadge.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1AFFFFFF"));
         }
 
-        private void CreditsBadge_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private async void CreditsBadge_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            // Credits badge = quick action, NOT the profile dropdown.
-            // Guest  → open pricing page so they can see plans and get more credits.
-            // Signed in → silently refresh credit count from backend.
-            if (!UserSession.IsLoggedIn)
+            await OpenCreditsDetailsAsync();
+        }
+
+        private async void PopupCreditsCard_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource is DependencyObject source && IsDescendantOf(source, PopupSignInCardBtn))
+                return;
+            e.Handled = true;
+            ProfileDropdownPopup.IsOpen = false;
+            await OpenCreditsDetailsAsync();
+        }
+
+        private async Task OpenCreditsDetailsAsync()
+        {
+            if (_creditsWindow?.IsVisible == true)
             {
-                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                    "https://coopilotxai.com/pricing") { UseShellExecute = true }); }
-                catch { }
+                _creditsWindow.Activate();
+                return;
             }
-            else
-                _ = FetchAndDisplayCreditsAsync().ContinueWith(t => {
-                    if (t.IsFaulted) DebugWindow.Log("CREDITS", t.Exception?.GetBaseException().Message ?? "refresh failed");
-                }, TaskScheduler.Default);
+
+            _creditsWindow = new CreditsWindow { Owner = this };
+            _creditsWindow.Closed += (_, _) => _creditsWindow = null;
+            _creditsWindow.Show();
+
+            await FetchAndDisplayCreditsAsync();
+            _creditsWindow?.RefreshFromSession();
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -607,7 +840,23 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         private void ApplyMainWindowOpacity()
         {
-            this.Opacity = SettingsWindow.GetMainWindowOpacity();
+            ApplyGlassOpacity(SettingsWindow.GetMainWindowOpacity());
+        }
+
+        // Glass model: content (text, buttons, surfaces) stays fully opaque and crisp;
+        // ONLY the near-black backdrop fades. At 100% the backdrop is solid black; as the
+        // slider drops, the desktop shows through the glass. No flat "tint" over the text.
+        private void ApplyGlassOpacity(double op)
+        {
+            this.Opacity = 1.0;
+            // Map the stored 0.50-1.0 preference onto backdrop alpha 0-100% so the
+            // slider percentage reads directly as glass darkness (25% slider = ~25%
+            // black backdrop = mostly see-through glass; 100% = solid). A small floor
+            // keeps the frame faintly visible at the extreme.
+            double bd = Math.Clamp((op - 0.50) / 0.50, 0.06, 1.0);
+            byte a = (byte)Math.Clamp(bd * 255.0, 0, 255);
+            if (MainAppBorder != null)
+                MainAppBorder.Background = new SolidColorBrush(Color.FromArgb(a, 0x09, 0x0B, 0x12));
             answerWindow?.ApplyOverlayOpacity();
         }
 
@@ -634,21 +883,85 @@ namespace InterviewCopilot
             _stealthMode = !_stealthMode;
             try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
             UpdateStealthBtn();
+            // Persist so the Settings toggle and the account-menu toggle stay in sync.
+            try
+            {
+                var cfg = SettingsWindow.LoadConfig();
+                cfg.StealthMode = _stealthMode;
+                SettingsWindow.SaveConfig(cfg);
+            }
+            catch (Exception ex) { DebugWindow.Log("STEALTH", $"persist failed: {ex.Message}"); }
         }
 
+        // Clicking the stealth pill toggles stealth — a fast, discoverable control.
+        private void StealthPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => ToggleStealth();
+
+        // Drive the premium toolbar stealth pill (dot + icon + label + halo glow) so the
+        // user can SEE at a glance whether they're hidden from screen capture.
         private void UpdateStealthBtn()
         {
-            if (StealthTogglePill == null) return;
-            if (_stealthMode)
+            try
             {
-                StealthTogglePill.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4ade80"));
-                StealthToggleText.Text = "ON";
+                if (StealthPill == null) return;
+                static SolidColorBrush B(string hex) => new((Color)ColorConverter.ConvertFromString(hex));
+                if (_stealthMode)
+                {
+                    StealthPill.Background      = B("#0F2C1B");
+                    StealthPill.BorderBrush     = B("#255E3D");
+                    StealthDot.Fill             = B("#48E29A");
+                    StealthPillIcon.Foreground  = B("#84E7B6");
+                    StealthPillLabel.Foreground = B("#B6F1D4");
+                    StealthPillIcon.Text  = "";
+                    StealthPillLabel.Text = "Hidden";
+                    StealthGlow.Color   = (Color)ColorConverter.ConvertFromString("#43D98A");
+                    StealthGlow.Opacity = 0.55;
+                    StealthPill.ToolTip = "Hidden from screen sharing and screen recording  -  click to toggle";
+                }
+                else
+                {
+                    StealthPill.Background      = B("#332611");
+                    StealthPill.BorderBrush     = B("#6A5223");
+                    StealthDot.Fill             = B("#F6C748");
+                    StealthPillIcon.Foreground  = B("#F3C864");
+                    StealthPillLabel.Foreground = B("#F7D68A");
+                    StealthPillIcon.Text  = "";
+                    StealthPillLabel.Text = "Visible";
+                    StealthGlow.Color   = (Color)ColorConverter.ConvertFromString("#E8A93A");
+                    StealthGlow.Opacity = 0.42;
+                    StealthPill.ToolTip = "Stealth OFF - this window IS visible on screen share  -  click to hide";
+                }
             }
-            else
+            catch { }
+        }
+
+        // ── FIRST-RUN ONBOARDING ────────────────────────────────────────────
+        private string OnboardingSeenPath => Path.Combine(AppDataFolder, "onboarding_seen.flag");
+
+        private void ShowOnboarding()
+        {
+            try { if (OnboardingOverlay != null) OnboardingOverlay.Visibility = Visibility.Visible; }
+            catch (Exception ex) { DebugWindow.Log("ONBOARD", ex.Message); }
+        }
+
+        private void OnboardingClose_Click(object sender, RoutedEventArgs e)
+        {
+            try
             {
-                StealthTogglePill.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#ef4444"));
-                StealthToggleText.Text = "OFF";
+                if (OnboardingOverlay != null) OnboardingOverlay.Visibility = Visibility.Collapsed;
+                try { File.WriteAllText(OnboardingSeenPath, "1"); } catch { }
+                // Hand keyboard focus back to the window so SPACE works right away.
+                this.Focusable = true;
+                System.Windows.Input.Keyboard.Focus(this);
             }
+            catch (Exception ex) { DebugWindow.Log("ONBOARD", ex.Message); }
+        }
+
+        private void HelpBtn_Click(object sender, RoutedEventArgs e) => ShowOnboarding();
+
+        private void ProfileHowItWorks_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            try { if (ProfileDropdownPopup != null) ProfileDropdownPopup.IsOpen = false; } catch { }
+            ShowOnboarding();
         }
 
         // CAMERA MODE
@@ -692,10 +1005,317 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         private bool _spaceHandling = false;
 
+        private void AutoModePill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            ProfileDropdownPopup.IsOpen = false;
+            SavedResumesPopup.IsOpen = false;
+            ListeningModePopup.PlacementTarget = AutoModePill;
+            UpdateListeningModePopupSelection();
+            ListeningModePopup.IsOpen = !ListeningModePopup.IsOpen;
+        }
+
+        private void ManualModeOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            SelectListeningMode(ListeningMode.Manual);
+        }
+
+        private void InterviewModeOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            SelectListeningMode(ListeningMode.InterviewAuto);
+        }
+
+        private void PracticeModeOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            SelectListeningMode(ListeningMode.PracticeAuto);
+        }
+
+        private void SelectListeningMode(ListeningMode mode)
+        {
+            ListeningModePopup.IsOpen = false;
+            if (_listeningMode == mode)
+            {
+                if (AutoModeEnabled) StartAutoListeningIfReady();
+                return;
+            }
+
+            string previousCaptureMode = CaptureModeFor(_listeningMode);
+            string nextCaptureMode = CaptureModeFor(mode);
+
+            // Mode changes never submit a half-finished transcript. They stop capture,
+            // clear only the auto-turn detector, and leave the user's saved Settings intact.
+            if (isListening)
+            {
+                isListening = false;
+                isMuted = true;
+                WritePauseFlag();
+                UpdateMicUi();
+            }
+
+            _listeningMode = mode;
+            _lastAutoSubmittedQuestion = "";
+            _lastAutoRejectedTranscript = "";
+            _lastAutoSubmitUtc = DateTime.MinValue;
+            ResetAutoTurnDetection();
+            UpdateListeningModeUi();
+
+            if (!string.Equals(previousCaptureMode, nextCaptureMode, StringComparison.Ordinal))
+            {
+                ShowListeningModeNotice("SWITCHING");
+                StartSpeechmaticsEngine();
+            }
+            else if (AutoModeEnabled)
+            {
+                StartAutoListeningIfReady();
+            }
+
+            string modeName = mode switch
+            {
+                ListeningMode.InterviewAuto => "Interview Auto (system audio only)",
+                ListeningMode.PracticeAuto => "Practice Auto (system audio + microphone)",
+                _ => "Manual"
+            };
+            DebugWindow.Log("MODE", $"Selected {modeName}. Saved audio preference was not changed.");
+        }
+
+        private static string CaptureModeFor(ListeningMode mode) => mode switch
+        {
+            ListeningMode.InterviewAuto => "system",
+            ListeningMode.PracticeAuto => "both",
+            _ => SettingsWindow.GetMicCaptureEnabled() ? "both" : "system"
+        };
+
+        private void UpdateListeningModeUi()
+        {
+            if (AutoModePill == null) return;
+            static SolidColorBrush Brush(string hex) =>
+                new((Color)ColorConverter.ConvertFromString(hex));
+
+            switch (_listeningMode)
+            {
+                case ListeningMode.InterviewAuto:
+                    AutoModePill.Background = Brush("#102A1D");
+                    AutoModePill.BorderBrush = Brush("#2C7B50");
+                    AutoModeDot.Fill = Brush("#34E08A");
+                    AutoModeLabel.Text = "INTERVIEW AUTO";
+                    AutoModeLabel.Foreground = Brush("#B8F5D3");
+                    AutoModeChevron.Foreground = Brush("#73C998");
+                    AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#34E08A");
+                    AutoModeGlow.Opacity = 0.42;
+                    AutoModePill.ToolTip = "Interview Auto listens to meeting audio only";
+                    break;
+
+                case ListeningMode.PracticeAuto:
+                    AutoModePill.Background = Brush("#0C2731");
+                    AutoModePill.BorderBrush = Brush("#22768B");
+                    AutoModeDot.Fill = Brush("#38CFF2");
+                    AutoModeLabel.Text = "PRACTICE AUTO";
+                    AutoModeLabel.Foreground = Brush("#BDEFFC");
+                    AutoModeChevron.Foreground = Brush("#70C6DA");
+                    AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#38CFF2");
+                    AutoModeGlow.Opacity = 0.38;
+                    AutoModePill.ToolTip = "Practice Auto listens to your microphone without a meeting";
+                    break;
+
+                default:
+                    AutoModePill.Background = Brush("#101827");
+                    AutoModePill.BorderBrush = Brush("#26364C");
+                    AutoModeDot.Fill = Brush("#607086");
+                    AutoModeLabel.Text = "MANUAL";
+                    AutoModeLabel.Foreground = Brush("#A9B6C8");
+                    AutoModeChevron.Foreground = Brush("#6F8198");
+                    AutoModeGlow.Opacity = 0;
+                    AutoModePill.ToolTip = "Manual mode · press Space to listen and Space to answer";
+                    break;
+            }
+
+            UpdateListeningModePopupSelection();
+        }
+
+        private void UpdateListeningModePopupSelection()
+        {
+            if (ManualModeCheck == null) return;
+            static SolidColorBrush Brush(string hex) =>
+                new((Color)ColorConverter.ConvertFromString(hex));
+
+            ManualModeCheck.Visibility = _listeningMode == ListeningMode.Manual
+                ? Visibility.Visible : Visibility.Collapsed;
+            InterviewModeCheck.Visibility = _listeningMode == ListeningMode.InterviewAuto
+                ? Visibility.Visible : Visibility.Collapsed;
+            PracticeModeCheck.Visibility = _listeningMode == ListeningMode.PracticeAuto
+                ? Visibility.Visible : Visibility.Collapsed;
+
+            SetModeRowSelection(ManualModeRow, _listeningMode == ListeningMode.Manual,
+                Brush("#152337"), Brush("#40536B"));
+            SetModeRowSelection(InterviewModeRow, _listeningMode == ListeningMode.InterviewAuto,
+                Brush("#102A1D"), Brush("#2C7B50"));
+            SetModeRowSelection(PracticeModeRow, _listeningMode == ListeningMode.PracticeAuto,
+                Brush("#0C2731"), Brush("#22768B"));
+        }
+
+        private static void SetModeRowSelection(System.Windows.Controls.Border row, bool selected,
+            SolidColorBrush selectedBackground, SolidColorBrush selectedBorder)
+        {
+            row.Background = selected ? selectedBackground : Brushes.Transparent;
+            row.BorderBrush = selected ? selectedBorder : Brushes.Transparent;
+            row.BorderThickness = selected ? new Thickness(1) : new Thickness(0);
+        }
+
+        private void ShowListeningModeNotice(string message)
+        {
+            if (AutoModePill == null) return;
+            static SolidColorBrush Brush(string hex) =>
+                new((Color)ColorConverter.ConvertFromString(hex));
+
+            AutoModePill.Background = Brush("#2A2110");
+            AutoModePill.BorderBrush = Brush("#8A6825");
+            AutoModeDot.Fill = Brush("#F5B83D");
+            AutoModeLabel.Text = message;
+            AutoModeLabel.Foreground = Brush("#F8D58B");
+            AutoModeChevron.Foreground = Brush("#C99D49");
+            AutoModePill.ToolTip = "Switching the existing transcription engine to the selected capture mode";
+
+            _autoModeNoticeTimer?.Stop();
+            _autoModeNoticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
+            _autoModeNoticeTimer.Tick += (_, _) =>
+            {
+                _autoModeNoticeTimer?.Stop();
+                UpdateListeningModeUi();
+            };
+            _autoModeNoticeTimer.Start();
+        }
+
+        private void StartAutoListeningIfReady()
+        {
+            if (!AutoModeEnabled || !_engineOnline || isListening || isProcessing ||
+                _flushing || _isScreenAnalyzing)
+                return;
+
+            this.Focusable = true;
+            System.Windows.Input.Keyboard.Focus(this);
+            HandleSpaceDown("AUTO");
+        }
+
+        private void ResetAutoTurnDetection()
+        {
+            _autoTurnSubmitting = false;
+            _autoLastTranscript = "";
+            _autoListeningStartedUtc = DateTime.UtcNow;
+            _autoTranscriptChangedUtc = DateTime.UtcNow;
+        }
+
+        private void TrySubmitAutomaticTurn(string transcript)
+        {
+            if (!AutoModeEnabled || _autoTurnSubmitting || !isListening ||
+                isProcessing || _flushing || _isScreenAnalyzing)
+                return;
+
+            string question = transcript.Trim();
+            string candidateQuestion = PromptBuilder.NormalizeInterviewerQuestion(question);
+            DateTime now = DateTime.UtcNow;
+            bool isCompleteQuestion = IsLikelyCompleteAutomaticQuestion(candidateQuestion);
+            bool isRecentDuplicate = string.Equals(
+                                         candidateQuestion,
+                                         _lastAutoSubmittedQuestion,
+                                         StringComparison.OrdinalIgnoreCase) &&
+                                     now - _lastAutoSubmitUtc < TimeSpan.FromSeconds(12);
+            if (!isCompleteQuestion || isRecentDuplicate)
+            {
+                if (!isCompleteQuestion &&
+                    !string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
+                {
+                    _lastAutoRejectedTranscript = question;
+                    DebugWindow.Log("AUTO", $"Waiting for a complete question ({question.Length} chars). No AI request sent.");
+                }
+                return;
+            }
+
+            bool hasClosingPunctuation = candidateQuestion.EndsWith("?", StringComparison.Ordinal) ||
+                                         candidateQuestion.EndsWith(".", StringComparison.Ordinal) ||
+                                         candidateQuestion.EndsWith("!", StringComparison.Ordinal);
+            int requiredSilenceMs = hasClosingPunctuation
+                ? AutoTurnPunctuatedSilenceMs
+                : AutoTurnNaturalSilenceMs;
+            if (question.Length < AutoTurnMinimumChars ||
+                now - _autoListeningStartedUtc < TimeSpan.FromMilliseconds(AutoTurnMinimumSpeechMs) ||
+                now - _autoTranscriptChangedUtc < TimeSpan.FromMilliseconds(requiredSilenceMs))
+                return;
+
+            _autoTurnSubmitting = true;
+            _lastAutoSubmittedQuestion = candidateQuestion;
+            _lastAutoSubmitUtc = now;
+            DebugWindow.Log("AUTO", $"Turn stable for {requiredSilenceMs}ms; submitting {candidateQuestion.Length} normalized characters.");
+            HandleSpaceUp("AUTO");
+        }
+
+        private static bool IsLikelyCompleteAutomaticQuestion(string question)
+        {
+            if (string.IsNullOrWhiteSpace(question)) return false;
+
+            string[] words = Regex.Matches(question, @"[\p{L}\p{N}']+")
+                                  .Cast<Match>()
+                                  .Select(match => match.Value.ToLowerInvariant())
+                                  .ToArray();
+            if (words.Length == 0) return false;
+
+            string normalized = string.Join(" ", words);
+            if (normalized is "okay" or "okay sir" or "yes" or "yes sir" or "no" or
+                              "no sir" or "thanks" or "thank you" or "hello" or "hi" or
+                              "la la la")
+                return false;
+
+            bool hasQuestionMark = question.Contains('?');
+
+            string first = words[0];
+            bool isQuestionStarter = first is "what" or "why" or "how" or "when" or
+                "where" or "who" or "which" or "can" or "could" or "would" or "will" or
+                "do" or "does" or "did" or "are" or "is" or "was" or "were" or "have" or
+                "has" or "should";
+            if (isQuestionStarter)
+                return words.Length >= 2 || (hasQuestionMark && first is "what" or "why" or "how");
+
+            bool isInterviewCommand = first is "tell" or "explain" or "describe" or "walk" or
+                "share" or "discuss" or "design" or "implement" or "compare" or "define" or
+                "introduce" or "summarize" or "write" or "create" or "build" or "code" or
+                "program" or "solve" or "develop" or "generate" or "show";
+            if (isInterviewCommand)
+            {
+                if (first == "tell" && words.Length == 2 && words[1] == "me") return false;
+                return words.Length >= 2;
+            }
+
+            if (hasQuestionMark) return words.Length >= 2;
+
+            // Multiple declarative sentences are normally background conversation, not
+            // a question. Question starters and coding/command requests returned above,
+            // so this guard no longer blocks a valid question followed by a constraint.
+            int periodCount = question.Count(character => character == '.');
+            if (periodCount >= 2) return false;
+
+            char last = question[^1];
+            bool hasClosingPunctuation = last is '.' or '!';
+            return words.Length >= 5 && question.Length >= 20 && hasClosingPunctuation;
+        }
+
         // Push-to-talk: DOWN = start listening, UP = fire AI.
         // Toggle callers (button, in-app Space) call both in sequence.
+        private string _listeningInitiator = "";
+        private long _listeningStartTicks = 0;
+
+        // True while the user is actively typing in one of the app's own text fields —
+        // Space must insert a space character there, not toggle the mic. Checked here
+        // (rather than only in a WPF key handler) so the global hook's unconditional
+        // Space toggle still respects it regardless of call source.
+        private bool IsTypingInTextField() =>
+            ResumeTextBox.IsKeyboardFocusWithin || AskBox.IsKeyboardFocusWithin ||
+            CompanyNameBox.IsKeyboardFocusWithin || JobDescBox.IsKeyboardFocusWithin;
+
         private void HandleSpaceDown(string source)
         {
+            if (source != "BUTTON" && IsTypingInTextField()) return;
             if (_engineUsageLimitReached)
             {
                 ShowEngineUsageLimitError();
@@ -705,7 +1325,10 @@ namespace InterviewCopilot
             _spaceHandling = true;
             try
             {
+                _listeningInitiator = source;
+                _listeningStartTicks = Environment.TickCount64;
                 isMuted = false; isListening = true;
+                SetResumePanelCollapsed(true, animate: true);
                 string latestPath = Path.Combine(AppDataFolder, "latest.txt");
                 try { File.Delete(latestPath); } catch { }
                 try { File.WriteAllText(latestPath, ""); } catch (Exception ex) { DebugWindow.Log("FILE", $"latest.txt clear failed: {ex.Message}"); }
@@ -714,57 +1337,173 @@ namespace InterviewCopilot
                 _listenStartTicks = 0;
                 TranscriptTextBlock.Text = "";
                 TranscriptHint.Visibility = Visibility.Visible;
-                AiAnswerBox.Text = "";
-                if (answerWindow != null) { answerWindow.UpdateAnswer(""); answerWindow.UpdateQuestion(""); }
+                // Manual listening starts a fresh visual turn. Auto modes resume listening
+                // immediately after an answer, so keep that answer visible until the next
+                // answer actually begins instead of flashing it and clearing it at once.
+                if (source != "AUTO")
+                {
+                    AiAnswerBox.Text = "";
+                    if (answerWindow != null) answerWindow.UpdateAnswer("");
+                }
+                if (answerWindow != null) answerWindow.UpdateQuestion("");
                 DeletePauseFlag();
                 DebugWindow.Log("MIC", $"[{source}] UNMUTED — listening");
+                if (AutoModeEnabled) ResetAutoTurnDetection();
                 UpdateMicUi();
             }
             finally { _spaceHandling = false; }
         }
 
-        private void HandleSpaceUp(string source)
+        private async void HandleSpaceUp(string source)
         {
-            if (_spaceHandling || isProcessing || isMuted) return;
-            _spaceHandling = true;
+            if (source != "BUTTON" && IsTypingInTextField()) return;
+            if (_spaceHandling || isProcessing || _flushing || isMuted) return;
+
+            // If listening was started by UI button, do NOT let space key release mute it!
+            if (source != "BUTTON" && _listeningInitiator == "BUTTON") return;
+
+            // GLOBAL fires HandleSpacePress once per discrete toggle press. A sub-200ms hold
+            // is an accidental double-fire, not a real utterance, so re-mute and bail.
+            // PREVIEW pairs one physical KeyDown with its own KeyUp (a human tap is ~100-160ms),
+            // so the floor is not applied there.
+            if (source != "PREVIEW")
+            {
+                long heldMs = Environment.TickCount64 - _listeningStartTicks;
+                if (heldMs < 200)
+                {
+                    DebugWindow.Log("MIC", $"[{source}] Quick space tap ignored ({heldMs}ms) — re-muting");
+                    isListening = false; WritePauseFlag(); isMuted = true;
+                    UpdateMicUi();
+                    return;
+                }
+            }
+
+            // Enter the flush phase IMMEDIATELY. Setting _flushing here (instead of holding
+            // _spaceHandling across the async grace window) means a Space press during this
+            // window routes straight to InterruptAiAndListen and re-listens in ONE press,
+            // instead of being swallowed until the AI happened to start.
+            isListening = false; isMuted = true; _flushing = true;
+            try { _aiCts?.Dispose(); } catch { }
+            _aiCts = new System.Threading.CancellationTokenSource();
+            var ct = _aiCts.Token;
+            DebugWindow.Log("MIC", $"[{source}] MUTED — flushing final transcript");
+            UpdateMicUi();
+
+            // Stop capturing NEW audio, but do NOT set pause.flag yet: Speechmatics runs
+            // ~max_delay behind live speech, so the tail of the utterance is still in flight.
+            // Poll latest.txt for a brief grace window so the complete question lands first.
+            string question = "";
             try
             {
-                isListening = false; WritePauseFlag(); isMuted = true;
-                DebugWindow.Log("MIC", $"[{source}] MUTED — firing AI");
-                UpdateMicUi();
-                _ = AskAiAsync().ContinueWith(t =>
+                question = ReadLatestTxtSafe().Trim();
+                int stableCount = 0;
+                for (int i = 0; i < 16; i++)   // ~1.28s cap
                 {
-                    if (t.IsFaulted)
+                    await Task.Delay(80, ct);  // throws if the user interrupted
+                    string t = ReadLatestTxtSafe().Trim();
+                    if (t.Length > question.Length)
                     {
-                        Exception ex = t.Exception?.GetBaseException() ?? t.Exception!;
-                        DebugWindow.Log("AI_FATAL", ex.Message);
-                        Dispatcher.Invoke(() =>
-                        {
-                            AiAnswerBox.Text = "⚠ Unexpected error. Please try again. Press F12 for details.";
-                            StopThinkingUi();
-                        });
+                        question = t;
+                        stableCount = 0;
                     }
-                }, TaskScheduler.Default);
+                    else
+                    {
+                        // Once text has stopped growing for ~160ms the utterance has landed.
+                        stableCount++;
+                        if (!string.IsNullOrWhiteSpace(question) && stableCount >= 2)
+                            break;
+                    }
+                }
             }
-            finally { _spaceHandling = false; }
+            catch (OperationCanceledException)
+            {
+                // User pressed Space during the flush: a fresh listening session already
+                // took over in InterruptAiAndListen. Leave that state alone.
+                DebugWindow.Log("MIC", $"[{source}] flush interrupted — re-listening");
+                return;
+            }
+            catch (Exception ex) { DebugWindow.Log("MIC", $"HandleSpaceUp flush error: {ex.Message}"); }
+            finally { _flushing = false; }
+
+            if (!string.IsNullOrWhiteSpace(question))
+                TranscriptTextBlock.Text = question;
+            WritePauseFlag();   // final has landed — safe to pause the engine
+            DebugWindow.Log("MIC", $"[{source}] firing AI ({question.Length} chars)");
+
+            if (string.IsNullOrWhiteSpace(question))
+            {
+                UpdateMicUi();   // nothing said — plain mute
+                return;
+            }
+
+            try { await AskAiAsync(question, ct); }
+            catch (Exception ex) { DebugWindow.Log("MIC", $"HandleSpaceUp ask error: {ex.Message}"); }
         }
 
-        // Button and in-app Space toggle: treat as push-to-talk in sequence
+        // Space is a single always-responsive toggle. Whatever state we're in, one
+        // press does the obvious next thing instantly:
+        //   ANSWERING  -> cancel the answer and start listening again (interrupt anytime)
+        //   MUTED/IDLE -> start listening
+        //   LISTENING  -> stop and fire the AI
         private void HandleSpacePress(string source)
         {
-            if (isMuted) HandleSpaceDown(source);
-            else          HandleSpaceUp(source);
+            // Auto owns the listening lifecycle. Global Space presses in an Auto mode used
+            // to cancel the active answer and launch many tiny requests, exhausting Groq and
+            // forcing a slow fallback. Manual Space behavior is unchanged in Manual mode.
+            if (AutoModeEnabled && source != "AUTO")
+            {
+                ShowListeningModeNotice("AUTO ACTIVE");
+                DebugWindow.Log("MODE", $"Ignored {source} Space while {_listeningMode} controls the turn.");
+                return;
+            }
+
+            // Answering OR flushing the final transcript -> one press cancels and re-listens.
+            if (isProcessing || _flushing) { InterruptAiAndListen(source); return; }
+            if (isMuted)      HandleSpaceDown(source);
+            else              HandleSpaceUp(source);
+        }
+
+        // Cancel an in-flight answer (or the transcript-flush window) and immediately begin
+        // a fresh listening session, so the user is never "stuck" waiting before they can
+        // ask the next thing. This is what makes unmute feel instant, every time.
+        private void InterruptAiAndListen(string source)
+        {
+            if (source != "BUTTON" && IsTypingInTextField()) return;
+            DebugWindow.Log("MIC", $"[{source}] interrupt — cancelling, back to listening");
+            try { _aiCts?.Cancel(); } catch { }
+            isProcessing = false;
+            _flushing = false;
+            thinkingTimer?.Stop();
+            ThinkingPanel.Visibility = Visibility.Collapsed;
+            // isMuted is already true during processing/flushing, so this starts listening cleanly.
+            HandleSpaceDown(source);
         }
 
         private void MicBtn_Click(object sender, RoutedEventArgs e) => HandleSpacePress("BUTTON");
 
         // ══════════════════════════════════════════════════════════════════════
-        // AI — routes through CoopilotX backend (credits deducted server-side)
+        // AI requests route through the secured backend, where credits are deducted.
         // ══════════════════════════════════════════════════════════════════════
-        private async Task AskAiAsync(string? customQuestion = null)
+        private async Task AskAiAsync(string? customQuestion = null,
+                                      System.Threading.CancellationToken externalCt = default)
         {
             if (isProcessing) return;
             isProcessing = true; // guard: set before any await so no second call can sneak through
+
+            // Reuse the caller's cancellation token when the voice flow already owns one
+            // (so a single _aiCts.Cancel() interrupts flush + answer together); otherwise
+            // (e.g. the typed AskBox path) create a fresh source for this answer.
+            System.Threading.CancellationToken aiCt;
+            if (externalCt.CanBeCanceled)
+            {
+                aiCt = externalCt;
+            }
+            else
+            {
+                try { _aiCts?.Dispose(); } catch { }
+                _aiCts = new System.Threading.CancellationTokenSource();
+                aiCt = _aiCts.Token;
+            }
 
             // Outer try/catch wraps the ENTIRE method body — including setup awaits —
             // so no exception can ever escape this Task unobserved.
@@ -772,10 +1511,14 @@ namespace InterviewCopilot
             var streamedAnswer = new StringBuilder();
             try
             {
-                q = string.IsNullOrWhiteSpace(customQuestion)
+                string rawQuestion = string.IsNullOrWhiteSpace(customQuestion)
                     ? TranscriptTextBlock.Text.Trim()
                     : customQuestion.Trim();
+                q = PromptBuilder.NormalizeInterviewerQuestion(rawQuestion);
                 if (string.IsNullOrWhiteSpace(q)) { isProcessing = false; UpdateMicUi(); return; }
+                if (!string.Equals(rawQuestion, q, StringComparison.Ordinal))
+                    DebugWindow.Log("AI", $"Ignored opening transcript filler: {rawQuestion.Length - q.Length} chars");
+                var answerTimer = System.Diagnostics.Stopwatch.StartNew();
 
                 if (UserSession.IsLoggedIn) await UserSession.TryRefreshAsync();
 
@@ -783,7 +1526,10 @@ namespace InterviewCopilot
                 // _creditsFetched prevents false-blocking before the first backend response.
                 if (!UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold)
                 {
-                    AiAnswerBox.Text = $"⚠ Not enough credits ({UserSession.Credits} remaining).\n\nVisit coopilotxai.com/pricing to upgrade.";
+                    // Show warning in a non-intrusive way — don't pollute the AI answer panel
+                    System.Windows.MessageBox.Show(
+                        $"You only have {UserSession.Credits} credit{(UserSession.Credits == 1 ? "" : "s")} left.\n\nOpen the Replysis AI pricing page to get more.",
+                        "Credits Low", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                     isProcessing = false;
                     UpdateMicUi();
                     return;
@@ -796,33 +1542,42 @@ namespace InterviewCopilot
                 thinkingTimer?.Start();
                 UpdateMicUi();
 
-                string sep = "\n" + new string('─', 45) + "\n\n";
-                string old = AiAnswerBox.Text;
-                AiAnswerBox.Text = $"Q: {q}\n\n";
+                // The answer panel shows ONLY the current answer. The question already
+                // appears in the Interviewer transcript, so we don't repeat a "Q:" label
+                // here, and each new question replaces the previous answer instead of
+                // stacking old ones underneath.
+                AiAnswerBox.Text = "";
                 if (answerWindow != null) { answerWindow.UpdateAnswer(""); answerWindow.UpdateQuestion(q); }
 
                 int tokenCount = 0;
 
-                await foreach (var token in StreamFromBackend(q, ResumeTextBox.Text))
+                await foreach (var token in StreamFromBackend(q, ResumeTextBox.Text, aiCt))
                 {
+                    aiCt.ThrowIfCancellationRequested();
                     streamedAnswer.Append(token); tokenCount++;
                     if (tokenCount == 1)
                     {
                         thinkingTimer?.Stop();
                         ThinkingPanel.Visibility = Visibility.Collapsed;
+                        DebugWindow.Log("AI", $"First token in {answerTimer.ElapsedMilliseconds}ms");
                     }
-                    if (tokenCount % 3 == 0 || token.Contains('\n'))
+                    // Paint the first token immediately. After that, repaint every two
+                    // tokens (or on a newline) to keep the stream smooth without
+                    // thrashing the UI thread.
+                    if (tokenCount == 1 || tokenCount % 2 == 0 || token.Contains('\n'))
                     {
                         string soFar = CleanAiOutput(streamedAnswer.ToString());
-                        AiAnswerBox.Text = $"Q: {q}\n\n{soFar}";
+                        AiAnswerBox.Text = soFar;
                         AiAnswerBox.ScrollToEnd();
                         if (answerWindow != null) answerWindow.UpdateAnswer(soFar);
                     }
                 }
 
                 string final = CleanAiOutput(streamedAnswer.ToString());
-                AiAnswerBox.Text = $"Q: {q}\n\n{final}\n{sep}{old}";
-                AiAnswerBox.ScrollToEnd();
+                if (string.IsNullOrWhiteSpace(final))
+                    throw new BackendRequestException("No answer was returned. Please try again.");
+                AiAnswerBox.Text = final;
+                AiAnswerBox.ScrollToHome();   // land at the top so the answer reads from the start
                 if (answerWindow != null) { answerWindow.UpdateAnswer(final); answerWindow.UpdateQuestion(q); }
                 PromptBuilder.AddToHistory(q, final);
                 AppendToSessionLog(q, final);
@@ -833,21 +1588,44 @@ namespace InterviewCopilot
                     if (t.IsFaulted) DebugWindow.Log("CREDITS_ERR", t.Exception?.GetBaseException().Message ?? "unknown");
                 }, TaskScheduler.Default);
             }
+            catch (OperationCanceledException)
+            {
+                // User pressed Space to interrupt this answer — a fresh listening session
+                // has already taken over. Stay silent: no error text, no partial dump.
+                DebugWindow.Log("AI", "Answer interrupted by user.");
+            }
+            catch (BackendRequestException ex)
+            {
+                DebugWindow.Log("AI_ERR", ex.Message);
+                string partial = CleanAiOutput(streamedAnswer.ToString());
+                AiAnswerBox.Text = string.IsNullOrWhiteSpace(partial)
+                    ? ex.Message
+                    : $"{partial}\n\n{ex.Message}";
+                if (answerWindow != null)
+                    answerWindow.UpdateAnswer(AiAnswerBox.Text);
+                _ = FetchAndDisplayCreditsAsync();
+            }
             catch (Exception ex)
             {
                 DebugWindow.Log("AI_ERR", ex.Message);
-                string label = string.IsNullOrWhiteSpace(q) ? "" : $"Q: {q}\n\n";
                 string partial = CleanAiOutput(streamedAnswer.ToString());
                 string failure = "Connection interrupted. Please try again.";
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(partial)
-                    ? $"{label}{failure}"
-                    : $"{label}{partial}\n\n{failure}";
+                    ? failure
+                    : $"{partial}\n\n{failure}";
                 if (answerWindow != null)
                     answerWindow.UpdateAnswer(string.IsNullOrWhiteSpace(partial)
                         ? failure
                         : $"{partial}\n\n{failure}");
             }
-            finally { StopThinkingUi(); }
+            finally
+            {
+                // Only tear down the thinking UI if THIS answer is still the active one.
+                // If the user already interrupted and started a new listening session,
+                // leave that state alone so we don't stomp the live mic UI.
+                if (!isListening) StopThinkingUi();
+                else { isProcessing = false; }
+            }
         }
 
         // ── Streaming iterator — NO try/catch wrapping yield statements ────────
@@ -864,15 +1642,20 @@ namespace InterviewCopilot
 
             // ── 2. Handle non-200 status codes with plain yields (no try/catch) ─
             int status = (int)res.StatusCode;
-            if (status == 402) { yield return "⚠ Not enough credits. Visit coopilotxai.com/pricing to upgrade."; yield break; }
+            if (status == 402)
+                throw new BackendRequestException("Not enough credits. Open Replysis AI pricing to continue.");
             if (status == 401)
             {
                 UserSession.Clear();
-                Dispatcher.Invoke(() => SetLoggedOutUI());
-                yield return "⚠ Session expired. Please sign in again.";
-                yield break;
+                Dispatcher.Invoke(() => { _ = SwitchToGuestSessionAsync(); });
+                throw new BackendRequestException("Your sign-in expired. Guest mode is ready; sign in again when convenient.");
             }
-            if (!res.IsSuccessStatusCode) { yield return $"Backend error ({status}). Try again."; yield break; }
+            if (!res.IsSuccessStatusCode)
+            {
+                // Keep the real status for diagnosis; the user gets plain language.
+                DebugWindow.Log("AI_ERR", $"Answer request failed with HTTP {status}");
+                throw new BackendRequestException(FriendlyBackendMessage(status));
+            }
 
             // ── 3. Stream SSE lines — collect then yield (no try/catch around yield) ─
             await foreach (string token in StreamSseTokensAsync(res, ct))
@@ -880,39 +1663,65 @@ namespace InterviewCopilot
         }
 
         // Handles the HTTP request; exceptions bubble up to AskAiAsync's catch block.
+        /// <summary>
+        /// Fire-and-forget lightweight request that keeps the answer backend's container
+        /// warm so the next real question doesn't pay a cold-start. Cheap GET, short
+        /// timeout, all errors swallowed — this must never affect the UI or throw.
+        /// </summary>
+        private async Task WarmBackendAsync()
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, $"{BackendUrl}/health");
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(6));
+                using var res = await _creditsClient.SendAsync(req, cts.Token);
+                // Any response (even 404) means the container is awake — that's all we need.
+            }
+            catch { /* offline / cold / 404 — nothing to do, this is best-effort */ }
+        }
+
         private async Task<HttpResponseMessage> SendBackendRequestAsync(
             string question, string resume, System.Threading.CancellationToken ct)
         {
             PromptBuilder.SetContext(_liveHints, _companyName, _jobDescription);
             string resumeFacts = ResumeParser.ExtractFacts(resume);
-            var messages = PromptBuilder.BuildMessages(resumeFacts, question);
-            // Embed context + locked facts + format rule directly in the question field
-            // so the backend model always sees them, even if it ignores the messages array.
-            string enhancedQuestion = PromptBuilder.BuildEnhancedQuestion(question, resumeFacts);
+            var messages = PromptBuilder.BuildMessages(resumeFacts, question, AutoModeEnabled);
             const int MaxResumeChars = 30_000;
             string safeResume = (resume ?? "").Length > MaxResumeChars
                 ? resume!.Substring(0, MaxResumeChars) + "\n[truncated]"
                 : (resume ?? "");
             var provider = SettingsWindow.IsGroq() ? "groq" : "openai";
-            var payload = new { question = enhancedQuestion, resume = safeResume, provider, messages };
+            // Auto uses the compact message set below, which already includes curated resume
+            // facts. Avoid duplicating the full raw resume over the network on every turn.
+            string transportResume = AutoModeEnabled ? string.Empty : safeResume;
+            var payload = new { question, resume = transportResume, provider, messages };
+            string payloadJson = JsonSerializer.Serialize(payload);
+            DebugWindow.Log("AI", $"Request prepared: {messages.Count} messages, {Encoding.UTF8.GetByteCount(payloadJson)} bytes");
             using var request = new HttpRequestMessage(HttpMethod.Post,
                 $"{BackendUrl}/api/v1/interview/ask");
             if (!string.IsNullOrEmpty(UserSession.IdToken))
                 request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
             request.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            request.Content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
 
             try
             {
-                return await _backendClient.SendAsync(
+                var requestTimer = Stopwatch.StartNew();
+                HttpResponseMessage response = await _backendClient.SendAsync(
                     request, HttpCompletionOption.ResponseHeadersRead, ct);
+                DebugWindow.Log("AI", $"Backend headers in {requestTimer.ElapsedMilliseconds}ms (HTTP {(int)response.StatusCode}).");
+                return response;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // User interrupted with Space. Let this propagate so AskAiAsync's
+                // cancellation catch stays silent instead of showing a fake 503 error.
+                throw;
             }
             catch (Exception ex)
             {
                 DebugWindow.Log("AI_ERR", ex.Message);
-                // Return a fake 503 so the iterator can yield a friendly message
-                return new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable);
+                throw new BackendRequestException("The answer service could not be reached. Please check your connection and try again.");
             }
         }
 
@@ -952,6 +1761,17 @@ namespace InterviewCopilot
             }
         }
 
+        // Turns a failed backend response into something worth reading. The status
+        // code itself stays in the debug log: it means nothing to the person in the
+        // middle of an interview, and every one of these cases is recoverable.
+        private static string FriendlyBackendMessage(int status) => status switch
+        {
+            408 or 504 => "That took longer than expected. No credits were used. Press space to try again.",
+            429        => "Too many requests in a short time. Wait a few seconds, then press space to try again.",
+            503        => "The answer service is briefly unavailable. Your session is safe. Press space to try again.",
+            _          => "We could not generate an answer this time. No credits were used. Press space to try again.",
+        };
+
         private static bool TryReadSseToken(string data, out string token, out bool isTerminal)
         {
             token = "";
@@ -962,9 +1782,8 @@ namespace InterviewCopilot
                 using var doc = JsonDocument.Parse(data);
                 if (doc.RootElement.TryGetProperty("error", out var error))
                 {
-                    token = $"Server error: {error.GetString() ?? "Unknown error"}";
-                    isTerminal = true;
-                    return true;
+                    throw new BackendRequestException(error.GetString()
+                        ?? "The answer service could not complete this request.");
                 }
 
                 if (!doc.RootElement.TryGetProperty("choices", out var choices) ||
@@ -985,9 +1804,21 @@ namespace InterviewCopilot
         private string CleanAiOutput(string ans)
         {
             ans = Regex.Replace(ans, @"```[a-z]*|```", "").Trim();
-            ans = Regex.Replace(ans, @"\*{1,3}([^*\n]+)\*{1,3}", "$1");   // **bold** → bold
-            ans = Regex.Replace(ans, @"_{1,3}([^_\n]+)_{1,3}", "$1");      // _italic_ → italic
-            ans = Regex.Replace(ans, @"(?m)^#{1,6}\s+", "");               // # Header → Header (line-start only, preserves C#)
+            ans = Regex.Replace(ans, @"\*{1,3}([^*\n]+)\*{1,3}", "$1");   // strip **bold**
+            ans = Regex.Replace(ans, @"_{1,3}([^_\n]+)_{1,3}", "$1");      // strip _italic_
+            ans = Regex.Replace(ans, @"(?m)^#{1,6}\s+", "");               // strip # headers (line-start only, preserves C#)
+
+            // Rewrite the punctuation that most makes text read as AI-generated into
+            // plain human writing. A long dash used mid-sentence as a break (word,
+            // space, dash, space) becomes a comma the way most people actually write.
+            // Only horizontal whitespace is matched so line breaks and bullets are
+            // never merged; anything left (e.g. a tight number range like 2020–2023)
+            // falls through to a plain hyphen.
+            ans = Regex.Replace(ans, @"(\S)[ \t]*[—–―][ \t]+", "$1, ");   // mid-sentence break -> comma
+            ans = ans.Replace("—", "-").Replace("–", "-").Replace("―", "-");  // any remaining -> hyphen
+            ans = Regex.Replace(ans, @",\s*,", ",");           // collapse accidental double commas
+            ans = Regex.Replace(ans, @"[ \t]{2,}", " ");       // collapse doubled spaces
+
             ans = ans.Replace("\r\n", "\n").Replace("\r", "\n");
             ans = Regex.Replace(ans, @"\n{3,}", "\n\n");
             return ans.Trim();
@@ -1056,9 +1887,6 @@ namespace InterviewCopilot
                 SessionTimerLabel.Text = $"{m}:{s2:D2}";
             };
             _sessionTimer.Start();
-
-            // Show the pulsing REC badge automatically
-            RecordingBadge.Visibility = isRecording ? Visibility.Visible : Visibility.Collapsed;
             DebugWindow.Log("SESSION", $"Auto-started session #{sessionNumber}");
         }
 
@@ -1093,9 +1921,6 @@ namespace InterviewCopilot
             // Stop and hide session timer
             _sessionTimer?.Stop();
             SessionTimerBadge.Visibility = Visibility.Collapsed;
-
-            // Hide REC badge
-            RecordingBadge.Visibility = Visibility.Collapsed;
             PromptBuilder.ClearHistory();
             UnlockResume();
             DebugWindow.Log("SESSION", "Session ended");
@@ -1108,9 +1933,15 @@ namespace InterviewCopilot
         /// <summary>Opens the My Sessions recordings window.</summary>
         private void SessionsBtn_Click(object sender, RoutedEventArgs e)
         {
-            var sessionsWin = new SessionsWindow();
-            sessionsWin.Owner = this;
-            sessionsWin.Show();
+            if (_sessionsWindow?.IsVisible == true)
+            {
+                _sessionsWindow.Activate();
+                return;
+            }
+
+            _sessionsWindow = new SessionsWindow { Owner = this };
+            _sessionsWindow.Closed += (_, _) => _sessionsWindow = null;
+            _sessionsWindow.Show();
         }
 
         private void UpdateMicUi()
@@ -1118,28 +1949,112 @@ namespace InterviewCopilot
             Color c; string label;
             if (isProcessing) { c = Colors.Orange; label = "THINKING"; }
             else if (isListening) { c = Colors.LimeGreen; label = "LISTENING"; }
+            else if (!_engineOnline && UserSession.SpeechmaticsLastStatusCode == 402)
+            {
+                c = Color.FromRgb(239, 68, 68);
+                label = "NO CREDITS";
+            }
+            else if (!_engineOnline && UserSession.SpeechmaticsLastStatusCode == 401)
+            {
+                c = Color.FromRgb(239, 68, 68);
+                label = "SIGN IN";
+            }
+            else if (!_engineOnline && UserSession.SpeechmaticsLastStatusCode is 502 or 503)
+            {
+                c = Color.FromRgb(239, 68, 68);
+                label = "SERVICE OFFLINE";
+            }
+            // Engine still handshaking with Speechmatics — it literally can't hear yet,
+            // so tell the user to wait a moment rather than letting them speak into a void.
+            else if (!_engineOnline && DateTime.UtcNow < UserSession.SpeechmaticsRetryAfterUtc)
+            {
+                c = Color.FromRgb(245, 178, 60);
+                label = "WAITING";
+            }
+            // Backing off between restart attempts. Distinct from CONNECTING so a
+            // first connection is not confused with a recovery that is already
+            // several attempts in.
+            else if (!_engineOnline && _engineRestartCount > 0 && DateTime.UtcNow < _nextEngineRestartUtc)
+            {
+                c = Color.FromRgb(245, 178, 60);
+                label = "RETRYING";
+            }
+            else if (!_engineOnline) { c = Color.FromRgb(245, 178, 60); label = "CONNECTING"; }
             else if (isMuted) { c = Color.FromRgb(239, 68, 68); label = "MUTED"; }
             else { c = Color.FromRgb(239, 68, 68); label = isRecording ? "RECORDING" : "READY"; }
 
             var brush = new SolidColorBrush(c);
             MicIndicator.Fill = brush;
             MicGlow.Color = c;
-            MicGlow.BlurRadius = isListening ? 20 : (isProcessing ? 12 : 0);
             MicBtn.BorderBrush = brush;
             MicIndicatorText.Text = label;
+
+            // Premium: tint the whole status pill + a soft halo to match the state color,
+            // with state-coloured (lightened) text — so MUTED reads red, LISTENING green, etc.
+            try
+            {
+                Color lite = Color.FromRgb(
+                    (byte)(c.R + (255 - c.R) * 0.45),
+                    (byte)(c.G + (255 - c.G) * 0.45),
+                    (byte)(c.B + (255 - c.B) * 0.45));
+                MicStatusPill.Background   = new SolidColorBrush(Color.FromArgb(0x26, c.R, c.G, c.B));
+                MicStatusPill.BorderBrush  = new SolidColorBrush(Color.FromArgb(0x72, c.R, c.G, c.B));
+                MicIndicatorText.Foreground = new SolidColorBrush(lite);
+                if (MicPillGlow != null) { MicPillGlow.Color = c; MicPillGlow.Opacity = 0.38; }
+            }
+            catch { }
+
+            // Premium micro-interaction: a soft "breathing" glow while listening so the
+            // active state feels alive and hand-crafted rather than a flat static control.
+            // Animating the effect object directly (not via a Storyboard) keeps it fully
+            // contained here — no XAML plumbing, nothing else can be affected.
+            if (isListening)
+            {
+                var pulse = new System.Windows.Media.Animation.DoubleAnimation
+                {
+                    From = 12,
+                    To = 26,
+                    Duration = TimeSpan.FromMilliseconds(950),
+                    AutoReverse = true,
+                    RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+                    EasingFunction = new System.Windows.Media.Animation.SineEase
+                    {
+                        EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut
+                    }
+                };
+                MicGlow.BeginAnimation(System.Windows.Media.Effects.DropShadowEffect.BlurRadiusProperty, pulse);
+            }
+            else
+            {
+                // Stop any running pulse, then settle on a static glow for the state.
+                MicGlow.BeginAnimation(System.Windows.Media.Effects.DropShadowEffect.BlurRadiusProperty, null);
+                MicGlow.BlurRadius = isProcessing ? 12 : 0;
+            }
+
             if (answerWindow != null) answerWindow.UpdateMicState(isListening, isProcessing);
         }
 
         private void UpdateTranscript()
         {
+            // Auto mode continuously returns to listening after each answer. It uses the
+            // existing transcript only; no microphone, engine or provider behavior changes.
+            if (AutoModeEnabled && !isListening && !isProcessing && !_flushing)
+            {
+                StartAutoListeningIfReady();
+                return;
+            }
+
             if (!isListening) return;
 
-            // Suppress stale engine output for ~400 ms after unmute (≈3 ticks at 150 ms)
+            // Briefly suppress stale engine output right after unmute so the tail of a
+            // previous utterance can't flash before reset.flag takes effect. 4 ticks at
+            // the 60ms poll ≈ 240ms — long enough for the reset to land, short enough that
+            // your live words show almost immediately for a real-time feel.
             if (_justStartedListening)
             {
                 _listenStartTicks++;
                 TranscriptTextBlock.Text = "";          // force blank during suppression
-                if (_listenStartTicks >= 7) _justStartedListening = false;  // ~1050ms
+                if (_listenStartTicks >= 4) _justStartedListening = false;
                 return;
             }
 
@@ -1153,7 +2068,16 @@ namespace InterviewCopilot
                     TranscriptScroll.ScrollToBottom();
                     if (_isCameraMode && answerWindow != null)
                         answerWindow.UpdateQuestion(text);
+
+                    if (AutoModeEnabled)
+                    {
+                        _autoLastTranscript = text;
+                        _autoTranscriptChangedUtc = DateTime.UtcNow;
+                    }
                 }
+
+                if (AutoModeEnabled)
+                    TrySubmitAutomaticTurn(_autoLastTranscript);
             }
             catch (Exception ex) { DebugWindow.Log("TRANSCRIPT", $"UpdateTranscript failed: {ex.Message}"); }
         }
@@ -1163,7 +2087,14 @@ namespace InterviewCopilot
             string path = Path.Combine(AppDataFolder, "latest.txt");
             for (int i = 0; i < TranscriptRetryCount; i++)
             {
-                try { return File.ReadAllText(path); }
+                try
+                {
+                    // FileShare.Delete allows Python's os.replace() atomic rename to succeed
+                    using var fs = new FileStream(path, FileMode.Open, FileAccess.Read,
+                                                  FileShare.ReadWrite | FileShare.Delete);
+                    using var sr = new StreamReader(fs, System.Text.Encoding.UTF8);
+                    return sr.ReadToEnd();
+                }
                 catch { }
             }
             return TranscriptTextBlock.Text;
@@ -1172,6 +2103,28 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         // ENGINE
         // ══════════════════════════════════════════════════════════════════════
+        private async Task InitializeSpeechPipelineAsync()
+        {
+            try
+            {
+                _engineAuthFailed = false;
+                _engineUsageLimitReached = false;
+                UpdateMicUi();
+                bool keyReady = await UserSession.EnsureSpeechmaticsKeyAsync(DeviceIdentity.Current);
+                if (!keyReady)
+                {
+                    UpdateMicUi();
+                    return;
+                }
+                StartSpeechmaticsEngine();
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("ENGINE", $"Audio initialization failed: {ex.Message}");
+                UpdateMicUi();
+            }
+        }
+
         private async void StartSpeechmaticsEngine()
         {
             int generation = Interlocked.Increment(ref _engineStartGeneration);
@@ -1185,48 +2138,60 @@ namespace InterviewCopilot
                 var ct = _engineCts.Token;
 
                 KillAndDisposeEngine();
+                _engineOnline      = false; // fresh process: not ready to transcribe yet
                 _engineAuthFailed  = false; // reset so MonitorEngine can restart after a key change
                 _engineUsageLimitReached = false;
                 _engineFatalReason = "";
 
                 string pyScript = Path.Combine(scriptFolder, "speechmatics_engine.py");
                 if (!File.Exists(pyScript)) { DebugWindow.Log("ENGINE", "❌ Not found: " + scriptFolder); return; }
-                // Key priority:
-                // 1. Backend-fetched key (guests always use this; logged-in users too)
-                // 2. Retry backend fetch if #1 is empty (startup race: engine started before fetch completed)
-                // 3. Settings key — only for non-guests who entered their own SM account key
-                // Never use the Settings key for guests — it's likely an old/expired key that causes KEY INVALID.
-                string smKey = UserSession.SpeechmaticsKey;
+                // Speechmatics key is always allocated server-side per device/user —
+                // there is no user-facing override; keys are admin-managed only.
+                string smKey = UserSession.HasValidSpeechmaticsKey
+                    ? UserSession.SpeechmaticsKey
+                    : "";
                 if (string.IsNullOrWhiteSpace(smKey))
                 {
-                    DebugWindow.Log("ENGINE", "SM key not yet available, waiting for fetch…");
-                    await UserSession.FetchSpeechmaticsKeyAsync(DeviceIdentity.Current);
+                    DebugWindow.Log("ENGINE", "SM key not yet available, awaiting warm fetch…");
+                    // Await the SAME fetch started at the top of Loaded — no second
+                    // serialized round-trip; usually already complete by now.
+                    await UserSession.EnsureSpeechmaticsKeyAsync(DeviceIdentity.Current).ConfigureAwait(false);
                     smKey = UserSession.SpeechmaticsKey;
                 }
-                // For non-guest users who entered their own key in Settings, allow that as fallback.
-                if (string.IsNullOrWhiteSpace(smKey) && !UserSession.IsGuestSession)
-                    smKey = SettingsWindow.GetSpeechmaticsKey();
-                if (string.IsNullOrWhiteSpace(smKey)) { DebugWindow.Log("ENGINE", "❌ No SM key — server unreachable."); return; }
+                if (string.IsNullOrWhiteSpace(smKey))
+                {
+                    if (DateTime.UtcNow < UserSession.SpeechmaticsRetryAfterUtc)
+                        DebugWindow.Log("ENGINE", $"Speechmatics key rate-limited; waiting until {UserSession.SpeechmaticsRetryAfterUtc:HH:mm:ss} UTC");
+                    else
+                        DebugWindow.Log("ENGINE", "Speechmatics key unavailable; waiting for automatic retry.");
+                    _ = Dispatcher.BeginInvoke(new Action(UpdateMicUi));
+                    return;
+                }
 
                 // Resolve Python executable: try "py" launcher first (Windows standard),
                 // then "python", then "python3" — log which one succeeds.
-                string? pyExe = await Task.Run(ResolvePythonExecutable);
+                string? pyExe = await ResolvePythonExecutableAsync().ConfigureAwait(false);
                 if (generation != Volatile.Read(ref _engineStartGeneration)) return;
                 if (string.IsNullOrWhiteSpace(pyExe))
                 {
                     _engineFatalReason = "Install Python 3.11+ using the official Windows installer";
                     _engineAuthFailed = true;
-                    ShowEngineAuthError();
+                    _ = Dispatcher.BeginInvoke(new Action(ShowEngineAuthError));
                     return;
                 }
                 DebugWindow.Log("ENGINE", $"Python executable: {pyExe}");
 
                 speechmaticsProcess = new Process();
                 speechmaticsProcess.StartInfo.FileName = pyExe;
+                WriteVocabFile();   // interview-specific terms → better STT accuracy
                 string deviceArg = _audioDeviceId >= 0 ? $" --device {_audioDeviceId}" : "";
-                string modeArg   = SettingsWindow.GetMicCaptureEnabled() ? " --mode both" : " --mode system";
-                speechmaticsProcess.StartInfo.Arguments = $"-3 \"{pyScript}\"{deviceArg}{modeArg}";
+                string modeArg = $" --mode {CaptureModeFor(_listeningMode)}";
+                string langArg   = $" --language {SettingsWindow.GetTranscriptLanguage()}";
+                speechmaticsProcess.StartInfo.Arguments = $"-3 \"{pyScript}\"{deviceArg}{modeArg}{langArg}";
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SM_API_KEY"] = smKey;
+                // Sarvam key for Telugu / other Speechmatics-unsupported languages. Passed via
+                // env (never on the command line) exactly like the Speechmatics key.
+                speechmaticsProcess.StartInfo.EnvironmentVariables["SARVAM_API_KEY"] = SettingsWindow.GetSarvamApiKey();
                 speechmaticsProcess.StartInfo.WorkingDirectory = scriptFolder;
                 speechmaticsProcess.StartInfo.CreateNoWindow = true;
                 speechmaticsProcess.StartInfo.UseShellExecute = false;
@@ -1253,6 +2218,21 @@ namespace InterviewCopilot
                         {
                             string? line = await proc.StandardOutput.ReadLineAsync(ct).ConfigureAwait(false);
                             if (line == null) break; // EOF
+                            // The engine prints "STATUS: ONLINE" the moment Speechmatics
+                            // accepts the session — that's when transcription actually works.
+                            // Flip the readiness flag so the mic pill can show READY.
+                            if (!_engineOnline && line.Contains("STATUS: ONLINE"))
+                            {
+                                _engineOnline = true;
+                                _engineRestartCount = 0;
+                                _nextEngineRestartUtc = DateTime.MinValue;
+                                _engineTokenRefreshAttempted = false;
+                                _ = Dispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    UpdateMicUi();
+                                    StartAutoListeningIfReady();
+                                }));
+                            }
                             _ = Dispatcher.BeginInvoke(new Action(() => DebugWindow.Log("PY", line)));
                         }
                     }
@@ -1295,6 +2275,76 @@ namespace InterviewCopilot
                 if (generation == Volatile.Read(ref _engineStartGeneration))
                     _engineStarting = false;
             }
+        }
+
+        // Languages the engine routes to Sarvam AI (Speechmatics can't do them).
+        // Keep in sync with SARVAM_LANG_MAP in speechmatics_engine.py.
+        private static readonly HashSet<string> _sarvamLangs =
+            new(StringComparer.OrdinalIgnoreCase) { "te", "kn", "ml", "gu", "pa", "or", "as" };
+        private static bool IsSarvamLanguage(string code) => _sarvamLangs.Contains((code ?? "").Trim());
+
+        // Common words that get capitalized at sentence starts — never useful as STT vocab.
+        private static readonly HashSet<string> _vocabStop = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "The","And","For","With","You","Your","Our","We","This","That","Are","Is","As","At",
+            "Or","By","Be","It","If","So","But","Not","All","Can","Will","Job","Role","Team","Work",
+            "Years","Year","Experience","Skills","Company","About","Requirements","Responsibilities",
+            "Description","Position","Please","Must","Have","Strong","Good","New","More","Who","What",
+            "When","Where","Why","How","We're","You'll","We'll","Their","There","Here","Then","Than"
+        };
+
+        /// <summary>
+        /// Write the current interview's distinctive terms (company, role tech stack, resume
+        /// names/projects) to vocab.txt so the speech engine recognises them instead of
+        /// guessing. Big accuracy win on exactly the words that matter in THIS interview.
+        /// </summary>
+        private void WriteVocabFile()
+        {
+            try
+            {
+                string resume = "";
+                try { resume = ResumeTextBox?.Text ?? ""; } catch { }
+                string blob = $"{_companyName}\n{_jobDescription}\n{_liveHints}\n{resume}";
+                var terms = ExtractVocabTerms(blob, _companyName);
+                File.WriteAllLines(Path.Combine(AppDataFolder, "vocab.txt"), terms);
+                DebugWindow.Log("VOCAB", $"Wrote {terms.Count} interview terms for STT accuracy");
+            }
+            catch (Exception ex) { DebugWindow.Log("VOCAB", $"write failed: {ex.Message}"); }
+        }
+
+        private static List<string> ExtractVocabTerms(string text, string company)
+        {
+            var found = new List<string>();
+            var seen  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void Add(string w)
+            {
+                w = w.Trim().Trim('.', ',', ';', ':', '(', ')', '"', '\'', '!', '?');
+                if (w.Length < 2 || w.Length > 40) return;
+                if (_vocabStop.Contains(w)) return;
+                if (seen.Add(w)) found.Add(w);
+            }
+
+            if (!string.IsNullOrWhiteSpace(company)) Add(company.Trim());
+
+            text ??= "";
+            // Count frequencies so we can keep repeated proper nouns and drop one-off
+            // sentence-start capitalizations (which are usually just ordinary words).
+            var freq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var tokens = System.Text.RegularExpressions.Regex.Matches(text, @"[A-Za-z][A-Za-z0-9\.\+/#\-]*");
+            foreach (System.Text.RegularExpressions.Match m in tokens)
+                freq[m.Value] = freq.TryGetValue(m.Value, out var c) ? c + 1 : 1;
+
+            foreach (System.Text.RegularExpressions.Match m in tokens)
+            {
+                string w = m.Value;
+                if (found.Count >= 170) break;
+                bool acronym = w.Length is >= 2 and <= 6 && w.All(ch => char.IsUpper(ch) || char.IsDigit(ch)) && w.Any(char.IsLetter);
+                bool tech    = w.IndexOfAny(new[] { '.', '+', '#', '/' }) >= 0 || (w.Any(char.IsDigit) && w.Any(char.IsLetter));
+                bool internalCaps = w.Length >= 3 && w.Skip(1).Any(char.IsUpper);          // React, MongoDB, TypeScript
+                bool repeatedProper = char.IsUpper(w[0]) && w.Length >= 3 && freq[w] >= 2;  // a recurring proper noun
+                if (acronym || tech || internalCaps || repeatedProper) Add(w);
+            }
+            return found;
         }
 
         /// <summary>Kill + Dispose the Python process and null the reference.</summary>
@@ -1364,6 +2414,23 @@ namespace InterviewCopilot
         /// Result is cached after first resolution so UI thread never blocks twice.
         /// </summary>
         private static string? _cachedPythonExe;
+        private static readonly object PythonResolutionLock = new();
+        private static Task<string?>? _pythonResolutionTask;
+
+        private static Task<string?> ResolvePythonExecutableAsync()
+        {
+            if (_cachedPythonExe != null) return Task.FromResult<string?>(_cachedPythonExe);
+
+            lock (PythonResolutionLock)
+            {
+                if (_cachedPythonExe != null) return Task.FromResult<string?>(_cachedPythonExe);
+                if (_pythonResolutionTask is { IsCompleted: false }) return _pythonResolutionTask;
+
+                _pythonResolutionTask = Task.Run(ResolvePythonExecutable);
+                return _pythonResolutionTask;
+            }
+        }
+
         private static string? ResolvePythonExecutable()
         {
             if (_cachedPythonExe != null) return _cachedPythonExe;
@@ -1391,7 +2458,11 @@ namespace InterviewCopilot
         private void MonitorEngine()
         {
             if (_engineUsageLimitReached) return;
+            if (_engineRecoveryInProgress) return;
+            if (DateTime.UtcNow < _nextEngineRestartUtc) return;
             if (_engineStarting || _engineAuthFailed) return; // auth failure — do not restart
+            if (string.IsNullOrWhiteSpace(UserSession.SpeechmaticsKey) &&
+                DateTime.UtcNow < UserSession.SpeechmaticsRetryAfterUtc) return;
             if (speechmaticsProcess == null || speechmaticsProcess.HasExited)
             {
                 int code = -1;
@@ -1405,12 +2476,25 @@ namespace InterviewCopilot
                 }
                 if (code == SpeechRecognitionExitCodes.AuthenticationFailure)
                 {
+                    if (!IsSarvamLanguage(SettingsWindow.GetTranscriptLanguage()) && !_engineTokenRefreshAttempted)
+                    {
+                        _engineTokenRefreshAttempted = true;
+                        _ = RecoverSpeechmaticsAuthenticationAsync();
+                        return;
+                    }
                     _engineAuthFailed = true;
-                    DebugWindow.Log("ENGINE", "❌ Auth failure (exit 2) — engine stopped. Fix your Speechmatics key in Settings.");
+                    // Name the right engine: Telugu (and the other Sarvam-routed languages)
+                    // authenticate with the Sarvam key, not the Speechmatics key.
+                    string whichKey = IsSarvamLanguage(SettingsWindow.GetTranscriptLanguage())
+                        ? "Sarvam" : "Speechmatics";
+                    DebugWindow.Log("ENGINE", $"❌ Auth failure (exit 2) — engine stopped. Fix your {whichKey} key in Settings.");
                     Dispatcher.Invoke(() => ShowEngineAuthError());
                     return;
                 }
-                DebugWindow.Log("ENGINE", "Dead — restarting...");
+                int retrySeconds = Math.Min(30, 1 << Math.Min(_engineRestartCount, 5));
+                _engineRestartCount++;
+                _nextEngineRestartUtc = DateTime.UtcNow.AddSeconds(retrySeconds);
+                DebugWindow.Log("ENGINE", $"Engine stopped; retrying with {retrySeconds}-second backoff.");
                 if (isListening)
                 {
                     isListening = false;
@@ -1421,9 +2505,46 @@ namespace InterviewCopilot
             }
         }
 
+        private async Task RecoverSpeechmaticsAuthenticationAsync()
+        {
+            if (_engineRecoveryInProgress) return;
+            _engineRecoveryInProgress = true;
+            _engineAuthFailed = true;
+            try
+            {
+                DebugWindow.Log("ENGINE", "Temporary transcription token expired; requesting a fresh token.");
+                UserSession.InvalidateSpeechmaticsKey();
+                bool refreshed = await UserSession.EnsureSpeechmaticsKeyAsync(DeviceIdentity.Current);
+                _engineAuthFailed = false;
+                if (refreshed)
+                {
+                    _nextEngineRestartUtc = DateTime.MinValue;
+                    StartSpeechmaticsEngine();
+                }
+                else
+                {
+                    _engineTokenRefreshAttempted = false;
+                    UpdateMicUi();
+                }
+            }
+            catch (Exception ex)
+            {
+                _engineAuthFailed = false;
+                _engineTokenRefreshAttempted = false;
+                DebugWindow.Log("ENGINE", $"Token recovery failed: {ex.Message}");
+                UpdateMicUi();
+            }
+            finally
+            {
+                _engineRecoveryInProgress = false;
+            }
+        }
+
         private void ShowEngineAuthError()
         {
-            string label = string.IsNullOrEmpty(_engineFatalReason) ? "KEY INVALID" : "INSTALL NEEDED";
+            // "KEY INVALID" named a credential the person using the app does not
+            // own and cannot replace. The specific cause is in the debug log.
+            string label = string.IsNullOrEmpty(_engineFatalReason) ? "UNAVAILABLE" : "SETUP NEEDED";
             MicIndicator.Fill     = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#ef4444"));
             MicIndicatorText.Text = label;
             MicBtn.BorderBrush    = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#ef4444"));
@@ -1445,6 +2566,7 @@ namespace InterviewCopilot
 
         private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
+            if (e.IsRepeat) return; // Ignore auto-repeat key down events from holding space down
             if (e.Key == System.Windows.Input.Key.F12) { e.Handled = true; ToggleDebugWindow(); return; }
             if (e.Key == System.Windows.Input.Key.F8)
             {
@@ -1466,24 +2588,47 @@ namespace InterviewCopilot
                 }, TaskScheduler.Default);
                 return;
             }
-            if (e.Key == System.Windows.Input.Key.Space)
-            {
-                if (ResumeTextBox.IsFocused   || ResumeTextBox.IsKeyboardFocusWithin)   return;
-                if (AskBox.IsFocused          || AskBox.IsKeyboardFocusWithin)           return;
-                if (CompanyNameBox.IsFocused  || CompanyNameBox.IsKeyboardFocusWithin)   return;
-                if (JobDescBox.IsFocused      || JobDescBox.IsKeyboardFocusWithin)       return;
-                e.Handled = true; HandleSpacePress("PREVIEW");
-            }
+            // Space is no longer handled here — the global hook (GlobalHotkey.cs) now fires
+            // unconditionally for Space regardless of window focus, so there is a single path
+            // instead of two that could race/double-fire while this window had focus. Typing a
+            // literal space in a text field still works normally: the hook never marks the key
+            // event handled, and HandleSpaceDown/Up separately guard via IsTypingInTextField().
+        }
+
+        private void Window_PreviewKeyUp(object sender, System.Windows.Input.KeyEventArgs e)
+        {
         }
 
         private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e) { /* handled by PreviewKeyDown */ }
         private void Border_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e) { try { DragMove(); } catch { } }
+
+        // ── WM_MOUSEACTIVATE fix ─────────────────────────────────────────────
+        // Borderless, layered windows (WindowStyle=None + AllowsTransparency=True)
+        // otherwise consume the very first click purely to activate the window,
+        // never delivering it to the control underneath — so every button (mic,
+        // Screen AI, etc.) needs an extra "wasted" click first. Returning
+        // MA_ACTIVATE tells Windows: activate AND let this same click go through.
+        private const int WM_MOUSEACTIVATE = 0x0021;
+        private const int MA_ACTIVATE = 1;
+
+        private IntPtr WndProcActivateFix(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_MOUSEACTIVATE)
+            {
+                handled = true;
+                return (IntPtr)MA_ACTIVATE;
+            }
+            return IntPtr.Zero;
+        }
         private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
         private void MinimizeBtn_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
         private void SettingsBtn_Click(object sender, RoutedEventArgs e)
         {
-            var sw = new SettingsWindow(_audioDeviceId);
+            var sw = new SettingsWindow(
+                _audioDeviceId,
+                AutoModeEnabled,
+                _listeningMode == ListeningMode.PracticeAuto);
             sw.Owner = this;
             sw.ShowDialog();
             if (sw.SignInRequested) { SignInHeaderBtn_Click(sender, e); return; }
@@ -1492,11 +2637,16 @@ namespace InterviewCopilot
                 if (sw.SelectedDeviceIndex >= 0) _audioDeviceId = sw.SelectedDeviceIndex;
                 StartSpeechmaticsEngine();
                 ApplyMainWindowOpacity();
+                // Re-apply stealth in case it was changed in Settings.
+                _stealthMode = SettingsWindow.GetStealthMode();
+                try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
+                UpdateStealthBtn();
                 if (UserSession.IsLoggedIn)
                     _ = FetchAndDisplayCreditsAsync().ContinueWith(t => {
                         if (t.IsFaulted) DebugWindow.Log("CREDITS_ERR", t.Exception?.GetBaseException().Message ?? "unknown");
                     }, TaskScheduler.Default);
             }
+
         }
 
         private void VerifyResume_Click(object sender, RoutedEventArgs e)
@@ -1533,10 +2683,26 @@ namespace InterviewCopilot
             try { File.WriteAllText(Path.Combine(AppDataFolder, "latest.txt"), ""); } catch { }
         }
 
+        private bool _lastAnswerEmpty = true;
         private void AiAnswerBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
         {
+            bool empty = string.IsNullOrEmpty(AiAnswerBox.Text);
             if (AiAnswerHint != null)
-                AiAnswerHint.Visibility = string.IsNullOrEmpty(AiAnswerBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+                AiAnswerHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+
+            // Motion: gently fade the answer in the instant it first appears (once per answer,
+            // not on every streamed token) for a premium reveal instead of a hard pop.
+            if (_lastAnswerEmpty && !empty)
+            {
+                var fade = new System.Windows.Media.Animation.DoubleAnimation(0.25, 1.0,
+                    new Duration(TimeSpan.FromMilliseconds(240)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.CubicEase
+                    { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                };
+                AiAnswerBox.BeginAnimation(UIElement.OpacityProperty, fade);
+            }
+            _lastAnswerEmpty = empty;
         }
 
         // ── Toolbar: End current session and immediately start a new one ─────
@@ -1586,14 +2752,31 @@ namespace InterviewCopilot
             }
         }
 
-        // ── Resume panel: show/hide watermark based on content ───────────────
+        // Filename of the loaded resume, shown on the loaded card ("" = none yet).
+        private string _loadedResumeName = "";
+
+        // ── Resume card: swap between the empty upload prompt and the loaded state ──
         private void ResumeTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
         {
-            if (ResumeWatermark != null)
-                ResumeWatermark.Visibility = string.IsNullOrWhiteSpace(ResumeTextBox.Text)
-                    ? Visibility.Visible : Visibility.Collapsed;
+            UpdateResumeCardState();
             ResumeParser.InvalidateCache();
         }
+
+        private void UpdateResumeCardState()
+        {
+            bool loaded = !string.IsNullOrWhiteSpace(ResumeTextBox.Text);
+            if (ResumeEmptyState != null)
+                ResumeEmptyState.Visibility = loaded ? Visibility.Collapsed : Visibility.Visible;
+            if (ResumeLoadedState != null)
+                ResumeLoadedState.Visibility = loaded ? Visibility.Visible : Visibility.Collapsed;
+            if (loaded && ResumeLoadedName != null)
+                ResumeLoadedName.Text = string.IsNullOrWhiteSpace(_loadedResumeName)
+                    ? "Resume loaded" : _loadedResumeName;
+        }
+
+        // Clicking anywhere on the resume card opens the file picker (drop also works).
+        private void ResumeCard_Click(object sender, RoutedEventArgs e)
+            => ResumeUploadBtn_Click(sender, e);
 
         private void ScreenAnalyzeBtn_Click(object sender, RoutedEventArgs e)
             => _ = HandleScreenAnalysisAsync();
@@ -1606,8 +2789,20 @@ namespace InterviewCopilot
                 Title  = "Upload Resume",
                 Filter = "Document files|*.pdf;*.docx;*.txt|All files|*.*"
             };
-            if (dlg.ShowDialog() == true)
-                LoadResumeFromFile(dlg.FileName);
+            // The always-on-top overlay window would otherwise cover the file dialog,
+            // making a click look like it did nothing. Lower it while the dialog is open
+            // and own the dialog to this window so it comes to the front reliably.
+            bool wasTopmost = answerWindow != null && answerWindow.Topmost;
+            if (wasTopmost && answerWindow != null) answerWindow.Topmost = false;
+            try
+            {
+                if (dlg.ShowDialog(this) == true)
+                    LoadResumeFromFile(dlg.FileName);
+            }
+            finally
+            {
+                if (wasTopmost && answerWindow != null) answerWindow.Topmost = true;
+            }
         }
 
         private void LoadResumeFromFile(string filePath)
@@ -1652,10 +2847,15 @@ namespace InterviewCopilot
                     return;
                 }
 
-                ResumeTextBox.Text = text;
-                DebugWindow.Log("RESUME", $"Loaded {text.Length} chars from {Path.GetFileName(filePath)}");
+                _loadedResumeName = Path.GetFileName(filePath);
+                ResumeTextBox.Text = text;   // fires TextChanged -> shows the loaded card
+                DebugWindow.Log("RESUME", $"Loaded {text.Length} chars from {_loadedResumeName}");
                 SaveCurrentResume();   // auto-save silently so it appears in history
                 CollapseResumeForAsk();
+                // Rebuild the speech engine's interview vocabulary from this resume (tools,
+                // projects, names) and restart so it recognises those words during the
+                // interview instead of mishearing them. Setup-time action — safe to restart.
+                try { StartSpeechmaticsEngine(); } catch (Exception ex) { DebugWindow.Log("VOCAB", $"engine refresh skipped: {ex.Message}"); }
             }
             catch (Exception ex)
             {
@@ -1666,23 +2866,14 @@ namespace InterviewCopilot
 
         private void CollapseResumeForAsk()
         {
-            ResumeTabPanel.Visibility    = Visibility.Collapsed;
-            JobTabPanel.Visibility       = Visibility.Collapsed;
-            ResumeLoadedBadge.Visibility = Visibility.Visible;
-            ContentRow.Height            = GridLength.Auto;
-            AskGuideRow.Height           = new GridLength(1, GridUnitType.Star);
-            AskBox.Focus();
+            // The card reflects loaded/empty automatically via UpdateResumeCardState().
+            UpdateResumeCardState();
         }
 
         private void ExpandResumeContent()
         {
-            ResumeLoadedBadge.Visibility = Visibility.Collapsed;
-            ContentRow.Height            = new GridLength(1, GridUnitType.Star);
-            AskGuideRow.Height           = new GridLength(170);
+            UpdateResumeCardState();
         }
-
-        private void ResumeLoadedBadge_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-            => SwitchToResumeTab();
 
         private static string ExtractDocxText(string filePath)
         {
@@ -1788,22 +2979,11 @@ namespace InterviewCopilot
                 AiAnswerBox.Text = isGuest
                     ? $"Your guest session has {remaining} credit{(remaining == 1 ? "" : "s")} remaining.\n\n" +
                       "Screen AI and all features are available on a free account.\n\n" +
-                      "Create your free account at coopilotxai.com to get 100 credits/month,\n" +
+                      "Create a free Replysis AI account to get 100 credits each month,\n" +
                       "or upgrade to Pro for 5,000 credits/month with priority processing."
                     : $"Insufficient credits ({remaining} remaining).\n\n" +
-                      "Upgrade your plan at coopilotxai.com/pricing to continue\n" +
+                      "Upgrade your Replysis AI plan to continue\n" +
                       "using Screen AI and other advanced features.";
-                return;
-            }
-
-            // Must have a vision API key configured
-            if (string.IsNullOrWhiteSpace(SettingsWindow.GetApiKey()))
-            {
-                AiAnswerBox.Text = "Screen AI requires an API key to analyze visual content.\n\n" +
-                                   "To enable:  Open Settings and add your key.\n\n" +
-                                   "  Groq  (gsk_…)  — Free tier · Llama 4 Scout Vision\n" +
-                                   "  OpenAI (sk-…)  — GPT-4o Vision · Higher accuracy\n\n" +
-                                   "Note: Voice-based answers work without a vision key.";
                 return;
             }
 
@@ -1903,13 +3083,22 @@ namespace InterviewCopilot
                 catch (Exception ex)
                 {
                     DebugWindow.Log("SCREEN_ERR", $"Stream failed: {ex.Message}");
-                    sb.Append($"\n⚠ Stream interrupted: {ex.Message}");
+                    AiAnswerBox.Text = ex.Message;
+                    if (_isCameraMode && answerWindow != null)
+                        answerWindow.UpdateAnswer(ex.Message);
+                    _ = FetchAndDisplayCreditsAsync();
+                    return;
                 }
 
                 // ── Phase 4: post-process + finalise display ──────────────────────
                 // PostProcess normalises section headers, removes stray markdown,
                 // and collapses excess blank lines — runs instantly on the final string.
                 string finalResult = ScreenAnalyzer.PostProcess(sb.ToString());
+                if (string.IsNullOrWhiteSpace(finalResult))
+                {
+                    AiAnswerBox.Text = "Screen AI returned no answer. Please try again.";
+                    return;
+                }
 
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(previousAnswers)
                     ? $"{header}{finalResult}"
@@ -1925,6 +3114,7 @@ namespace InterviewCopilot
                 // Persist to session log + history for smart follow-up voice questions
                 AppendToSessionLog("[Screen Analysis]", finalResult);
                 PromptBuilder.AddToHistory("Analyze what is currently on my screen", finalResult);
+                _ = FetchAndDisplayCreditsAsync();
 
                 DebugWindow.Log("SCREEN", $"Done — {tokenCount} tokens, {finalResult.Length} chars");
             }
@@ -1937,10 +3127,67 @@ namespace InterviewCopilot
 
         private void ResumeToggleBtn_Click(object sender, RoutedEventArgs e)
         {
-            _resumeCollapsed = !_resumeCollapsed;
-            ResumePanel.Visibility = _resumeCollapsed ? Visibility.Collapsed : Visibility.Visible;
-            ResumeColumn.Width = _resumeCollapsed ? new GridLength(0) : new GridLength(260);
-            ResumeToggleBtn.Content = _resumeCollapsed ? "▶" : "◀";
+            SetResumePanelCollapsed(!_resumeCollapsed, animate: true);
+        }
+
+        private void SetResumePanelCollapsed(bool collapse, bool animate)
+        {
+            if (_resumeCollapsed == collapse) return;
+
+            _resumeCollapsed = collapse;
+            ResumeToggleBtn.Content = collapse ? "" : "";
+
+            if (!animate)
+            {
+                ResumeColumn.BeginAnimation(System.Windows.Controls.ColumnDefinition.WidthProperty, null);
+                ResumePanel.BeginAnimation(UIElement.OpacityProperty, null);
+                ResumeColumn.Width = collapse ? new GridLength(0) : new GridLength(ResumePanelExpandedWidth);
+                ResumePanel.Opacity = 1;
+                ResumePanel.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+                return;
+            }
+
+            double fromWidth = Math.Max(0, ResumeColumn.ActualWidth);
+            double toWidth = collapse ? 0 : ResumePanelExpandedWidth;
+            double fromOpacity = collapse ? ResumePanel.Opacity : 0;
+            double toOpacity = collapse ? 0 : 1;
+
+            ResumePanel.Visibility = Visibility.Visible;
+            if (!collapse)
+            {
+                ResumeColumn.BeginAnimation(System.Windows.Controls.ColumnDefinition.WidthProperty, null);
+                ResumeColumn.Width = new GridLength(0);
+                ResumePanel.Opacity = 0;
+                fromWidth = 0;
+            }
+
+            var duration = new Duration(TimeSpan.FromMilliseconds(180));
+            var widthAnimation = new GridLengthAnimation
+            {
+                From = new GridLength(fromWidth),
+                To = new GridLength(toWidth),
+                Duration = duration
+            };
+            var opacityAnimation = new System.Windows.Media.Animation.DoubleAnimation
+            {
+                From = fromOpacity,
+                To = toOpacity,
+                Duration = duration
+            };
+
+            widthAnimation.Completed += (_, _) =>
+            {
+                if (_resumeCollapsed != collapse) return;
+
+                ResumeColumn.BeginAnimation(System.Windows.Controls.ColumnDefinition.WidthProperty, null);
+                ResumePanel.BeginAnimation(UIElement.OpacityProperty, null);
+                ResumeColumn.Width = new GridLength(toWidth);
+                ResumePanel.Opacity = 1;
+                ResumePanel.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+            };
+
+            ResumeColumn.BeginAnimation(System.Windows.Controls.ColumnDefinition.WidthProperty, widthAnimation);
+            ResumePanel.BeginAnimation(UIElement.OpacityProperty, opacityAnimation);
         }
 
         private void ToggleDebugWindow()
@@ -1956,14 +3203,26 @@ namespace InterviewCopilot
             transcriptTimer?.Stop();
             thinkingTimer?.Stop();
             creditsRefreshTimer?.Stop();
+            warmupTimer?.Stop();
             _engineMonitorTimer?.Stop();
             _sessionTimer?.Stop();
+            _autoModeNoticeTimer?.Stop();
+
+            // The job-context save is debounced by 500ms, so an edit typed just
+            // before closing is still sitting in that window. Flush it before
+            // stopping the timer, otherwise the edit is silently discarded.
+            if (_jobContextSaveTimer?.IsEnabled == true) SaveJobContext();
+            _jobContextSaveTimer?.Stop();
 
             // Unsubscribe camera events and close overlay window
             if (answerWindow != null && _cameraModeClosedHandler != null)
                 answerWindow.CameraModeClosedByUser -= _cameraModeClosedHandler;
             try { answerWindow?.Close(); } catch { }
             answerWindow = null;
+            try { _creditsWindow?.Close(); } catch { }
+            try { _sessionsWindow?.Close(); } catch { }
+            _creditsWindow = null;
+            _sessionsWindow = null;
 
             _globalHotkey?.Dispose();
             _debugWindow?.ForceClose();
@@ -1973,8 +3232,14 @@ namespace InterviewCopilot
             EndSession();
             PresenceTracker.Stop();
 
-            if (hadActiveRecording && WaitForRecordingSaveAsync(recordingId, RecordingSaveTimeoutMs).GetAwaiter().GetResult())
-                ProtectRecording(sessionNumber);
+            // Run recording-save wait on a background thread so the UI thread is never frozen
+            if (hadActiveRecording)
+                Task.Run(async () =>
+                {
+                    if (await WaitForRecordingSaveAsync(recordingId, RecordingSaveTimeoutMs))
+                        ProtectRecording(sessionNumber);
+                });
+
             Interlocked.Increment(ref _engineStartGeneration);
             _engineCts.Cancel();
             _engineCts.Dispose();
@@ -2037,38 +3302,18 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         // TAB SWITCHING
         // ══════════════════════════════════════════════════════════════════════
+        // Tab-less side panel: Resume and Target Role are both always visible.
+        // These remain so existing callers keep working.
         private void SwitchToResumeTab()
         {
             ExpandResumeContent();
-            ResumeTabPanel.Visibility = Visibility.Visible;
-            JobTabPanel.Visibility    = Visibility.Collapsed;
-            ResumeTabBorder.Background  = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0D1B2E"));
-            ResumeTabBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1e3a5f"));
-            ResumeTabLabel.Foreground   = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#38BDF8"));
-            JobTabBorder.Background   = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#09111e"));
-            JobTabBorder.BorderBrush  = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#161f30"));
-            JobTabLabel.Foreground    = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4b6070"));
-            SavedResumesBtn.Visibility = Visibility.Visible;
-            ResumeUploadBtn.Visibility = Visibility.Visible;
+            if (ResumeTextBox != null) ResumeTextBox.Focus();
         }
 
         private void SwitchToJobTab()
         {
-            ExpandResumeContent();
-            ResumeTabPanel.Visibility = Visibility.Collapsed;
-            JobTabPanel.Visibility    = Visibility.Visible;
-            JobTabBorder.Background   = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0D1B2E"));
-            JobTabBorder.BorderBrush  = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1e3a5f"));
-            JobTabLabel.Foreground    = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#38BDF8"));
-            ResumeTabBorder.Background  = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#09111e"));
-            ResumeTabBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#161f30"));
-            ResumeTabLabel.Foreground   = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4b6070"));
-            SavedResumesBtn.Visibility = Visibility.Collapsed;
-            ResumeUploadBtn.Visibility = Visibility.Collapsed;
+            if (JobDescBox != null) JobDescBox.Focus();
         }
-
-        private void ResumeTabBtn_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SwitchToResumeTab();
-        private void JobTabBtn_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)    => SwitchToJobTab();
 
         // ══════════════════════════════════════════════════════════════════════
         // TARGET ROLE (company + job description)
@@ -2184,31 +3429,42 @@ namespace InterviewCopilot
                 string cnt = content;
                 var row = new System.Windows.Controls.Border
                 {
-                    Padding     = new Thickness(14, 9, 14, 9),
-                    Cursor      = System.Windows.Input.Cursors.Hand,
-                    Background  = System.Windows.Media.Brushes.Transparent,
+                    Padding      = new Thickness(11, 8, 11, 8),
+                    Margin       = new Thickness(1, 0, 1, 0),
+                    CornerRadius = new CornerRadius(8),
+                    Cursor       = System.Windows.Input.Cursors.Hand,
+                    Background   = System.Windows.Media.Brushes.Transparent,
                 };
                 var sp = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-                sp.Children.Add(new System.Windows.Controls.TextBlock
+                // Icon in a rounded chip to match the Save/Clear rows and read as premium.
+                sp.Children.Add(new System.Windows.Controls.Border
                 {
-                    Text       = "",
-                    FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                    FontSize   = 12,
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4b6070")),
-                    Margin     = new Thickness(0, 0, 10, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
+                    Width = 26, Height = 26,
+                    CornerRadius = new CornerRadius(7),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1B2A3C")),
+                    Margin = new Thickness(0, 0, 11, 0),
+                    Child = new System.Windows.Controls.TextBlock
+                    {
+                        Text       = "",
+                        FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                        FontSize   = 12,
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#8FA6BE")),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment   = VerticalAlignment.Center,
+                    },
                 });
                 sp.Children.Add(new System.Windows.Controls.TextBlock
                 {
                     Text       = name,
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#cbd5e1")),
-                    FontSize   = 12,
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DCE6F0")),
+                    FontSize   = 12.5,
+                    FontWeight = FontWeights.SemiBold,
                     FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
                     VerticalAlignment = VerticalAlignment.Center,
                 });
                 row.Child = sp;
                 row.MouseEnter += (s, _) => ((System.Windows.Controls.Border)s).Background =
-                    new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1e2a3a"));
+                    new SolidColorBrush((Color)ColorConverter.ConvertFromString("#17293E"));
                 row.MouseLeave += (s, _) => ((System.Windows.Controls.Border)s).Background =
                     System.Windows.Media.Brushes.Transparent;
                 row.MouseLeftButtonDown += (_, _2) =>
@@ -2245,7 +3501,7 @@ namespace InterviewCopilot
                 MessageBox.Show(this, "No resume text to save.", "Save Resume", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            string name = "Resume · " + DateTime.Now.ToString("MMM d, HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+            string name = "Resume · " + DateTime.Now.ToString("MMM d, h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
             _savedResumes.Insert(0, (name, content));
             if (_savedResumes.Count > 10) _savedResumes.RemoveAt(_savedResumes.Count - 1);
             PersistSavedResumes();
@@ -2263,15 +3519,10 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         // RESUME LOCK / UNLOCK
         // ══════════════════════════════════════════════════════════════════════
-        private void LockResume()
-        {
-            if (ResumeLockOverlay != null) ResumeLockOverlay.Visibility = Visibility.Visible;
-        }
-
-        private void UnlockResume()
-        {
-            if (ResumeLockOverlay != null) ResumeLockOverlay.Visibility = Visibility.Collapsed;
-        }
+        // The resume is now upload-only (no editable text box), so there is nothing to
+        // lock during an interview. Kept as no-ops so existing callers stay valid.
+        private void LockResume()   { }
+        private void UnlockResume() { }
 
         // ══════════════════════════════════════════════════════════════════════
         // PERSISTENCE  (hints · job context · saved resumes)

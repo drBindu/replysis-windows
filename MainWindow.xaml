@@ -1,9 +1,10 @@
 <Window x:Class="InterviewCopilot.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="CoopilotX | Interview Copilot"
-        Height="580" Width="880"
-        MinHeight="460" MinWidth="760"
+        Title="Replysis AI"
+        Icon="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
+        Height="600" Width="980"
+        MinHeight="500" MinWidth="820"
         WindowStartupLocation="Manual"
         KeyDown="Window_KeyDown"
         PreviewMouseDown="Window_PreviewMouseDown"
@@ -13,182 +14,302 @@
         Background="Transparent"
         Opacity="1"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType">
 
     <Window.Resources>
+
+        <!-- PRIMARY (indigo to blue gradient with glow) -->
         <Style x:Key="GreenBtn" TargetType="Button">
-            <Setter Property="Background" Value="#147A54"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#2AB97D"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#806366F1"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#6366F1" Offset="0"/>
+                        <GradientStop Color="#2563EB" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="9" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1A9264"/>
+                                <Setter TargetName="Bd" Property="Background">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#4F46E5" Offset="0"/>
+                                            <GradientStop Color="#1D4ED8" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#A5B4FC"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#106443"/>
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- DANGER (rose crimson gradient) -->
         <Style x:Key="RedBtn" TargetType="Button">
-            <Setter Property="Background" Value="#8F2833"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#D7525D"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#80EF4444"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#DC2626" Offset="0"/>
+                        <GradientStop Color="#991B1B" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="9" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#B73745"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#701E27"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#FCA5A5"/>
+                                <Setter TargetName="Bd" Property="Background">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#EF4444" Offset="0"/>
+                                            <GradientStop Color="#B91C1C" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- GHOST (soft slate blue glass) -->
         <Style x:Key="GhostBtn" TargetType="Button">
-            <Setter Property="Background" Value="#111111"/>
-            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="Foreground" Value="#F8FAFC"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#252525"/>
+            <Setter Property="BorderBrush" Value="#5685B8"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#38495F" Offset="0"/>
+                        <GradientStop Color="#2A3B4E" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform x:Name="BdScale" ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1A1A1A"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#777777"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="BdScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="1.045" Duration="0:0:0.13">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="BdScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="1.045" Duration="0:0:0.13">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="BdScale" Storyboard.TargetProperty="ScaleX"
+                                                             To="1" Duration="0:0:0.17"/>
+                                            <DoubleAnimation Storyboard.TargetName="BdScale" Storyboard.TargetProperty="ScaleY"
+                                                             To="1" Duration="0:0:0.17"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                                <Setter TargetName="Bd" Property="Background">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#3A4E64" Offset="0"/>
+                                            <GradientStop Color="#2A3D50" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#79A9DA"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#0A0A0A"/>
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.8"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- BLUE (cyan sapphire gradient) -->
         <Style x:Key="BlueBtn" TargetType="Button">
-            <Setter Property="Background" Value="#2A2A2A"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#DDDDDD"/>
+            <Setter Property="BorderBrush" Value="#60A5FA"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#0284C7" Offset="0"/>
+                        <GradientStop Color="#2563EB" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#383838"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#CCCCCC"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1E1E1E"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#93C5FD"/>
+                                <Setter TargetName="Bd" Property="Background">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#0369A1" Offset="0"/>
+                                            <GradientStop Color="#1D4ED8" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- MIC (circular gradient glass) -->
+        <!-- Premium circular mic button. The accent RING + outer glow are recolored
+             by state in UpdateMicUi (via BorderBrush); the body stays a refined dark
+             slate so the state color reads cleanly against it. -->
         <Style x:Key="MicBtnStyle" TargetType="Button">
-            <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="BorderBrush" Value="#DDDDDD"/>
+            <Setter Property="BorderThickness" Value="1.6"/>
+            <Setter Property="BorderBrush" Value="#10B981"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Width" Value="50"/>
-            <Setter Property="Height" Value="50"/>
-            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="Width" Value="46"/>
+            <Setter Property="Height" Value="46"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Grid>
-                            <!-- Outer state ring -->
-                            <Border x:Name="Ring" CornerRadius="25"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="2" Background="Transparent"/>
-                            <!-- Inner gradient circle -->
-                            <Border x:Name="Bd" CornerRadius="22" Margin="3">
-                                <Border.Background>
-                                    <RadialGradientBrush Center="0.5,0.3" GradientOrigin="0.5,0.2" RadiusX="0.85" RadiusY="0.85">
-                                        <GradientStop Color="#1A1A1A" Offset="0"/>
-                                        <GradientStop Color="#0A0A0A" Offset="1"/>
+                        <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Grid.RenderTransform>
+
+                            <!-- Main body: soft radial gradient for depth -->
+                            <Ellipse x:Name="Body" Margin="2">
+                                <Ellipse.Fill>
+                                    <RadialGradientBrush GradientOrigin="0.35,0.28" Center="0.5,0.5" RadiusX="0.8" RadiusY="0.8">
+                                        <GradientStop Color="#1E293B" Offset="0"/>
+                                        <GradientStop Color="#0B1220" Offset="1"/>
                                     </RadialGradientBrush>
-                                </Border.Background>
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                                </Ellipse.Fill>
+                            </Ellipse>
+
+                            <!-- Glassy top highlight for a premium sheen -->
+                            <Ellipse x:Name="Gloss" Margin="7,5,7,22" Opacity="0.22">
+                                <Ellipse.Fill>
+                                    <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
+                                        <GradientStop Color="#FFFFFF" Offset="0"/>
+                                        <GradientStop Color="#00FFFFFF" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Ellipse.Fill>
+                            </Ellipse>
+
+                            <!-- Accent ring (state color, driven by BorderBrush) -->
+                            <Ellipse x:Name="Ring"
+                                     Stroke="{TemplateBinding BorderBrush}"
+                                     StrokeThickness="{TemplateBinding BorderThickness}"/>
+
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background">
+                                <Setter TargetName="Body" Property="Fill">
                                     <Setter.Value>
-                                        <RadialGradientBrush Center="0.5,0.3" GradientOrigin="0.5,0.2" RadiusX="0.85" RadiusY="0.85">
-                                            <GradientStop Color="#303030" Offset="0"/>
-                                            <GradientStop Color="#141414" Offset="1"/>
+                                        <RadialGradientBrush GradientOrigin="0.35,0.28" Center="0.5,0.5" RadiusX="0.8" RadiusY="0.8">
+                                            <GradientStop Color="#293548" Offset="0"/>
+                                            <GradientStop Color="#111A2B" Offset="1"/>
                                         </RadialGradientBrush>
                                     </Setter.Value>
                                 </Setter>
+                                <Setter TargetName="Root" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="1.07" ScaleY="1.07"/>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter TargetName="Gloss" Property="Opacity" Value="0.32"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background">
+                                <Setter TargetName="Root" Property="RenderTransform">
                                     <Setter.Value>
-                                        <RadialGradientBrush Center="0.5,0.3" GradientOrigin="0.5,0.2" RadiusX="0.85" RadiusY="0.85">
-                                            <GradientStop Color="#141414" Offset="0"/>
-                                            <GradientStop Color="#080808" Offset="1"/>
-                                        </RadialGradientBrush>
+                                        <ScaleTransform ScaleX="0.94" ScaleY="0.94"/>
                                     </Setter.Value>
                                 </Setter>
                             </Trigger>
@@ -197,148 +318,197 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- PANEL TOGGLE -->
         <Style x:Key="ArrowToggleBtn" TargetType="Button">
-            <Setter Property="Background" Value="#111111"/>
-            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#94A3B8"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="Width" Value="22"/>
-            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Width" Value="20"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="2,0">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="6" Padding="2,10">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1A1A1A"/>
-                                <Setter Property="Foreground" Value="#CCCCCC"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#1E293B"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- SECTION CAPTION -->
+        <Style x:Key="SectionCaption" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#CBD5E1"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+        </Style>
+
     </Window.Resources>
 
-    <Border x:Name="MainAppBorder" CornerRadius="18"
-            BorderBrush="#40FFFFFF" BorderThickness="1"
+    <!-- ====================================================================
+         MAIN CONTAINER  &#183;  pure glass on near-black
+    ===================================================================== -->
+    <Border x:Name="MainAppBorder" CornerRadius="16"
+            BorderBrush="#1AFFFFFF" BorderThickness="1"
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <Border.Background>
-            <SolidColorBrush Color="#22060810"/>
+            <SolidColorBrush Color="#090B12"/>
         </Border.Background>
         <Border.Effect>
-            <DropShadowEffect BlurRadius="40" ShadowDepth="10" Opacity="0.55" Color="#04040E"/>
+            <DropShadowEffect BlurRadius="48" ShadowDepth="16" Opacity="0.80" Color="#000000"/>
         </Border.Effect>
+
         <Grid>
             <Grid x:Name="NormalModeGrid">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="68"/>
+                    <RowDefinition Height="60"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- HEADER -->
-                <Border Grid.Row="0" Background="#A0060810" CornerRadius="18,18,0,0"
-                        BorderBrush="#30FFFFFF" BorderThickness="0,0,0,1">
-                    <Grid Margin="22,0">
+                <!-- ================= HEADER ================= -->
+                <Border Grid.Row="0" CornerRadius="16,16,0,0"
+                        BorderBrush="#1E2C40" BorderThickness="0,0,0,1"
+                        Background="#0AFFFFFF">
+                    <Grid Margin="18,0,14,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- LEFT: Logo -->
+                        <!-- Brand -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="#222222" CornerRadius="10" Width="38" Height="38" Margin="0,0,11,0"
-                                    BorderBrush="#AAAAAA" BorderThickness="1">
-                                <TextBlock Text="CX" Foreground="#FFFFFF" FontWeight="Bold" FontSize="12"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                            <Image Width="35" Height="35" Margin="0,0,12,0"
+                                   Source="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
+                                   Stretch="Uniform" SnapsToDevicePixels="True"/>
                             <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="CoopilotX" Foreground="#F4F7FB" FontSize="15" FontWeight="SemiBold"/>
-                                <TextBlock Text="INTERVIEW INTELLIGENCE" Foreground="#888888" FontSize="8" FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                <TextBlock Text="Replysis AI" Foreground="#F5F8FC" FontSize="14.5"
+                                           FontWeight="Bold" FontFamily="Segoe UI"/>
+                                <TextBlock Text="I N T E R V I E W   I N T E L L I G E N C E" Foreground="#8598B4"
+                                           FontSize="7.5" FontWeight="Bold" FontFamily="Segoe UI" Margin="0,1,0,0"/>
                             </StackPanel>
                         </StackPanel>
 
-                        <!-- CENTER: Mic -->
+                        <!-- Mic + status -->
                         <StackPanel Grid.Column="1" Orientation="Horizontal"
                                     HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Button x:Name="MicBtn" Style="{StaticResource MicBtnStyle}"
-                                    Click="MicBtn_Click" Margin="0,0,16,0">
-                                <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="White"/>
+                                    Click="MicBtn_Click" Margin="0,0,13,0">
+                                <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" Foreground="#F1F5F9"/>
                                 <Button.Effect>
-                                    <DropShadowEffect x:Name="MicGlow" Color="#ef4444" BlurRadius="0" ShadowDepth="0"/>
+                                    <DropShadowEffect x:Name="MicGlow" Color="#10B981"
+                                                      BlurRadius="8" ShadowDepth="0"/>
                                 </Button.Effect>
                             </Button>
-                            <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse x:Name="MicIndicator" Width="9" Height="9" Fill="#57D68D" Margin="0,0,8,0"/>
-                                    <TextBlock x:Name="MicIndicatorText" Text="READY"
-                                               Foreground="#EAF2FF" FontWeight="SemiBold" FontSize="12"/>
-                                </StackPanel>
+                            <StackPanel VerticalAlignment="Center">
+                                <Border x:Name="MicStatusPill" CornerRadius="10" Padding="11,5"
+                                        Background="#141C2A" BorderBrush="#28374D" BorderThickness="1">
+                                    <Border.Effect>
+                                        <DropShadowEffect x:Name="MicPillGlow" BlurRadius="11" ShadowDepth="0"
+                                                          Opacity="0" Color="#10B981"/>
+                                    </Border.Effect>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse x:Name="MicIndicator" Width="7" Height="7"
+                                                 Fill="#10B981" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="MicIndicatorText" Text="READY"
+                                                   Foreground="#EAF1F8" FontWeight="Bold" FontSize="10.5"
+                                                   FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
-                            <!-- REC badge — kept for code compat; hidden (timer shows recording state) -->
-                            <Border x:Name="RecordingBadge" Visibility="Collapsed"/>
+
+                            <!-- One compact selector keeps Manual and both hands-free modes organized. -->
+                            <Border x:Name="AutoModePill" CornerRadius="11" Padding="10,5"
+                                    Margin="8,0,0,0" Background="#101827" BorderBrush="#26364C"
+                                    BorderThickness="1" Cursor="Hand" VerticalAlignment="Center"
+                                    MouseLeftButtonDown="AutoModePill_Click"
+                                    ToolTip="Choose Manual, Interview Auto or Practice Auto">
+                                <Border.Effect>
+                                    <DropShadowEffect x:Name="AutoModeGlow" BlurRadius="11" ShadowDepth="0"
+                                                      Opacity="0" Color="#34E08A"/>
+                                </Border.Effect>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse x:Name="AutoModeDot" Width="6" Height="6" Fill="#607086"
+                                             Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="AutoModeLabel" Text="MANUAL" Foreground="#A9B6C8"
+                                               FontSize="9.5" FontWeight="Bold" FontFamily="Segoe UI"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="AutoModeChevron" Text="&#xE70D;"
+                                               FontFamily="Segoe MDL2 Assets" FontSize="8"
+                                               Foreground="#6F8198" Margin="7,0,0,0"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
-                        <!-- RIGHT cluster — matches Mac order: Analyze | Camera | Sessions | Settings | Timer | Credits | Profile | Min | Close -->
-                        <StackPanel Grid.Column="2" Orientation="Horizontal"
-                                    VerticalAlignment="Center" Margin="0,0,4,0">
+                        <!-- Right controls -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
 
-                            <!-- Screen AI (F9) -->
-                            <Button x:Name="ScreenAnalyzeBtn"
-                                    Style="{StaticResource GhostBtn}"
-                                    Click="ScreenAnalyzeBtn_Click"
-                                    Padding="10,6" Margin="0,0,6,0"
-                                    ToolTip="Screen AI — captures your screen and generates an instant AI answer. Works for guests too. (F8 all monitors · F9 primary)">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                               Margin="0,0,5,0" VerticalAlignment="Center" Foreground="#C8D8F0"/>
-                                    <TextBlock x:Name="AnalyzeLabel" Text="Screen AI" FontSize="11"
-                                               FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                    <Border Background="#18FFFFFF" CornerRadius="4" Padding="4,2" Margin="5,0,0,0">
-                                        <TextBlock Text="F9" Foreground="#BBBBCC" FontSize="9" FontWeight="Bold" FontFamily="Segoe UI Mono"/>
-                                    </Border>
+                            <Button x:Name="ScreenAnalyzeBtn" Style="{StaticResource GhostBtn}"
+                                    Click="ScreenAnalyzeBtn_Click" Padding="9,6" Margin="0,0,4,0"
+                                    ToolTip="Screen AI  &#183;  F8 all monitors, F9 primary monitor">
+                                <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                           VerticalAlignment="Center" Foreground="#C6D4E8"/>
+                            </Button>
+                            <!-- keeps the old AnalyzeLabel name alive off-screen for code that sets it -->
+                            <TextBlock x:Name="AnalyzeLabel" Visibility="Collapsed"/>
+
+                            <Button Style="{StaticResource GhostBtn}" Click="CameraMode_Click"
+                                    Padding="9,6" Margin="0,0,4,0"
+                                    ToolTip="Compact overlay for in-person interviews">
+                                <TextBlock Text="&#xE890;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                           VerticalAlignment="Center" Foreground="#C6D4E8"/>
+                            </Button>
+
+                            <!-- Stealth / privacy status — tells the user they're hidden from screen share -->
+                            <Border x:Name="StealthPill" CornerRadius="9" Background="#12331F"
+                                    BorderBrush="#255E3D" BorderThickness="1" Padding="9,5" Margin="0,0,6,0"
+                                    VerticalAlignment="Center" Cursor="Hand"
+                                    MouseLeftButtonDown="StealthPill_Click"
+                                    ToolTip="Hidden from screen sharing and screen recording  &#183;  click to toggle">
+                                <Border.Effect>
+                                    <DropShadowEffect x:Name="StealthGlow" BlurRadius="13" ShadowDepth="0"
+                                                      Opacity="0.55" Color="#43D98A"/>
+                                </Border.Effect>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse x:Name="StealthDot" Width="6" Height="6" Fill="#48E29A"
+                                             Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="StealthPillIcon" Text="&#xE72E;" FontFamily="Segoe MDL2 Assets"
+                                               FontSize="10.5" Foreground="#84E7B6" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="StealthPillLabel" Text="Hidden" Foreground="#AEEFCF"
+                                               FontSize="10.5" FontWeight="Bold" FontFamily="Segoe UI"
+                                               VerticalAlignment="Center"/>
                                 </StackPanel>
-                            </Button>
+                            </Border>
 
-                            <!-- Camera / Eye toggle -->
-                            <Button Style="{StaticResource GhostBtn}"
-                                    Click="CameraMode_Click" Padding="9,6" Margin="0,0,6,0"
-                                    ToolTip="Camera overlay — hides main window, shows a tiny floating answer bar for in-person interviews">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="👁" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Overlay" FontSize="10" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
+                            <!-- Help moved into the profile menu ("How it works") to declutter -->
 
-                            <!-- My Sessions (icon only) — visible when logged in -->
-                            <Button x:Name="SessionsBtn"
-                                    Style="{StaticResource GhostBtn}"
-                                    Click="SessionsBtn_Click"
-                                    Padding="9,6" Margin="0,0,6,0"
-                                    Visibility="Collapsed"
-                                    ToolTip="My Sessions — past interview recordings">
-                                <TextBlock Text="📋" FontSize="13"/>
-                            </Button>
-
-                            <!-- Session Timer — visible while a session is active -->
-                            <Border x:Name="SessionTimerBadge" Background="#0D0D0D" CornerRadius="8"
-                                    Padding="9,5" Margin="0,0,6,0" VerticalAlignment="Center"
-                                    BorderBrush="#1A1A1A" BorderThickness="1"
+                            <!-- Session timer -->
+                            <Border x:Name="SessionTimerBadge" CornerRadius="7"
+                                    Background="#0AFFFFFF" BorderBrush="#16FFFFFF" BorderThickness="1"
+                                    Padding="9,4" Margin="0,0,4,0" VerticalAlignment="Center"
                                     Visibility="Collapsed" ToolTip="Session duration">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="6" Height="6" Fill="#ef4444" Margin="0,0,5,0"
+                                    <Ellipse Width="5" Height="5" Fill="#F87171" Margin="0,0,6,0"
                                              VerticalAlignment="Center">
                                         <Ellipse.Triggers>
                                             <EventTrigger RoutedEvent="Loaded">
                                                 <BeginStoryboard>
                                                     <Storyboard RepeatBehavior="Forever">
                                                         <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                         From="1" To="0.2" Duration="0:0:0.8"
+                                                                         From="1" To="0.2" Duration="0:0:0.9"
                                                                          AutoReverse="True"/>
                                                     </Storyboard>
                                                 </BeginStoryboard>
@@ -346,384 +516,332 @@
                                         </Ellipse.Triggers>
                                     </Ellipse>
                                     <TextBlock x:Name="SessionTimerLabel" Text="0:00"
-                                               Foreground="#DDDDDD" FontSize="11"
-                                               FontWeight="Bold" FontFamily="Segoe UI Mono"/>
+                                               Foreground="#FFFFFF" FontSize="11"
+                                               FontWeight="Bold" FontFamily="Consolas"/>
                                 </StackPanel>
                             </Border>
 
-                            <!-- Credits Badge — always visible, opens profile dropdown -->
-                            <Border x:Name="CreditsBadge" CornerRadius="20"
-                                    Padding="10,5" Margin="0,0,6,0" VerticalAlignment="Center"
-                                    BorderThickness="1" Cursor="Hand"
+                            <!-- Credits — hidden from the top bar to declutter; still shown in the profile menu -->
+                            <Border x:Name="CreditsBadge" CornerRadius="18" Padding="10,4" Margin="0,0,4,0"
+                                    Visibility="Collapsed"
+                                    VerticalAlignment="Center" BorderThickness="1" Cursor="Hand"
                                     MouseLeftButtonDown="CreditsBadge_Click"
-                                    ToolTip="Credits · Click for account menu">
+                                    ToolTip="Credits  &#183;  click to refresh or view pricing">
                                 <Border.Background>
-                                    <SolidColorBrush x:Name="CreditsBadgeBg" Color="#08080E"/>
+                                    <SolidColorBrush x:Name="CreditsBadgeBg" Color="#0DFFFFFF"/>
                                 </Border.Background>
                                 <Border.BorderBrush>
-                                    <SolidColorBrush x:Name="CreditsBadgeBorder" Color="#202028"/>
+                                    <SolidColorBrush x:Name="CreditsBadgeBorder" Color="#1AFFFFFF"/>
                                 </Border.BorderBrush>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock x:Name="CreditsIcon" Text="⚡" FontSize="10"
+                                    <TextBlock x:Name="CreditsIcon" Text="" FontSize="10"
                                                Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="CreditsLabel" Text="55"
-                                               Foreground="#4ade80" FontSize="11"
+                                    <TextBlock x:Name="CreditsLabel" Text="&#x26A1; 70"
+                                               Foreground="#FFFFFF" FontSize="11"
                                                FontWeight="Bold" FontFamily="Segoe UI"/>
                                     <TextBlock x:Name="CreditsPlanLabel" Text=" left"
-                                               Foreground="#4ade80" FontSize="11"
-                                               FontFamily="Segoe UI"/>
+                                               Foreground="#A0A0A4" FontSize="11" FontFamily="Segoe UI"/>
                                 </StackPanel>
                             </Border>
 
-                            <!-- Profile Badge — always visible (GU = Guest User when not signed in) -->
-                            <Border x:Name="ProfileBadge" CornerRadius="20" Padding="8,5"
-                                    Margin="0,0,6,0" VerticalAlignment="Center"
-                                    Background="#0F0F0F" BorderBrush="#1A1A1A" BorderThickness="1"
+                            <!-- Profile -->
+                            <Border x:Name="ProfileBadge" CornerRadius="18" Padding="7,4" Margin="0,0,4,0"
+                                    VerticalAlignment="Center"
+                                    Background="#0AFFFFFF" BorderBrush="#16FFFFFF" BorderThickness="1"
                                     Cursor="Hand" MouseLeftButtonDown="ProfileBadge_Click"
                                     ToolTip="Account menu">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Border Width="26" Height="26" CornerRadius="13" Background="#1A1A1A" Margin="0,0,6,0">
-                                        <TextBlock x:Name="AvatarInitials" Text="GU"
-                                                   Foreground="#DDDDDD" FontSize="9" FontWeight="Bold"
-                                                   FontFamily="Segoe UI" HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"/>
+                                    <Border Width="22" Height="22" CornerRadius="11"
+                                            Background="#22FFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1"
+                                            Margin="0,0,6,0">
+                                        <Grid>
+                                            <TextBlock x:Name="AvatarInitials" Text="GU"
+                                                       Foreground="White" FontSize="8.5" FontWeight="Bold"
+                                                       FontFamily="Segoe UI" HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"/>
+                                            <Ellipse x:Name="AvatarPhoto" Width="22" Height="22"
+                                                     Visibility="Collapsed"/>
+                                        </Grid>
                                     </Border>
                                     <TextBlock x:Name="ProfileNameLabel" Text=""
-                                               Foreground="White" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#E0E0E4" FontSize="11" FontWeight="Medium"
                                                FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                    <TextBlock Text=" ▾" Foreground="#3d4d5f" FontSize="10"
-                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets"
+                                               Foreground="#59FFFFFF" FontSize="8"
+                                               Margin="5,1,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
 
-                            <!-- Sign In btn (hidden — only kept for code compat) -->
                             <Button x:Name="SignInHeaderBtn" Visibility="Collapsed"
-                                    Click="SignInHeaderBtn_Click" Style="{StaticResource BlueBtn}"
-                                    Content="Sign In" Padding="10,6" Margin="0,0,6,0"/>
+                                    Click="SignInHeaderBtn_Click" Style="{StaticResource GhostBtn}"
+                                    Content="Sign In" Padding="10,5" Margin="0,0,4,0"/>
 
                             <!-- Window controls -->
-                            <Button Content="–" Foreground="#555" Background="Transparent"
-                                    BorderThickness="0" Click="MinimizeBtn_Click"
-                                    FontSize="18" ToolTip="Minimize" Cursor="Hand"
-                                    Padding="6,0" Margin="0,0,2,0"/>
-                            <Button Content="✕" Foreground="#666" Background="Transparent"
-                                    BorderThickness="0" Click="CloseBtn_Click"
-                                    ToolTip="Close" Cursor="Hand" Padding="6,0"/>
+                            <Button Click="MinimizeBtn_Click" ToolTip="Minimize" Cursor="Hand"
+                                    Background="Transparent" BorderThickness="0" Padding="7,0" Margin="2,0,0,0">
+                                <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                           Foreground="#66FFFFFF"/>
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                                CornerRadius="5" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button Cursor="Hand" ToolTip="Close" Padding="7,0" Click="CloseBtn_Click"
+                                    Background="Transparent" BorderThickness="0">
+                                <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                           Foreground="#66FFFFFF"/>
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                                CornerRadius="5" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#22F87171"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
 
-                <!-- BODY -->
-                <Grid Grid.Row="1" Margin="18,16,18,18">
+                <!-- ================= BODY ================= -->
+                <Grid Grid.Row="1" Margin="14,12,14,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition x:Name="ResumeColumn" Width="260"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Grid x:Name="ResumePanel" Grid.Column="0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition x:Name="ContentRow" Height="*"/>
-                            <RowDefinition x:Name="AskGuideRow" Height="170"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
 
-                        <!-- ── TAB BAR + ACTION BUTTONS ─────────────────────── -->
-                        <Grid Grid.Row="0" Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <!-- Tabs -->
-                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border x:Name="ResumeTabBorder"
-                                        Background="#A0060810" CornerRadius="8"
-                                        BorderBrush="#55FFFFFF" BorderThickness="1"
-                                        Cursor="Hand" MouseLeftButtonDown="ResumeTabBtn_Click"
-                                        Padding="11,5" Margin="0,0,4,0">
-                                    <TextBlock x:Name="ResumeTabLabel" Text="Resume" FontSize="11" FontWeight="SemiBold"
-                                               Foreground="#DDDDDD" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                </Border>
-                                <Border x:Name="JobTabBorder"
-                                        Background="#80060810" CornerRadius="8"
-                                        BorderBrush="#20FFFFFF" BorderThickness="1"
-                                        Cursor="Hand" MouseLeftButtonDown="JobTabBtn_Click"
-                                        Padding="11,5">
-                                    <TextBlock x:Name="JobTabLabel" Text="Target Role" FontSize="11" FontWeight="SemiBold"
-                                               Foreground="#4b6070" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                </Border>
-                            </StackPanel>
-                            <!-- Action buttons — icon-only to keep tab bar compact -->
-                            <StackPanel Grid.Column="1" Orientation="Horizontal"
-                                        VerticalAlignment="Center" Margin="6,0,0,0">
-                                <Button x:Name="SavedResumesBtn" Style="{StaticResource GhostBtn}"
-                                        Click="SavedResumesBtn_Click" Padding="6,4" Margin="0,0,3,0"
-                                        Visibility="Collapsed" ToolTip="Load a saved resume">
-                                    <TextBlock Text="&#xE81C;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                               Foreground="#94A3B8"/>
-                                </Button>
-                                <Button x:Name="ResumeUploadBtn" Style="{StaticResource GhostBtn}"
-                                        Click="ResumeUploadBtn_Click" Padding="6,4"
-                                        ToolTip="Upload a PDF, DOCX or TXT resume">
-                                    <TextBlock Text="&#xE898;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                               Foreground="#94A3B8"/>
-                                </Button>
-                            </StackPanel>
-                        </Grid>
+                    <!-- =========================================================
+                         SIDE PANEL  &#183;  Interview Setup (tab-less, no dead space)
+                    ========================================================== -->
+                    <Border x:Name="ResumePanel" Grid.Column="0"
+                            CornerRadius="12" BorderBrush="#22FFFFFF" BorderThickness="1"
+                            Background="#10FFFFFF" Padding="14,13" ClipToBounds="True">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="1.15*"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="1*"/>
+                            </Grid.RowDefinitions>
 
-                        <!-- ── RESUME TAB CONTENT ────────────────────────────── -->
-                        <Grid x:Name="ResumeTabPanel" Grid.Row="1">
-                            <Border x:Name="ResumeDropBorder" Background="#B0060810" CornerRadius="14"
-                                    BorderBrush="#28FFFFFF" BorderThickness="1"
-                                    AllowDrop="True"
+                            <!-- Title -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+                                <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                           Foreground="#66FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="INTERVIEW SETUP" Style="{StaticResource SectionCaption}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- Resume label -->
+                            <Grid Grid.Row="1" Margin="0,0,0,7">
+                                <TextBlock Text="RESUME" Foreground="#B4B4BA" FontSize="10.5"
+                                           FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Premium upload / drop zone. A real Button so click-to-browse
+                                 fires reliably; the ResumeTextBox is kept only as a hidden
+                                 backing store for the extracted resume text. -->
+                            <Button x:Name="ResumeDropBorder" Grid.Row="2" Cursor="Hand"
+                                    Click="ResumeCard_Click" AllowDrop="True"
+                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
                                     DragEnter="ResumeDropBorder_DragEnter"
                                     DragOver="ResumeDropBorder_DragOver"
                                     DragLeave="ResumeDropBorder_DragLeave"
                                     Drop="ResumeDropBorder_Drop">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.18" Color="Black"/>
-                                </Border.Effect>
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="CardBd" CornerRadius="12" BorderBrush="#26FFFFFF"
+                                                BorderThickness="1.2" MinHeight="158" Background="#10FFFFFF">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="CardBd" Property="BorderBrush" Value="#3E5A82"/>
+                                                <Setter TargetName="CardBd" Property="Background" Value="#16FFFFFF"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="CardBd" Property="Background" Value="#1FFFFFFF"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
                                 <Grid>
-                                    <TextBox x:Name="ResumeTextBox" TextWrapping="Wrap" AcceptsReturn="True"
-                                              Background="Transparent" Foreground="#D7E2F0" BorderThickness="0"
-                                             Padding="14" VerticalScrollBarVisibility="Auto"
-                                             FontFamily="Segoe UI" FontSize="12"
+                                    <TextBox x:Name="ResumeTextBox" Visibility="Collapsed"
                                              TextChanged="ResumeTextBox_TextChanged"/>
-                                    <TextBlock x:Name="ResumeWatermark"
-                                               Foreground="#6E849F" FontSize="12" TextWrapping="Wrap"
-                                               Margin="14,14,14,14" VerticalAlignment="Top"
-                                               IsHitTestVisible="False" FontStyle="Italic" FontFamily="Segoe UI">
-                                        Paste your resume here, or drag &amp; drop a PDF / DOCX / TXT — or click Upload.&#x0a;&#x0a;With it, every answer is tailored to your exact experience and skills.
-                                    </TextBlock>
+
+                                    <!-- Empty state: upload prompt -->
+                                    <StackPanel x:Name="ResumeEmptyState" HorizontalAlignment="Center"
+                                                VerticalAlignment="Center" Margin="18" IsHitTestVisible="False">
+                                        <Border Width="48" Height="48" CornerRadius="24" Background="#1E2B40"
+                                                HorizontalAlignment="Center" Margin="0,0,0,13">
+                                            <TextBlock Text="&#xE898;" FontFamily="Segoe MDL2 Assets" FontSize="21"
+                                                       Foreground="#7FA8E0" HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Drop your resume here" Foreground="#E8EEF6" FontSize="13"
+                                                   FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="or click to browse" Foreground="#7E90A8" FontSize="11"
+                                                   FontFamily="Segoe UI" HorizontalAlignment="Center" Margin="0,3,0,11"/>
+                                        <Border Background="#16FFFFFF" CornerRadius="6" Padding="9,3" HorizontalAlignment="Center">
+                                            <TextBlock Text="PDF  &#183;  DOCX  &#183;  TXT" Foreground="#93A4BA"
+                                                       FontSize="9.5" FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!-- Loaded state -->
+                                    <StackPanel x:Name="ResumeLoadedState" HorizontalAlignment="Center"
+                                                VerticalAlignment="Center" Margin="18" Visibility="Collapsed"
+                                                IsHitTestVisible="False">
+                                        <Border Width="48" Height="48" CornerRadius="24" Background="#13331F"
+                                                HorizontalAlignment="Center" Margin="0,0,0,13">
+                                            <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="21"
+                                                       Foreground="#4ED88F" HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock x:Name="ResumeLoadedName" Text="Resume loaded" Foreground="#E8EEF6"
+                                                   FontSize="13" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                                   HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="235" TextAlignment="Center"/>
+                                        <TextBlock Text="click to replace" Foreground="#7E90A8" FontSize="11"
+                                                   FontFamily="Segoe UI" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                    </StackPanel>
+
                                     <!-- Drag-over overlay -->
-                                    <Border x:Name="ResumeDragOverlay" CornerRadius="14"
-                                            Background="#40FFFFFF" BorderBrush="#80FFFFFF" BorderThickness="2"
-                                            Visibility="Collapsed" IsHitTestVisible="False">
-                                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <TextBlock Text="⬇" FontSize="28" Foreground="#CCCCCC"
-                                                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Drop to load resume" Foreground="White"
-                                                       FontSize="12" FontWeight="Bold" FontFamily="Segoe UI"
-                                                       HorizontalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <!-- Interview lock overlay -->
-                                    <Border x:Name="ResumeLockOverlay" CornerRadius="14"
-                                            Background="#CC030712" Visibility="Collapsed"
+                                    <Border x:Name="ResumeDragOverlay" CornerRadius="12"
+                                            Background="#22315A" BorderBrush="#5EA8FF"
+                                            BorderThickness="1.5" Visibility="Collapsed"
                                             IsHitTestVisible="False">
                                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <TextBlock Text="🔒" FontSize="20" HorizontalAlignment="Center"
-                                                       Margin="0,0,0,8"/>
-                                            <TextBlock Text="Locked during interview" Foreground="#f59e0b"
-                                                       FontSize="11" FontWeight="SemiBold"
-                                                       HorizontalAlignment="Center" FontFamily="Segoe UI"
-                                                       Margin="0,0,0,4"/>
-                                            <TextBlock Text="Use ASK or GUIDE below ↓" Foreground="#57534e"
-                                                       FontSize="10" HorizontalAlignment="Center"
-                                                       FontFamily="Segoe UI"/>
+                                            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="24" Foreground="#BBD6FF"
+                                                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                            <TextBlock Text="Drop to load" Foreground="#FFFFFF"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       FontFamily="Segoe UI" HorizontalAlignment="Center"/>
                                         </StackPanel>
                                     </Border>
                                 </Grid>
-                            </Border>
-                        </Grid>
+                            </Button>
 
-                        <!-- ── TARGET ROLE TAB CONTENT (hidden by default) ────── -->
-                        <Grid x:Name="JobTabPanel" Grid.Row="1" Visibility="Collapsed">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <!-- Company name -->
-                            <Grid Grid.Row="0" Margin="0,0,0,10">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Text="COMPANY" Foreground="#3d4d5f" FontSize="8"
-                                           FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                <Border Grid.Row="1" Background="#CC08080E" CornerRadius="8"
-                                        BorderBrush="#22FFFFFF" BorderThickness="1">
-                                    <Grid>
-                                        <TextBox x:Name="CompanyNameBox" Background="Transparent"
-                                                 Foreground="White" BorderThickness="0"
-                                                 Padding="10,8" FontSize="13" FontFamily="Segoe UI"
-                                                 CaretBrush="White"
-                                                 TextChanged="CompanyNameBox_TextChanged"/>
-                                        <TextBlock x:Name="CompanyNameWatermark" Text="e.g.  Stripe, Google, Citi…"
-                                                   Foreground="#1A1A1A" FontSize="12" FontStyle="Italic"
-                                                   Margin="10,8,10,8" FontFamily="Segoe UI"
-                                                   IsHitTestVisible="False" VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Border>
+                            <!-- Previously uploaded resumes (shown only when some exist) -->
+                            <Grid Grid.Row="3" Margin="0,10,0,0">
+                                <Button x:Name="SavedResumesBtn" Style="{StaticResource GhostBtn}"
+                                        Click="SavedResumesBtn_Click" Padding="0,8"
+                                        Visibility="Collapsed" ToolTip="Previously uploaded resumes">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                                   Foreground="#93A4BA" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Previous resumes" FontSize="11" FontFamily="Segoe UI"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                             </Grid>
-                            <!-- Job description -->
-                            <Grid Grid.Row="1">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Text="JOB DESCRIPTION" Foreground="#3d4d5f" FontSize="8"
-                                           FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                <Border Grid.Row="1" Background="#B0060810" CornerRadius="14"
-                                        BorderBrush="#28FFFFFF" BorderThickness="1">
-                                    <Border.Effect>
-                                        <DropShadowEffect BlurRadius="14" ShadowDepth="4" Opacity="0.16" Color="Black"/>
-                                    </Border.Effect>
-                                    <Grid>
-                                        <TextBox x:Name="JobDescBox" TextWrapping="Wrap" AcceptsReturn="True"
-                                                  Background="Transparent" Foreground="#D7E2F0" BorderThickness="0"
-                                                 Padding="13" VerticalScrollBarVisibility="Auto"
-                                                 FontFamily="Segoe UI" FontSize="12"
-                                                 TextChanged="JobDescBox_TextChanged"/>
-                                        <TextBlock x:Name="JobDescWatermark" Foreground="#6E849F" FontSize="12"
-                                                   TextWrapping="Wrap" Margin="13,13,13,13" VerticalAlignment="Top"
-                                                   IsHitTestVisible="False" FontStyle="Italic" FontFamily="Segoe UI">
-                                            Paste the job description — role, required skills, tech stack.&#x0a;&#x0a;The AI will tailor every answer to exactly what this company needs.
-                                        </TextBlock>
-                                    </Grid>
-                                </Border>
-                            </Grid>
-                        </Grid>
 
-                        <!-- ── RESUME LOADED BADGE (shown when content is auto-collapsed) ── -->
-                        <Border x:Name="ResumeLoadedBadge" Grid.Row="1"
-                                Background="#08080E" CornerRadius="8"
-                                BorderBrush="#202028" BorderThickness="1"
-                                Visibility="Collapsed" Padding="12,9" Margin="0,4,0,6"
-                                Cursor="Hand" MouseLeftButtonDown="ResumeLoadedBadge_Click"
-                                ToolTip="Click to expand and edit resume">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="✓" Foreground="#4ade80" FontSize="11" FontWeight="Bold"
-                                           Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Resume loaded" Foreground="#DDDDDD" FontSize="10"
-                                           FontWeight="SemiBold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                <TextBlock Text="  — tap to edit" Foreground="#2a4a5a" FontSize="10"
-                                           FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                            <!-- Divider -->
+                            <Border Grid.Row="4" Height="1" Background="#10FFFFFF" Margin="0,14,0,12"/>
+
+                            <!-- Target role label -->
+                            <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,0,0,7">
+                                <TextBlock Text="&#xE821;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                           Foreground="#66FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="TARGET ROLE" Foreground="#B4B4BA" FontSize="10.5"
+                                           FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                <TextBlock Text="  tailors every answer" Foreground="#40FFFFFF"
+                                           FontSize="9.5" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                             </StackPanel>
-                        </Border>
 
-                        <!-- ── ASK or GUIDE ──────────────────────────────────── -->
-                        <Border Grid.Row="2" Background="#B0060810" CornerRadius="12"
-                                BorderBrush="#28FFFFFF" BorderThickness="1" Margin="0,10,0,0">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.28" Color="Black"/>
-                            </Border.Effect>
-                            <Grid Margin="12,10">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-
-                                <!-- Header -->
-                                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,7">
-                                    <TextBlock Text="⚡" FontSize="10" Foreground="#fbbf24"
-                                               Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="ASK or GUIDE" FontSize="10" FontWeight="Bold"
-                                               Foreground="#c79a3c" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                    <TextBlock Text="  · pin to remember" FontSize="9" Foreground="#6b5630"
-                                               FontStyle="Italic" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                </StackPanel>
-
-                                <!-- Input -->
-                                <Border Grid.Row="1" Background="#80060810" CornerRadius="8"
-                                        BorderBrush="#20FFFFFF" BorderThickness="1">
-                                    <Grid>
-                                        <TextBox x:Name="AskBox" TextWrapping="Wrap" AcceptsReturn="True"
-                                                 Background="Transparent" Foreground="#E4ECF8"
-                                                 BorderThickness="0" Padding="10,8"
-                                                 FontFamily="Segoe UI" FontSize="12"
-                                                 VerticalScrollBarVisibility="Auto"
-                                                 CaretBrush="#fbbf24"
-                                                 TextChanged="AskBox_TextChanged"
-                                                 PreviewKeyDown="AskBox_PreviewKeyDown"/>
-                                        <TextBlock x:Name="AskBoxWatermark"
-                                                   Foreground="#7589A5" FontSize="11" TextWrapping="Wrap"
-                                                   Margin="10,9,10,9" VerticalAlignment="Top"
-                                                   IsHitTestVisible="False" FontStyle="Italic" FontFamily="Segoe UI">
-                                            Ask a question for an instant answer, or add context the AI should remember…
-                                        </TextBlock>
-                                    </Grid>
-                                </Border>
-
-                                <!-- Pinned hints display -->
-                                <Border x:Name="PinnedHintsBar" Grid.Row="2" Visibility="Collapsed"
-                                        Background="#fbbf2412" CornerRadius="6"
-                                        Margin="0,6,0,0" Padding="8,5">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="📌" FontSize="9"
-                                                   Foreground="#b08930" Margin="0,1,5,0"
-                                                   VerticalAlignment="Top"/>
-                                        <TextBlock Grid.Column="1" x:Name="PinnedHintsText"
-                                                   Foreground="#cbb06a" FontSize="10" TextWrapping="Wrap"
-                                                   MaxHeight="44" VerticalAlignment="Top"
-                                                   FontFamily="Segoe UI"/>
-                                        <Button Grid.Column="2" Content="✕"
-                                                Click="ClearHintsBtn_Click"
-                                                Background="Transparent" BorderThickness="0"
-                                                Foreground="#6b7280" FontSize="10" Cursor="Hand"
-                                                Padding="4,1" VerticalAlignment="Top"
-                                                ToolTip="Clear pinned context"/>
-                                    </Grid>
-                                </Border>
-
-                                <!-- Pin + Ask buttons -->
-                                <Grid Grid.Row="3" Margin="0,7,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Button Grid.Column="0" x:Name="PinBtn"
-                                            Style="{StaticResource GhostBtn}"
-                                            Click="PinBtn_Click" Padding="10,7" Margin="0,0,6,0"
-                                            ToolTip="Pin as persistent context that steers every AI answer">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="📌" FontSize="11" Margin="0,0,4,0"/>
-                                            <TextBlock Text="Pin" FontSize="11" FontFamily="Segoe UI"
-                                                       Foreground="#fbbf24"/>
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Grid.Column="1" x:Name="AskSubmitBtn"
-                                            Style="{StaticResource BlueBtn}"
-                                            Click="AskSubmitBtn_Click" Padding="10,7"
-                                            ToolTip="Get an AI answer for this question right now (Ctrl+Enter)">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="Ask" FontSize="12" FontWeight="Bold"
-                                                       FontFamily="Segoe UI" Margin="0,0,5,0"/>
-                                            <TextBlock Text="→" FontSize="12" FontFamily="Segoe UI"/>
-                                        </StackPanel>
-                                    </Button>
+                            <!-- Company -->
+                            <Border Grid.Row="6" Background="#1AFFFFFF" CornerRadius="8"
+                                    BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,0,8">
+                                <Grid>
+                                    <TextBox x:Name="CompanyNameBox" Background="Transparent"
+                                             Foreground="#F0F0F2" BorderThickness="0"
+                                             Padding="10,8" FontSize="12" FontFamily="Segoe UI" FontWeight="SemiBold"
+                                             CaretBrush="#AAAAAA" TextChanged="CompanyNameBox_TextChanged"/>
+                                    <TextBlock x:Name="CompanyNameWatermark"
+                                               Text="Company  (e.g. Google, Stripe, Amazon)"
+                                               Foreground="#66FFFFFF" FontSize="12" FontWeight="SemiBold" Margin="10,8"
+                                               FontFamily="Segoe UI" IsHitTestVisible="False"
+                                               VerticalAlignment="Center"/>
                                 </Grid>
-                            </Grid>
-                        </Border>
+                            </Border>
 
-                        <!-- ── Save path ─────────────────────────────────────── -->
-                        <Border Grid.Row="3" Margin="0,8,0,0" Background="#20060810"
-                                CornerRadius="10" Padding="10,8">
-                            <TextBlock x:Name="SavePathLabel" Foreground="#2a3a4a"
-                                       FontSize="9" TextWrapping="Wrap"/>
-                        </Border>
-                    </Grid>
-                    <Button x:Name="ResumeToggleBtn" Grid.Column="1" Content="◀"
+                            <!-- Job description -->
+                            <Border Grid.Row="7" Background="#1AFFFFFF" CornerRadius="10"
+                                    BorderBrush="#22FFFFFF" BorderThickness="1">
+                                <Grid>
+                                    <TextBox x:Name="JobDescBox" TextWrapping="Wrap" AcceptsReturn="True"
+                                             Background="Transparent" Foreground="#F0F0F2"
+                                             BorderThickness="0" Padding="11"
+                                             VerticalScrollBarVisibility="Auto"
+                                             FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold" CaretBrush="#AAAAAA"
+                                             TextChanged="JobDescBox_TextChanged"/>
+                                    <TextBlock x:Name="JobDescWatermark" Foreground="#66FFFFFF"
+                                               FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Margin="11"
+                                               VerticalAlignment="Top" IsHitTestVisible="False"
+                                               FontFamily="Segoe UI"
+                                               Text="Paste the role &amp; requirements: title, must-have skills, tech stack, seniority."/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Hidden ASK/GUIDE + SavePath (kept for code-behind) -->
+                            <Grid Grid.Row="7" Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBox x:Name="AskBox" TextChanged="AskBox_TextChanged"
+                                             PreviewKeyDown="AskBox_PreviewKeyDown"/>
+                                    <TextBlock x:Name="AskBoxWatermark"/>
+                                    <Border x:Name="PinnedHintsBar" Visibility="Collapsed">
+                                        <TextBlock x:Name="PinnedHintsText"/>
+                                    </Border>
+                                    <Button x:Name="PinBtn" Click="PinBtn_Click"/>
+                                    <Button x:Name="AskSubmitBtn" Click="AskSubmitBtn_Click"/>
+                                    <Button Click="ClearHintsBtn_Click"/>
+                                    <TextBlock x:Name="SavePathLabel"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <!-- Panel toggle -->
+                    <Button x:Name="ResumeToggleBtn" Grid.Column="1" Content="&#xE76B;"
                             Style="{StaticResource ArrowToggleBtn}"
-                            Click="ResumeToggleBtn_Click" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                            Click="ResumeToggleBtn_Click"
+                            VerticalAlignment="Center" Margin="8,0,8,0"/>
+
+                    <!-- =========================================================
+                         MAIN CONTENT
+                    ========================================================== -->
                     <Grid Grid.Column="2">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="3*"/>
-                            <RowDefinition Height="2*"/>
+                            <RowDefinition Height="4.2*"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="1.4*"/>
                         </Grid.RowDefinitions>
 
-                        <!-- AI Answer Box — top panel, larger -->
-                        <Border Grid.Row="0" Background="#B0060810" CornerRadius="14"
-                                BorderBrush="#28FFFFFF" BorderThickness="1" Padding="22,18" Margin="0,0,0,14">
+                        <!-- AI ANSWER -->
+                        <Border Grid.Row="0" CornerRadius="15"
+                                BorderBrush="#2A3A52" BorderThickness="1" Background="#13FFFFFF">
                             <Border.Effect>
-                                <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.18" Color="Black"/>
+                                <DropShadowEffect BlurRadius="26" ShadowDepth="7" Opacity="0.42" Color="#000000"/>
                             </Border.Effect>
                             <Grid>
                                 <Grid.RowDefinitions>
@@ -732,140 +850,147 @@
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
 
-                                <!-- ACTION TOOLBAR: Copy · Clear · New Session -->
-                                <DockPanel Grid.Row="0" Margin="0,0,0,10">
-                                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                                        <Border Background="#080808" CornerRadius="6" Padding="8,4">
-                                            <TextBlock Text="🤖  AI Answer" Foreground="#DDDDDD"
-                                                       FontSize="9" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        </Border>
-                                        <Border x:Name="StarBadge" Visibility="Collapsed"
-                                                Background="#78350f" CornerRadius="6" Padding="7,3"
-                                                Margin="6,0,0,0"
-                                                ToolTip="Behavioral question — use STAR: Situation · Task · Action · Result">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="⭐" FontSize="9" Margin="0,0,3,0" VerticalAlignment="Center"/>
-                                                <TextBlock Text="STAR" Foreground="#fbbf24" FontSize="9"
-                                                           FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
-                                        <Button x:Name="CopyAnswerBtn" Content="📋 Copy"
-                                                Click="CopyAnswerBtn_Click"
-                                                Style="{StaticResource GhostBtn}"
-                                                Padding="10,5" Margin="0,0,6,0"
-                                                ToolTip="Copy answer to clipboard"/>
-                                        <Button x:Name="ClearAnswerBtn" Content="✕ Clear"
-                                                Click="ClearAnswerBtn_Click"
-                                                Style="{StaticResource GhostBtn}"
-                                                Padding="10,5" Margin="0,0,6,0"
-                                                ToolTip="Clear current transcript and answer"/>
-                                        <Button x:Name="NewSessionBtn" Content="＋ New Session"
-                                                Click="NewSessionBtn_Click"
-                                                Style="{StaticResource GreenBtn}"
-                                                Padding="10,5"
-                                                ToolTip="Start a fresh interview session"/>
-                                    </StackPanel>
-                                </DockPanel>
+                                <Border Grid.Row="0" Background="#16FFFFFF" CornerRadius="15,15,0,0"
+                                        BorderBrush="#12FFFFFF" BorderThickness="0,0,0,1" Padding="16,11">
+                                    <DockPanel>
+                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
+                                                    VerticalAlignment="Center">
+                                            <Border Background="#14FFFFFF" CornerRadius="6" Padding="8,3"
+                                                    Margin="0,0,8,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xEA80;" FontFamily="Segoe MDL2 Assets"
+                                                               Foreground="#BBBBBF" FontSize="9"
+                                                               Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="A I   A N S W E R" Foreground="#9DB1CC"
+                                                               FontSize="9" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <Border x:Name="StarBadge" Visibility="Collapsed"
+                                                    Background="#14FFFFFF" CornerRadius="6" Padding="7,3">
+                                                <TextBlock Text="STAR METHOD" Foreground="#C4C4C8" FontSize="9"
+                                                           FontWeight="Bold" FontFamily="Segoe UI"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right"
+                                                    HorizontalAlignment="Right">
+                                            <Button x:Name="CopyAnswerBtn" Style="{StaticResource GhostBtn}"
+                                                    Click="CopyAnswerBtn_Click" Padding="9,4" Margin="0,0,5,0"
+                                                    ToolTip="Copy answer">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets"
+                                                               FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Copy" FontSize="11" FontFamily="Segoe UI"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button x:Name="ClearAnswerBtn" Style="{StaticResource GhostBtn}"
+                                                    Click="ClearAnswerBtn_Click" Padding="9,4" Margin="0,0,5,0"
+                                                    ToolTip="Clear">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets"
+                                                               FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Clear" FontSize="11" FontFamily="Segoe UI"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button x:Name="NewSessionBtn" Style="{StaticResource GreenBtn}"
+                                                    Click="NewSessionBtn_Click" Padding="12,4"
+                                                    ToolTip="Start a fresh interview session">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets"
+                                                               FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="New Session" FontSize="11"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
 
-                                <!-- THINKING INDICATOR -->
-                                <StackPanel x:Name="ThinkingPanel" Grid.Row="1" Orientation="Horizontal"
-                                            Visibility="Collapsed" Margin="0,0,0,10">
-                                    <TextBlock x:Name="ThinkingLabel" Text="Thinking..."
-                                               Foreground="#DDDDDD" FontSize="12" FontStyle="Italic"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="ThinkingHintLabel" Text=" · F8 all screens  ·  F9 primary"
-                                               Foreground="#334466" FontSize="11"
-                                               VerticalAlignment="Center" Margin="12,0,0,0"/>
-                                </StackPanel>
+                                <Grid Grid.Row="1" Margin="16,8,16,0">
+                                    <StackPanel x:Name="ThinkingPanel" Orientation="Horizontal" Visibility="Collapsed">
+                                        <Ellipse Width="5" Height="5" Fill="#AAAAAA" Margin="0,0,7,0"
+                                                 VerticalAlignment="Center">
+                                            <Ellipse.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                             From="1" To="0.2" Duration="0:0:0.5"
+                                                                             AutoReverse="True"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Ellipse.Triggers>
+                                        </Ellipse>
+                                        <TextBlock x:Name="ThinkingLabel" Text="Thinking..."
+                                                   Foreground="#C4C4C8" FontSize="11" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" FontFamily="Segoe UI"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="ThinkingHintLabel"
+                                               Text="F8  all screens    &#183;    F9  primary    &#183;    SPACE  listen / answer"
+                                               Foreground="#94A3B8" FontSize="10" FontWeight="Bold"
+                                               VerticalAlignment="Center" FontFamily="Segoe UI" Visibility="Visible"/>
+                                </Grid>
 
-                                <!-- ANSWER -->
-                                <ScrollViewer Grid.Row="2">
+                                <ScrollViewer Grid.Row="2" Padding="16,12,16,14">
                                     <Grid>
-                                        <TextBox x:Name="AiAnswerBox"
-                                                 Text=""
-                                                 Background="Transparent" Foreground="#E2E8F0"
-                                                 BorderThickness="0" FontSize="15"
-                                                 FontFamily="Segoe UI"
+                                        <TextBox x:Name="AiAnswerBox" Text=""
+                                                 Background="Transparent" Foreground="#F1F5F9"
+                                                 BorderThickness="0" FontSize="14" FontFamily="Segoe UI"
+                                                 FontWeight="SemiBold"
                                                  TextWrapping="Wrap" IsReadOnly="True"
+                                                 SelectionBrush="#55FFFFFF"
                                                  TextChanged="AiAnswerBox_TextChanged"/>
-                                        <TextBlock x:Name="AiAnswerHint"
-                                                   Text="Ready. Press SPACE to start listening, then SPACE again to get your answer."
-                                                   Foreground="#E2E8F0" FontSize="15" Opacity="0.5"
-                                                   FontFamily="Segoe UI"
-                                                   TextWrapping="Wrap" IsHitTestVisible="False"
-                                                   VerticalAlignment="Top" HorizontalAlignment="Left"
-                                                   Visibility="Visible"/>
+                                        <TextBlock x:Name="AiAnswerHint" Foreground="#94A3B8" FontSize="14"
+                                                   FontFamily="Segoe UI" FontWeight="SemiBold" TextWrapping="Wrap"
+                                                   IsHitTestVisible="False" VerticalAlignment="Top"
+                                                   HorizontalAlignment="Left" Visibility="Visible">
+                                            Press <Run FontWeight="Bold" Foreground="#FFFFFF">SPACE</Run> to start listening, then <Run FontWeight="Bold" Foreground="#FFFFFF">SPACE</Run> again to get your answer.
+                                        </TextBlock>
                                     </Grid>
                                 </ScrollViewer>
                             </Grid>
                         </Border>
 
-                        <!-- Transcript Box — bottom panel, smaller -->
-                        <Border Grid.Row="1" Background="#B0060810" CornerRadius="14"
-                                BorderBrush="#28FFFFFF" BorderThickness="1" Padding="22,18">
+                        <Grid Grid.Row="1"/>
+
+                        <!-- TRANSCRIPT -->
+                        <Border Grid.Row="2" CornerRadius="15"
+                                BorderBrush="#2A3A52" BorderThickness="1" Background="#13FFFFFF">
                             <Border.Effect>
-                                <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.18" Color="Black"/>
+                                <DropShadowEffect BlurRadius="26" ShadowDepth="7" Opacity="0.42" Color="#000000"/>
                             </Border.Effect>
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
-                                <!-- Hotkey bar + section label -->
-                                <Grid Grid.Row="0" Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="INTERVIEWER" Foreground="#2A4A6A" FontSize="9"
-                                               FontWeight="Bold" FontFamily="Segoe UI"
-                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                        <Border Background="#0D0D0D" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
-                                            <TextBlock Text="SPACE · listen → answer" Foreground="#DDDDDD"
-                                                       FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                        </Border>
-                                        <Border Background="#08080E" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
-                                            <TextBlock Text="F8 · all screens" Foreground="#4ade80"
-                                                       FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                        </Border>
-                                        <Border Background="#08080E" CornerRadius="5" Padding="8,3" Margin="0,0,6,0">
-                                            <TextBlock Text="F9 · primary" Foreground="#86efac"
-                                                       FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                        </Border>
-                                        <Border Background="#08080E" CornerRadius="5" Padding="8,3">
-                                            <TextBlock Text="F12 · debug" Foreground="#DDDDDD"
-                                                       FontSize="9" FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                        </Border>
-                                    </StackPanel>
-                                </Grid>
-                                <!-- Transcript scroll + hint -->
-                                <Grid Grid.Row="1">
-                                    <ScrollViewer x:Name="TranscriptScroll">
-                                        <TextBlock x:Name="TranscriptTextBlock" Foreground="White"
-                                                   FontSize="15" FontFamily="Segoe UI"
-                                                   LineHeight="24" TextWrapping="Wrap"/>
-                                    </ScrollViewer>
-                                    <StackPanel x:Name="TranscriptHint"
-                                                VerticalAlignment="Center" HorizontalAlignment="Center"
-                                                IsHitTestVisible="False" Visibility="Visible">
-                                        <Border Width="44" Height="44" CornerRadius="22"
-                                                Background="#0D0D0D" BorderBrush="#222222" BorderThickness="1"
-                                                HorizontalAlignment="Center" Margin="0,0,0,14">
-                                            <TextBlock Text="🎙" FontSize="18" Foreground="#DDDDDD"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <StackPanel HorizontalAlignment="Center">
-                                            <TextBlock Text="Ready when you are" Foreground="#666666" FontSize="14"
-                                                       FontWeight="SemiBold" FontFamily="Segoe UI"
-                                                       HorizontalAlignment="Center" Margin="0,0,0,3"/>
-                                            <TextBlock Text="Your conversation will appear here" Foreground="#303030"
-                                                       FontSize="11" FontFamily="Segoe UI"
-                                                       HorizontalAlignment="Center"/>
+
+                                <Border Grid.Row="0" Background="#16FFFFFF" CornerRadius="15,15,0,0"
+                                        BorderBrush="#12FFFFFF" BorderThickness="0,0,0,1" Padding="16,9">
+                                    <DockPanel>
+                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
+                                                    VerticalAlignment="Center">
+                                            <Ellipse Width="6" Height="6" Fill="#38BDF8" Margin="0,0,7,0"
+                                                     VerticalAlignment="Center"/>
+                                            <TextBlock Text="I N T E R V I E W E R" Foreground="#9DB1CC" FontSize="9"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                         </StackPanel>
+                                    </DockPanel>
+                                </Border>
+
+                                <Grid Grid.Row="1" Margin="16,10,16,10">
+                                    <ScrollViewer x:Name="TranscriptScroll">
+                                        <TextBlock x:Name="TranscriptTextBlock" Foreground="#FFFFFF"
+                                                   FontSize="12.5" FontFamily="Segoe UI" FontWeight="Bold"
+                                                   LineHeight="19" TextWrapping="Wrap"/>
+                                    </ScrollViewer>
+                                    <StackPanel x:Name="TranscriptHint" VerticalAlignment="Center"
+                                                HorizontalAlignment="Center" IsHitTestVisible="False"
+                                                Visibility="Visible">
+                                        <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                                                   Foreground="#33FFFFFF" HorizontalAlignment="Center"
+                                                   Margin="0,0,0,9"/>
+                                        <TextBlock Text="Conversation will appear here" Foreground="#44FFFFFF"
+                                                   FontSize="12" FontFamily="Segoe UI" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Grid>
                             </Grid>
@@ -874,332 +999,652 @@
                 </Grid>
             </Grid>
 
-            <!-- CAMERA MODE -->
-            <Grid x:Name="CameraModeGrid" Visibility="Collapsed" VerticalAlignment="Top" Height="110">
-                <Border Background="#E606080E" CornerRadius="0,0,14,14" BorderBrush="#55FFFFFF" BorderThickness="0,0,0,1">
-                    <Grid Margin="20,10">
+            <!-- ================= CAMERA / OVERLAY ================= -->
+            <Grid x:Name="CameraModeGrid" Visibility="Collapsed" VerticalAlignment="Top" Height="90">
+                <Border CornerRadius="0,0,12,12" BorderBrush="#22FFFFFF" BorderThickness="0,0,0,1"
+                        Background="#0AFFFFFF">
+                    <Grid Margin="18,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Button Grid.Column="0" Style="{StaticResource MicBtnStyle}" Click="MicBtn_Click" Width="40" Height="40"/>
-                        <ScrollViewer Grid.Column="1" Margin="20,0">
-                            <TextBlock x:Name="CamAnswerBox" Text="Ready..." Foreground="White"
-                                       FontSize="18" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Center"/>
+                        <Button Grid.Column="0" Style="{StaticResource MicBtnStyle}"
+                                Click="MicBtn_Click" Width="36" Height="36"/>
+                        <ScrollViewer Grid.Column="1" Margin="14,0">
+                            <TextBlock x:Name="CamAnswerBox" Text="Ready..." Foreground="#FFFFFF"
+                                       FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       TextAlignment="Center" FontFamily="Segoe UI"/>
                         </ScrollViewer>
                         <Button Grid.Column="2" Content="Exit" Style="{StaticResource GhostBtn}"
-                                Click="ExitCameraMode_Click" Padding="10,5"/>
+                                Click="ExitCameraMode_Click" Padding="9,5"/>
                     </Grid>
                 </Border>
             </Grid>
 
-
-            <!-- ══ SAVED RESUMES POPUP ═════════════════════════════════════ -->
-            <Popup x:Name="SavedResumesPopup"
-                   Placement="Bottom" StaysOpen="True"
+            <!-- ================= LISTENING MODE POPUP ================= -->
+            <Popup x:Name="ListeningModePopup" Placement="Bottom" StaysOpen="True"
                    AllowsTransparency="True" PopupAnimation="Fade"
-                   VerticalOffset="4">
-                <Border Background="#111111" BorderBrush="#1C1C1C" BorderThickness="1"
-                        CornerRadius="12" MinWidth="224" Margin="0,0,0,12">
-                    <Border.Effect>
-                        <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.55" Color="Black"/>
-                    </Border.Effect>
-                    <StackPanel>
-                        <!-- Save action -->
-                        <Border x:Name="SaveResumePopupItem" Padding="14,10" Cursor="Hand"
-                                MouseLeftButtonDown="SaveResumePopupItem_Click">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1C1C1C"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
-                                           Foreground="#DDDDDD" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Save current resume" Foreground="#e6edf3"
-                                           FontSize="12" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
+                   HorizontalOffset="-178" VerticalOffset="7">
+                <Border Padding="0,0,0,14">
+                    <Border Background="#0B131F" BorderBrush="#2A3A4F" BorderThickness="1"
+                            CornerRadius="15" Width="304" Padding="7">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="34" ShadowDepth="8" Opacity="0.62" Color="#000000"/>
+                        </Border.Effect>
+                        <StackPanel>
+                            <Grid Margin="11,8,10,9">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="LISTENING MODE" Foreground="#6F8198" FontSize="9.5"
+                                               FontWeight="Bold" FontFamily="Segoe UI"/>
+                                    <TextBlock Text="Choose how each question starts"
+                                               Foreground="#C6D4E8" FontSize="11.5" FontWeight="SemiBold"
+                                               FontFamily="Segoe UI" Margin="0,3,0,0"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Width="24" Height="24" CornerRadius="8"
+                                        Background="#132235" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE8D4;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                               Foreground="#7F93AB" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                            </Grid>
 
-                        <Border Height="1" Background="#1C1C1C"/>
+                            <Border Height="1" Background="#1B2A3C" Margin="8,0,8,6"/>
 
-                        <!-- Dynamic saved resume entries -->
-                        <StackPanel x:Name="SavedResumesListPanel"/>
+                            <Border x:Name="ManualModeRow" Padding="10,10" Cursor="Hand"
+                                    CornerRadius="10" Margin="1,0,1,3"
+                                    MouseLeftButtonDown="ManualModeOption_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#152337"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="34" Height="34" CornerRadius="10" Background="#172438"
+                                            BorderBrush="#2A3A4F" BorderThickness="1" Margin="0,0,11,0">
+                                        <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                                   Foreground="#A9B6C8" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Manual" Foreground="#EEF4FB" FontSize="12.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
+                                        <TextBlock Text="Press Space to listen, then Space to answer"
+                                                   Foreground="#7F93AB" FontSize="10.5" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="ManualModeCheck" Grid.Column="2" Text="&#xE73E;"
+                                               FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                               Foreground="#A9B6C8" VerticalAlignment="Center" Margin="8,0,2,0"/>
+                                </Grid>
+                            </Border>
 
-                        <Border Height="1" Background="#1C1C1C" x:Name="ClearSeparator" Visibility="Collapsed"/>
+                            <Border x:Name="InterviewModeRow" Padding="10,10" Cursor="Hand"
+                                    CornerRadius="10" Margin="1,0,1,3"
+                                    MouseLeftButtonDown="InterviewModeOption_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#102A1D"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="34" Height="34" CornerRadius="10" Background="#102A1D"
+                                            BorderBrush="#285D42" BorderThickness="1" Margin="0,0,11,0">
+                                        <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                                   Foreground="#34E08A" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Interview Auto" Foreground="#E9FFF2" FontSize="12.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
+                                        <TextBlock Text="Meeting audio only · microphone stays off"
+                                                   Foreground="#80B89A" FontSize="10.5" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="InterviewModeCheck" Grid.Column="2" Text="&#xE73E;"
+                                               FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                               Foreground="#34E08A" VerticalAlignment="Center" Margin="8,0,2,0"
+                                               Visibility="Collapsed"/>
+                                </Grid>
+                            </Border>
 
-                        <!-- Clear action -->
-                        <Border x:Name="ClearResumesPopupItem" Padding="14,10" Cursor="Hand"
-                                Visibility="Collapsed" MouseLeftButtonDown="ClearResumesPopupItem_Click">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#200a0a"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="12"
-                                           Foreground="#ef4444" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Clear saved resumes" Foreground="#ef4444"
-                                           FontSize="12" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
+                            <Border x:Name="PracticeModeRow" Padding="10,10" Cursor="Hand"
+                                    CornerRadius="10" Margin="1,0,1,1"
+                                    MouseLeftButtonDown="PracticeModeOption_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#0C2731"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="34" Height="34" CornerRadius="10" Background="#0C2731"
+                                            BorderBrush="#1E5D70" BorderThickness="1" Margin="0,0,11,0">
+                                        <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                                   Foreground="#38CFF2" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Practice Auto" Foreground="#E8FBFF" FontSize="12.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
+                                        <TextBlock Text="Ask with your voice · no meeting required"
+                                                   Foreground="#78B8C8" FontSize="10.5" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="PracticeModeCheck" Grid.Column="2" Text="&#xE73E;"
+                                               FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                               Foreground="#38CFF2" VerticalAlignment="Center" Margin="8,0,2,0"
+                                               Visibility="Collapsed"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
                 </Border>
             </Popup>
 
-            <!-- ══ PROFILE DROPDOWN POPUP ══════════════════════════════════ -->
-            <Popup x:Name="ProfileDropdownPopup"
-                   Placement="Bottom" StaysOpen="True"
+            <!-- ================= SAVED RESUMES POPUP ================= -->
+            <Popup x:Name="SavedResumesPopup" Placement="Bottom" StaysOpen="True"
+                   AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="7">
+                <!-- Outer margin leaves room for the drop shadow so it isn't clipped -->
+                <Border Padding="0,0,0,14">
+                    <Border Background="#0B131F" BorderBrush="#2A3A4F" BorderThickness="1"
+                            CornerRadius="13" MinWidth="252" Padding="6">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="30" ShadowDepth="7" Opacity="0.55" Color="#000000"/>
+                        </Border.Effect>
+                        <StackPanel>
+                            <!-- Header -->
+                            <TextBlock Text="SAVED RESUMES" Foreground="#5E7288" FontSize="9.5"
+                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="11,8,10,7"/>
+
+                            <!-- Save current resume -->
+                            <Border x:Name="SaveResumePopupItem" Padding="11,10" Cursor="Hand"
+                                    CornerRadius="8" Margin="1,0" MouseLeftButtonDown="SaveResumePopupItem_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#17293E"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Width="26" Height="26" CornerRadius="7" Background="#2C3A54"
+                                            Margin="0,0,11,0">
+                                        <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                                   Foreground="#C6D4E8" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="Save current resume" Foreground="#EAF1F8"
+                                               FontSize="12.5" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Height="1" Background="#1B2A3C" Margin="9,7"/>
+
+                            <StackPanel x:Name="SavedResumesListPanel"/>
+
+                            <Border Height="1" Background="#1B2A3C" Margin="9,7"
+                                    x:Name="ClearSeparator" Visibility="Collapsed"/>
+
+                            <!-- Clear saved resumes -->
+                            <Border x:Name="ClearResumesPopupItem" Padding="11,10" Cursor="Hand"
+                                    CornerRadius="8" Margin="1,0" Visibility="Collapsed"
+                                    MouseLeftButtonDown="ClearResumesPopupItem_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#2A1518"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Width="26" Height="26" CornerRadius="7" Background="#3A1A1E"
+                                            Margin="0,0,11,0">
+                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                                   Foreground="#F98A90" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="Clear saved resumes" Foreground="#F98A90"
+                                               FontSize="12.5" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Border>
+            </Popup>
+
+            <!-- ================= PROFILE DROPDOWN ================= -->
+            <Popup x:Name="ProfileDropdownPopup" Placement="Bottom" StaysOpen="True"
                    AllowsTransparency="True" PopupAnimation="Fade"
                    HorizontalOffset="-200" VerticalOffset="6">
-                <Border Background="#111111" BorderBrush="#303030" BorderThickness="1"
-                        CornerRadius="12" Width="296" Margin="0,0,0,12">
+                <Border Background="#0B1320" BorderBrush="#26354A" BorderThickness="1"
+                        CornerRadius="14" Width="296" Margin="0,0,0,12">
                     <Border.Effect>
-                        <DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.5" Color="Black"/>
+                        <DropShadowEffect BlurRadius="34" ShadowDepth="9" Opacity="0.62" Color="#000000"/>
                     </Border.Effect>
                     <StackPanel>
-
-                        <!-- User info -->
                         <Grid Margin="16,14,16,12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border Width="46" Height="46" CornerRadius="23"
-                                    Background="#1A1A1A" Margin="0,0,12,0" VerticalAlignment="Center">
-                                <TextBlock x:Name="PopupAvatarInitials" Text="GU" Foreground="#DDDDDD"
-                                           FontSize="16" FontWeight="Bold" FontFamily="Segoe UI"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Border Width="44" Height="44" CornerRadius="22" BorderThickness="0"
+                                    Margin="0,0,13,0" VerticalAlignment="Center">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#3B6FE0" Offset="0"/>
+                                        <GradientStop Color="#5A3FD6" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.5" Color="#3B6FE0"/>
+                                </Border.Effect>
+                                <Grid>
+                                    <TextBlock x:Name="PopupAvatarInitials" Text="GU" Foreground="White"
+                                               FontSize="15" FontWeight="Bold" FontFamily="Segoe UI"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Ellipse x:Name="PopupAvatarPhoto" Width="44" Height="44"
+                                             Visibility="Collapsed"/>
+                                </Grid>
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock x:Name="PopupProfileName" Text="Guest"
-                                           Foreground="White" FontSize="14" FontWeight="SemiBold"
-                                           FontFamily="Segoe UI"/>
-                                <TextBlock x:Name="PopupProfileStatus" Text="Free trial — not signed in"
-                                           Foreground="#6b7280" FontSize="11" FontFamily="Segoe UI"
-                                           Margin="0,2,0,0"/>
+                                <TextBlock x:Name="PopupProfileName" Text="Guest" Foreground="#FFFFFF"
+                                           FontSize="13" FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                <TextBlock x:Name="PopupProfileStatus" Text="Free trial (guest)"
+                                           Foreground="#66FFFFFF" FontSize="11" FontFamily="Segoe UI" Margin="0,2,0,0"/>
                             </StackPanel>
                         </Grid>
 
-                        <Border Height="1" Background="#303030"/>
+                        <Border Height="1" Background="#182338" Margin="14,0"/>
 
-                        <!-- Credits card -->
-                        <Border x:Name="PopupCreditsCard" Margin="12,10,12,10" CornerRadius="8"
-                                BorderThickness="1" Padding="12,10">
+                        <Border x:Name="PopupCreditsCard" Margin="12,12,12,8" CornerRadius="12"
+                                BorderThickness="1" Padding="13,12" Cursor="Hand"
+                                MouseLeftButtonDown="PopupCreditsCard_Click"
+                                ToolTip="View credit details and pricing">
                             <Border.Background>
-                                <SolidColorBrush x:Name="PopupCreditsBg" Color="#08080E"/>
+                                <SolidColorBrush x:Name="PopupCreditsBg" Color="#0DFFFFFF"/>
                             </Border.Background>
                             <Border.BorderBrush>
-                                <SolidColorBrush x:Name="PopupCreditsBorder" Color="#202028"/>
+                                <SolidColorBrush x:Name="PopupCreditsBorder" Color="#1AFFFFFF"/>
                             </Border.BorderBrush>
                             <Grid>
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="⚡" FontSize="14" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="PopupCreditsAmount" Text="55 credits"
-                                                   Foreground="#4ade80" FontSize="14"
-                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    </StackPanel>
-                                    <TextBlock x:Name="PopupCreditsPlan" Text="Free trial"
-                                               Foreground="#4b5563" FontSize="11"
-                                               FontFamily="Segoe UI" Margin="0,3,0,0"/>
+                                <Border Grid.Column="0" Width="37" Height="37" CornerRadius="10"
+                                        Background="#2C2612" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <TextBlock Text="&#x26A1;" FontSize="16" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock x:Name="PopupCreditsAmount" Text="70 credits" Foreground="#FFFFFF"
+                                               FontSize="14.5" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                    <TextBlock x:Name="PopupCreditsPlan" Text="Free trial" Foreground="#7E94AE"
+                                               FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI" Margin="0,2,0,0"/>
                                 </StackPanel>
-                                <!-- Sign In button inside credits card (shown when guest) -->
-                                <Button Grid.Column="1" x:Name="PopupSignInCardBtn"
-                                        Click="PopupSignIn_Click" Cursor="Hand"
-                                        Foreground="White" FontSize="12" FontFamily="Segoe UI"
-                                        FontWeight="SemiBold" Padding="0">
+                                <Button Grid.Column="2" x:Name="PopupSignInCardBtn" Click="PopupSignIn_Click"
+                                        Cursor="Hand" Foreground="White" Padding="0" VerticalAlignment="Center">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
-                                            <Border x:Name="Bd" Background="#2A2A2A" CornerRadius="6" Padding="12,6">
+                                            <Border x:Name="Bd" CornerRadius="8" Padding="15,7" BorderThickness="0">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#3E86F7" Offset="0"/>
+                                                        <GradientStop Color="#2563EB" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <Border.Effect>
+                                                    <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.45" Color="#2E6BE0"/>
+                                                </Border.Effect>
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Bd" Property="Background" Value="#383838"/>
+                                                    <Setter TargetName="Bd" Property="Opacity" Value="0.9"/>
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="Bd" Property="Opacity" Value="0.8"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Button.Template>
-                                    <TextBlock Text="Sign In" FontSize="12" FontFamily="Segoe UI" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Sign In" FontSize="11.5" FontFamily="Segoe UI" FontWeight="Bold"/>
                                 </Button>
                             </Grid>
                         </Border>
 
-                        <Border Height="1" Background="#303030"/>
+                        <Border Height="1" Background="#182338" Margin="14,0"/>
 
-                        <!-- Window + Eye mode opacity (shared) -->
-                        <StackPanel Margin="16,12,16,10">
-                            <Grid Margin="0,0,0,6">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="◐" FontSize="13" Margin="0,0,8,0"
-                                               Foreground="#94a3b8" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Both windows opacity" Foreground="#94a3b8"
-                                               FontSize="13" FontWeight="SemiBold" FontFamily="Segoe UI"
-                                               VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock x:Name="PopupOpacityLabel" Text="80%"
-                                           Foreground="#DDDDDD" FontSize="13" FontWeight="Bold"
-                                           FontFamily="Segoe UI" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center"/>
+                        <StackPanel Margin="16,10,16,10">
+                            <Grid Margin="0,0,0,7">
+                                <TextBlock Text="Window opacity" Foreground="#BBBBBF" FontSize="11"
+                                           FontWeight="SemiBold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="PopupOpacityLabel" Text="80%" Foreground="#FFFFFF"
+                                           FontSize="11" FontWeight="Bold" FontFamily="Segoe UI"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
                             </Grid>
                             <Slider x:Name="PopupOpacitySlider" Minimum="1" Maximum="100" Value="50"
                                     ValueChanged="PopupOpacitySlider_ValueChanged"/>
                         </StackPanel>
 
-                        <Border Height="1" Background="#303030"/>
+                        <Border Height="1" Background="#182338" Margin="14,0"/>
 
-                        <!-- Stealth Mode row -->
-                        <Border Cursor="Hand" MouseLeftButtonDown="StealthToggle_Click" Padding="16,10">
+                        <!-- How it works — replays the onboarding intro -->
+                        <Border Cursor="Hand" MouseLeftButtonDown="ProfileHowItWorks_Click" Padding="16,11">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1C1C1C"/>
+                                            <Setter Property="Background" Value="#0AFFFFFF"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="🛡" FontSize="14" Margin="0,0,12,0"
-                                               Foreground="#6b7280" VerticalAlignment="Center"/>
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Stealth Mode" Foreground="White" FontSize="13"
-                                                   FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Hidden from OBS, Teams &amp; screen recorders"
-                                                   Foreground="#4b5563" FontSize="11" FontFamily="Segoe UI"
-                                                   Margin="0,2,0,0"/>
-                                    </StackPanel>
-                                </StackPanel>
-                                <Border x:Name="StealthTogglePill" Grid.Column="1" VerticalAlignment="Center"
-                                        CornerRadius="11" Width="44" Height="22" Background="#4ade80">
-                                    <TextBlock x:Name="StealthToggleText" Text="ON"
-                                               Foreground="White" FontSize="9" FontWeight="Bold"
-                                               FontFamily="Segoe UI" HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Border Width="30" Height="30" CornerRadius="8" Background="#2C3A54"
+                                        Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE897;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                               Foreground="#C6D4E8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
-                            </Grid>
-                        </Border>
-
-                        <Border Height="1" Background="#303030"/>
-
-                        <!-- Settings row -->
-                        <Border Cursor="Hand" MouseLeftButtonDown="PopupSettings_Click" Padding="16,12">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1C1C1C"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="⚙" FontSize="15" Margin="0,0,12,0"
-                                           Foreground="#6b7280" VerticalAlignment="Center"/>
                                 <StackPanel>
-                                    <TextBlock Text="Settings" Foreground="White" FontSize="13"
+                                    <TextBlock Text="How it works" Foreground="#FFFFFF" FontSize="12"
                                                FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="AI model · audio · appearance" Foreground="#4b5563"
-                                               FontSize="11" FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                    <TextBlock Text="Replay the quick intro" Foreground="#66FFFFFF"
+                                               FontSize="10.5" FontFamily="Segoe UI" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
 
-                        <Border Height="1" Background="#303030" Margin="16,0"/>
+                        <Border Height="1" Background="#182338" Margin="14,0"/>
 
-                        <!-- Past Sessions row -->
-                        <Border Cursor="Hand" MouseLeftButtonDown="PopupSessions_Click" Padding="16,12">
+                        <Border Cursor="Hand" MouseLeftButtonDown="PopupSettings_Click" Padding="16,11">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1C1C1C"/>
+                                            <Setter Property="Background" Value="#0AFFFFFF"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="🕒" FontSize="15" Margin="0,0,12,0"
-                                           Foreground="#6b7280" VerticalAlignment="Center"/>
+                                <Border Width="30" Height="30" CornerRadius="8" Background="#2C3A54"
+                                        Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                               Foreground="#C6D4E8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
                                 <StackPanel>
-                                    <TextBlock Text="Past Sessions" Foreground="White" FontSize="13"
+                                    <TextBlock Text="Settings" Foreground="#FFFFFF" FontSize="12"
                                                FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Review previous interviews" Foreground="#4b5563"
-                                               FontSize="11" FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                    <TextBlock Text="AI model  &#183;  audio  &#183;  appearance" Foreground="#66FFFFFF"
+                                               FontSize="10.5" FontFamily="Segoe UI" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
 
-                        <Border Height="1" Background="#303030" Margin="16,0"/>
+                        <Border Height="1" Background="#182338" Margin="14,0"/>
 
-                        <!-- Sign In row (guest) -->
-                        <Border x:Name="PopupSignInRow" Cursor="Hand"
-                                MouseLeftButtonDown="PopupSignIn_Click" Padding="16,12">
+                        <Border Cursor="Hand" MouseLeftButtonDown="PopupSessions_Click" Padding="16,11">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1C1C1C"/>
+                                            <Setter Property="Background" Value="#0AFFFFFF"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="👤" FontSize="15" Margin="0,0,12,0"
-                                           Foreground="#6b7280" VerticalAlignment="Center"/>
+                                <Border Width="30" Height="30" CornerRadius="8" Background="#2C3A54"
+                                        Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                               Foreground="#C6D4E8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
                                 <StackPanel>
-                                    <TextBlock Text="Sign In" Foreground="White" FontSize="13"
+                                    <TextBlock Text="Past Sessions" Foreground="#FFFFFF" FontSize="12"
                                                FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Save your progress &amp; unlock more credits"
-                                               Foreground="#4b5563" FontSize="11" FontFamily="Segoe UI"
-                                               Margin="0,2,0,0"/>
+                                    <TextBlock Text="Review previous interviews" Foreground="#66FFFFFF"
+                                               FontSize="10.5" FontFamily="Segoe UI" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
 
-                        <!-- Sign Out row (signed in only) -->
-                        <Border x:Name="PopupSignOutRow" Visibility="Collapsed"
-                                Cursor="Hand" MouseLeftButtonDown="PopupSignOut_Click" Padding="16,12">
+                        <Border Height="1" Background="#182338" Margin="14,0"/>
+
+                        <Border x:Name="PopupSignInRow" Cursor="Hand" MouseLeftButtonDown="PopupSignIn_Click"
+                                Padding="16,11">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#1e0a0a"/>
+                                            <Setter Property="Background" Value="#0AFFFFFF"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="↩" FontSize="15" Margin="0,0,12,0"
-                                           Foreground="#ef4444" VerticalAlignment="Center"/>
-                                <TextBlock Text="Sign Out" Foreground="#ef4444" FontSize="13"
-                                           FontWeight="SemiBold" FontFamily="Segoe UI"
-                                           VerticalAlignment="Center"/>
+                                <Border Width="30" Height="30" CornerRadius="8" Background="#2C3A54"
+                                        Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                               Foreground="#C6D4E8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel>
+                                    <TextBlock Text="Sign In" Foreground="#FFFFFF" FontSize="12"
+                                               FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                    <TextBlock Text="Save progress &amp; unlock more credits" Foreground="#66FFFFFF"
+                                               FontSize="10.5" FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
+                        <Border x:Name="PopupSignOutRow" Visibility="Collapsed" Cursor="Hand"
+                                MouseLeftButtonDown="PopupSignOut_Click" Padding="16,11">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#0AFFFFFF"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                           Foreground="#F87171" Margin="0,0,11,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Sign Out" Foreground="#F87171" FontSize="12"
+                                           FontWeight="SemiBold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
             </Popup>
+
+            <!-- ═══════════════════════════════════════════════════════════════
+                 FIRST-RUN ONBOARDING  (shown once; reopen via the ? button)
+                 ═══════════════════════════════════════════════════════════════ -->
+            <Grid x:Name="OnboardingOverlay" Visibility="Collapsed" Panel.ZIndex="200">
+                <Rectangle Fill="#DA05070C"/>
+                <Border HorizontalAlignment="Center" VerticalAlignment="Center" Width="474"
+                        CornerRadius="18" Background="#0E1524" BorderBrush="#27374E" BorderThickness="1">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="44" ShadowDepth="12" Opacity="0.62" Color="#000000"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <!-- Header with accent gradient sheen -->
+                        <Border CornerRadius="17,17,0,0" Padding="30,26,30,22">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#20437E" Offset="0"/>
+                                    <GradientStop Color="#122036" Offset="0.65"/>
+                                    <GradientStop Color="#0E1524" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <StackPanel>
+                                <TextBlock Text="Welcome to Replysis AI" Foreground="#F5F8FC"
+                                           FontSize="21" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                <TextBlock Text="Your invisible interview co-pilot. Here's how it works."
+                                           Foreground="#A6B8D2" FontSize="12.5" FontWeight="SemiBold"
+                                           FontFamily="Segoe UI" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Steps -->
+                        <StackPanel Margin="26,20,26,4">
+                            <!-- 1. Resume -->
+                            <Grid Margin="0,0,0,17">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="38" Height="38" CornerRadius="10"
+                                        Background="#2C3A54" Margin="0,0,15,0" VerticalAlignment="Top">
+                                    <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                               Foreground="#C6D4E8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Upload your resume" Foreground="#EAF1F8"
+                                               FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                    <TextBlock Text="Tailors every answer to your real experience, projects and tools."
+                                               Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"
+                                               FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- 2. Company -->
+                            <Grid Margin="0,0,0,17">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="38" Height="38" CornerRadius="10"
+                                        Background="#2C3A54" Margin="0,0,15,0" VerticalAlignment="Top">
+                                    <TextBlock Text="&#xE716;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                               Foreground="#C6D4E8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Add the company &amp; role" Foreground="#EAF1F8"
+                                               FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                    <TextBlock Text="Gives sharper, role-specific answers for the exact job you're interviewing for."
+                                               Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"
+                                               FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- 3. Stealth -->
+                            <Grid Margin="0,0,0,17">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="38" Height="38" CornerRadius="10"
+                                        Background="#33280F" Margin="0,0,15,0" VerticalAlignment="Top">
+                                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                               Foreground="#F3C64D" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="You're invisible on screen share" Foreground="#EAF1F8"
+                                               FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                    <TextBlock Text="Stealth mode is ON. The window is hidden from Zoom, Teams and Meet screen sharing and from screen recordings."
+                                               Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"
+                                               FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- 4. Space (last — the action you take in the interview) -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="38" Height="38" CornerRadius="10"
+                                        Background="#2C3A54" Margin="0,0,15,0" VerticalAlignment="Top">
+                                    <TextBlock Text="&#xE765;" FontFamily="Segoe MDL2 Assets" FontSize="17"
+                                               Foreground="#C6D4E8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Then press SPACE for an instant answer" Foreground="#EAF1F8"
+                                               FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                    <TextBlock Text="In the interview: tap once to start listening, tap again to get your AI answer. Works from any app."
+                                               Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"
+                                               FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Footer -->
+                        <Border BorderBrush="#1B2A3E" BorderThickness="0,1,0,0" Margin="0,18,0,0" Padding="26,16,26,20">
+                            <Grid>
+                                <TextBlock Text="Reopen anytime from the ? button" Foreground="#5E7288"
+                                           FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                           VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                <Button x:Name="OnboardingCloseBtn" Click="OnboardingClose_Click"
+                                        HorizontalAlignment="Right" Cursor="Hand" Padding="0" BorderThickness="0" Background="Transparent">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Pb" CornerRadius="10" Padding="26,10"
+                                                    Background="#2563EB">
+                                                <TextBlock Text="Get Started" Foreground="#FFFFFF" FontSize="13"
+                                                           FontWeight="Bold" FontFamily="Segoe UI"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Pb" Property="Background" Value="#3B78F0"/>
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="Pb" Property="Background" Value="#1D4ED8"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Grid>
 
         </Grid>
     </Border>
