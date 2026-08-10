@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace InterviewCopilot
@@ -26,15 +27,154 @@ namespace InterviewCopilot
         public static string Email        { get; private set; } = "";
         public static string Name         { get; private set; } = "";
         public static string UserId       { get; private set; } = "";
+        public static string PhotoUrl     { get; private set; } = "";
         public static bool   IsLoggedIn   => !string.IsNullOrEmpty(IdToken);
 
         // ── Cached SavedAt — avoids reading disk on every IsTokenExpired() call ──
         private static DateTime _savedAt = DateTime.MinValue;
 
-        // ── Credits (refreshed from Firestore) ──
+        // ── Refresh token concurrency guard — prevents double-POST on simultaneous expiry ──
+        private static readonly SemaphoreSlim _refreshSem = new(1, 1);
+
+        // ── Guest session flag ──
+        // True when the user is using the app without signing in.
+        // The backend identifies the device via X-Device-Id and caps credits per month.
+        public static bool IsGuestSession { get; set; } = false;
+
+        // ── Credits (refreshed from backend) ──
         public static int    Credits    { get; set; } = 0;
         public static string Plan       { get; set; } = "free";
-        public static bool   IsUnlimited => Plan == "pro" || Plan == "enterprise";
+        public static bool   IsUnlimited { get; set; } = false;
+
+        // ── Speechmatics key (fetched from backend; works for guests via X-Device-Id) ──
+        public static string SpeechmaticsKey { get; private set; } = "";
+
+        private static readonly object _smKeyLock = new();
+        private static DateTime _speechmaticsRetryAfterUtc = DateTime.MinValue;
+        private static DateTime _speechmaticsExpiresAtUtc = DateTime.MinValue;
+        public static int SpeechmaticsLastStatusCode { get; private set; }
+        public static DateTime SpeechmaticsRetryAfterUtc
+        {
+            get { lock (_smKeyLock) return _speechmaticsRetryAfterUtc; }
+        }
+
+        public static bool HasValidSpeechmaticsKey
+        {
+            get
+            {
+                lock (_smKeyLock)
+                    return !string.IsNullOrWhiteSpace(SpeechmaticsKey)
+                        && DateTime.UtcNow < _speechmaticsExpiresAtUtc.AddSeconds(-60);
+            }
+        }
+
+        // A single in-flight key fetch shared by every caller. Warming this up at the
+        // very start of app launch (in parallel with process-kill + UI setup) means the
+        // engine no longer stalls on a cold network round-trip before it can spawn
+        // Python — by the time StartSpeechmaticsEngine runs, the key is already here.
+        private static Task<bool>? _smKeyInFlight;
+
+        public static Task<bool> EnsureSpeechmaticsKeyAsync(string deviceId = "")
+        {
+            lock (_smKeyLock)
+            {
+                if (HasValidSpeechmaticsKey) return Task.FromResult(true);
+                SpeechmaticsKey = "";
+                _speechmaticsExpiresAtUtc = DateTime.MinValue;
+                if (DateTime.UtcNow < _speechmaticsRetryAfterUtc) return Task.FromResult(false);
+                if (_smKeyInFlight != null && !_smKeyInFlight.IsCompleted) return _smKeyInFlight;
+
+                _smKeyInFlight = FetchSpeechmaticsKeyCoreAsync(deviceId);
+                return _smKeyInFlight;
+            }
+        }
+
+        // Preserve the old public method for callers, but route every request through
+        // the same lock, in-flight task, and retry window.
+        public static Task<bool> FetchSpeechmaticsKeyAsync(string deviceId = "") =>
+            EnsureSpeechmaticsKeyAsync(deviceId);
+
+        private static async Task<bool> FetchSpeechmaticsKeyCoreAsync(string deviceId)
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get,
+                    $"{SettingsWindow.GetBackendUrl()}/api/v1/stt/key");
+
+                // Only add Authorization if we have a real token.
+                if (!string.IsNullOrEmpty(IdToken))
+                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {IdToken}");
+                if (!string.IsNullOrEmpty(deviceId))
+                    req.Headers.TryAddWithoutValidation("X-Device-Id", deviceId);
+
+                using var res = await _http.SendAsync(req);
+                string body = await res.Content.ReadAsStringAsync();
+
+                if (!res.IsSuccessStatusCode)
+                {
+                    SpeechmaticsLastStatusCode = (int)res.StatusCode;
+                    if ((int)res.StatusCode == 429)
+                    {
+                        TimeSpan delay = res.Headers.RetryAfter?.Delta
+                            ?? (res.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow)
+                            ?? TimeSpan.FromSeconds(60);
+                        if (delay < TimeSpan.FromSeconds(15)) delay = TimeSpan.FromSeconds(15);
+                        if (delay > TimeSpan.FromMinutes(5)) delay = TimeSpan.FromMinutes(5);
+                        lock (_smKeyLock)
+                            _speechmaticsRetryAfterUtc = DateTime.UtcNow.Add(delay);
+                        DebugWindow.Log("STT_KEY", $"Rate limited; retrying automatically in {Math.Ceiling(delay.TotalSeconds)} seconds");
+                        return false;
+                    }
+
+                    lock (_smKeyLock)
+                        _speechmaticsRetryAfterUtc = DateTime.UtcNow.AddSeconds(30);
+                    DebugWindow.Log("STT_KEY", $"HTTP {(int)res.StatusCode}: {body[..Math.Min(body.Length, 120)]}");
+                    return false;
+                }
+
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                string key = doc.RootElement.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "";
+                int expiresIn = doc.RootElement.TryGetProperty("expiresIn", out var expiry) && expiry.TryGetInt32(out int ttl)
+                    ? Math.Clamp(ttl, 60, 86_400)
+                    : 3_600;
+                if (string.IsNullOrEmpty(key))
+                {
+                    lock (_smKeyLock)
+                        _speechmaticsRetryAfterUtc = DateTime.UtcNow.AddSeconds(30);
+                    DebugWindow.Log("STT_KEY", "200 OK but no 'key' field in response");
+                    return false;
+                }
+
+                lock (_smKeyLock)
+                {
+                    SpeechmaticsKey = key;
+                    _speechmaticsExpiresAtUtc = DateTime.UtcNow.AddSeconds(expiresIn);
+                    _speechmaticsRetryAfterUtc = DateTime.MinValue;
+                    SpeechmaticsLastStatusCode = 0;
+                }
+                DebugWindow.Log("STT_KEY", $"Temporary key fetched; valid for {expiresIn} seconds");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                lock (_smKeyLock)
+                    _speechmaticsRetryAfterUtc = DateTime.UtcNow.AddSeconds(30);
+                DebugWindow.Log("STT_KEY", $"FetchSpeechmaticsKeyAsync failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static void InvalidateSpeechmaticsKey()
+        {
+            lock (_smKeyLock)
+            {
+                SpeechmaticsKey = "";
+                _speechmaticsExpiresAtUtc = DateTime.MinValue;
+                _speechmaticsRetryAfterUtc = DateTime.MinValue;
+                SpeechmaticsLastStatusCode = 0;
+                _smKeyInFlight = null;
+            }
+        }
 
         // ── Avatar initials ──
         public static string Initials
@@ -50,28 +190,42 @@ namespace InterviewCopilot
         }
 
         // ── Set session after login ──
-        public static void SetSession(string idToken, string email, string name, string userId, string refreshToken = "")
+        public static void SetSession(string idToken, string email, string name, string userId, string refreshToken = "", string photoUrl = "")
         {
-            IdToken      = idToken;
-            RefreshToken = refreshToken;
-            Email        = email;
-            Name         = string.IsNullOrEmpty(name) ? email.Split('@')[0] : name;
-            UserId       = userId;
+            InvalidateSpeechmaticsKey();
+            IdToken        = idToken;
+            RefreshToken   = refreshToken;
+            Email          = email;
+            Name           = string.IsNullOrEmpty(name) ? email.Split('@')[0] : name;
+            UserId         = userId;
+            PhotoUrl       = photoUrl ?? "";
+            IsGuestSession = false;  // clear guest flag on real login
             SaveToDisk();
         }
 
         // ── Clear on logout ──
         public static void Clear()
         {
-            IdToken      = "";
-            RefreshToken = "";
-            Email        = "";
-            Name         = "";
-            UserId       = "";
-            Credits      = 0;
-            Plan         = "free";
-            _savedAt     = DateTime.MinValue;   // reset in-memory cache
-            try { if (File.Exists(SessionPath)) File.Delete(SessionPath); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SESSION] Delete session file failed: {ex.Message}"); }
+            IdToken          = "";
+            RefreshToken     = "";
+            Email            = "";
+            Name             = "";
+            UserId           = "";
+            PhotoUrl         = "";
+            Credits          = 0;
+            Plan             = "free";
+            IsUnlimited      = false;
+            lock (_smKeyLock)
+            {
+                SpeechmaticsKey = "";
+                _speechmaticsExpiresAtUtc = DateTime.MinValue;
+                _speechmaticsRetryAfterUtc = DateTime.MinValue;
+                SpeechmaticsLastStatusCode = 0;
+                _smKeyInFlight = null;
+            }
+            IsGuestSession   = false;
+            _savedAt         = DateTime.MinValue;
+            try { if (File.Exists(SessionPath)) File.Delete(SessionPath); } catch (Exception ex) { DebugWindow.Log("SESSION", $"Delete session file failed: {ex.Message}"); }
         }
 
         // ── Persist session so user stays logged in between app restarts ──
@@ -88,12 +242,12 @@ namespace InterviewCopilot
                     Email        = Email,
                     Name         = Name,
                     UserId       = UserId,
+                    PhotoUrl     = PhotoUrl,
                     SavedAt      = _savedAt
                 };
-                File.WriteAllText(SessionPath,
-                    JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
+                WriteProtectedSession(JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
             }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SESSION] SaveToDisk failed: {ex.Message}"); }
+            catch (Exception ex) { DebugWindow.Log("SESSION", $"SaveToDisk failed: {ex.Message}"); }
         }
 
         // ── Load session from disk (on app start) ──
@@ -107,9 +261,19 @@ namespace InterviewCopilot
             {
                 if (!File.Exists(SessionPath)) return false;
 
-                string json = File.ReadAllText(SessionPath);
+                string raw = File.ReadAllText(SessionPath);
+                bool isProtected = SecureDataProtector.IsProtected(raw);
+                string json = raw;
+                if (isProtected && !SecureDataProtector.TryUnprotect(raw, out json))
+                {
+                    DebugWindow.Log("SESSION", "Could not decrypt session file.");
+                    return false;
+                }
                 var data = JsonSerializer.Deserialize<SessionData>(json);
                 if (data == null) return false;
+
+                if (!isProtected)
+                    WriteProtectedSession(json);
 
                 // Cache the SavedAt timestamp in memory so IsTokenExpired() never reads disk again
                 _savedAt = data.SavedAt;
@@ -119,6 +283,7 @@ namespace InterviewCopilot
                 Email        = data.Email        ?? "";
                 Name         = data.Name         ?? "";
                 UserId       = data.UserId        ?? "";
+                PhotoUrl     = data.PhotoUrl      ?? "";
 
                 // Token expires after 1 hour — if saved > 55 min ago return false but keep
                 // RefreshToken so the caller can call TryRefreshAsync() without forcing re-login.
@@ -130,7 +295,7 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[SESSION] TryLoadFromDisk failed: {ex.Message}");
+                DebugWindow.Log("SESSION", $"TryLoadFromDisk failed: {ex.Message}");
                 return false;
             }
         }
@@ -145,7 +310,10 @@ namespace InterviewCopilot
             try
             {
                 if (!File.Exists(SessionPath)) return true;
-                string json = File.ReadAllText(SessionPath);
+                string raw = File.ReadAllText(SessionPath);
+                string json = raw;
+                if (SecureDataProtector.IsProtected(raw) && !SecureDataProtector.TryUnprotect(raw, out json))
+                    return true;
                 var data = JsonSerializer.Deserialize<SessionData>(json);
                 if (data == null) return true;
                 _savedAt = data.SavedAt;    // prime the cache
@@ -154,20 +322,32 @@ namespace InterviewCopilot
             catch { return true; }
         }
 
+        private static void WriteProtectedSession(string json)
+        {
+            Directory.CreateDirectory(SessionDir);
+            string tmp = SessionPath + ".tmp";
+            File.WriteAllText(tmp, SecureDataProtector.Protect(json));
+            File.Move(tmp, SessionPath, true);
+        }
+
         // ── Silently refresh the Firebase ID token using the stored refresh token ──
         public static async Task<bool> TryRefreshAsync()
         {
             if (string.IsNullOrEmpty(RefreshToken)) return false;
-            if (!IsTokenExpired()) return true; // still valid, nothing to do
+            if (!IsTokenExpired()) return true;
+            await _refreshSem.WaitAsync();
             try
             {
+                // Re-check after acquiring: a concurrent caller may have already refreshed
+                if (!IsTokenExpired()) return true;
+
                 string url = $"https://securetoken.googleapis.com/v1/token?key={FirebaseApiKey}";
-                var content = new System.Net.Http.FormUrlEncodedContent(new[]
+                using var content = new System.Net.Http.FormUrlEncodedContent(new[]
                 {
                     new System.Collections.Generic.KeyValuePair<string,string>("grant_type",    "refresh_token"),
                     new System.Collections.Generic.KeyValuePair<string,string>("refresh_token", RefreshToken),
                 });
-                var res  = await _http.PostAsync(url, content);
+                using var res = await _http.PostAsync(url, content);
                 string body = await res.Content.ReadAsStringAsync();
                 if (!res.IsSuccessStatusCode) return false;
 
@@ -176,12 +356,14 @@ namespace InterviewCopilot
                 string newRefresh  = doc.RootElement.TryGetProperty("refresh_token", out var rt) ? rt.GetString() ?? "" : "";
                 if (string.IsNullOrEmpty(newIdToken)) return false;
 
-                IdToken      = newIdToken;
-                RefreshToken = newRefresh;
+                IdToken = newIdToken;
+                if (!string.IsNullOrEmpty(newRefresh))
+                    RefreshToken = newRefresh;
                 SaveToDisk();
                 return true;
             }
             catch { return false; }
+            finally { _refreshSem.Release(); }
         }
 
         private class SessionData
@@ -191,6 +373,7 @@ namespace InterviewCopilot
             public string   Email        { get; set; } = "";
             public string   Name         { get; set; } = "";
             public string   UserId       { get; set; } = "";
+            public string   PhotoUrl     { get; set; } = "";
             public DateTime SavedAt      { get; set; } = DateTime.UtcNow;
         }
     }
