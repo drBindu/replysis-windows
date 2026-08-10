@@ -287,7 +287,7 @@ namespace InterviewCopilot
                 using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8));
                 using var req = new System.Net.Http.HttpRequestMessage(
                     System.Net.Http.HttpMethod.Get,
-                    "https://api.github.com/repos/moto123a/interview-copilot-windows/releases/latest");
+                    "https://api.github.com/repos/drBindu/replysis-windows/releases/latest");
                 req.Headers.TryAddWithoutValidation("User-Agent", "Replysis-Win");
                 req.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
 
