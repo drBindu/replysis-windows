@@ -7,6 +7,15 @@
     <Nullable>enable</Nullable>
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>AnyCPU;x64</Platforms>
+    <Product>Replysis AI</Product>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Must stay equal to Identity/@Version in
+         InterviewCopilotPackager\Package.appxmanifest. The in-app update check
+         compares this against the latest windows-v* release tag, so if the two
+         drift the app reports the wrong installed version. -->
+    <Version>1.0.12.0</Version>
+    <AssemblyVersion>1.0.12.0</AssemblyVersion>
+    <FileVersion>1.0.12.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,13 +23,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="Assets\replysis-icon-1024.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="speechmatics_engine.py">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="requirements.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="PdfPig" Version="0.1.15" />
     <PackageReference Include="System.Speech" Version="9.0.3" />
   </ItemGroup>
 

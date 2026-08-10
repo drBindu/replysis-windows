@@ -7,13 +7,13 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="2fc37bc6-4936-47c4-982b-3f02ee0cab60"
-    Publisher="CN=krish"
-    Version="1.0.10.0" />
+    Name="Varoxel.Replysis"
+    Publisher="CN=F243CD72-CA0D-445C-A7DA-A6B7A2BDF0F9"
+    Version="1.0.12.0" />
 
   <Properties>
-    <DisplayName>Interview Copilot</DisplayName>
-    <PublisherDisplayName>krish</PublisherDisplayName>
+    <DisplayName>Replysis</DisplayName>
+    <PublisherDisplayName>Varoxel</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
 
@@ -31,7 +31,7 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="Interview Copilot"
+        DisplayName="Replysis"
         Description="AI-powered interview assistant"
         BackgroundColor="transparent"
         Square150x150Logo="Images\Square150x150Logo.png"
