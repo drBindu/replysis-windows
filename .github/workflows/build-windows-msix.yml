@@ -1,8 +1,6 @@
 name: Build Windows MSIX
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -14,15 +12,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.4.1
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.6.0
         with:
           dotnet-version: '8.0.x'
 
       - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.1
 
       - name: Restore NuGet packages
         shell: powershell
@@ -98,30 +96,30 @@ jobs:
           $bundleUrl = "https://github.com/$repo/releases/download/windows-v$version/InterviewCopilot.msixbundle"
 
           $xml = @"
-<?xml version="1.0" encoding="utf-8"?>
-<AppInstaller
-    Uri="https://coopilotxai.com/InterviewCopilot.appinstaller"
-    Version="$version"
-    xmlns="http://schemas.microsoft.com/appx/appinstaller/2017/2">
-  <MainBundle
-      Name="2fc37bc6-4936-47c4-982b-3f02ee0cab60"
-      Version="$version"
-      Publisher="$publisher"
-      Uri="$bundleUrl" />
-  <UpdateSettings>
-    <OnLaunch HoursBetweenUpdateChecks="0" />
-  </UpdateSettings>
-</AppInstaller>
-"@
+          <?xml version="1.0" encoding="utf-8"?>
+          <AppInstaller
+              Uri="https://github.com/$repo/releases/latest/download/InterviewCopilot.appinstaller"
+              Version="$version"
+              xmlns="http://schemas.microsoft.com/appx/appinstaller/2017/2">
+            <MainBundle
+                Name="2fc37bc6-4936-47c4-982b-3f02ee0cab60"
+                Version="$version"
+                Publisher="$publisher"
+                Uri="$bundleUrl" />
+            <UpdateSettings>
+              <OnLaunch HoursBetweenUpdateChecks="0" />
+            </UpdateSettings>
+          </AppInstaller>
+          "@
           Set-Content "InterviewCopilot.appinstaller" $xml -Encoding UTF8
           echo "Bundle URL: $bundleUrl"
 
       # ── GitHub Release ─────────────────────────────────────────────────────
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2.3.3
         with:
           tag_name: windows-v${{ env.APP_VERSION }}
-          name: Interview Copilot Windows v${{ env.APP_VERSION }}
+          name: Replysis for Windows v${{ env.APP_VERSION }}
           body: |
             ## Install
             **Option 1 (recommended):** Download `InterviewCopilot.appinstaller` — installs and auto-updates automatically.
@@ -142,20 +140,33 @@ jobs:
           icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
           echo "SSH_KEY_PATH=$keyPath" >> $env:GITHUB_ENV
 
+      - name: Configure trusted Oracle host key
+        shell: powershell
+        env:
+          ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:ORACLE_KNOWN_HOSTS)) {
+            throw "ORACLE_KNOWN_HOSTS is required. Add the server's verified ssh-keyscan output as a GitHub secret."
+          }
+          $knownHostsPath = "$env:RUNNER_TEMP\known_hosts"
+          Set-Content -Path $knownHostsPath -Value $env:ORACLE_KNOWN_HOSTS -Encoding ASCII
+          echo "KNOWN_HOSTS_PATH=$knownHostsPath" >> $env:GITHUB_ENV
+
       - name: Deploy .appinstaller to website
         shell: powershell
         env:
           ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
         run: |
           $key  = "${{ env.SSH_KEY_PATH }}"
+          $knownHosts = "${{ env.KNOWN_HOSTS_PATH }}"
           $host = $env:ORACLE_HOST
           $dest = "ubuntu@${host}"
 
           # Upload .appinstaller to server /tmp/
-          scp -i $key -o StrictHostKeyChecking=no `
+          scp -i $key -o UserKnownHostsFile=$knownHosts -o StrictHostKeyChecking=yes `
             "InterviewCopilot.appinstaller" `
             "${dest}:/tmp/InterviewCopilot.appinstaller"
 
-          # Copy directly into running Docker container — no rebuild needed
-          $remoteCmd = "docker cp /tmp/InterviewCopilot.appinstaller coopilotx-frontend:/app/public/InterviewCopilot.appinstaller && rm /tmp/InterviewCopilot.appinstaller && echo 'Deployed OK'"
-          ssh -i $key -o StrictHostKeyChecking=no $dest $remoteCmd
+          # Atomically replace the host-mounted installer without making the container writable.
+          $remoteCmd = "install -d -m 0755 ~/coopilotx/assets && install -m 0644 /tmp/InterviewCopilot.appinstaller ~/coopilotx/assets/InterviewCopilot.appinstaller.next && mv ~/coopilotx/assets/InterviewCopilot.appinstaller.next ~/coopilotx/assets/InterviewCopilot.appinstaller && rm /tmp/InterviewCopilot.appinstaller && echo 'Deployed OK'"
+          ssh -i $key -o UserKnownHostsFile=$knownHosts -o StrictHostKeyChecking=yes $dest $remoteCmd
