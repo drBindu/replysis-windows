@@ -26,7 +26,11 @@ namespace InterviewCopilot
             TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
             AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
 
-            const string MutexName = "Global\\InterviewCopilot_SingleInstance";
+            // Local\ scopes the lock to the current user's session. Global\ spanned
+            // every account on the machine, so on a shared PC a second user was told
+            // the app was "already running" and sent to look in a system tray they
+            // cannot see, because the running copy belonged to another session.
+            const string MutexName = "Local\\InterviewCopilot_SingleInstance";
             _singleInstanceMutex = new Mutex(true, MutexName, out bool createdNew);
             _ownsSingleInstanceMutex = createdNew;
             if (!createdNew)
