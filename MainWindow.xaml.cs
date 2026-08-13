@@ -881,8 +881,10 @@ namespace InterviewCopilot
         private void ToggleStealth()
         {
             _stealthMode = !_stealthMode;
-            try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
-            UpdateStealthBtn();
+
+            // Persist BEFORE applying: every other window reads
+            // SettingsWindow.GetStealthMode() in its constructor, so one created
+            // right after this point must see the new value, not the old one.
             // Persist so the Settings toggle and the account-menu toggle stay in sync.
             try
             {
@@ -891,6 +893,44 @@ namespace InterviewCopilot
                 SettingsWindow.SaveConfig(cfg);
             }
             catch (Exception ex) { DebugWindow.Log("STEALTH", $"persist failed: {ex.Message}"); }
+
+            ApplyStealthToAllWindows();
+            UpdateStealthBtn();
+        }
+
+        /// <summary>
+        /// Applies the current stealth setting to every open window rather than only
+        /// the main one. The answer/camera overlay is a separate top-level window with
+        /// its own HWND, so its capture-exclusion flag stays exactly as it was set when
+        /// the window was constructed until something clears it. That is why turning
+        /// stealth off used to leave the overlay hidden from screen capture while the
+        /// main window correctly became visible again.
+        /// </summary>
+        private void ApplyStealthToAllWindows()
+        {
+            try { WindowStealth.SetStealthMode(this, _stealthMode); }
+            catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
+
+            // The overlay may not be in Application.Current.Windows yet if it has
+            // never been shown, so set it explicitly.
+            if (answerWindow != null)
+            {
+                try { WindowStealth.SetStealthMode(answerWindow, _stealthMode); }
+                catch (Exception ex) { DebugWindow.Log("STEALTH", $"overlay: {ex.Message}"); }
+            }
+
+            try
+            {
+                var app = Application.Current;
+                if (app == null) return;
+                foreach (Window w in app.Windows)
+                {
+                    if (w == null || ReferenceEquals(w, this) || ReferenceEquals(w, answerWindow)) continue;
+                    try { WindowStealth.SetStealthMode(w, _stealthMode); }
+                    catch (Exception ex) { DebugWindow.Log("STEALTH", $"{w.GetType().Name}: {ex.Message}"); }
+                }
+            }
+            catch (Exception ex) { DebugWindow.Log("STEALTH", $"enumerate failed: {ex.Message}"); }
         }
 
         // Clicking the stealth pill toggles stealth — a fast, discoverable control.
@@ -2637,9 +2677,10 @@ namespace InterviewCopilot
                 if (sw.SelectedDeviceIndex >= 0) _audioDeviceId = sw.SelectedDeviceIndex;
                 StartSpeechmaticsEngine();
                 ApplyMainWindowOpacity();
-                // Re-apply stealth in case it was changed in Settings.
+                // Re-apply stealth in case it was changed in Settings. This must reach
+                // the overlay too, not just the main window.
                 _stealthMode = SettingsWindow.GetStealthMode();
-                try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
+                ApplyStealthToAllWindows();
                 UpdateStealthBtn();
                 if (UserSession.IsLoggedIn)
                     _ = FetchAndDisplayCreditsAsync().ContinueWith(t => {
