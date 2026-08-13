@@ -212,7 +212,8 @@ namespace InterviewCopilot
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[GOOGLE] unhandled: {ex.Message}");
-                ShowError("Google sign-in failed. Please try again or contact support.");
+                DebugWindow.Log("GOOGLE", $"S0 unhandled {ex.GetType().Name}: {ex.Message}");
+                ShowError("Google sign-in failed. Please try again or contact support. (E0)");
             }
             finally { if (!LoginSuccess) SetLoading(false); }
         }
@@ -227,11 +228,25 @@ namespace InterviewCopilot
             string challenge = PkceChallenge(verifier);
             string state     = Guid.NewGuid().ToString("N");
 
+            DebugWindow.Log("GOOGLE", $"S1 start packaged={IsPackaged()} verifierLen={verifier.Length} challengeLen={challenge.Length}");
+
             // 2. Loopback listener on a free OS-assigned port
             var tcpListener = new TcpListener(System.Net.IPAddress.Loopback, 0);
-            tcpListener.Start();
+            try
+            {
+                tcpListener.Start();
+            }
+            catch (Exception ex)
+            {
+                // A packaged build runs under different network rules than the
+                // Visual Studio build, so record why the listener could not bind.
+                DebugWindow.Log("GOOGLE", $"S2 listener bind FAILED {ex.GetType().Name}: {ex.Message}");
+                ShowError("Google sign-in failed. Please try again or contact support. (E2)");
+                return;
+            }
             int    port        = ((System.Net.IPEndPoint)tcpListener.LocalEndpoint).Port;
             string redirectUri = $"http://127.0.0.1:{port}/";
+            DebugWindow.Log("GOOGLE", $"S2 listener bound port={port} redirectUri={redirectUri}");
 
             // 3. Open browser to Google OAuth
             string authUrl =
@@ -246,8 +261,19 @@ namespace InterviewCopilot
                 "&access_type=offline" +
                 "&prompt=select_account";
 
-            System.Diagnostics.Process.Start(
-                new System.Diagnostics.ProcessStartInfo(authUrl) { UseShellExecute = true });
+            try
+            {
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo(authUrl) { UseShellExecute = true });
+                DebugWindow.Log("GOOGLE", "S3 browser launched");
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("GOOGLE", $"S3 browser launch FAILED {ex.GetType().Name}: {ex.Message}");
+                tcpListener.Stop();
+                ShowError("Google sign-in failed. Please try again or contact support. (E3)");
+                return;
+            }
 
             // 4. Accept redirect (120s timeout)
             string? code = null;
@@ -255,6 +281,7 @@ namespace InterviewCopilot
             try
             {
                 using var client = await tcpListener.AcceptTcpClientAsync(cts.Token);
+                DebugWindow.Log("GOOGLE", "S4 callback connection accepted");
                 using var stream = client.GetStream();
 
                 // Read until we have the full HTTP header block (handles Chrome's long headers)
@@ -278,7 +305,15 @@ namespace InterviewCopilot
                 qd.TryGetValue("code",  out code);
                 qd.TryGetValue("state", out string? returnedState);
 
-                bool ok = returnedState == state && !string.IsNullOrEmpty(code);
+                // Never log the authorization code or the raw query, only shape.
+                bool stateMatched = returnedState == state;
+                bool hasCode      = !string.IsNullOrEmpty(code);
+                qd.TryGetValue("error", out string? oauthError);
+                DebugWindow.Log("GOOGLE",
+                    $"S5 callback parsed stateMatch={stateMatched} hasCode={hasCode} " +
+                    $"codeLen={(code?.Length ?? 0)} googleError={(string.IsNullOrEmpty(oauthError) ? "none" : oauthError)}");
+
+                bool ok = stateMatched && hasCode;
                 string html = ok
                     ? "<html><body style='background:#0d1117;color:#4ade80;font-family:sans-serif;text-align:center;padding:60px'><h2>&#10003; Signed in! You can close this tab.</h2></body></html>"
                     : "<html><body style='background:#0d1117;color:#ef4444;font-family:sans-serif;text-align:center;padding:60px'><h2>Sign-in failed. Please close this tab and try again.</h2></body></html>";
@@ -288,13 +323,23 @@ namespace InterviewCopilot
 
                 if (!ok)
                 {
-                    ShowError("Sign-in was not completed. Please try again.");
+                    DebugWindow.Log("GOOGLE", "S5 rejected: state mismatch or missing code");
+                    ShowError("Sign-in was not completed. Please try again. (E5)");
                     return;
                 }
             }
             catch (OperationCanceledException)
             {
-                ShowError("Sign-in timed out. Please try again.");
+                // No callback ever arrived. In a packaged build this is the
+                // signature of the loopback redirect not reaching the app.
+                DebugWindow.Log("GOOGLE", "S4 TIMEOUT: no loopback callback within 120s");
+                ShowError("Sign-in timed out. Please try again. (E4)");
+                return;
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("GOOGLE", $"S4 callback read FAILED {ex.GetType().Name}: {ex.Message}");
+                ShowError("Google sign-in failed. Please try again or contact support. (E4b)");
                 return;
             }
             finally
@@ -305,19 +350,36 @@ namespace InterviewCopilot
             // 5. Exchange code via backend (backend holds Google client secret).
             // Uses the long-timeout client — exchange calls Google token endpoint + Firebase
             // from the backend server and can take longer than HttpShort's 15 s limit.
-            var exchPayload = new { code, codeVerifier = verifier, redirectUri };
-            using var exchReq = new HttpRequestMessage(
-                HttpMethod.Post, $"{SettingsWindow.GetBackendUrl()}/api/v1/auth/google/exchange");
-            exchReq.Content = new StringContent(
-                JsonSerializer.Serialize(exchPayload), Encoding.UTF8, "application/json");
+            var    exchPayload = new { code, codeVerifier = verifier, redirectUri };
+            string backendBase = SettingsWindow.GetBackendUrl();
+            string exchangeUrl = $"{backendBase}/api/v1/auth/google/exchange";
+            DebugWindow.Log("GOOGLE", $"S6 exchange POST {exchangeUrl}");
 
-            using var exchRes  = await SharedHttpClient.Http.SendAsync(exchReq);
-            string    exchBody = await exchRes.Content.ReadAsStringAsync();
-
-            if (!exchRes.IsSuccessStatusCode)
+            string exchBody;
+            System.Net.HttpStatusCode exchStatus;
+            try
             {
-                DebugWindow.Log("GOOGLE", $"Exchange HTTP {(int)exchRes.StatusCode}: {exchBody[..Math.Min(exchBody.Length, 300)]}");
-                ShowError("Google sign-in failed. Please try again or contact support.");
+                using var exchReq = new HttpRequestMessage(HttpMethod.Post, exchangeUrl);
+                exchReq.Content = new StringContent(
+                    JsonSerializer.Serialize(exchPayload), Encoding.UTF8, "application/json");
+
+                using var exchRes = await SharedHttpClient.Http.SendAsync(exchReq);
+                exchStatus = exchRes.StatusCode;
+                exchBody   = await exchRes.Content.ReadAsStringAsync();
+                DebugWindow.Log("GOOGLE", $"S6 exchange HTTP {(int)exchStatus} bodyLen={exchBody.Length}");
+
+                if (!exchRes.IsSuccessStatusCode)
+                {
+                    DebugWindow.Log("GOOGLE", $"S6 exchange failed HTTP {(int)exchStatus}");
+                    ShowError($"Google sign-in failed. Please try again or contact support. (E6-{(int)exchStatus})");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Network-layer failure: unreachable host, TLS, DNS or timeout.
+                DebugWindow.Log("GOOGLE", $"S6 exchange TRANSPORT FAILED {ex.GetType().Name}: {ex.Message}");
+                ShowError("Google sign-in failed. Please try again or contact support. (E6-net)");
                 return;
             }
 
@@ -327,6 +389,10 @@ namespace InterviewCopilot
             string firebaseIdToken = GetStr(exchDoc, "idToken");
             if (string.IsNullOrEmpty(firebaseIdToken))
                 firebaseIdToken = GetStr(exchDoc, "firebase_id_token");
+
+            DebugWindow.Log("GOOGLE",
+                $"S7 parsed hasIdToken={!string.IsNullOrEmpty(firebaseIdToken)} " +
+                $"hasAccessToken={!string.IsNullOrEmpty(GetStr(exchDoc, "access_token"))}");
 
             if (!string.IsNullOrEmpty(firebaseIdToken))
             {
@@ -345,7 +411,8 @@ namespace InterviewCopilot
             string accessToken = GetStr(exchDoc, "access_token");
             if (string.IsNullOrEmpty(accessToken))
             {
-                ShowError("Google sign-in failed. Please try again or contact support.");
+                DebugWindow.Log("GOOGLE", "S7 response had neither idToken nor access_token");
+                ShowError("Google sign-in failed. Please try again or contact support. (E7)");
                 return;
             }
 
@@ -372,7 +439,8 @@ namespace InterviewCopilot
 
             if (!res.IsSuccessStatusCode)
             {
-                ShowError("Google sign-in failed. Please try again or contact support.");
+                DebugWindow.Log("GOOGLE", $"S8 signInWithIdp HTTP {(int)res.StatusCode}");
+                ShowError($"Google sign-in failed. Please try again or contact support. (E8-{(int)res.StatusCode})");
                 return;
             }
 
@@ -387,7 +455,8 @@ namespace InterviewCopilot
 
             if (string.IsNullOrEmpty(idToken))
             {
-                ShowError("Google sign-in failed. Please try again or contact support.");
+                DebugWindow.Log("GOOGLE", "S8 signInWithIdp returned no idToken");
+                ShowError("Google sign-in failed. Please try again or contact support. (E8)");
                 return;
             }
 
@@ -397,6 +466,9 @@ namespace InterviewCopilot
         private async Task CompleteSignIn(string idToken, string refreshToken, string email, string name, string uid, string photoUrl = "")
         {
             UserSession.SetSession(idToken, email, name, uid, refreshToken, photoUrl);
+            DebugWindow.Log("GOOGLE",
+                $"S9 SetSession done isLoggedIn={UserSession.IsLoggedIn} hasUid={!string.IsNullOrEmpty(uid)}");
+
             IdToken   = idToken;
             UserEmail = email;
             UserName  = name;
@@ -408,16 +480,42 @@ namespace InterviewCopilot
                 cfg.CoopilotEmail = email;
                 SettingsWindow.SaveConfig(cfg);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Non-fatal, but under MSIX a failed write here points at storage
+                // redirection, so it must not stay silent.
+                DebugWindow.Log("GOOGLE", $"S9 config save failed {ex.GetType().Name}: {ex.Message}");
+            }
 
             ShowSuccess($"Welcome, {name}!");
             await Task.Delay(800);
             if (!IsLoaded) return;
             LoginSuccess = true;
+            DebugWindow.Log("GOOGLE", "S10 success, closing login window");
             Close();
         }
 
         // ── PKCE helpers ──────────────────────────────────────────
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern int GetCurrentPackageFullName(ref int packageFullNameLength, System.Text.StringBuilder? packageFullName);
+
+        private const int APPMODEL_ERROR_NO_PACKAGE = 15700;
+
+        /// <summary>
+        /// True when running from the installed MSIX package. The packaged and
+        /// unpackaged builds differ in storage redirection and network rules, so
+        /// the sign-in log records which one produced it.
+        /// </summary>
+        private static bool IsPackaged()
+        {
+            try
+            {
+                int length = 0;
+                return GetCurrentPackageFullName(ref length, null) != APPMODEL_ERROR_NO_PACKAGE;
+            }
+            catch { return false; }
+        }
+
         private static string PkceVerifier()
         {
             byte[] bytes = new byte[32];

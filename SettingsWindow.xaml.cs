@@ -9,7 +9,9 @@ namespace InterviewCopilot
 {
     public partial class SettingsWindow : Window
     {
-        private const string DefaultBackendUrl = "https://coopilotxai.com";
+        // A clean install has no config.json, so every first run uses this value.
+        // It must be the live domain: the old one no longer serves the site.
+        private const string DefaultBackendUrl = "https://replysis.com";
         public bool SettingsChanged { get; set; } = false;
         public int SelectedDeviceIndex { get; set; } = -1;
         private List<int> deviceIndices = new List<int>();
