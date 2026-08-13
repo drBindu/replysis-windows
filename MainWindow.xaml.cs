@@ -760,7 +760,13 @@ namespace InterviewCopilot
 
                     if (isUnlimited)
                     {
-                        CreditsLabel.Text = "∞  Pro";
+                        // "Unlimited" here means the owner allow-list, not a specific
+                        // plan tier, so name whichever plan the backend actually sent
+                        // rather than assuming Pro. A Max subscriber must not see "Pro".
+                        string planName = string.IsNullOrWhiteSpace(plan)
+                            ? "Pro"
+                            : char.ToUpperInvariant(plan[0]) + plan[1..];
+                        CreditsLabel.Text = $"∞  {planName}";
                         CreditsIcon.Text = "";
                         SetCreditsBadgeStyle("", "");
                         CreditsLabel.Foreground = new SolidColorBrush(

@@ -28,9 +28,14 @@ namespace InterviewCopilot
             else
             {
                 CreditsAmountText.Text = $"{UserSession.Credits:N0} credits";
+                // Must match PLAN_MONTHLY_CREDITS in the website's
+                // app/api/stt/tokens/route.ts. lifetime/teams are retired
+                // plans, kept only so an existing account still shows its
+                // real allowance instead of silently falling to the free tier.
                 AllowanceText.Text = plan switch
                 {
-                    "pro" or "lifetime" => "5,000 each month",
+                    "pro" => "2,000 each month",
+                    "max" or "lifetime" => "5,000 each month",
                     "teams" => "10,000 each month",
                     _ => "100 each month"
                 };
