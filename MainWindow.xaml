@@ -462,6 +462,12 @@
                                 <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="14"
                                            VerticalAlignment="Center" Foreground="#C6D4E8"/>
                             </Button>
+                            <Button x:Name="RegionAnalyzeBtn" Style="{StaticResource GhostBtn}"
+                                    Click="RegionAnalyzeBtn_Click" Padding="9,6" Margin="0,0,4,0"
+                                    ToolTip="Select a screen region for Coding or System Design AI">
+                                <TextBlock Text="&#xE7C5;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                           VerticalAlignment="Center" Foreground="#84E7B6"/>
+                            </Button>
                             <!-- keeps the old AnalyzeLabel name alive off-screen for code that sets it -->
                             <TextBlock x:Name="AnalyzeLabel" Visibility="Collapsed"/>
 

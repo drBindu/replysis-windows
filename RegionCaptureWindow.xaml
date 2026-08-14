@@ -1,0 +1,35 @@
+<Window x:Class="InterviewCopilot.RegionCaptureWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="#66030A13"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Cursor="Cross"
+        KeyDown="Window_KeyDown"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown"
+        MouseMove="Window_MouseMove"
+        MouseLeftButtonUp="Window_MouseLeftButtonUp">
+    <Canvas x:Name="SelectionCanvas">
+        <Border Canvas.Left="24" Canvas.Top="24" Padding="16,10" CornerRadius="10"
+                Background="#EE07111F" BorderBrush="#4B6B91" BorderThickness="1"
+                IsHitTestVisible="False">
+            <StackPanel>
+                <TextBlock Text="Select the interview content" Foreground="White"
+                           FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Text="Drag around the question, code, error, or diagram · Esc cancels"
+                           Foreground="#AFC4DC" FontSize="11" Margin="0,3,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="SelectionBorder" Visibility="Collapsed" IsHitTestVisible="False"
+                BorderBrush="#5CE18D" BorderThickness="2" Background="#181DD06C"
+                CornerRadius="4">
+            <Border.Effect>
+                <DropShadowEffect Color="#5CE18D" BlurRadius="18" ShadowDepth="0" Opacity="0.8" />
+            </Border.Effect>
+        </Border>
+    </Canvas>
+</Window>

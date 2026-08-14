@@ -2864,6 +2864,9 @@ namespace InterviewCopilot
         private void ScreenAnalyzeBtn_Click(object sender, RoutedEventArgs e)
             => _ = HandleScreenAnalysisAsync();
 
+        private void RegionAnalyzeBtn_Click(object sender, RoutedEventArgs e)
+            => _ = HandleRegionScreenAnalysisAsync();
+
         // ── Resume: Upload button ─────────────────────────────────────────────
         private void ResumeUploadBtn_Click(object sender, RoutedEventArgs e)
         {
@@ -3049,7 +3052,19 @@ namespace InterviewCopilot
         private Task HandleScreenAnalysisAsync()            => RunScreenAnalysis(primaryOnly: false);
         private Task HandlePrimaryScreenAnalysisAsync()     => RunScreenAnalysis(primaryOnly: true);
 
-        private async Task RunScreenAnalysis(bool primaryOnly)
+        private async Task HandleRegionScreenAnalysisAsync()
+        {
+            if (isProcessing || _isScreenAnalyzing) return;
+
+            var picker = new RegionCaptureWindow();
+            bool? selected = picker.ShowDialog();
+            if (selected != true || picker.SelectedRegion.Width <= 0 || picker.SelectedRegion.Height <= 0)
+                return;
+
+            await RunScreenAnalysis(primaryOnly: false, selectedRegion: picker.SelectedRegion);
+        }
+
+        private async Task RunScreenAnalysis(bool primaryOnly, Int32Rect? selectedRegion = null)
         {
             // Guard: don't double-fire while already processing
             if (isProcessing || _isScreenAnalyzing) return;
@@ -3075,7 +3090,7 @@ namespace InterviewCopilot
             UpdateMicUi();
 
             // ── Phase 1: scanning state ───────────────────────────────────────
-            string captureLabel = primaryOnly ? "primary screen" : "all monitors";
+            string captureLabel = selectedRegion.HasValue ? "selected region" : primaryOnly ? "primary screen" : "all monitors";
             ThinkingLabel.Text = $"🔍  Capturing {captureLabel}…";
             ThinkingHintLabel.Visibility = Visibility.Collapsed;
             ThinkingPanel.Visibility = Visibility.Visible;
@@ -3094,9 +3109,13 @@ namespace InterviewCopilot
             byte[] imageBytes;
             try
             {
-                imageBytes = await Task.Run(() => primaryOnly
-                    ? ScreenAnalyzer.CapturePrimaryScreen()
-                    : ScreenAnalyzer.CaptureScreen());
+                imageBytes = await Task.Run(() => selectedRegion.HasValue
+                    ? ScreenAnalyzer.CaptureRegion(
+                        selectedRegion.Value.X, selectedRegion.Value.Y,
+                        selectedRegion.Value.Width, selectedRegion.Value.Height)
+                    : primaryOnly
+                        ? ScreenAnalyzer.CapturePrimaryScreen()
+                        : ScreenAnalyzer.CaptureScreen());
                 DebugWindow.Log("SCREEN", $"Captured {imageBytes.Length / 1024} KB ({captureLabel})");
             }
             catch (Exception ex)

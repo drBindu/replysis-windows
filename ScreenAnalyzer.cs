@@ -78,7 +78,7 @@ namespace InterviewCopilot
             // Fallback: if virtual screen metrics are unavailable, use primary only
             if (vw <= 0 || vh <= 0) { vx = 0; vy = 0; vw = GetSystemMetrics(SM_CXSCREEN); vh = GetSystemMetrics(SM_CYSCREEN); }
 
-            return CaptureRegion(vx, vy, vw, vh, maxW: 2560, maxH: 1600);
+            return CaptureRegionCore(vx, vy, vw, vh, maxW: 2560, maxH: 1600);
         }
 
         /// <summary>
@@ -87,14 +87,23 @@ namespace InterviewCopilot
         /// </summary>
         public static byte[] CapturePrimaryScreen()
         {
-            return CaptureRegion(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
+            return CaptureRegionCore(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
                                  maxW: 1920, maxH: 1200);
+        }
+
+        /// <summary>
+        /// Captures a user-selected desktop rectangle. Coordinates are physical
+        /// virtual-screen pixels and can be negative on left/top monitors.
+        /// </summary>
+        public static byte[] CaptureRegion(int x, int y, int width, int height)
+        {
+            return CaptureRegionCore(x, y, width, height, maxW: 1920, maxH: 1400);
         }
 
         /// <summary>
         /// Core capture: BitBlt a region of the desktop DC into a JPEG byte array.
         /// </summary>
-        private static byte[] CaptureRegion(int srcX, int srcY, int srcW, int srcH, int maxW, int maxH)
+        private static byte[] CaptureRegionCore(int srcX, int srcY, int srcW, int srcH, int maxW, int maxH)
         {
             if (srcW <= 0 || srcH <= 0)
                 throw new InvalidOperationException("The requested screen region is invalid.");
@@ -213,8 +222,16 @@ namespace InterviewCopilot
             sb.AppendLine("[Complete working code. Language = whatever is on screen, default Python.]");
             sb.AppendLine("[Inline comments on non-obvious lines. Handle edge cases. No truncation.]");
             sb.AppendLine();
+            sb.AppendLine("━━━ TESTS ━━━");
+            sb.AppendLine("• Normal: [input] → [expected output]");
+            sb.AppendLine("• Edge: [empty/min/max/duplicate case] → [expected output]");
+            sb.AppendLine("• Failure or invalid case when relevant: [behavior]");
+            sb.AppendLine();
             sb.AppendLine("━━━ COMPLEXITY ━━━");
             sb.AppendLine("Time: O(?)   |   Space: O(?)");
+            sb.AppendLine();
+            sb.AppendLine("━━━ EXPLANATION ━━━");
+            sb.AppendLine("[Why the approach is correct, including the key invariant or proof idea.]");
             sb.AppendLine();
             sb.AppendLine("━━━ SAY THIS ━━━");
             sb.AppendLine("• \"[Opening line to say to the interviewer before coding]\"");
@@ -226,6 +243,11 @@ namespace InterviewCopilot
             sb.AppendLine("─────────────────────────────────────────────────────");
             sb.AppendLine("IF SCREEN SHOWS A SYSTEM DESIGN / ARCHITECTURE DIAGRAM, output:");
             sb.AppendLine("─────────────────────────────────────────────────────");
+            sb.AppendLine();
+            sb.AppendLine("━━━ REQUIREMENTS & ESTIMATES ━━━");
+            sb.AppendLine("• Functional: [core user behavior]");
+            sb.AppendLine("• Non-functional: [scale, latency, availability, durability]");
+            sb.AppendLine("• Assumptions: [traffic/storage estimates, clearly labeled]");
             sb.AppendLine();
             sb.AppendLine("━━━ COMPONENTS ━━━");
             sb.AppendLine("• [Component name] — [what it does in 1 sentence]");
@@ -240,6 +262,15 @@ namespace InterviewCopilot
             sb.AppendLine();
             sb.AppendLine("━━━ IMPROVEMENT ━━━");
             sb.AppendLine("[One concrete suggestion, e.g. \"Add Redis cache between API and DB\"]");
+            sb.AppendLine();
+            sb.AppendLine("━━━ RELIABILITY & OBSERVABILITY ━━━");
+            sb.AppendLine("• [Failure handling, retries, idempotency, and degradation]");
+            sb.AppendLine("• [Metrics, logs, traces, alerts, and an SLO]");
+            sb.AppendLine();
+            sb.AppendLine("━━━ SAY THIS ━━━");
+            sb.AppendLine("• \"[How to open with requirements and assumptions]\"");
+            sb.AppendLine("• \"[How to narrate the critical data path]\"");
+            sb.AppendLine("• \"[How to close with the main trade-off]\"");
             sb.AppendLine();
 
             // ── Template: Multiple choice ─────────────────────────────────────
