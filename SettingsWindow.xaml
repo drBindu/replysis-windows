@@ -121,10 +121,10 @@
                                          VerticalAlignment="Center" Visibility="Collapsed"/>
                             </Border>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="Groq (Llama, Fast and Free)"
+                                <TextBlock Text="Fast (recommended for live interviews)"
                                            Foreground="White" FontSize="13"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="Fast responses, completely free, great for practice"
+                                <TextBlock Text="Answers start appearing soonest  &#183;  5 credits per question"
                                            Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold"
                                            FontFamily="Segoe UI" Margin="0,3,0,0"/>
                             </StackPanel>
@@ -152,10 +152,10 @@
                                          VerticalAlignment="Center" Visibility="Collapsed"/>
                             </Border>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="OpenAI (GPT-4o, More Accurate)"
+                                <TextBlock Text="Accurate (GPT-4o)"
                                            Foreground="White" FontSize="13"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="Higher accuracy for real interviews, uses your credits"
+                                <TextBlock Text="Stronger on hard technical questions  &#183;  5 credits per question"
                                            Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold"
                                            FontFamily="Segoe UI" Margin="0,3,0,0"/>
                             </StackPanel>

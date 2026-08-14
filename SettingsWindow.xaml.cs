@@ -28,7 +28,10 @@ namespace InterviewCopilot
             "gpt-4.1",                    // 0 — Best quality
             "gpt-4o-mini",                // 1 — Fast + cheap
             "gpt-4o",                     // 2 — Balanced
-            "llama-3.3-70b-versatile",    // 3 — Groq free
+            // Groq shut down the Llama models on 2026-08-16. The backend picks the
+            // real model; this list only labels session records, so it has to match
+            // or every saved session is stamped with a model that no longer exists.
+            "openai/gpt-oss-20b",         // 3 — Groq fast
             "gemini-2.0-flash",           // 4 — Google
         };
 
@@ -584,7 +587,7 @@ namespace InterviewCopilot
         public static bool IsCloudSyncEnabled() => LoadConfig().CloudSyncEnabled;
         public static double GetTemperature() => LoadConfig().Temperature;
         public static bool IsGemini() => LoadConfig().ModelIndex == 4;
-        // Groq (Llama) is the FAST model and the default for instant answers. Only route
+        // Groq is the FAST provider and the default for instant answers. Only route
         // to OpenAI when the user has explicitly picked it (index 2) in Settings — every
         // other value, including the legacy default (0), uses fast Groq.
         public static bool IsGroq() => LoadConfig().ModelIndex != IdxOpenAi;
