@@ -8,6 +8,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>AnyCPU;x64</Platforms>
     <Product>Replysis AI</Product>
+    <ApplicationIcon>Assets\replysis.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Must stay equal to Identity/@Version in
          InterviewCopilotPackager\Package.appxmanifest. The in-app update check
