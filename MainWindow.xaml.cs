@@ -269,7 +269,7 @@ namespace InterviewCopilot
                     bool sessionRestored = UserSession.TryLoadFromDisk();
                     if (!sessionRestored && !string.IsNullOrEmpty(UserSession.RefreshToken))
                     {
-                        DebugWindow.Log("AUTH", "idToken expired — attempting silent refresh…");
+                        DebugWindow.Log("AUTH", "idToken expired — attempting silent refresh...");
                         sessionRestored = await UserSession.TryRefreshAsync();
                         if (sessionRestored)
                             DebugWindow.Log("AUTH", "Silent token refresh succeeded");
@@ -526,7 +526,7 @@ namespace InterviewCopilot
             {
                 // Backend hasn't responded yet — show loading state and trigger a fresh fetch.
                 // When the fetch completes it will re-invoke UpdateProfileDropdown if the popup is still open.
-                PopupCreditsAmount.Text = "Loading…";
+                PopupCreditsAmount.Text = "Loading...";
                 PopupCreditsAmount.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6b7280"));
                 PopupCreditsPlan.Text = loggedIn ? $"{UserSession.Plan} plan" : "Free trial";
                 PopupSignInCardBtn.Visibility = loggedIn ? Visibility.Collapsed : Visibility.Visible;
@@ -729,7 +729,7 @@ namespace InterviewCopilot
 
             void CLog(string msg) => DebugWindow.Log("CREDITS", msg);
 
-            CLog($"Fetching… guest={UserSession.IsGuestSession}");
+            CLog($"Fetching... guest={UserSession.IsGuestSession}");
 
             try
             {
@@ -2336,7 +2336,7 @@ namespace InterviewCopilot
                     : "";
                 if (string.IsNullOrWhiteSpace(smKey))
                 {
-                    DebugWindow.Log("ENGINE", "SM key not yet available, awaiting warm fetch…");
+                    DebugWindow.Log("ENGINE", "SM key not yet available, awaiting warm fetch...");
                     // Await the SAME fetch started at the top of Loaded — no second
                     // serialized round-trip; usually already complete by now.
                     await UserSession.EnsureSpeechmaticsKeyAsync(DeviceIdentity.Current).ConfigureAwait(false);
@@ -3211,7 +3211,7 @@ namespace InterviewCopilot
 
             // ── Phase 1: scanning state ───────────────────────────────────────
             string captureLabel = selectedRegion.HasValue ? "selected region" : primaryOnly ? "primary screen" : "all monitors";
-            ThinkingLabel.Text = $"🔍  Capturing {captureLabel}…";
+            ThinkingLabel.Text = $"Capturing {captureLabel}...";
             ThinkingHintLabel.Visibility = Visibility.Collapsed;
             ThinkingPanel.Visibility = Visibility.Visible;
 
@@ -3244,7 +3244,7 @@ namespace InterviewCopilot
                 this.Opacity = savedOpacity;
                 // Restore Window.Opacity to 1.0 — visual opacity stays controlled by MainBorder.Opacity
                 if (answerWasVisible && answerWindow != null) answerWindow.Opacity = 1.0;
-                AiAnswerBox.Text = "⚠ Screen capture failed. Press F12 for details.";
+                AiAnswerBox.Text = "Screen capture failed. Press F12 for details.";
                 _isScreenAnalyzing = false;
                 StopThinkingUi();
                 return;
@@ -3259,12 +3259,14 @@ namespace InterviewCopilot
             if (_isCameraMode && answerWindow != null)
             {
                 answerWindow.UpdateAnswer("");
-                answerWindow.UpdateQuestion("Analyzing screen…");
+                answerWindow.UpdateQuestion("Analyzing screen...");
             }
 
             // ── Phase 3: stream from vision AI ───────────────────────────────
-            string visionLabel = SettingsWindow.IsGroq() ? "Llama 4 Scout" : "GPT-4o";
-            ThinkingLabel.Text = $"🤖  {visionLabel} analyzing…";
+            // Deliberately not naming the model. The Groq vision model this used to
+            // name is decommissioned and requests fall through to the other
+            // provider, so a named label told the user something untrue.
+            ThinkingLabel.Text = "Reading your screen...";
 
             string resumeCtx  = ResumeParser.ExtractFacts(ResumeTextBox.Text);
             string timestamp  = DateTime.Now.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
@@ -3288,7 +3290,7 @@ namespace InterviewCopilot
                         sb.Append(token);
                         tokenCount++;
 
-                        // First token → hide the "analyzing…" indicator
+                        // First token → hide the "analyzing..." indicator
                         if (tokenCount == 1)
                             ThinkingPanel.Visibility = Visibility.Collapsed;
 

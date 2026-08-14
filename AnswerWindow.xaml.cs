@@ -121,7 +121,7 @@ namespace InterviewCopilot
 
             if (isProcessing)
             {
-                MicStatusLabel.Text       = "Thinking…";
+                MicStatusLabel.Text       = "Thinking...";
                 MicStatusLabel.Foreground = new SolidColorBrush(Color.FromRgb(210, 153, 34));
                 MiniMicIndicator.Fill     = new SolidColorBrush(Color.FromRgb(210, 153, 34));
                 MiniMicGlow.Color         = Color.FromRgb(210, 153, 34);
@@ -188,7 +188,7 @@ namespace InterviewCopilot
             }
             else
             {
-                QuestionTextBlock.Text       = "Listening…";
+                QuestionTextBlock.Text       = "Listening...";
                 QuestionTextBlock.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)); // #64748b
                 if (!_isListening)
                 {

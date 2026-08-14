@@ -91,7 +91,7 @@
                     <!-- Spacer -->
                     <Grid Grid.Column="3"/>
 
-                    <!-- Analyze button — #38bdf8 on #38bdf8 12% bg -->
+                    <!-- Analyze button, brand emerald on a 16% emerald wash -->
                     <Button Grid.Column="4"
                             x:Name="AnalyzeBtn"
                             Click="AnalyzeBtn_Click"
@@ -106,18 +106,17 @@
                                          CornerRadius="7"
                                         Padding="8,4">
                                     <Border.Background>
-                                         <SolidColorBrush Color="#5EA8FF" Opacity="0.18"/>
+                                         <SolidColorBrush Color="#34E08A" Opacity="0.16"/>
                                     </Border.Background>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="⊙"
-                                                    Foreground="#C4DDFF"
+                                        <TextBlock Text="&#xE722;"
+                                                   Foreground="#84E7B6"
                                                    FontSize="10"
-                                                   FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI"
-                                                   Margin="0,0,4,0"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   Margin="0,0,5,0"
                                                    VerticalAlignment="Center"/>
                                         <TextBlock Text="Analyze"
-                                                    Foreground="#C4DDFF"
+                                                   Foreground="#AEEFCF"
                                                    FontSize="10"
                                                    FontWeight="SemiBold"
                                                    FontFamily="Segoe UI"
@@ -128,7 +127,7 @@
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter TargetName="AnalyzeBd" Property="Background">
                                             <Setter.Value>
-                                                <SolidColorBrush Color="#5EA8FF" Opacity="0.36"/>
+                                                <SolidColorBrush Color="#34E08A" Opacity="0.32"/>
                                             </Setter.Value>
                                         </Setter>
                                     </Trigger>
@@ -139,9 +138,9 @@
 
                     <!-- Close button: white 45% opacity -->
                     <Button Grid.Column="6"
-                            Content="✕"
-                            FontSize="11"
-                            FontWeight="Bold"
+                            Content="&#xE711;"
+                            FontFamily="Segoe MDL2 Assets"
+                            FontSize="10"
                             Padding="6,3"
                             Background="Transparent"
                             BorderThickness="0"
@@ -209,7 +208,7 @@
                     <!-- Transcript text: 13pt, capped at 3 lines via grid MaxHeight -->
                     <TextBlock Grid.Column="1"
                                x:Name="QuestionTextBlock"
-                               Text="Listening…"
+                               Text="Listening..."
                                FontSize="13"
                                FontFamily="Segoe UI"
                                FontWeight="SemiBold"

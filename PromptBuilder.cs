@@ -660,7 +660,7 @@ namespace InterviewCopilot
                     sb.AppendLine($"  Company: {CompanyName}");
                 if (!string.IsNullOrWhiteSpace(JobDesc))
                 {
-                    string jd = JobDesc.Length > 600 ? JobDesc[..600] + "…" : JobDesc;
+                    string jd = JobDesc.Length > 600 ? JobDesc[..600] + "..." : JobDesc;
                     sb.AppendLine($"  Job: {jd}");
                 }
                 sb.AppendLine("  Reference this company and role specifically in your answers.");
@@ -1117,7 +1117,7 @@ namespace InterviewCopilot
                 if (!string.IsNullOrWhiteSpace(CompanyName))
                     sb.AppendLine($"Company: {CompanyName}");
                 if (!string.IsNullOrWhiteSpace(JobDesc))
-                    sb.AppendLine($"Job: {(JobDesc.Length > 400 ? JobDesc[..400] + "…" : JobDesc)}");
+                    sb.AppendLine($"Job: {(JobDesc.Length > 400 ? JobDesc[..400] + "..." : JobDesc)}");
                 sb.AppendLine("Tailor this specific answer to the role and company above — mention them by name.");
                 sb.AppendLine();
             }

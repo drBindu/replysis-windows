@@ -132,15 +132,17 @@
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Interview Sessions" Foreground="White"
                                        FontSize="14" FontWeight="Bold" FontFamily="Segoe UI"/>
-                            <TextBlock x:Name="SubtitleLabel" Text="Loading…"
+                            <TextBlock x:Name="SubtitleLabel" Text="Loading..."
                                        Foreground="#9A9AA0" FontSize="10" FontFamily="Segoe UI"/>
                         </StackPanel>
                     </StackPanel>
 
                     <!-- Right: close button -->
-                    <Button Grid.Column="2" Content="✕" Click="CloseBtn_Click"
+                    <Button Grid.Column="2" Click="CloseBtn_Click" ToolTip="Close"
                             Background="Transparent" BorderThickness="0"
-                            Foreground="#C4C4C8" FontSize="16" Cursor="Hand" Padding="8,4"/>
+                            Foreground="#C4C4C8" Cursor="Hand" Padding="8,4">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                    </Button>
                 </Grid>
             </Border>
 
@@ -274,12 +276,12 @@
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button x:Name="CopyTranscriptBtn"
-                                        Content="📋 Copy Text"
+                                        Content="Copy Text"
                                         Style="{StaticResource GhostBtn}"
                                         Click="CopyTranscriptBtn_Click"
                                         Padding="12,6" Margin="0,0,8,0"/>
                                 <Button x:Name="ExportBtn"
-                                        Content="⬇ Export .txt"
+                                        Content="Export .txt"
                                         Style="{StaticResource GhostBtn}"
                                         Click="ExportBtn_Click"
                                         Padding="12,6"/>

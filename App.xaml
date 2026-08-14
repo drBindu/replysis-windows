@@ -9,8 +9,8 @@
         <Color x:Key="AppStrokeColor">#26354A</Color>
         <Color x:Key="AppTextColor">#F4F7FB</Color>
         <Color x:Key="AppMutedTextColor">#93A4BA</Color>
-        <Color x:Key="AppAccentColor">#5EA8FF</Color>
-        <Color x:Key="AppAccentHoverColor">#83BDFF</Color>
+        <Color x:Key="AppAccentColor">#34E08A</Color>
+        <Color x:Key="AppAccentHoverColor">#84E7B6</Color>
         <Color x:Key="AppSuccessColor">#57D68D</Color>
         <Color x:Key="AppDangerColor">#FF6B73</Color>
 

@@ -508,22 +508,22 @@ namespace InterviewCopilot
             }
             catch (TaskCanceledException)
             {
-                return (null, "⚠ Request timed out. Check your connection and try again.");
+                return (null, "Request timed out. Check your connection and try again.");
             }
             catch (Exception ex)
             {
-                return (null, $"⚠ Network error: {ex.Message}");
+                return (null, $"Network error: {ex.Message}");
             }
         }
 
         /// <summary>Maps a non-200 status from the backend to a friendly message.</summary>
         private static string DescribeVisionError(System.Net.HttpStatusCode status) => status switch
         {
-            System.Net.HttpStatusCode.Unauthorized => "⚠ Please sign in to use Screen AI.",
+            System.Net.HttpStatusCode.Unauthorized => "Please sign in to use Screen AI.",
             System.Net.HttpStatusCode.PaymentRequired =>
-                "⚠ Insufficient credits.\n\nUpgrade your Replysis AI plan to continue using Screen AI.",
-            System.Net.HttpStatusCode.BadRequest => "⚠ Could not analyze this screenshot. Please try again.",
-            _ => "⚠ Screen AI is temporarily unavailable. Please try again."
+                "Insufficient credits.\n\nUpgrade your Replysis AI plan to continue using Screen AI.",
+            System.Net.HttpStatusCode.BadRequest => "Could not analyze this screenshot. Please try again.",
+            _ => "Screen AI is temporarily unavailable. Please try again."
         };
 
         /// <summary>Parses one SSE data line; returns "" on any error (never throws).</summary>

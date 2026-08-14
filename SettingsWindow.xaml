@@ -45,8 +45,8 @@
                                 <Setter TargetName="Track" Property="Background">
                                     <Setter.Value>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#6366F1" Offset="0"/>
-                                            <GradientStop Color="#2563EB" Offset="1"/>
+                                            <GradientStop Color="#25B978" Offset="0"/>
+                                            <GradientStop Color="#1E9E63" Offset="1"/>
                                         </LinearGradientBrush>
                                     </Setter.Value>
                                 </Setter>
@@ -333,7 +333,7 @@
                             Foreground="#FFFFFF" FontSize="12" FontFamily="Segoe UI"
                             HorizontalAlignment="Left" Cursor="Hand" Padding="0,0,0,6"
                             Visibility="Collapsed"/>
-                    <Button Content="Check for Updates…"
+                    <Button Content="Check for Updates..."
                             Click="CheckUpdatesBtn_Click"
                             Background="Transparent" BorderThickness="0"
                             Foreground="#FFFFFF" FontSize="12" FontFamily="Segoe UI"

@@ -119,7 +119,7 @@ namespace InterviewCopilot
             else if (UserSession.Credits > 0)
                 CreditsAboutLabel.Text = $"{UserSession.Credits} left";
             else
-                CreditsAboutLabel.Text = UserSession.IsLoggedIn ? "0 left" : "Loading…";
+                CreditsAboutLabel.Text = UserSession.IsLoggedIn ? "0 left" : "Loading...";
             SignInSettingsBtn.Visibility = UserSession.IsLoggedIn
                                          ? Visibility.Collapsed : Visibility.Visible;
         }
@@ -280,7 +280,7 @@ namespace InterviewCopilot
         private async void CheckUpdatesBtn_Click(object sender, RoutedEventArgs e)
         {
             var btn = sender as System.Windows.Controls.Button;
-            if (btn != null) { btn.IsEnabled = false; btn.Content = "Checking…"; }
+            if (btn != null) { btn.IsEnabled = false; btn.Content = "Checking..."; }
 
             string current = InstalledVersion();
 
@@ -339,7 +339,7 @@ namespace InterviewCopilot
             }
             finally
             {
-                if (btn != null) { btn.IsEnabled = true; btn.Content = "Check for Updates…"; }
+                if (btn != null) { btn.IsEnabled = true; btn.Content = "Check for Updates..."; }
             }
         }
 

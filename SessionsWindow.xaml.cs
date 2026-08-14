@@ -738,10 +738,10 @@ namespace InterviewCopilot
             {
                 Clipboard.SetText(BuildTranscriptDocument(_selectedSession));
                 // Flash the button label for 2 seconds to confirm copy
-                CopyTranscriptBtn.Content = "✓ Copied!";
+                CopyTranscriptBtn.Content = "Copied";
                 var timer = new System.Windows.Threading.DispatcherTimer
                     { Interval = TimeSpan.FromSeconds(2) };
-                timer.Tick += (s, _) => { CopyTranscriptBtn.Content = "📋 Copy Text"; timer.Stop(); };
+                timer.Tick += (s, _) => { CopyTranscriptBtn.Content = "Copy Text"; timer.Stop(); };
                 timer.Start();
             }
             catch (Exception ex)
@@ -827,6 +827,6 @@ namespace InterviewCopilot
         public string DisplayModel =>
             string.IsNullOrWhiteSpace(ModelName)
                 ? ""
-                : ModelName.Length > 30 ? ModelName.Substring(0, 30) + "…" : ModelName;
+                : ModelName.Length > 30 ? ModelName.Substring(0, 30) + "..." : ModelName;
     }
 }
