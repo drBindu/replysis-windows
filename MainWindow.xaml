@@ -456,27 +456,28 @@
                         <!-- Right controls -->
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
 
-                            <Button x:Name="ScreenAnalyzeBtn" Style="{StaticResource GhostBtn}"
-                                    Click="ScreenAnalyzeBtn_Click" Padding="9,6" Margin="0,0,4,0"
-                                    ToolTip="Screen AI  &#183;  F8 all monitors, F9 primary monitor">
-                                <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                           VerticalAlignment="Center" Foreground="#C6D4E8"/>
-                            </Button>
-                            <Button x:Name="RegionAnalyzeBtn" Style="{StaticResource GhostBtn}"
-                                    Click="RegionAnalyzeBtn_Click" Padding="9,6" Margin="0,0,4,0"
-                                    ToolTip="Select a screen region for Coding or System Design AI">
-                                <TextBlock Text="&#xE7C5;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                           VerticalAlignment="Center" Foreground="#84E7B6"/>
-                            </Button>
                             <!-- keeps the old AnalyzeLabel name alive off-screen for code that sets it -->
                             <TextBlock x:Name="AnalyzeLabel" Visibility="Collapsed"/>
 
-                            <Button Style="{StaticResource GhostBtn}" Click="CameraMode_Click"
-                                    Padding="9,6" Margin="0,0,4,0"
-                                    ToolTip="Compact overlay for in-person interviews">
-                                <TextBlock Text="&#xE890;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                           VerticalAlignment="Center" Foreground="#C6D4E8"/>
-                            </Button>
+                            <!-- Screen AI, region select and compact overlay were three unlabeled
+                                 icon buttons a new user could not tell apart without a tooltip.
+                                 One labeled pill, same pattern as the mode selector below, opens a
+                                 menu naming each option. F8/F9 keep working unchanged. -->
+                            <Border x:Name="AnalyzePill" CornerRadius="11" Padding="10,5"
+                                    Margin="0,0,8,0" Background="#101827" BorderBrush="#26364C"
+                                    BorderThickness="1" Cursor="Hand" VerticalAlignment="Center"
+                                    MouseLeftButtonDown="AnalyzePill_Click"
+                                    ToolTip="Analyze the screen or start the compact overlay">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                               Foreground="#84E7B6" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="ANALYZE" Foreground="#A9B6C8"
+                                               FontSize="9.5" FontWeight="Bold" FontFamily="Segoe UI"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="8"
+                                               Foreground="#6F8198" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
 
                             <!-- Stealth / privacy status — tells the user they're hidden from screen share -->
                             <Border x:Name="StealthPill" CornerRadius="9" Background="#12331F"
@@ -1035,6 +1036,142 @@
                     </Grid>
                 </Border>
             </Grid>
+
+            <!-- ================= ANALYZE POPUP ================= -->
+            <Popup x:Name="AnalyzePopup" Placement="Bottom" StaysOpen="True"
+                   AllowsTransparency="True" PopupAnimation="Fade"
+                   HorizontalOffset="-178" VerticalOffset="7">
+                <Border Padding="0,0,0,14">
+                    <Border Background="#0B131F" BorderBrush="#2A3A4F" BorderThickness="1"
+                            CornerRadius="15" Width="304" Padding="7">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="34" ShadowDepth="8" Opacity="0.62" Color="#000000"/>
+                        </Border.Effect>
+                        <StackPanel>
+                            <Grid Margin="11,8,10,9">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="SCREEN ANALYSIS" Foreground="#6F8198" FontSize="9.5"
+                                               FontWeight="Bold" FontFamily="Segoe UI"/>
+                                    <TextBlock Text="Get help from what's on your screen"
+                                               Foreground="#C6D4E8" FontSize="11.5" FontWeight="SemiBold"
+                                               FontFamily="Segoe UI" Margin="0,3,0,0"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Width="24" Height="24" CornerRadius="8"
+                                        Background="#132235" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                               Foreground="#7F93AB" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+
+                            <Border Height="1" Background="#1B2A3C" Margin="8,0,8,6"/>
+
+                            <Border Padding="10,10" Cursor="Hand" CornerRadius="10" Margin="1,0,1,3"
+                                    MouseLeftButtonDown="AnalyzeScreenOption_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#152337"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="34" Height="34" CornerRadius="10" Background="#172438"
+                                            BorderBrush="#2A3A4F" BorderThickness="1" Margin="0,0,11,0">
+                                        <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                                   Foreground="#A9B6C8" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Analyze Screen" Foreground="#EEF4FB" FontSize="12.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
+                                        <TextBlock Text="All monitors  &#183;  F8"
+                                                   Foreground="#7F93AB" FontSize="10.5" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Padding="10,10" Cursor="Hand" CornerRadius="10" Margin="1,0,1,3"
+                                    MouseLeftButtonDown="SelectRegionOption_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#102A1D"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="34" Height="34" CornerRadius="10" Background="#102A1D"
+                                            BorderBrush="#285D42" BorderThickness="1" Margin="0,0,11,0">
+                                        <TextBlock Text="&#xE7C5;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                                   Foreground="#34E08A" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Select Region" Foreground="#E9FFF2" FontSize="12.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
+                                        <TextBlock Text="Coding or System Design"
+                                                   Foreground="#80B89A" FontSize="10.5" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Padding="10,10" Cursor="Hand" CornerRadius="10" Margin="1,0,1,3"
+                                    MouseLeftButtonDown="CompactOverlayOption_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#152337"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="34" Height="34" CornerRadius="10" Background="#172438"
+                                            BorderBrush="#2A3A4F" BorderThickness="1" Margin="0,0,11,0">
+                                        <TextBlock Text="&#xE890;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                                   Foreground="#A9B6C8" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Compact Overlay" Foreground="#EEF4FB" FontSize="12.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
+                                        <TextBlock Text="For in-person interviews"
+                                                   Foreground="#7F93AB" FontSize="10.5" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Border>
+            </Popup>
 
             <!-- ================= LISTENING MODE POPUP ================= -->
             <Popup x:Name="ListeningModePopup" Placement="Bottom" StaysOpen="True"

@@ -298,16 +298,9 @@ namespace InterviewCopilot
 
                     _engineMonitorTimer.Start();
 
-                    // Returning users see the setup check before using the first
-                    // session. First-time users see onboarding first; its final
-                    // action opens the same check.
-                    if (File.Exists(OnboardingSeenPath))
-                        _ = Dispatcher.BeginInvoke(new Action(async () =>
-                        {
-                            await Task.Delay(700);
-                            await ShowPreflightAsync();
-                        }), DispatcherPriority.Background);
-
+                    // The setup check no longer opens itself. It stays available on demand
+                    // from the "Setup Check" button (SetupCheckBtn_Click -> ShowPreflightAsync),
+                    // which is the only remaining caller.
                     creditsRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(CreditRefreshMinutes) };
                     creditsRefreshTimer.Tick += async (s2, e2) =>
                     {
@@ -450,6 +443,7 @@ namespace InterviewCopilot
                 if (SavedResumesPopup   != null) SavedResumesPopup.IsOpen   = false;
                 if (ProfileDropdownPopup != null) ProfileDropdownPopup.IsOpen = false;
                 if (ListeningModePopup  != null) ListeningModePopup.IsOpen  = false;
+                if (AnalyzePopup        != null) AnalyzePopup.IsOpen        = false;
             }
             catch { }
         }
@@ -475,6 +469,16 @@ namespace InterviewCopilot
                                        IsDescendantOf(modeSource, modePopupChild);
                 bool onModePill = modeSource != null && IsDescendantOf(modeSource, AutoModePill);
                 if (!insideModePopup && !onModePill) ListeningModePopup.IsOpen = false;
+            }
+
+            if (AnalyzePopup.IsOpen)
+            {
+                var analyzeSource = e.OriginalSource as DependencyObject;
+                var analyzePopupChild = AnalyzePopup.Child as FrameworkElement;
+                bool insideAnalyzePopup = analyzePopupChild != null && analyzeSource != null &&
+                                          IsDescendantOf(analyzeSource, analyzePopupChild);
+                bool onAnalyzePill = analyzeSource != null && IsDescendantOf(analyzeSource, AnalyzePill);
+                if (!insideAnalyzePopup && !onAnalyzePill) AnalyzePopup.IsOpen = false;
             }
 
             if (!ProfileDropdownPopup.IsOpen) return;
@@ -1011,7 +1015,6 @@ namespace InterviewCopilot
                 System.Windows.Input.Keyboard.Focus(this);
             }
             catch (Exception ex) { DebugWindow.Log("ONBOARD", ex.Message); }
-            await ShowPreflightAsync();
         }
 
         private void HelpBtn_Click(object sender, RoutedEventArgs e) => ShowOnboarding();
@@ -1068,9 +1071,46 @@ namespace InterviewCopilot
             e.Handled = true;
             ProfileDropdownPopup.IsOpen = false;
             SavedResumesPopup.IsOpen = false;
+            AnalyzePopup.IsOpen = false;
             ListeningModePopup.PlacementTarget = AutoModePill;
             UpdateListeningModePopupSelection();
             ListeningModePopup.IsOpen = !ListeningModePopup.IsOpen;
+        }
+
+        // Consolidates the three previously separate icon buttons (Screen AI, Select
+        // Region, Compact Overlay) into one labeled menu. Each option below calls
+        // the exact same handler/method the old button called; F8 and F9 still fire
+        // HandleScreenAnalysisAsync/HandlePrimaryScreenAnalysisAsync directly through
+        // the keyboard hook and are unaffected by this menu.
+        private void AnalyzePill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            ProfileDropdownPopup.IsOpen = false;
+            SavedResumesPopup.IsOpen = false;
+            ListeningModePopup.IsOpen = false;
+            AnalyzePopup.PlacementTarget = AnalyzePill;
+            AnalyzePopup.IsOpen = !AnalyzePopup.IsOpen;
+        }
+
+        private void AnalyzeScreenOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            AnalyzePopup.IsOpen = false;
+            _ = HandleScreenAnalysisAsync();
+        }
+
+        private void SelectRegionOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            AnalyzePopup.IsOpen = false;
+            _ = HandleRegionScreenAnalysisAsync();
+        }
+
+        private void CompactOverlayOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            AnalyzePopup.IsOpen = false;
+            CameraMode_Click(sender, new RoutedEventArgs());
         }
 
         private void ManualModeOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
