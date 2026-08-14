@@ -2190,10 +2190,12 @@ namespace InterviewCopilot
                     (byte)(c.R + (255 - c.R) * 0.45),
                     (byte)(c.G + (255 - c.G) * 0.45),
                     (byte)(c.B + (255 - c.B) * 0.45));
-                MicStatusPill.Background   = new SolidColorBrush(Color.FromArgb(0x26, c.R, c.G, c.B));
-                MicStatusPill.BorderBrush  = new SolidColorBrush(Color.FromArgb(0x72, c.R, c.G, c.B));
+                // The status no longer sits in its own bordered box: the mic beside it
+                // already shows the same state as a coloured ring and glow, so a second
+                // tinted container repeated it and read as another button in the row.
+                // The dot and the state-coloured text carry it now.
                 MicIndicatorText.Foreground = new SolidColorBrush(lite);
-                if (MicPillGlow != null) { MicPillGlow.Color = c; MicPillGlow.Opacity = 0.38; }
+                if (MicPillGlow != null) { MicPillGlow.Opacity = 0; }
             }
             catch { }
 
@@ -2203,10 +2205,14 @@ namespace InterviewCopilot
             // contained here — no XAML plumbing, nothing else can be affected.
             if (isListening)
             {
+                // Kept within the header row. At 26 the halo reached 13px past the
+                // button on every side, more than the row could show, so while
+                // listening the glow and the ring under it were sliced flat by the
+                // window edge. The breathing still reads at this range.
                 var pulse = new System.Windows.Media.Animation.DoubleAnimation
                 {
-                    From = 12,
-                    To = 26,
+                    From = 6,
+                    To = 12,
                     Duration = TimeSpan.FromMilliseconds(950),
                     AutoReverse = true,
                     RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,

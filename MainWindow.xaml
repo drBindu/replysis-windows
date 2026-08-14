@@ -249,6 +249,39 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
+        <!-- Segmented group: related actions share one outline so the row carries
+             fewer objects than it does controls. -->
+        <Style x:Key="ToolbarGroup" TargetType="Border">
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Background" Value="#101827"/>
+            <Setter Property="BorderBrush" Value="#26364C"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- One action inside a group. Carries no outline of its own; the hover
+             tint is what tells you the halves are separately clickable. -->
+        <Style x:Key="ToolbarSegment" TargetType="Border">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="CornerRadius" Value="9"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#182438"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ToolbarSegmentDivider" TargetType="Border">
+            <Setter Property="Width" Value="1"/>
+            <Setter Property="Height" Value="15"/>
+            <Setter Property="Background" Value="#22344A"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <!-- Separates the row into what you do, how you appear, and who you are,
              so nine controls read as three short groups rather than one run. -->
         <Style x:Key="ToolbarDivider" TargetType="Border">
@@ -388,7 +421,10 @@
         <Grid>
             <Grid x:Name="NormalModeGrid">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="60"/>
+                    <!-- 60 left the mic short of room: the button is 46 and its glow
+                         blurs out past that, so the ring and halo were sliced flat by
+                         the window edge. 72 clears the button plus its widest pulse. -->
+                    <RowDefinition Height="72"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -428,22 +464,25 @@
                                                       BlurRadius="8" ShadowDepth="0"/>
                                 </Button.Effect>
                             </Button>
-                            <StackPanel VerticalAlignment="Center">
-                                <Border x:Name="MicStatusPill" CornerRadius="10" Padding="11,5"
-                                        Background="#141C2A" BorderBrush="#28374D" BorderThickness="1">
-                                    <Border.Effect>
-                                        <DropShadowEffect x:Name="MicPillGlow" BlurRadius="11" ShadowDepth="0"
-                                                          Opacity="0" Color="#10B981"/>
-                                    </Border.Effect>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Ellipse x:Name="MicIndicator" Width="7" Height="7"
-                                                 Fill="#10B981" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="MicIndicatorText" Text="READY"
-                                                   Foreground="#EAF1F8" FontWeight="Bold" FontSize="10.5"
-                                                   FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
+                            <!-- The mic already carries its state in the ring colour and
+                                 glow, so boxing the same state in a bordered pill beside
+                                 it counted twice and added another button to the row.
+                                 The label reads as part of the mic now. The pill and its
+                                 glow keep their names because UpdateMicUi drives them. -->
+                            <Border x:Name="MicStatusPill" Background="Transparent"
+                                    BorderThickness="0" Padding="0" VerticalAlignment="Center">
+                                <Border.Effect>
+                                    <DropShadowEffect x:Name="MicPillGlow" BlurRadius="11" ShadowDepth="0"
+                                                      Opacity="0" Color="#10B981"/>
+                                </Border.Effect>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse x:Name="MicIndicator" Width="7" Height="7"
+                                             Fill="#10B981" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="MicIndicatorText" Text="READY"
+                                               Foreground="#EAF1F8" FontWeight="Bold" FontSize="10.5"
+                                               FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
 
                             <!-- One compact selector keeps Manual and both hands-free modes organized. -->
                             <Border x:Name="AutoModePill" Style="{StaticResource ToolbarPill}"
@@ -477,29 +516,36 @@
                                  option. F8/F9 keep working unchanged. Compact overlay used to sit
                                  in this menu, but it is a display mode rather than a way to read
                                  the screen, so it has its own pill and is no longer hidden here. -->
-                            <Border x:Name="AnalyzePill" Style="{StaticResource ToolbarPill}"
-                                    MouseLeftButtonDown="AnalyzePill_Click"
-                                    ToolTip="Answer a question that is on your screen  &#183;  F8">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="&#xE722;" Style="{StaticResource ToolbarPillIcon}"/>
-                                    <TextBlock Text="ANALYZE" Style="{StaticResource ToolbarPillLabel}"/>
-                                    <TextBlock Style="{StaticResource ToolbarPillChevron}"/>
+                            <!-- Analyze and Compact share one outline instead of floating as
+                                 two more separate pills. Same two actions, one object in the
+                                 row, which is what stops the bar reading as a wall of
+                                 buttons. Compact stays out here rather than inside the
+                                 Analyze menu: it was the least-discovered feature in the app
+                                 and it is not a way of reading the screen. -->
+                            <Border Style="{StaticResource ToolbarGroup}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border x:Name="AnalyzePill" Style="{StaticResource ToolbarSegment}"
+                                            MouseLeftButtonDown="AnalyzePill_Click"
+                                            ToolTip="Answer a question that is on your screen  &#183;  F8">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE722;" Style="{StaticResource ToolbarPillIcon}"/>
+                                            <TextBlock Text="ANALYZE" Style="{StaticResource ToolbarPillLabel}"/>
+                                            <TextBlock Style="{StaticResource ToolbarPillChevron}"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Style="{StaticResource ToolbarSegmentDivider}"/>
+
+                                    <Border x:Name="CompactOverlayPill" Style="{StaticResource ToolbarSegment}"
+                                            MouseLeftButtonDown="CompactOverlayPill_Click"
+                                            ToolTip="Shrink to a slim bar at the top of your screen for in-person interviews  &#183;  the full window comes back when you exit">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE890;" Style="{StaticResource ToolbarPillIcon}"/>
+                                            <TextBlock Text="COMPACT" Style="{StaticResource ToolbarPillLabel}"/>
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                             </Border>
-
-                            <!-- Compact overlay. Kept on the toolbar rather than inside a menu:
-                                 it was the single least-discovered feature in the app, and it is
-                                 the mode people need for in-person interviews. -->
-                            <Border x:Name="CompactOverlayPill" Style="{StaticResource ToolbarPill}"
-                                    MouseLeftButtonDown="CompactOverlayPill_Click"
-                                    ToolTip="Shrink to a slim bar at the top of your screen for in-person interviews  &#183;  the full window comes back when you exit">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="&#xE890;" Style="{StaticResource ToolbarPillIcon}"/>
-                                    <TextBlock Text="COMPACT" Style="{StaticResource ToolbarPillLabel}"/>
-                                </StackPanel>
-                            </Border>
-
-                            <Border Style="{StaticResource ToolbarDivider}"/>
 
                             <!-- Stealth / privacy status — tells the user they're hidden from screen share.
                                  Colours are set from code by state; only the geometry comes from the
