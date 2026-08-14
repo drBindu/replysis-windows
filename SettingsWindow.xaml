@@ -178,7 +178,7 @@
                                    Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Stealth mode" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
-                            <TextBlock Text="Hides the window from OBS, Teams, Zoom and other recorders, and from the taskbar and Alt-Tab."
+                            <TextBlock Text="Applies Windows capture exclusion and removes the app from the taskbar and Alt-Tab. Verify it in your meeting app before every real call."
                                        Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>

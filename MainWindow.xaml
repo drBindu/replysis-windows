@@ -898,6 +898,14 @@
                                                     <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets"
                                                                FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                                     <TextBlock Text="New Session" FontSize="11"/>
+                                                    </StackPanel>
+                                            </Button>
+                                            <Button x:Name="SetupCheckBtn" Style="{StaticResource GhostBtn}"
+                                                    Click="SetupCheckBtn_Click" Padding="9,4" Margin="5,0,0,0"
+                                                    ToolTip="Test connection, audio, and capture protection">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets" FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Setup Check" FontSize="11"/>
                                                 </StackPanel>
                                             </Button>
                                         </StackPanel>
@@ -1525,7 +1533,7 @@
                             <StackPanel>
                                 <TextBlock Text="Welcome to Replysis AI" Foreground="#F5F8FC"
                                            FontSize="21" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="Your invisible interview co-pilot. Here's how it works."
+                                <TextBlock Text="Your live interview workspace. Here's how it works."
                                            Foreground="#A6B8D2" FontSize="12.5" FontWeight="SemiBold"
                                            FontFamily="Segoe UI" Margin="0,5,0,0"/>
                             </StackPanel>
@@ -1585,9 +1593,9 @@
                                                Foreground="#F3C64D" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                                 <StackPanel Grid.Column="1">
-                                    <TextBlock Text="You're invisible on screen share" Foreground="#EAF1F8"
+                                    <TextBlock Text="Check capture protection before the call" Foreground="#EAF1F8"
                                                FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Stealth mode is ON. The window is hidden from Zoom, Teams and Meet screen sharing and from screen recordings."
+                                    <TextBlock Text="Stealth mode applies Windows capture exclusion. Support varies, so use Setup Check and verify it in your meeting app."
                                                Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"
                                                FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                 </StackPanel>

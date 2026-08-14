@@ -51,6 +51,7 @@ namespace InterviewCopilot
         private bool _creditsFetched = false;
         private bool isRecording = false;
         private bool _newSessionInProgress;
+        private bool _preflightOpen;
         private bool _resumeCollapsed = false;
         private const double ResumePanelExpandedWidth = 260;
         private bool _isCameraMode = false;
@@ -296,6 +297,16 @@ namespace InterviewCopilot
                     }
 
                     _engineMonitorTimer.Start();
+
+                    // Returning users see the setup check before using the first
+                    // session. First-time users see onboarding first; its final
+                    // action opens the same check.
+                    if (File.Exists(OnboardingSeenPath))
+                        _ = Dispatcher.BeginInvoke(new Action(async () =>
+                        {
+                            await Task.Delay(700);
+                            await ShowPreflightAsync();
+                        }), DispatcherPriority.Background);
 
                     creditsRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(CreditRefreshMinutes) };
                     creditsRefreshTimer.Tick += async (s2, e2) =>
@@ -989,7 +1000,7 @@ namespace InterviewCopilot
             catch (Exception ex) { DebugWindow.Log("ONBOARD", ex.Message); }
         }
 
-        private void OnboardingClose_Click(object sender, RoutedEventArgs e)
+        private async void OnboardingClose_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -1000,6 +1011,7 @@ namespace InterviewCopilot
                 System.Windows.Input.Keyboard.Focus(this);
             }
             catch (Exception ex) { DebugWindow.Log("ONBOARD", ex.Message); }
+            await ShowPreflightAsync();
         }
 
         private void HelpBtn_Click(object sender, RoutedEventArgs e) => ShowOnboarding();
@@ -2796,6 +2808,30 @@ namespace InterviewCopilot
                     button.IsEnabled = true;
                     button.Content = originalContent;
                 }
+            }
+        }
+
+        private async void SetupCheckBtn_Click(object sender, RoutedEventArgs e)
+            => await ShowPreflightAsync();
+
+        private async Task<bool> ShowPreflightAsync()
+        {
+            if (_preflightOpen) return false;
+            _preflightOpen = true;
+            try
+            {
+                var window = new PreflightWindow(
+                    () => _engineOnline && speechmaticsProcess != null && !speechmaticsProcess.HasExited,
+                    _stealthMode)
+                {
+                    Owner = this
+                };
+                return window.ShowDialog() == true && window.ChecksPassed;
+            }
+            finally
+            {
+                _preflightOpen = false;
+                await Task.CompletedTask;
             }
         }
 

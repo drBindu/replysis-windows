@@ -1,0 +1,67 @@
+<Window x:Class="InterviewCopilot.PreflightWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Replysis setup check" Width="560" Height="530"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" UseLayoutRounding="True">
+    <Border Background="#0E1016" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="20" Padding="24">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <StackPanel>
+                    <TextBlock Text="Pre-interview setup check" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                    <TextBlock Text="Confirm the essentials before the call starts." Foreground="#9CA3AF" FontSize="12" Margin="0,5,0,0"/>
+                </StackPanel>
+                <Button Content="&#xE711;" FontFamily="Segoe MDL2 Assets" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Click="Close_Click" Foreground="#AEB4C0" Background="Transparent" BorderThickness="0" Padding="8" Cursor="Hand"/>
+            </Grid>
+
+            <Border Grid.Row="1" Background="#102C2030" BorderBrush="#2457D987" BorderThickness="1"
+                    CornerRadius="10" Padding="12,9" Margin="0,18,0,14">
+                <TextBlock Text="No test audio is uploaded or stored. Capture protection varies by Windows and meeting app, so verify it before a real call."
+                           Foreground="#B8E8C8" FontSize="11" TextWrapping="Wrap"/>
+            </Border>
+
+            <StackPanel Grid.Row="2">
+                <Border x:Name="NetworkCard" Background="#10FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="12" Padding="15" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border x:Name="NetworkIcon" Width="32" Height="32" CornerRadius="9" Background="#1C334155"><TextBlock Text="&#xE701;" FontFamily="Segoe MDL2 Assets" Foreground="#CBD5E1" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <StackPanel Grid.Column="1"><TextBlock Text="Replysis connection" Foreground="White" FontSize="13" FontWeight="Bold"/><TextBlock x:Name="NetworkDetail" Text="Waiting to run…" Foreground="#9CA3AF" FontSize="11" TextWrapping="Wrap" Margin="0,4,10,0"/></StackPanel>
+                        <TextBlock x:Name="NetworkState" Grid.Column="2" Text="WAITING" Foreground="#94A3B8" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+                <Border Background="#10FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="12" Padding="15" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border Width="32" Height="32" CornerRadius="9" Background="#1C334155"><TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" Foreground="#CBD5E1" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <StackPanel Grid.Column="1"><TextBlock Text="Audio pipeline" Foreground="White" FontSize="13" FontWeight="Bold"/><TextBlock x:Name="AudioDetail" Text="Waiting to run…" Foreground="#9CA3AF" FontSize="11" TextWrapping="Wrap" Margin="0,4,10,0"/></StackPanel>
+                        <TextBlock x:Name="AudioState" Grid.Column="2" Text="WAITING" Foreground="#94A3B8" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+                <Border Background="#10FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="12" Padding="15">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border Width="32" Height="32" CornerRadius="9" Background="#1C334155"><TextBlock Text="&#xEA18;" FontFamily="Segoe MDL2 Assets" Foreground="#CBD5E1" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <StackPanel Grid.Column="1"><TextBlock Text="Capture-protection control" Foreground="White" FontSize="13" FontWeight="Bold"/><TextBlock x:Name="PrivacyDetail" Text="Waiting to run…" Foreground="#9CA3AF" FontSize="11" TextWrapping="Wrap" Margin="0,4,10,0"/></StackPanel>
+                        <TextBlock x:Name="PrivacyState" Grid.Column="2" Text="WAITING" Foreground="#94A3B8" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <Grid Grid.Row="3" Margin="0,18,0,0">
+                <Button x:Name="RunButton" Content="Run setup check" Click="Run_Click" HorizontalAlignment="Left"
+                        Background="#182231" BorderBrush="#334155" BorderThickness="1" Foreground="White" FontSize="12" FontWeight="Bold" Padding="18,10" Cursor="Hand"/>
+                <Button x:Name="ContinueButton" Content="Continue" Click="Continue_Click" HorizontalAlignment="Right" IsEnabled="False"
+                        Background="#21924A" BorderThickness="0" Foreground="White" FontSize="12" FontWeight="Bold" Padding="24,10" Cursor="Hand"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

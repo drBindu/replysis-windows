@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace InterviewCopilot
 {
     /// <summary>
-    /// Mirrors each Q&amp;A pair to the cloud (coopilotxai.com/api/sessions) so
+    /// Mirrors each Q&amp;A pair to the Replysis session API so
     /// interview transcripts are backed up and visible in the Past Sessions panel
     /// across devices — matching the Mac app's cloud-backup behaviour.
     /// Fire-and-forget: never blocks the UI thread, never surfaces errors to the user.

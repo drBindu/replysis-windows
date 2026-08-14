@@ -30,12 +30,25 @@ namespace InterviewCopilot
         /// menus) live in their OWN top-level window, so the main window's stealth does NOT
         /// cover them — without this they flash into screen recordings even in stealth mode.
         /// </summary>
-        public static void SetCaptureExclusion(IntPtr hwnd, bool enable)
+        public static bool TrySetCaptureExclusion(IntPtr hwnd, bool enable)
         {
-            if (hwnd == IntPtr.Zero) return;
-            try { SetWindowDisplayAffinity(hwnd, enable ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE); }
-            catch (Exception ex) { DebugWindow.Log("STEALTH", "SetCaptureExclusion error: " + ex.Message); }
+            if (hwnd == IntPtr.Zero) return false;
+            try
+            {
+                bool applied = SetWindowDisplayAffinity(hwnd, enable ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE) != 0;
+                if (!applied)
+                    DebugWindow.Log("STEALTH", $"Capture exclusion was not applied (err {Marshal.GetLastWin32Error()}).");
+                return applied;
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("STEALTH", "SetCaptureExclusion error: " + ex.Message);
+                return false;
+            }
         }
+
+        public static void SetCaptureExclusion(IntPtr hwnd, bool enable)
+            => TrySetCaptureExclusion(hwnd, enable);
 
         public static void SetStealthMode(Window window, bool enable)
         {
