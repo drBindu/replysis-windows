@@ -1136,7 +1136,11 @@ namespace InterviewCopilot
             catch { }
         }
 
-        internal void ShowInAppAlert(string title, string message)
+        /// <param name="persist">
+        /// Keep the banner up until dismissed. Used for faults the user has to act
+        /// on, which a timed banner would hide again before they had read it.
+        /// </param>
+        internal void ShowInAppAlert(string title, string message, bool persist = false)
         {
             // In compact overlay the main window is hidden, so the banner would
             // never be seen. The overlay is the visible surface there.
@@ -1156,6 +1160,8 @@ namespace InterviewCopilot
             InAppAlert.Visibility = Visibility.Visible;
 
             _alertTimer?.Stop();
+            if (persist) return;
+
             _alertTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(9) };
             _alertTimer.Tick += (_, _) =>
             {
@@ -2361,7 +2367,11 @@ namespace InterviewCopilot
                 if (generation != Volatile.Read(ref _engineStartGeneration)) return;
                 if (string.IsNullOrWhiteSpace(pyExe))
                 {
-                    _engineFatalReason = "Install Python 3.11+ using the official Windows installer";
+                    // Python alone is not enough: the engine also needs the packages
+                    // in requirements.txt, so naming only the runtime sent people
+                    // away to install it and hit the same wall again.
+                    _engineFatalReason =
+                        "Install Python 3.11 or newer, then run: pip install -r requirements.txt";
                     _engineAuthFailed = true;
                     _ = Dispatcher.BeginInvoke(new Action(ShowEngineAuthError));
                     return;
@@ -2735,6 +2745,19 @@ namespace InterviewCopilot
             MicIndicator.Fill     = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#ef4444"));
             MicIndicatorText.Text = label;
             MicBtn.BorderBrush    = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#ef4444"));
+
+            // The reason was computed and then thrown away: the only signal was a
+            // red dot reading "SETUP NEEDED", with the explanation buried in a
+            // debug log the user has no reason to open. Someone whose machine is
+            // missing the speech engine just saw transcription silently not work.
+            string detail = string.IsNullOrEmpty(_engineFatalReason)
+                ? "Speech transcription could not start. Press F12 for details."
+                : $"Speech transcription could not start. {_engineFatalReason}.";
+
+            if (_isCameraMode && answerWindow != null)
+                answerWindow.ShowServiceUnavailable("Setup needed", detail);
+            else
+                ShowInAppAlert("Speech transcription is not available", detail, persist: true);
         }
 
         private void ShowEngineUsageLimitError()
