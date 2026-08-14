@@ -1102,10 +1102,13 @@ namespace InterviewCopilot
             _ = HandleRegionScreenAnalysisAsync();
         }
 
-        private void CompactOverlayOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private void CompactOverlayPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             e.Handled = true;
             AnalyzePopup.IsOpen = false;
+            ProfileDropdownPopup.IsOpen = false;
+            SavedResumesPopup.IsOpen = false;
+            ListeningModePopup.IsOpen = false;
             CameraMode_Click(sender, new RoutedEventArgs());
         }
 
@@ -1984,6 +1987,10 @@ namespace InterviewCopilot
             DebugWindow.Log("SESSION", $"Auto-started session #{sessionNumber}");
         }
 
+        // Trailing marker in a session log holding the elapsed seconds.
+        // SessionsWindow reads it; kept in one place so both sides agree.
+        internal const string SessionDurationTag = "DURATION_SECONDS:";
+
         private void AppendToSessionLog(string q, string a)
         {
             if (!string.IsNullOrEmpty(sessionLogPath))
@@ -2010,6 +2017,21 @@ namespace InterviewCopilot
                 DebugWindow.Log("SESSION", $"Could not stop recording: {ex.Message}");
             }
             isRecording = false;
+
+            // Stamp how long the interview ran so the session report can show it.
+            // Written as a trailing line, so session files from older builds stay readable.
+            if (!string.IsNullOrEmpty(sessionLogPath) && _sessionSeconds > 0)
+            {
+                try
+                {
+                    string content = SecureDataProtector.ReadProtectedFile(sessionLogPath);
+                    if (!content.Contains(SessionDurationTag))
+                        SecureDataProtector.WriteProtectedFile(
+                            sessionLogPath, content + SessionDurationTag + " " + _sessionSeconds + "\n");
+                }
+                catch (Exception ex) { DebugWindow.Log("SESSION", $"Could not record duration: {ex.Message}"); }
+            }
+
             sessionLogPath = "";
 
             // Stop and hide session timer

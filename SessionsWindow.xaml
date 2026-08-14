@@ -262,6 +262,15 @@
                                            FontSize="14" FontWeight="Bold" FontFamily="Segoe UI"/>
                                 <TextBlock x:Name="DetailMeta" Text="" Foreground="#9A9AA0"
                                            FontSize="11" FontFamily="Segoe UI" Margin="0,3,0,0"/>
+                                <!-- What was actually asked, at a glance. The report used to be
+                                     a bare Q&A list with no way to see the shape of the session. -->
+                                <ItemsControl x:Name="SessionStats" Margin="0,9,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button x:Name="CopyTranscriptBtn"

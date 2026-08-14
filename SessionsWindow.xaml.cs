@@ -267,6 +267,13 @@ namespace InterviewCopilot
             int qCount = lines.Count(l => l.StartsWith("Q: "));
             int aCount = lines.Count(l => l.StartsWith("A: "));
 
+            // Present only on sessions ended by a build that records it.
+            int durationSeconds = 0;
+            var durationLine = lines.FirstOrDefault(l => l.StartsWith(MainWindow.SessionDurationTag));
+            if (durationLine != null)
+                int.TryParse(durationLine.Substring(MainWindow.SessionDurationTag.Length).Trim(),
+                             out durationSeconds);
+
             return new SessionInfo
             {
                 FilePath = path,
@@ -274,6 +281,7 @@ namespace InterviewCopilot
                 CreatedAt = sessionDate,
                 QuestionCount = qCount,
                 AnswerCount = aCount,
+                DurationSeconds = durationSeconds,
                 ModelName = modelName,
                 AllLines = lines
             };
@@ -293,6 +301,10 @@ namespace InterviewCopilot
 
             foreach (var line in lines)
             {
+                // Trailing metadata, not transcript. Without this it would be
+                // appended onto the end of the final answer.
+                if (line.StartsWith(MainWindow.SessionDurationTag)) continue;
+
                 if (line.StartsWith("Q: "))
                 {
                     if (!string.IsNullOrWhiteSpace(currentQ))
@@ -319,6 +331,71 @@ namespace InterviewCopilot
 
             return pairs;
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // QUESTION CLASSIFICATION
+        // Keyword matching over the question text, not a model call. It is here
+        // to show the shape of a session at a glance, so it stays deliberately
+        // conservative and falls back to "General" rather than guessing.
+        // ══════════════════════════════════════════════════════════════════════
+
+        private static readonly string[] BehaviouralCues =
+        {
+            "tell me about", "describe a time", "give me an example", "walk me through a time",
+            "conflict", "disagree", "weakness", "strength", "proud of", "failure", "failed",
+            "challenge you", "difficult team", "why do you want", "where do you see yourself",
+            "tell us about yourself", "about yourself"
+        };
+
+        private static readonly string[] SystemDesignCues =
+        {
+            "system design", "design a", "design an", "architecture", "scale", "scalable",
+            "load balancer", "microservice", "distributed", "throughput", "sharding",
+            "caching", "cache", "high availability", "fault tolerant", "rate limit"
+        };
+
+        private static readonly string[] CodingCues =
+        {
+            "algorithm", "time complexity", "space complexity", "big o", "o(n", "binary tree",
+            "linked list", "array", "hash map", "hashmap", "recursion", "sort", "sorting",
+            "implement", "write a function", "write code", "leetcode", "optimize this",
+            "data structure", "pointer", "traverse"
+        };
+
+        internal enum QuestionKind { Screen, Behavioural, SystemDesign, Coding, General }
+
+        internal static QuestionKind ClassifyQuestion(string question)
+        {
+            if (string.IsNullOrWhiteSpace(question)) return QuestionKind.General;
+
+            string q = question.ToLowerInvariant();
+
+            if (q.Contains("[screen analysis]")) return QuestionKind.Screen;
+            if (BehaviouralCues.Any(c => q.Contains(c))) return QuestionKind.Behavioural;
+            if (SystemDesignCues.Any(c => q.Contains(c))) return QuestionKind.SystemDesign;
+            if (CodingCues.Any(c => q.Contains(c))) return QuestionKind.Coding;
+
+            return QuestionKind.General;
+        }
+
+        internal static string KindLabel(QuestionKind kind) => kind switch
+        {
+            QuestionKind.Screen       => "FROM SCREEN",
+            QuestionKind.Behavioural  => "BEHAVIOURAL",
+            QuestionKind.SystemDesign => "SYSTEM DESIGN",
+            QuestionKind.Coding       => "CODING",
+            _                         => "GENERAL"
+        };
+
+        // Accent per category so a long transcript can be skimmed by colour.
+        private static string KindColour(QuestionKind kind) => kind switch
+        {
+            QuestionKind.Screen       => "#7FB4E8",
+            QuestionKind.Behavioural  => "#E8C07F",
+            QuestionKind.SystemDesign => "#C79FE8",
+            QuestionKind.Coding       => "#7FE8B4",
+            _                         => "#9A9AA0"
+        };
 
         private static bool SessionsMatch(SessionInfo first, SessionInfo second)
         {
@@ -353,8 +430,73 @@ namespace InterviewCopilot
             // Cloud sessions have no delete API — hide the button (matches Mac behaviour)
             DeleteBtn.Visibility = info.IsCloud ? Visibility.Collapsed : Visibility.Visible;
 
-            // Render transcript
+            RenderSessionStats(info);
             RenderTranscript(info);
+        }
+
+        // ── Summary chips: how long, how much was asked, and of what kind ─────
+        private void RenderSessionStats(SessionInfo info)
+        {
+            SessionStats.Items.Clear();
+
+            var pairs = ParseQaPairs(info.AllLines);
+            if (pairs.Count == 0) return;
+
+            if (info.DurationSeconds > 0)
+                SessionStats.Items.Add(BuildStatChip("Lasted " + FormatDuration(info.DurationSeconds), "#9A9AA0"));
+
+            SessionStats.Items.Add(BuildStatChip(
+                pairs.Count + (pairs.Count != 1 ? " questions" : " question"), "#9A9AA0"));
+
+            // Longest answer is a better signal of a heavy question than an average,
+            // which a couple of one-line replies would flatten.
+            int longest = pairs.Max(p => WordCount(p.A));
+            if (longest > 0)
+                SessionStats.Items.Add(BuildStatChip("Longest answer " + longest + " words", "#9A9AA0"));
+
+            foreach (var group in pairs
+                        .GroupBy(p => ClassifyQuestion(p.Q))
+                        .OrderByDescending(g => g.Count()))
+            {
+                SessionStats.Items.Add(BuildStatChip(
+                    group.Count() + " " + KindLabel(group.Key).ToLowerInvariant(),
+                    KindColour(group.Key)));
+            }
+        }
+
+        private static int WordCount(string text) =>
+            string.IsNullOrWhiteSpace(text)
+                ? 0
+                : text.Split(new[] { ' ', '\n', '\t', '\r' }, StringSplitOptions.RemoveEmptyEntries).Length;
+
+        private static string FormatDuration(int seconds)
+        {
+            if (seconds < 60) return seconds + "s";
+            int m = seconds / 60, s = seconds % 60;
+            if (m < 60) return s == 0 ? m + "m" : m + "m " + s + "s";
+            return (m / 60) + "h " + (m % 60) + "m";
+        }
+
+        private static Border BuildStatChip(string text, string hex)
+        {
+            var chip = new Border
+            {
+                Background      = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                BorderBrush     = new SolidColorBrush(Color.FromArgb(38, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(6),
+                Padding         = new Thickness(8, 3, 8, 3),
+                Margin          = new Thickness(0, 0, 6, 6)
+            };
+            chip.Child = new TextBlock
+            {
+                Text       = text,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
+                FontSize   = 10.5,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Segoe UI")
+            };
+            return chip;
         }
 
         private void RenderTranscript(SessionInfo info)
@@ -375,14 +517,22 @@ namespace InterviewCopilot
             int i = 1;
             foreach (var (q, a) in pairs)
             {
-                // Exchange number badge
+                var kind = ClassifyQuestion(q);
+
+                // Exchange number plus what kind of question it was, so a long
+                // transcript can be skimmed for "where were the coding rounds".
+                var badgeRow = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+
                 var badge = new Border
                 {
                     Background = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
                     CornerRadius = new CornerRadius(6),
                     Padding = new Thickness(8, 3, 8, 3),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Margin = new Thickness(0, 0, 0, 8)
+                    HorizontalAlignment = HorizontalAlignment.Left
                 };
                 badge.Child = new TextBlock
                 {
@@ -392,7 +542,20 @@ namespace InterviewCopilot
                     FontWeight = FontWeights.Bold,
                     FontFamily = new FontFamily("Segoe UI")
                 };
-                TranscriptPanel.Children.Add(badge);
+                badgeRow.Children.Add(badge);
+
+                badgeRow.Children.Add(new TextBlock
+                {
+                    Text = KindLabel(kind),
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(KindColour(kind))),
+                    FontSize = 9.5,
+                    FontWeight = FontWeights.Bold,
+                    FontFamily = new FontFamily("Segoe UI"),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(9, 0, 0, 0)
+                });
+
+                TranscriptPanel.Children.Add(badgeRow);
 
                 // Question block
                 var qBorder = new Border
@@ -527,6 +690,43 @@ namespace InterviewCopilot
         }
 
         // ══════════════════════════════════════════════════════════════════════
+        // TRANSCRIPT DOCUMENT
+        // Shared by Copy and Export so the two can never drift apart.
+        // ══════════════════════════════════════════════════════════════════════
+
+        private string BuildTranscriptDocument(SessionInfo info)
+        {
+            var pairs = ParseQaPairs(info.AllLines);
+            var sb = new System.Text.StringBuilder();
+
+            sb.AppendLine(info.DisplayTitle);
+            sb.AppendLine(info.DisplayDate);
+
+            var summary = new List<string> { info.DisplayStats };
+            if (info.DurationSeconds > 0) summary.Add("lasted " + FormatDuration(info.DurationSeconds));
+            sb.AppendLine(string.Join("  |  ", summary));
+
+            foreach (var group in pairs.GroupBy(p => ClassifyQuestion(p.Q)).OrderByDescending(g => g.Count()))
+                sb.AppendLine($"  {group.Count()} x {KindLabel(group.Key).ToLowerInvariant()}");
+
+            sb.AppendLine(new string('-', 60));
+            sb.AppendLine();
+
+            int exchangeNum = 1;
+            foreach (var (q, a) in pairs)
+            {
+                sb.AppendLine($"[{exchangeNum++}] {KindLabel(ClassifyQuestion(q))}");
+                sb.AppendLine($"INTERVIEWER:   {q}");
+                // This is what the assistant suggested, not what the candidate
+                // actually said. Labelling it CANDIDATE misrepresented the record.
+                sb.AppendLine($"AI SUGGESTED:  {a}");
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
         // COPY TRANSCRIPT
         // ══════════════════════════════════════════════════════════════════════
 
@@ -534,27 +734,9 @@ namespace InterviewCopilot
         {
             if (_selectedSession == null) return;
 
-            var pairs = ParseQaPairs(_selectedSession.AllLines);
-
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine(_selectedSession.DisplayTitle);
-            sb.AppendLine(_selectedSession.DisplayDate);
-            sb.AppendLine(_selectedSession.DisplayStats);
-            sb.AppendLine(new string('─', 50));
-            sb.AppendLine();
-
-            int exchangeNum = 1;
-            foreach (var (q, a) in pairs)
-            {
-                sb.AppendLine($"[Exchange {exchangeNum++}]");
-                sb.AppendLine($"INTERVIEWER: {q}");
-                sb.AppendLine($"CANDIDATE:   {a}");
-                sb.AppendLine();
-            }
-
             try
             {
-                Clipboard.SetText(sb.ToString());
+                Clipboard.SetText(BuildTranscriptDocument(_selectedSession));
                 // Flash the button label for 2 seconds to confirm copy
                 CopyTranscriptBtn.Content = "✓ Copied!";
                 var timer = new System.Windows.Threading.DispatcherTimer
@@ -589,15 +771,9 @@ namespace InterviewCopilot
 
             try
             {
-                if (_selectedSession.IsCloud)
-                {
-                    // Cloud sessions have no local file — write AllLines to disk
-                    File.WriteAllLines(dlg.FileName, _selectedSession.AllLines, Encoding.UTF8);
-                }
-                else
-                {
-                    File.WriteAllLines(dlg.FileName, _selectedSession.AllLines, Encoding.UTF8);
-                }
+                // Was dumping the raw internal lines, so the exported file still
+                // carried the "SESSION n | model | date" header and Q:/A: prefixes.
+                File.WriteAllText(dlg.FileName, BuildTranscriptDocument(_selectedSession), Encoding.UTF8);
                 MessageBox.Show(this, "Session exported successfully.", "Export Complete",
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -633,6 +809,7 @@ namespace InterviewCopilot
         public DateTime CreatedAt      { get; set; }
         public int      QuestionCount  { get; set; }
         public int      AnswerCount    { get; set; }
+        public int      DurationSeconds { get; set; }
         public string   ModelName      { get; set; } = "";
         public string[] AllLines       { get; set; } = Array.Empty<string>();
 
