@@ -2646,11 +2646,20 @@ namespace InterviewCopilot
                 }, TaskScheduler.Default);
                 return;
             }
-            // Space is no longer handled here — the global hook (GlobalHotkey.cs) now fires
-            // unconditionally for Space regardless of window focus, so there is a single path
-            // instead of two that could race/double-fire while this window had focus. Typing a
-            // literal space in a text field still works normally: the hook never marks the key
-            // event handled, and HandleSpaceDown/Up separately guard via IsTypingInTextField().
+            // The global hook (GlobalHotkey.cs, WH_KEYBOARD_LL) is the single source of truth
+            // for what Space DOES — it operates below WPF's routed-event system entirely, so
+            // marking the event handled here cannot stop it from firing, and does not create
+            // a second path. What it does stop is WPF's own default behavior: any Button that
+            // currently has keyboard focus (e.g. the Screen AI button after it was clicked)
+            // activates itself on Space and fires its own Click handler. Without this, one
+            // physical Space press could both toggle the mic (via the hook) AND re-trigger
+            // Screen Analysis (via the focused button), which is what a user reported seeing.
+            // Typing a literal space in a text field is unaffected: WPF checks focus before
+            // this handler runs, so a focused TextBox never reaches this branch.
+            if (e.Key == System.Windows.Input.Key.Space && !IsTypingInTextField())
+            {
+                e.Handled = true;
+            }
         }
 
         private void Window_PreviewKeyUp(object sender, System.Windows.Input.KeyEventArgs e)
