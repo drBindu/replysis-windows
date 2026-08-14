@@ -1,3 +1,5 @@
+import sys  # bare exit() is only defined when the site module loads; under a
+# PyInstaller build it is not, so every exit() below must be sys.exit().
 import os
 import json
 import argparse
@@ -11,6 +13,17 @@ import time
 import urllib.request
 import urllib.error
 from collections import deque
+
+# A PyInstaller build gets stdout on the legacy Windows code page rather than
+# UTF-8. Printing any non-ASCII character then raised UnicodeEncodeError, which
+# the connection loop caught as a transport failure and retried forever, so the
+# app sat on "connecting" and never came online. Force UTF-8 both ways; the C#
+# side reads these pipes as UTF-8 to match.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # PyAudioWPatch supports WASAPI loopback (as_loopback=True); fall back to stock pyaudio.
 try:
@@ -380,7 +393,7 @@ try:
 except ImportError as e:
     print(f">>> FATAL: speechmatics package missing - {e}", flush=True)
     print(">>> Fix: pip install speechmatics", flush=True)
-    exit(1)
+    sys.exit(1)
 
 
 # ── ARGS ──────────────────────────────────────────────────────────────────────
@@ -429,7 +442,7 @@ _USE_SARVAM = args.language in SARVAM_LANG_MAP
 _env_key = os.environ.get("SM_API_KEY", "")
 if not _env_key and not _USE_SARVAM:
     print(">>> FATAL: SM_API_KEY environment variable not set.", flush=True)
-    exit(1)
+    sys.exit(1)
 args.key = _env_key
 
 
@@ -729,7 +742,7 @@ except Exception as e:
     print(f">>> FATAL: Cannot open audio stream - {e}", flush=True)
     try: p.terminate()
     except Exception: pass
-    exit(1)
+    sys.exit(1)
 
 SILENCE = b"\x00" * (CHUNK_FRAMES * 2)
 
@@ -1024,7 +1037,7 @@ async def run_sarvam():
     if not api_key:
         print(">>> FATAL: SARVAM_API_KEY not set — this language needs a Sarvam key. "
               "Add it in Settings.", flush=True)
-        exit(2)
+        sys.exit(2)
 
     lang_code = SARVAM_LANG_MAP.get(args.language, "te-IN")
     qs = (f"language-code={lang_code}&model=saarika:v2.5&mode=transcribe"
@@ -1114,7 +1127,7 @@ async def run_sarvam():
             # "Fix your Sarvam key in Settings" instead of looking frozen.
             if "401" in msg or "403" in msg or "Unauthorized" in msg or "Forbidden" in msg:
                 print(">>> FATAL: Sarvam auth failed (exit 2) — check your Sarvam API key in Settings.", flush=True)
-                exit(2)
+                sys.exit(2)
             print(f">>> [SARVAM] disconnected/error: {e}", flush=True)
             await asyncio.sleep(reconnect_delay)
             reconnect_delay = min(reconnect_delay * 2, 30)
@@ -1183,7 +1196,7 @@ async def main():
                         auth_errors += 1
                         if auth_errors >= len(endpoints):
                             print(">>> FATAL: Could not obtain a real-time auth token. Check your Speechmatics key in Settings.", flush=True)
-                            exit(2)
+                            sys.exit(2)
                         continue
 
                 print(f">>>[Attempt {attempt}] Connecting to {endpoint}...", flush=True)
@@ -1631,7 +1644,7 @@ async def main():
                     print(f">>> Auth rejected on {endpoint} — trying next endpoint before giving up...", flush=True)
                     if auth_errors >= len(endpoints):
                         print(">>> FATAL: API key rejected on ALL endpoints. Check your Speechmatics key in Settings.", flush=True)
-                        exit(2)  # exit code 2 = auth failure (C# uses this to skip restart)
+                        sys.exit(2)  # exit code 2 = auth failure (C# uses this to skip restart)
                     continue
 
                 if "Audio Usage Exceeded" in err or "timelimit_exceeded" in err.lower():

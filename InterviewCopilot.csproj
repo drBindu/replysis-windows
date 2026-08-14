@@ -33,6 +33,15 @@
     <Content Include="requirements.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <!-- The self-contained speech engine, built by tools\build-engine.ps1.
+         Without this the app shipped only the .py script and needed Python plus
+         PyAudio already installed on the machine, so transcription could not
+         work on a customer's PC at all. Ships under engine\ next to the app;
+         if the folder is absent the app still falls back to a system Python. -->
+    <Content Include="engine-dist\speechmatics_engine\**\*">
+      <Link>engine\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

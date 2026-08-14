@@ -29,3 +29,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# PyInstaller engine build output (built by tools/build-engine.ps1)
+engine-dist/
+build/

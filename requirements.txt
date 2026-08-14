@@ -1,3 +1,6 @@
 PyAudio==0.2.14
-speechmatics>=1.8.0,<2.0.0
+# The import name is "speechmatics" but the distribution is "speechmatics-python".
+# This previously read "speechmatics>=1.8.0,<2.0.0", which resolves to nothing on
+# current Python, so anyone following these instructions could not install it.
+speechmatics-python==5.0.0
 packaging>=24.0,<26.0

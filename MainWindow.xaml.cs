@@ -2337,7 +2337,17 @@ namespace InterviewCopilot
                 _engineFatalReason = "";
 
                 string pyScript = Path.Combine(scriptFolder, "speechmatics_engine.py");
-                if (!File.Exists(pyScript)) { DebugWindow.Log("ENGINE", "❌ Not found: " + scriptFolder); return; }
+                string bundledEngine = BundledEnginePath();
+                bool haveBundledEngine = bundledEngine.Length > 0;
+
+                // Only the script path needs a Python interpreter behind it. When the
+                // self-contained engine ships alongside the app there is nothing for
+                // the user to install, so a missing script is not a problem.
+                if (!haveBundledEngine && !File.Exists(pyScript))
+                {
+                    DebugWindow.Log("ENGINE", "Engine not found under: " + scriptFolder);
+                    return;
+                }
                 // Speechmatics key is always allocated server-side per device/user —
                 // there is no user-facing override; keys are admin-managed only.
                 string smKey = UserSession.HasValidSpeechmaticsKey
@@ -2361,30 +2371,46 @@ namespace InterviewCopilot
                     return;
                 }
 
-                // Resolve Python executable: try "py" launcher first (Windows standard),
-                // then "python", then "python3" — log which one succeeds.
-                string? pyExe = await ResolvePythonExecutableAsync().ConfigureAwait(false);
-                if (generation != Volatile.Read(ref _engineStartGeneration)) return;
-                if (string.IsNullOrWhiteSpace(pyExe))
+                // Prefer the engine we ship. Falling back to a system Python keeps
+                // working for anyone running from source, where engine\ is absent.
+                string engineExe;
+                string scriptArg;
+
+                if (haveBundledEngine)
                 {
-                    // Python alone is not enough: the engine also needs the packages
-                    // in requirements.txt, so naming only the runtime sent people
-                    // away to install it and hit the same wall again.
-                    _engineFatalReason =
-                        "Install Python 3.11 or newer, then run: pip install -r requirements.txt";
-                    _engineAuthFailed = true;
-                    _ = Dispatcher.BeginInvoke(new Action(ShowEngineAuthError));
-                    return;
+                    engineExe = bundledEngine;
+                    scriptArg = "";
+                    DebugWindow.Log("ENGINE", "Using the bundled speech engine");
                 }
-                DebugWindow.Log("ENGINE", $"Python executable: {pyExe}");
+                else
+                {
+                    // Note: only the "py" launcher is probed, so the -3 below is
+                    // always a launcher argument and never passed to python.exe.
+                    string? pyExe = await ResolvePythonExecutableAsync().ConfigureAwait(false);
+                    if (generation != Volatile.Read(ref _engineStartGeneration)) return;
+                    if (string.IsNullOrWhiteSpace(pyExe))
+                    {
+                        // Python alone is not enough: the engine also needs the packages
+                        // in requirements.txt, so naming only the runtime sent people
+                        // away to install it and hit the same wall again.
+                        _engineFatalReason =
+                            "Install Python 3.11 or newer, then run: pip install -r requirements.txt";
+                        _engineAuthFailed = true;
+                        _ = Dispatcher.BeginInvoke(new Action(ShowEngineAuthError));
+                        return;
+                    }
+                    engineExe = pyExe;
+                    scriptArg = $"-3 \"{pyScript}\"";
+                    DebugWindow.Log("ENGINE", $"No bundled engine; using Python at {pyExe}");
+                }
 
                 speechmaticsProcess = new Process();
-                speechmaticsProcess.StartInfo.FileName = pyExe;
+                speechmaticsProcess.StartInfo.FileName = engineExe;
                 WriteVocabFile();   // interview-specific terms → better STT accuracy
                 string deviceArg = _audioDeviceId >= 0 ? $" --device {_audioDeviceId}" : "";
                 string modeArg = $" --mode {CaptureModeFor(_listeningMode)}";
                 string langArg   = $" --language {SettingsWindow.GetTranscriptLanguage()}";
-                speechmaticsProcess.StartInfo.Arguments = $"-3 \"{pyScript}\"{deviceArg}{modeArg}{langArg}";
+                speechmaticsProcess.StartInfo.Arguments = $"{scriptArg}{deviceArg}{modeArg}{langArg}";
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SM_API_KEY"] = smKey;
                 // Sarvam key for Telugu / other Speechmatics-unsupported languages. Passed via
                 // env (never on the command line) exactly like the Speechmatics key.
@@ -2394,6 +2420,10 @@ namespace InterviewCopilot
                 speechmaticsProcess.StartInfo.UseShellExecute = false;
                 speechmaticsProcess.StartInfo.RedirectStandardOutput = true;
                 speechmaticsProcess.StartInfo.RedirectStandardError = true;
+                // The engine forces its pipes to UTF-8; decode them the same way,
+                // otherwise any non-ASCII it prints arrives as mojibake.
+                speechmaticsProcess.StartInfo.StandardOutputEncoding = Encoding.UTF8;
+                speechmaticsProcess.StartInfo.StandardErrorEncoding = Encoding.UTF8;
                 speechmaticsProcess.Start();
                 DebugWindow.Log("ENGINE", $"STARTED | PID: {speechmaticsProcess.Id}");
 
@@ -2626,6 +2656,21 @@ namespace InterviewCopilot
                 _pythonResolutionTask = Task.Run(ResolvePythonExecutable);
                 return _pythonResolutionTask;
             }
+        }
+
+        /// <summary>
+        /// Path to the self-contained speech engine shipped beside the app, or ""
+        /// when running from source without a build of it.
+        /// </summary>
+        private string BundledEnginePath()
+        {
+            foreach (string root in new[] { AppContext.BaseDirectory, scriptFolder })
+            {
+                if (string.IsNullOrEmpty(root)) continue;
+                string candidate = Path.Combine(root, "engine", "speechmatics_engine.exe");
+                if (File.Exists(candidate)) return candidate;
+            }
+            return "";
         }
 
         private static string? ResolvePythonExecutable()
