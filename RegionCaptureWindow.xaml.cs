@@ -15,6 +15,14 @@ namespace InterviewCopilot
         public RegionCaptureWindow()
         {
             InitializeComponent();
+
+            // Every other window in the app excludes itself from capture; this one
+            // did not. It covers the entire desktop with a dark wash, an
+            // instruction card and a bright selection rectangle, so choosing
+            // "pick just one part" during a shared interview drew all of that on
+            // the interviewer's screen and gave the tool away outright.
+            try { WindowStealth.SetStealthMode(this, SettingsWindow.GetStealthMode()); } catch { }
+
             Left = SystemParameters.VirtualScreenLeft;
             Top = SystemParameters.VirtualScreenTop;
             Width = SystemParameters.VirtualScreenWidth;

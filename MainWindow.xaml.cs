@@ -35,6 +35,9 @@ namespace InterviewCopilot
         private const int    AutoTurnMinimumSpeechMs = 500;   // reject clicks/noise bursts
         private const int    AutoTurnMinimumChars    = 4;     // reject empty or tiny fragments
         private const int    RecordingSaveTimeoutMs  = 10_000;
+        // Shorter on exit: the app must still close promptly, and anything left
+        // unprotected is secured by SecurePendingAudioRecordings on next launch.
+        private const int    ShutdownRecordingSaveTimeoutMs = 3_000;
         private const long   MaxResumeFileBytes      = 10 * 1024 * 1024;
         private const int    MaxResumeTextChars      = 100_000;
         private const int    MaxAiResponseChars      = 100_000;
@@ -3456,13 +3459,29 @@ namespace InterviewCopilot
             EndSession();
             PresenceTracker.Stop();
 
-            // Run recording-save wait on a background thread so the UI thread is never frozen
+            // Let the engine finish writing the current recording before killing it.
+            // This used to be fire-and-forget running alongside the kill below, which
+            // lost the race two ways: the process died mid-write, and once
+            // KillAndDisposeEngine had nulled the field the wait saw no process and
+            // reported success immediately, so an incomplete file was protected.
+            // The process also exits as soon as this method returns, so a detached
+            // task had no chance to finish. Bounded and shorter than the in-session
+            // timeout so closing the app still feels immediate; anything still
+            // unprotected is picked up by SecurePendingAudioRecordings on next launch.
             if (hadActiveRecording)
-                Task.Run(async () =>
+            {
+                try
                 {
-                    if (await WaitForRecordingSaveAsync(recordingId, RecordingSaveTimeoutMs))
-                        ProtectRecording(sessionNumber);
-                });
+                    bool saved = Task.Run(() =>
+                        WaitForRecordingSaveAsync(recordingId, ShutdownRecordingSaveTimeoutMs))
+                        .GetAwaiter().GetResult();
+                    if (saved) ProtectRecording(sessionNumber);
+                }
+                catch (Exception ex)
+                {
+                    DebugWindow.Log("SESSION", $"Could not finish saving the recording on exit: {ex.Message}");
+                }
+            }
 
             Interlocked.Increment(ref _engineStartGeneration);
             _engineCts.Cancel();
