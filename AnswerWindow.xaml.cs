@@ -91,17 +91,7 @@ namespace InterviewCopilot
             }
 
             double opacity = SettingsWindow.GetOverlayOpacity();
-            // This reuses the main window's glass-opacity preference, but the main
-            // window's glass look works because its individual cards and buttons have
-            // their own opaque backing — the outer frame can be very transparent and
-            // everything on it stays readable. This overlay has no such inner panel:
-            // MainBorder is the ONLY background layer behind the answer text. At the
-            // old 0.06 floor, and even at the 0.62 default (~24% opaque), whatever sat
-            // behind the window on the user's screen read through clearly enough to
-            // overlap and obscure the answer they opened this window to read. The
-            // floor is raised so the backdrop never drops below legible, while the
-            // slider still visibly darkens it further above that floor.
-            double backdropOpacity = Math.Clamp((opacity - 0.50) / 0.50, 0.55, 1.0);
+            double backdropOpacity = Math.Clamp((opacity - 0.50) / 0.50, 0.06, 1.0);
             byte alpha = (byte)Math.Clamp(backdropOpacity * 255.0, 0, 255);
             MainBorder.Background = new SolidColorBrush(Color.FromArgb(alpha, 0x09, 0x0B, 0x12));
             MainBorder.Opacity = 1;
