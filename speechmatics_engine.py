@@ -196,6 +196,35 @@ def _read_stream_timeout(stream, frames, timeout_sec, label):
     return result[0]
 
 
+def open_stream_with_timeout(p, open_kwargs, timeout_sec=6.0):
+    """Open a PortAudio stream without letting one wedged device hang startup.
+
+    A virtual input left in a bad state (an app killed mid-session, driver
+    software still loading) can block p.open() indefinitely. That stranded the
+    whole engine before it ever reached the transcription socket, so the app
+    sat on "connecting" with no way to recover but a restart. Opening on a
+    daemon thread means a stuck device is abandoned and the caller falls back,
+    which downgrades the session instead of losing it.
+    """
+    result = {}
+
+    def _worker():
+        try:
+            result["stream"] = p.open(**open_kwargs)
+        except Exception as ex:            # noqa: BLE001 — reported to the caller below
+            result["error"] = ex
+
+    worker = threading.Thread(target=_worker, daemon=True)
+    worker.start()
+    worker.join(timeout_sec)
+
+    if worker.is_alive():
+        raise TimeoutError(f"audio device did not open within {timeout_sec:.0f}s")
+    if "error" in result:
+        raise result["error"]
+    return result.get("stream")
+
+
 def find_wasapi_loopback_device(p):
     """
     Find the WASAPI loopback device that actually carries audio.
@@ -653,7 +682,7 @@ try:
         _mic_chunk_frames    = CHUNK_FRAMES
 
         try:
-            mic_stream = p.open(**mic_kwargs)
+            mic_stream = open_stream_with_timeout(p, mic_kwargs)
             print(">>> MIC stream opened OK (16kHz mono)", flush=True)
         except Exception as ex_mic1:
             print(f">>> MIC 16kHz open failed ({ex_mic1}) — attempting native device rate fallback...", flush=True)
@@ -669,7 +698,7 @@ try:
                 mic_kwargs["frames_per_buffer"] = n_chunk
                 mic_kwargs["input_device_index"] = target_dev_idx
 
-                mic_stream = p.open(**mic_kwargs)
+                mic_stream = open_stream_with_timeout(p, mic_kwargs)
                 _mic_native_rate     = n_rate
                 _mic_native_channels = n_ch
                 _mic_chunk_frames    = n_chunk
@@ -694,14 +723,14 @@ try:
             # Chunk size at native rate that equals CHUNK_FRAMES at 16 kHz
             lb_chunk = max(CHUNK_FRAMES, int(CHUNK_FRAMES * lb_rate / SAMPLE_RATE))
             try:
-                sys_stream = p.open(
+                sys_stream = open_stream_with_timeout(p, dict(
                     format=pyaudio.paInt16,
                     channels=lb_ch,
                     rate=lb_rate,
                     input=True,
                     input_device_index=lb_idx,
                     frames_per_buffer=lb_chunk,
-                )
+                ))
                 dev_name = p.get_device_info_by_index(lb_idx)['name']
                 print(f">>> SYSTEM AUDIO (WASAPI loopback): [{lb_idx}] {dev_name} {lb_rate}Hz {lb_ch}ch", flush=True)
                 _sys_native_rate     = lb_rate
@@ -718,14 +747,14 @@ try:
             sys_device_index = find_vbcable_device(p)
         if sys_device_index is not None:
             try:
-                sys_stream = p.open(
+                sys_stream = open_stream_with_timeout(p, dict(
                     format=pyaudio.paInt16,
                     channels=1,
                     rate=SAMPLE_RATE,
                     input=True,
                     input_device_index=sys_device_index,
                     frames_per_buffer=CHUNK_FRAMES,
-                )
+                ))
                 sys_name = p.get_device_info_by_index(sys_device_index)['name']
                 print(f">>> SYSTEM AUDIO (VB-Cable): [{sys_device_index}] {sys_name}", flush=True)
                 _sys_native_rate     = SAMPLE_RATE
