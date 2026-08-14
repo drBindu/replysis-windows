@@ -1,4 +1,9 @@
 PyAudio==0.2.14
+# Adds WASAPI loopback, which is how the engine hears the interviewer without
+# any extra software. Without it the only route to system audio is a VB-Cable
+# install, so a customer who has not installed that could not hear their
+# interviewer at all. The engine prefers this and falls back to stock pyaudio.
+PyAudioWPatch==0.2.12.7
 # The import name is "speechmatics" but the distribution is "speechmatics-python".
 # This previously read "speechmatics>=1.8.0,<2.0.0", which resolves to nothing on
 # current Python, so anyone following these instructions could not install it.

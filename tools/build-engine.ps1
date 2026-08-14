@@ -27,7 +27,12 @@ Write-Host "Installing engine dependencies..."
 & $python -m pip install --quiet -r requirements.txt pyinstaller
 
 Write-Host "Building engine..."
+# pyaudiowpatch is imported inside a try/except, which PyInstaller's static
+# analysis walked straight past, so the frozen engine silently fell back to
+# stock pyaudio and lost WASAPI loopback. Without it, system audio needs a
+# VB-Cable install, so collect it explicitly.
 & $python -m PyInstaller --noconfirm --onedir `
+    --collect-all pyaudiowpatch `
     --name speechmatics_engine `
     --distpath (Join-Path $root "engine-dist") `
     --workpath (Join-Path $root "build\pyinstaller") `
