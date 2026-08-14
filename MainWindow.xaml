@@ -891,7 +891,7 @@
                                             </Button>
                                             <Button x:Name="ClearAnswerBtn" Style="{StaticResource GhostBtn}"
                                                     Click="ClearAnswerBtn_Click" Padding="9,4" Margin="0,0,5,0"
-                                                    ToolTip="Clear">
+                                                    ToolTip="Clear the screen and conversation memory &#183; stays in this session">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets"
                                                                FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
@@ -900,20 +900,12 @@
                                             </Button>
                                             <Button x:Name="NewSessionBtn" Style="{StaticResource GreenBtn}"
                                                     Click="NewSessionBtn_Click" Padding="12,4"
-                                                    ToolTip="Start a fresh interview session">
+                                                    ToolTip="Saves this session automatically, then starts a new one with your resume and role still loaded">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets"
                                                                FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                                     <TextBlock Text="New Session" FontSize="11"/>
                                                     </StackPanel>
-                                            </Button>
-                                            <Button x:Name="SetupCheckBtn" Style="{StaticResource GhostBtn}"
-                                                    Click="SetupCheckBtn_Click" Padding="9,4" Margin="5,0,0,0"
-                                                    ToolTip="Test connection, audio, and capture protection">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets" FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Setup Check" FontSize="11"/>
-                                                </StackPanel>
                                             </Button>
                                         </StackPanel>
                                     </DockPanel>

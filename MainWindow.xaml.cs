@@ -51,7 +51,6 @@ namespace InterviewCopilot
         private bool _creditsFetched = false;
         private bool isRecording = false;
         private bool _newSessionInProgress;
-        private bool _preflightOpen;
         private bool _resumeCollapsed = false;
         private const double ResumePanelExpandedWidth = 260;
         private bool _isCameraMode = false;
@@ -298,9 +297,6 @@ namespace InterviewCopilot
 
                     _engineMonitorTimer.Start();
 
-                    // The setup check no longer opens itself. It stays available on demand
-                    // from the "Setup Check" button (SetupCheckBtn_Click -> ShowPreflightAsync),
-                    // which is the only remaining caller.
                     creditsRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(CreditRefreshMinutes) };
                     creditsRefreshTimer.Tick += async (s2, e2) =>
                     {
@@ -2830,9 +2826,14 @@ namespace InterviewCopilot
             {
             string recordingId = _recordingSessionId;
             bool hadActiveRecording = isRecording;
+            int previousSessionNumber = sessionNumber;
+            bool previousSessionSaved = false;
             EndSession();
             if (hadActiveRecording && await WaitForRecordingSaveAsync(recordingId, RecordingSaveTimeoutMs))
+            {
                 ProtectRecording(sessionNumber);
+                previousSessionSaved = true;
+            }
             // Don't increment here — StartNewSession's while(File.Exists) scan is the sole source of truth
             TranscriptTextBlock.Text = "";
             TranscriptHint.Visibility = Visibility.Visible;
@@ -2843,6 +2844,10 @@ namespace InterviewCopilot
 
             if (!isRecording)
                 AiAnswerBox.Text = "We could not start a new session. Please try again.";
+            else if (previousSessionSaved)
+                AiAnswerBox.Text = $"Session {previousSessionNumber} saved. You are now in session {sessionNumber}, with your resume and role still loaded.";
+            else
+                AiAnswerBox.Text = $"Session {sessionNumber} started. Your resume and role are still loaded.";
             }
             catch (Exception ex)
             {
@@ -2857,30 +2862,6 @@ namespace InterviewCopilot
                     button.IsEnabled = true;
                     button.Content = originalContent;
                 }
-            }
-        }
-
-        private async void SetupCheckBtn_Click(object sender, RoutedEventArgs e)
-            => await ShowPreflightAsync();
-
-        private async Task<bool> ShowPreflightAsync()
-        {
-            if (_preflightOpen) return false;
-            _preflightOpen = true;
-            try
-            {
-                var window = new PreflightWindow(
-                    () => _engineOnline && speechmaticsProcess != null && !speechmaticsProcess.HasExited,
-                    _stealthMode)
-                {
-                    Owner = this
-                };
-                return window.ShowDialog() == true && window.ChecksPassed;
-            }
-            finally
-            {
-                _preflightOpen = false;
-                await Task.CompletedTask;
             }
         }
 
