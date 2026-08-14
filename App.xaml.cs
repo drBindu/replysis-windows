@@ -166,14 +166,18 @@ namespace InterviewCopilot
                 _lastCrashNoticeUtc = DateTime.UtcNow;
             }
 
+            // Deliberately not a MessageBox. This can fire at any moment, including
+            // mid-interview: a dialog is a separate top-level window, so it never
+            // carries the exclude-from-capture flag and would appear on a screen
+            // share. MainWindow.Alert keeps the notice inside the hidden window,
+            // and falls back to a dialog only before any window exists.
             try
             {
-                MessageBox.Show(
-                    "Replysis recovered from an unexpected problem.\n\n" +
-                    "Anything already saved remains available. You can keep working.",
-                    "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Information);
+                InterviewCopilot.MainWindow.Alert(
+                    "Replysis recovered from an unexpected problem",
+                    "Anything already saved remains available. You can keep working.");
             }
-            catch { /* a failed dialog must not escalate into a second crash */ }
+            catch { /* a failed notice must not escalate into a second crash */ }
         }
 
         protected override void OnExit(ExitEventArgs e)

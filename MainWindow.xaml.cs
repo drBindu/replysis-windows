@@ -1102,6 +1102,72 @@ namespace InterviewCopilot
             _ = HandleRegionScreenAnalysisAsync();
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        // IN-APP ALERT
+        // Replaces MessageBox for anything that can fire while an interview is
+        // running. A MessageBox is its own top-level window, so it never gets the
+        // WDA_EXCLUDEFROMCAPTURE flag WindowStealth applies, and it showed up on
+        // the interviewer's screen share. This banner is inside a window that is
+        // already excluded from capture, and it is not modal.
+        // ══════════════════════════════════════════════════════════════════════
+
+        private DispatcherTimer? _alertTimer;
+
+        /// <summary>Routes an alert to whichever surface is currently on screen.</summary>
+        internal static void Alert(string title, string message)
+        {
+            var main = System.Windows.Application.Current?.MainWindow as MainWindow;
+            if (main == null)
+            {
+                // No window yet (startup faults). A dialog is the only option left,
+                // and nothing is being shared at this point anyway.
+                try
+                {
+                    MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch { }
+                return;
+            }
+
+            try { main.Dispatcher.Invoke(() => main.ShowInAppAlert(title, message)); }
+            catch { }
+        }
+
+        internal void ShowInAppAlert(string title, string message)
+        {
+            // In compact overlay the main window is hidden, so the banner would
+            // never be seen. The overlay is the visible surface there.
+            if (_isCameraMode && answerWindow != null)
+            {
+                answerWindow.UpdateAnswer(string.IsNullOrWhiteSpace(message) ? title : title + "\n\n" + message);
+                return;
+            }
+
+            if (InAppAlert == null) return;
+
+            InAppAlertTitle.Text = title;
+            InAppAlertBody.Text = message;
+            InAppAlertBody.Visibility = string.IsNullOrWhiteSpace(message)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            InAppAlert.Visibility = Visibility.Visible;
+
+            _alertTimer?.Stop();
+            _alertTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(9) };
+            _alertTimer.Tick += (_, _) =>
+            {
+                _alertTimer?.Stop();
+                if (InAppAlert != null) InAppAlert.Visibility = Visibility.Collapsed;
+            };
+            _alertTimer.Start();
+        }
+
+        private void InAppAlertDismiss_Click(object sender, RoutedEventArgs e)
+        {
+            _alertTimer?.Stop();
+            if (InAppAlert != null) InAppAlert.Visibility = Visibility.Collapsed;
+        }
+
         private void CompactOverlayPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             e.Handled = true;
@@ -1623,10 +1689,12 @@ namespace InterviewCopilot
                 // _creditsFetched prevents false-blocking before the first backend response.
                 if (!UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold)
                 {
-                    // Show warning in a non-intrusive way — don't pollute the AI answer panel
-                    System.Windows.MessageBox.Show(
-                        $"You only have {UserSession.Credits} credit{(UserSession.Credits == 1 ? "" : "s")} left.\n\nOpen the Replysis AI pricing page to get more.",
-                        "Credits Low", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    // This fires the instant a user asks a question, so it used to
+                    // put a Windows dialog on screen in the middle of a live,
+                    // possibly shared, interview. Shown in-app instead.
+                    ShowInAppAlert(
+                        $"You have {UserSession.Credits} credit{(UserSession.Credits == 1 ? "" : "s")} left",
+                        "Open the Replysis pricing page to top up. Your session stays open.");
                     isProcessing = false;
                     UpdateMicUi();
                     return;

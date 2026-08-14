@@ -59,7 +59,7 @@ namespace InterviewCopilot
         private async Task DoSignIn()
         {
             string email    = EmailBox.Text.Trim();
-            string password = PasswordBox.Password;
+            string password = CurrentPassword;
 
             if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
             {
@@ -555,6 +555,10 @@ namespace InterviewCopilot
             GoogleSignInBtn.IsEnabled = !loading;
             EmailBox.IsEnabled        = !loading;
             PasswordBox.IsEnabled     = !loading;
+            // The revealed field is a separate control, so it needs locking too,
+            // otherwise the password stays editable while a request is in flight.
+            PasswordPlainBox.IsEnabled  = !loading;
+            RevealPasswordBtn.IsEnabled = !loading;
 
             var tmpl = SignInBtn.Template;
             if (tmpl == null) return;
@@ -589,13 +593,54 @@ namespace InterviewCopilot
 
         // Input focus highlight
         private void EmailBox_GotFocus(object sender, RoutedEventArgs e) =>
-            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#38BDF8"));
+            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#34E08A"));
         private void EmailBox_LostFocus(object sender, RoutedEventArgs e) =>
-            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#30363d"));
+            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#26364C"));
         private void PasswordBox_GotFocus(object sender, RoutedEventArgs e) =>
-            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#38BDF8"));
+            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#34E08A"));
         private void PasswordBox_LostFocus(object sender, RoutedEventArgs e) =>
-            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#30363d"));
+            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#26364C"));
+
+        // ══════════════════════════════════════════════════════════════════════
+        // PASSWORD REVEAL
+        // PasswordBox cannot display its own characters, so revealing swaps in a
+        // plain TextBox. Whichever control is visible holds the live value, and
+        // CurrentPassword is the single place that decides which one that is, so
+        // sign-in can never read a stale copy.
+        // ══════════════════════════════════════════════════════════════════════
+
+        private bool _passwordRevealed;
+
+        private string CurrentPassword =>
+            _passwordRevealed ? PasswordPlainBox.Text : PasswordBox.Password;
+
+        private void RevealPasswordBtn_Click(object sender, RoutedEventArgs e)
+        {
+            _passwordRevealed = !_passwordRevealed;
+
+            if (_passwordRevealed)
+            {
+                PasswordPlainBox.Text = PasswordBox.Password;
+                PasswordBox.Visibility = Visibility.Collapsed;
+                PasswordPlainBox.Visibility = Visibility.Visible;
+                PasswordPlainBox.CaretIndex = PasswordPlainBox.Text.Length;
+                PasswordPlainBox.Focus();
+                RevealPasswordBtn.ToolTip = "Hide password";
+            }
+            else
+            {
+                PasswordBox.Password = PasswordPlainBox.Text;
+                PasswordPlainBox.Visibility = Visibility.Collapsed;
+                PasswordBox.Visibility = Visibility.Visible;
+                PasswordBox.Focus();
+                RevealPasswordBtn.ToolTip = "Show password";
+            }
+
+            // Same eye glyph throughout, tinted when active. Swapping to a second
+            // glyph risks rendering an empty box if that codepoint is missing.
+            RevealPasswordIcon.Foreground = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(_passwordRevealed ? "#34E08A" : "#6F8198"));
+        }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
