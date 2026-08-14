@@ -868,9 +868,18 @@ namespace InterviewCopilot
             this.Opacity = 1.0;
             // Map the stored 0.50-1.0 preference onto backdrop alpha 0-100% so the
             // slider percentage reads directly as glass darkness (25% slider = ~25%
-            // black backdrop = mostly see-through glass; 100% = solid). A small floor
-            // keeps the frame faintly visible at the extreme.
-            double bd = Math.Clamp((op - 0.50) / 0.50, 0.06, 1.0);
+            // black backdrop = mostly see-through glass; 100% = solid).
+            //
+            // The "content stays fully opaque" comment above only holds if the panels
+            // sitting on this backdrop have their own solid background. The AI Answer
+            // panel does not — it is a #13FFFFFF tint (7.5% white) with no independent
+            // opacity of its own, so it directly inherits how see-through this backdrop
+            // is. At the old 0.06 floor, and even at the 0.62 default (~24% opaque),
+            // whatever sat behind the window on the user's screen read through clearly
+            // enough to overlap the answer text they opened the window to read. The
+            // floor is raised so the backdrop — and everything relying on it — never
+            // drops below legible, while the slider still visibly darkens it further.
+            double bd = Math.Clamp((op - 0.50) / 0.50, 0.55, 1.0);
             byte a = (byte)Math.Clamp(bd * 255.0, 0, 255);
             if (MainAppBorder != null)
                 MainAppBorder.Background = new SolidColorBrush(Color.FromArgb(a, 0x09, 0x0B, 0x12));
