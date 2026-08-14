@@ -972,7 +972,7 @@ namespace InterviewCopilot
                     StealthPillIcon.Foreground  = B("#84E7B6");
                     StealthPillLabel.Foreground = B("#B6F1D4");
                     StealthPillIcon.Text  = "";
-                    StealthPillLabel.Text = "Hidden";
+                    StealthPillLabel.Text = "HIDDEN";
                     StealthGlow.Color   = (Color)ColorConverter.ConvertFromString("#43D98A");
                     StealthGlow.Opacity = 0.55;
                     StealthPill.ToolTip = "Hidden from screen sharing and screen recording  -  click to toggle";
@@ -985,7 +985,7 @@ namespace InterviewCopilot
                     StealthPillIcon.Foreground  = B("#F3C864");
                     StealthPillLabel.Foreground = B("#F7D68A");
                     StealthPillIcon.Text  = "";
-                    StealthPillLabel.Text = "Visible";
+                    StealthPillLabel.Text = "VISIBLE";
                     StealthGlow.Color   = (Color)ColorConverter.ConvertFromString("#E8A93A");
                     StealthGlow.Opacity = 0.42;
                     StealthPill.ToolTip = "Stealth OFF - this window IS visible on screen share  -  click to hide";

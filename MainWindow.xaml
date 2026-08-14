@@ -198,6 +198,67 @@
             </Setter>
         </Style>
 
+        <!-- ═══════════════════════════════════════════════════════════════════
+             TOOLBAR PILL SYSTEM
+             The top bar had been hand-tuned pill by pill, so adjacent controls
+             carried three corner radii (11 / 9 / 7), three paddings and three
+             label sizes, and one label was sentence case among small caps. These
+             styles are the single definition, so the row lines up by
+             construction instead of by matching numbers across the file.
+             ═══════════════════════════════════════════════════════════════════ -->
+        <Style x:Key="ToolbarPill" TargetType="Border">
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Background" Value="#101827"/>
+            <Setter Property="BorderBrush" Value="#26364C"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Same geometry, no pointer: read-only status such as the timer. -->
+        <Style x:Key="ToolbarBadge" TargetType="Border" BasedOn="{StaticResource ToolbarPill}">
+            <Setter Property="Cursor" Value="Arrow"/>
+            <Setter Property="Background" Value="#0AFFFFFF"/>
+            <Setter Property="BorderBrush" Value="#16FFFFFF"/>
+        </Style>
+
+        <Style x:Key="ToolbarPillLabel" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#A9B6C8"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="ToolbarPillIcon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="#84E7B6"/>
+            <Setter Property="Margin" Value="0,0,7,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="ToolbarPillChevron" TargetType="TextBlock">
+            <Setter Property="Text" Value="&#xE70D;"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="8"/>
+            <Setter Property="Foreground" Value="#6F8198"/>
+            <Setter Property="Margin" Value="7,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Separates the row into what you do, how you appear, and who you are,
+             so nine controls read as three short groups rather than one run. -->
+        <Style x:Key="ToolbarDivider" TargetType="Border">
+            <Setter Property="Width" Value="1"/>
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="Background" Value="#22344A"/>
+            <Setter Property="Margin" Value="3,0,9,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <!-- MIC (circular gradient glass) -->
         <!-- Premium circular mic button. The accent RING + outer glow are recolored
              by state in UpdateMicUi (via BorderBrush); the body stays a refined dark
@@ -385,9 +446,8 @@
                             </StackPanel>
 
                             <!-- One compact selector keeps Manual and both hands-free modes organized. -->
-                            <Border x:Name="AutoModePill" CornerRadius="11" Padding="10,5"
-                                    Margin="8,0,0,0" Background="#101827" BorderBrush="#26364C"
-                                    BorderThickness="1" Cursor="Hand" VerticalAlignment="Center"
+                            <Border x:Name="AutoModePill" Style="{StaticResource ToolbarPill}"
+                                    Margin="8,0,0,0"
                                     MouseLeftButtonDown="AutoModePill_Click"
                                     ToolTip="Choose Manual, Interview Auto or Practice Auto">
                                 <Border.Effect>
@@ -397,13 +457,10 @@
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse x:Name="AutoModeDot" Width="6" Height="6" Fill="#607086"
                                              Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="AutoModeLabel" Text="MANUAL" Foreground="#A9B6C8"
-                                               FontSize="9.5" FontWeight="Bold" FontFamily="Segoe UI"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="AutoModeChevron" Text="&#xE70D;"
-                                               FontFamily="Segoe MDL2 Assets" FontSize="8"
-                                               Foreground="#6F8198" Margin="7,0,0,0"
-                                               VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="AutoModeLabel" Text="MANUAL"
+                                               Style="{StaticResource ToolbarPillLabel}"/>
+                                    <TextBlock x:Name="AutoModeChevron"
+                                               Style="{StaticResource ToolbarPillChevron}"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -420,43 +477,35 @@
                                  option. F8/F9 keep working unchanged. Compact overlay used to sit
                                  in this menu, but it is a display mode rather than a way to read
                                  the screen, so it has its own pill and is no longer hidden here. -->
-                            <Border x:Name="AnalyzePill" CornerRadius="11" Padding="10,5"
-                                    Margin="0,0,6,0" Background="#101827" BorderBrush="#26364C"
-                                    BorderThickness="1" Cursor="Hand" VerticalAlignment="Center"
+                            <Border x:Name="AnalyzePill" Style="{StaticResource ToolbarPill}"
                                     MouseLeftButtonDown="AnalyzePill_Click"
                                     ToolTip="Answer a question that is on your screen  &#183;  F8">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                               Foreground="#84E7B6" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="ANALYZE" Foreground="#A9B6C8"
-                                               FontSize="9.5" FontWeight="Bold" FontFamily="Segoe UI"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="8"
-                                               Foreground="#6F8198" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="&#xE722;" Style="{StaticResource ToolbarPillIcon}"/>
+                                    <TextBlock Text="ANALYZE" Style="{StaticResource ToolbarPillLabel}"/>
+                                    <TextBlock Style="{StaticResource ToolbarPillChevron}"/>
                                 </StackPanel>
                             </Border>
 
                             <!-- Compact overlay. Kept on the toolbar rather than inside a menu:
                                  it was the single least-discovered feature in the app, and it is
                                  the mode people need for in-person interviews. -->
-                            <Border x:Name="CompactOverlayPill" CornerRadius="11" Padding="10,5"
-                                    Margin="0,0,8,0" Background="#101827" BorderBrush="#26364C"
-                                    BorderThickness="1" Cursor="Hand" VerticalAlignment="Center"
+                            <Border x:Name="CompactOverlayPill" Style="{StaticResource ToolbarPill}"
                                     MouseLeftButtonDown="CompactOverlayPill_Click"
                                     ToolTip="Shrink to a slim bar at the top of your screen for in-person interviews  &#183;  the full window comes back when you exit">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="&#xE890;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                               Foreground="#84E7B6" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="COMPACT" Foreground="#A9B6C8"
-                                               FontSize="9.5" FontWeight="Bold" FontFamily="Segoe UI"
-                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="&#xE890;" Style="{StaticResource ToolbarPillIcon}"/>
+                                    <TextBlock Text="COMPACT" Style="{StaticResource ToolbarPillLabel}"/>
                                 </StackPanel>
                             </Border>
 
-                            <!-- Stealth / privacy status — tells the user they're hidden from screen share -->
-                            <Border x:Name="StealthPill" CornerRadius="9" Background="#12331F"
-                                    BorderBrush="#255E3D" BorderThickness="1" Padding="9,5" Margin="0,0,6,0"
-                                    VerticalAlignment="Center" Cursor="Hand"
+                            <Border Style="{StaticResource ToolbarDivider}"/>
+
+                            <!-- Stealth / privacy status — tells the user they're hidden from screen share.
+                                 Colours are set from code by state; only the geometry comes from the
+                                 shared pill, so this lines up with its neighbours. -->
+                            <Border x:Name="StealthPill" Style="{StaticResource ToolbarPill}"
+                                    Background="#12331F" BorderBrush="#255E3D"
                                     MouseLeftButtonDown="StealthPill_Click"
                                     ToolTip="Hidden from screen sharing and screen recording  &#183;  click to toggle">
                                 <Border.Effect>
@@ -466,20 +515,17 @@
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse x:Name="StealthDot" Width="6" Height="6" Fill="#48E29A"
                                              Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="StealthPillIcon" Text="&#xE72E;" FontFamily="Segoe MDL2 Assets"
-                                               FontSize="10.5" Foreground="#84E7B6" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="StealthPillLabel" Text="Hidden" Foreground="#AEEFCF"
-                                               FontSize="10.5" FontWeight="Bold" FontFamily="Segoe UI"
-                                               VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="StealthPillIcon" Text="&#xE72E;"
+                                               Style="{StaticResource ToolbarPillIcon}" Margin="0,0,6,0"/>
+                                    <TextBlock x:Name="StealthPillLabel" Text="HIDDEN"
+                                               Style="{StaticResource ToolbarPillLabel}" Foreground="#AEEFCF"/>
                                 </StackPanel>
                             </Border>
 
                             <!-- Help moved into the profile menu ("How it works") to declutter -->
 
                             <!-- Session timer -->
-                            <Border x:Name="SessionTimerBadge" CornerRadius="7"
-                                    Background="#0AFFFFFF" BorderBrush="#16FFFFFF" BorderThickness="1"
-                                    Padding="9,4" Margin="0,0,4,0" VerticalAlignment="Center"
+                            <Border x:Name="SessionTimerBadge" Style="{StaticResource ToolbarBadge}"
                                     Visibility="Collapsed" ToolTip="Session duration">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse Width="5" Height="5" Fill="#F87171" Margin="0,0,6,0"
@@ -524,6 +570,8 @@
                                                Foreground="#A0A0A4" FontSize="11" FontFamily="Segoe UI"/>
                                 </StackPanel>
                             </Border>
+
+                            <Border Style="{StaticResource ToolbarDivider}"/>
 
                             <!-- Profile -->
                             <Border x:Name="ProfileBadge" CornerRadius="18" Padding="7,4" Margin="0,0,4,0"
