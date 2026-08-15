@@ -70,26 +70,33 @@ namespace InterviewCopilot
         }
 
         /// <summary>
-        /// Faults that are local to one operation and leave the rest of the app
-        /// intact: a failed network call, a file that was locked or missing, a
-        /// cancelled task, a malformed response. Everything else (and in
-        /// particular <see cref="OutOfMemoryException"/>, access violations and
-        /// state-corruption errors) is treated as fatal.
+        /// Whether the app can keep running after this fault.
+        ///
+        /// This used to name the survivable exceptions and treat everything else
+        /// as fatal. That inverted the risk for this product. A
+        /// NullReferenceException in any handler, the commonest fault in .NET,
+        /// closed the whole app, and the moment that hurts most is the one it is
+        /// most likely to happen: mid-interview, with the user relying on it.
+        /// Losing the session costs them the interview. Carrying on with a
+        /// missed click or a blank panel usually costs them nothing.
+        ///
+        /// So only faults that genuinely cannot be continued from are fatal now:
+        /// the process is out of memory, the runtime state is corrupt, or the
+        /// deployment is broken. Everything else is logged and survived. This is
+        /// safe for the user's work because the transcript is streamed to disk as
+        /// it arrives and the recording is written by a separate process, so
+        /// staying alive never risks more than it saves.
         /// </summary>
         private static bool IsRecoverable(Exception? ex) => ex switch
         {
-            null                            => false,
-            OperationCanceledException      => true,
-            TimeoutException                => true,
-            System.Net.Http.HttpRequestException => true,
-            System.Net.WebException          => true,
-            System.Text.Json.JsonException   => true,
-            Newtonsoft.Json.JsonException    => true,
-            UnauthorizedAccessException      => true,
-            System.IO.FileNotFoundException  => true,
-            System.IO.DirectoryNotFoundException => true,
-            System.IO.IOException            => true,
-            _                                => false,
+            null                                 => false,
+            OutOfMemoryException                 => false,
+            System.Runtime.InteropServices.SEHException => false,
+            AccessViolationException             => false,
+            BadImageFormatException              => false,
+            TypeLoadException                    => false,
+            MissingMemberException               => false,
+            _                                    => true,
         };
 
         /// <summary>

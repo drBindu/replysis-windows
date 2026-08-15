@@ -63,8 +63,16 @@
     <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
     <GenerateTestArtifacts>True</GenerateTestArtifacts>
     <AppxBundlePlatforms>x64</AppxBundlePlatforms>
-    <AppInstallerUri>https://github.com/moto123a/interview-copilot-windows/releases/latest/download/</AppInstallerUri>
-    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+    <!-- Was pointing at moto123a/interview-copilot-windows, a repo from before the
+         rebrand that no longer receives builds, so any update check would have
+         gone nowhere. Now the current repo.
+         GenerateAppInstallerFile above stays False until the Azure certificate
+         exists and the package is actually hosted: generating the file earlier
+         only produces an artifact describing a download that is not there. Flip
+         it to True at that point and Windows will update sideloaded installs on
+         its own, no in-app prompt needed. -->
+    <AppInstallerUri>https://github.com/drBindu/replysis-windows/releases/latest/download/</AppInstallerUri>
+    <HoursBetweenUpdateChecks>8</HoursBetweenUpdateChecks>
     <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

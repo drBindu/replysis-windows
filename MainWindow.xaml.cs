@@ -2468,7 +2468,11 @@ namespace InterviewCopilot
                                     StartAutoListeningIfReady();
                                 }));
                             }
-                            _ = Dispatcher.BeginInvoke(new Action(() => DebugWindow.Log("PY", line)));
+                            // Logged straight from this reader thread. Marshalling to the UI
+                            // thread first meant every line the engine printed did a
+                            // synchronous file write there; DebugWindow.Log is already
+                            // thread-safe and dispatches its own UI update.
+                            DebugWindow.Log("PY", line);
                         }
                     }
                     catch (OperationCanceledException) { }
@@ -2483,7 +2487,7 @@ namespace InterviewCopilot
                         {
                             string? line = await proc.StandardError.ReadLineAsync(ct).ConfigureAwait(false);
                             if (line == null) break; // EOF
-                            _ = Dispatcher.BeginInvoke(new Action(() => DebugWindow.Log("PY_ERR", line)));
+                            DebugWindow.Log("PY_ERR", line);
 
                             // Fatal Python errors that cannot self-recover — stop the restart loop.
                             // ModuleNotFoundError / ImportError means a pip package is missing.

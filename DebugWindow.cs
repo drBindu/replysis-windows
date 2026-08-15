@@ -15,6 +15,7 @@ namespace InterviewCopilot
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "InterviewCopilot", "debug.log");
         private static readonly object _fileLock = new object();
+        private static bool _logDirReady;
         private static volatile DebugWindow? _instance;
         private readonly List<string> _logs = new List<string>();
         private readonly DispatcherTimer _refreshTimer;
@@ -124,15 +125,22 @@ namespace InterviewCopilot
             _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _refreshTimer.Tick += (s, e) =>
             {
-                if (_logs.Count > 0)
-                {
-                    while (_logs.Count > 200)
-                        _logs.RemoveAt(0);
+                if (_logs.Count == 0) return;
 
-                    logBlock.Text = string.Join("\n", _logs);
-                    scroll.ScrollToBottom();
-                    statusBar.Text = $"Total events: {_logs.Count} | Last: {DateTime.Now:HH:mm:ss.fff}";
-                }
+                // Trimming happens whether or not anyone is looking, so the list
+                // cannot grow through a long session.
+                while (_logs.Count > 200)
+                    _logs.RemoveAt(0);
+
+                // Rebuilding the text is not. This joins 200 lines into one string
+                // and reassigns a TextBlock ten times a second, and the window is
+                // hidden for virtually the whole of an interview, so that was pure
+                // waste on the UI thread exactly when the app needs to feel quick.
+                if (!IsVisible) return;
+
+                logBlock.Text = string.Join("\n", _logs);
+                scroll.ScrollToBottom();
+                statusBar.Text = $"Total events: {_logs.Count} | Last: {DateTime.Now:HH:mm:ss.fff}";
             };
             _refreshTimer.Start();
 
@@ -169,7 +177,13 @@ namespace InterviewCopilot
             {
                 lock (_fileLock)
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
+                    // The directory was being created again for every single line
+                    // logged, and the engine is chatty. Once is enough.
+                    if (!_logDirReady)
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
+                        _logDirReady = true;
+                    }
                     File.AppendAllText(LogFilePath, line + Environment.NewLine);
                 }
             }
