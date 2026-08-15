@@ -436,6 +436,47 @@ namespace InterviewCopilot
 
         private void CancelBtn_Click(object sender, RoutedEventArgs e) => this.Close();
 
+        /// <summary>
+        /// Looks up the latest published Windows release and returns its version if
+        /// it is newer than the installed one, otherwise null. Silent by design: no
+        /// dialogs, no state changes, and every failure is treated as "nothing to
+        /// report", so a GitHub outage never interrupts an interview. The caller
+        /// decides how to surface it. Used by the automatic check on launch, which
+        /// is how someone who installed an older build learns an update exists
+        /// without having to open Settings and press a button.
+        /// </summary>
+        internal static async System.Threading.Tasks.Task<string?> GetNewerVersionOrNullAsync(
+            System.Threading.CancellationToken ct = default)
+        {
+            try
+            {
+                using var timeout = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(8));
+
+                using var req = new System.Net.Http.HttpRequestMessage(
+                    System.Net.Http.HttpMethod.Get,
+                    "https://api.github.com/repos/drBindu/replysis-windows/releases/latest");
+                req.Headers.TryAddWithoutValidation("User-Agent", "Replysis-Win");
+                req.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+
+                using var resp = await SharedHttpClient.Http.SendAsync(req, timeout.Token);
+                if (!resp.IsSuccessStatusCode) return null;
+
+                string json = await resp.Content.ReadAsStringAsync(timeout.Token);
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+
+                string? tag = doc.RootElement.TryGetProperty("tag_name", out var t) ? t.GetString() : null;
+                string? latest = ParseWindowsReleaseTag(tag);
+                if (latest == null) return null;
+
+                return IsVersionNewer(latest, InstalledVersion()) ? latest : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private static bool IsVersionNewer(string candidate, string current) =>
             Version.TryParse(candidate, out Version? candidateVersion) &&
             Version.TryParse(current, out Version? currentVersion) &&

@@ -547,26 +547,9 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Stealth / privacy status — tells the user they're hidden from screen share.
-                                 Colours are set from code by state; only the geometry comes from the
-                                 shared pill, so this lines up with its neighbours. -->
-                            <Border x:Name="StealthPill" Style="{StaticResource ToolbarPill}"
-                                    Background="#12331F" BorderBrush="#255E3D"
-                                    MouseLeftButtonDown="StealthPill_Click"
-                                    ToolTip="Hidden from screen sharing and screen recording  &#183;  click to toggle">
-                                <Border.Effect>
-                                    <DropShadowEffect x:Name="StealthGlow" BlurRadius="13" ShadowDepth="0"
-                                                      Opacity="0.55" Color="#43D98A"/>
-                                </Border.Effect>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse x:Name="StealthDot" Width="6" Height="6" Fill="#48E29A"
-                                             Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="StealthPillIcon" Text="&#xE72E;"
-                                               Style="{StaticResource ToolbarPillIcon}" Margin="0,0,6,0"/>
-                                    <TextBlock x:Name="StealthPillLabel" Text="HIDDEN"
-                                               Style="{StaticResource ToolbarPillLabel}" Foreground="#AEEFCF"/>
-                                </StackPanel>
-                            </Border>
+                            <!-- Stealth lives in Settings only. It was a pill here as well,
+                                 spending toolbar width on a setting almost nobody changes
+                                 mid-interview, and stealth is on by default. -->
 
                             <!-- Help moved into the profile menu ("How it works") to declutter -->
 

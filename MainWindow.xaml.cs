@@ -204,6 +204,7 @@ namespace InterviewCopilot
                     _debugWindow = new DebugWindow();
 
                     SecurePendingAudioRecordings();
+                    _ = NotifyIfUpdateAvailableAsync();
                     UpdateMicUi();
                     SavePathLabel.Text = AppDataFolder;
                     LoadHints(); LoadJobContext(); LoadSavedResumes();
@@ -954,45 +955,15 @@ namespace InterviewCopilot
         }
 
         // Clicking the stealth pill toggles stealth — a fast, discoverable control.
-        private void StealthPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => ToggleStealth();
 
         // Drive the premium toolbar stealth pill (dot + icon + label + halo glow) so the
         // user can SEE at a glance whether they're hidden from screen capture.
-        private void UpdateStealthBtn()
-        {
-            try
-            {
-                if (StealthPill == null) return;
-                static SolidColorBrush B(string hex) => new((Color)ColorConverter.ConvertFromString(hex));
-                if (_stealthMode)
-                {
-                    StealthPill.Background      = B("#0F2C1B");
-                    StealthPill.BorderBrush     = B("#255E3D");
-                    StealthDot.Fill             = B("#48E29A");
-                    StealthPillIcon.Foreground  = B("#84E7B6");
-                    StealthPillLabel.Foreground = B("#B6F1D4");
-                    StealthPillIcon.Text  = "";
-                    StealthPillLabel.Text = "HIDDEN";
-                    StealthGlow.Color   = (Color)ColorConverter.ConvertFromString("#43D98A");
-                    StealthGlow.Opacity = 0.55;
-                    StealthPill.ToolTip = "Hidden from screen sharing and screen recording  -  click to toggle";
-                }
-                else
-                {
-                    StealthPill.Background      = B("#332611");
-                    StealthPill.BorderBrush     = B("#6A5223");
-                    StealthDot.Fill             = B("#F6C748");
-                    StealthPillIcon.Foreground  = B("#F3C864");
-                    StealthPillLabel.Foreground = B("#F7D68A");
-                    StealthPillIcon.Text  = "";
-                    StealthPillLabel.Text = "VISIBLE";
-                    StealthGlow.Color   = (Color)ColorConverter.ConvertFromString("#E8A93A");
-                    StealthGlow.Opacity = 0.42;
-                    StealthPill.ToolTip = "Stealth OFF - this window IS visible on screen share  -  click to hide";
-                }
-            }
-            catch { }
-        }
+        /// <summary>
+        /// Kept as a no-op. The stealth pill was removed from the toolbar and the
+        /// setting now lives in Settings alone, but the toggle paths still call this
+        /// and there is no toolbar element left to repaint.
+        /// </summary>
+        private void UpdateStealthBtn() { }
 
         // ── FIRST-RUN ONBOARDING ────────────────────────────────────────────
         private string OnboardingSeenPath => Path.Combine(AppDataFolder, "onboarding_seen.flag");
@@ -1169,6 +1140,37 @@ namespace InterviewCopilot
                 if (InAppAlert != null) InAppAlert.Visibility = Visibility.Collapsed;
             };
             _alertTimer.Start();
+        }
+
+        /// <summary>
+        /// Tells someone running an older build that a newer one exists. Until now
+        /// the only way to find out was to open Settings and press Check for
+        /// Updates, so anyone who installed once and never looked again stayed on
+        /// an old version indefinitely.
+        /// Deliberately quiet: it waits so it never competes with the engine
+        /// starting, says nothing at all when there is no update or the lookup
+        /// fails, and uses the in-app banner rather than a dialog, which would
+        /// appear on a screen share.
+        /// </summary>
+        private async Task NotifyIfUpdateAvailableAsync()
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(12));
+
+                string? newer = await SettingsWindow.GetNewerVersionOrNullAsync();
+                if (string.IsNullOrEmpty(newer)) return;
+
+                await Dispatcher.InvokeAsync(() =>
+                    ShowInAppAlert(
+                        $"Version {newer} is available",
+                        $"You are on {SettingsWindow.InstalledVersion()}. Download the new version from replysis.com when you have a moment.",
+                        persist: true));
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("UPDATE", $"Startup update check skipped: {ex.GetType().Name}");
+            }
         }
 
         private void InAppAlertDismiss_Click(object sender, RoutedEventArgs e)
