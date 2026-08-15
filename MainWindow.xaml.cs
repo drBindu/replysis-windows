@@ -1530,11 +1530,22 @@ namespace InterviewCopilot
 
         private async void HandleSpaceUp(string source)
         {
-            if (source != "BUTTON" && IsTypingInTextField()) return;
-            if (_spaceHandling || isProcessing || _flushing || isMuted) return;
+            // Auto mode latches _autoTurnSubmitting immediately before calling this, so
+            // every early return below has to release it. Without that the latch stays
+            // set, TrySubmitAutomaticTurn refuses every later turn, and the restart in
+            // UpdateTranscript never runs because it waits for listening to stop, which
+            // it never does. Auto mode then goes quiet for the rest of the interview
+            // with nothing on screen to say why. Releasing it simply lets the detector
+            // try again on the next poll. Reachable in practice when a manual Space
+            // lands while an automatic turn is being submitted: _spaceHandling is set
+            // by the other handler and this call bails.
+            void ReleaseAutoLatch() { if (source == "AUTO") _autoTurnSubmitting = false; }
+
+            if (source != "BUTTON" && IsTypingInTextField()) { ReleaseAutoLatch(); return; }
+            if (_spaceHandling || isProcessing || _flushing || isMuted) { ReleaseAutoLatch(); return; }
 
             // If listening was started by UI button, do NOT let space key release mute it!
-            if (source != "BUTTON" && _listeningInitiator == "BUTTON") return;
+            if (source != "BUTTON" && _listeningInitiator == "BUTTON") { ReleaseAutoLatch(); return; }
 
             // GLOBAL fires HandleSpacePress once per discrete toggle press. A sub-200ms hold
             // is an accidental double-fire, not a real utterance, so re-mute and bail.
@@ -1547,6 +1558,7 @@ namespace InterviewCopilot
                 {
                     DebugWindow.Log("MIC", $"[{source}] Quick space tap ignored ({heldMs}ms) — re-muting");
                     isListening = false; WritePauseFlag(); isMuted = true;
+                    ReleaseAutoLatch();
                     UpdateMicUi();
                     return;
                 }

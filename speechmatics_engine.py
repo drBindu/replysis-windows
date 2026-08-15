@@ -601,6 +601,7 @@ def stop_recording(save_synchronously):
 
 # ── PYAUDIO STREAMS ───────────────────────────────────────────────────────────
 CHUNK_FRAMES = 1600   # 100 ms at 16 kHz — smaller chunks = lower end-to-end latency
+CHUNK_SECONDS = 0.1   # one chunk of wall time; paces the loop when muted
 SAMPLE_RATE  = 16000
 
 def write_devices_file(pa):
@@ -1395,6 +1396,7 @@ async def main():
 
                 class MixedStream:
                     _call_count = 0
+                    _last_heartbeat = 0.0
 
                     def read(self, num_frames, exception_on_overflow=False):
                         global is_recording, recording_frames, active_recording_id
@@ -1402,6 +1404,7 @@ async def main():
                         global _silent_chunk_count
                         global _sys_hang_count, sys_stream
 
+                        _read_started = time.time()
                         shutdown_requested = os.path.exists(SHUTDOWN_FLAG)
                         recording_requested = os.path.exists(RECORD_FLAG)
                         paused = os.path.exists(PAUSE_FLAG)
@@ -1412,13 +1415,18 @@ async def main():
                             print(f">>> {'PAUSED (pause.flag set)' if paused else 'RESUMED (pause.flag cleared) - now reading real audio'}", flush=True)
                             _last_pause_state = paused
 
-                        # Unconditional heartbeat (~once/sec) — proves read() is actually being
-                        # called and shows the live paused state even with zero transitions,
-                        # independent of the edge-detector above and of mic amplitude.
+                        # Heartbeat, proving read() is still being called and showing the
+                        # live paused state. This counted calls rather than time, on the
+                        # assumption that a call takes ~100ms. While paused nothing blocks,
+                        # so the loop ran far faster and this printed thousands of lines a
+                        # second: one measured session reached 128 million calls and a 1.6 GB
+                        # log. Timed instead, so the rate no longer depends on how fast the
+                        # loop happens to turn.
                         MixedStream._call_count += 1
-                        if MixedStream._call_count % 10 == 0:
-                            print(f">>> HEARTBEAT #{MixedStream._call_count}: paused={paused} "
-                                  f"pause_flag_path={PAUSE_FLAG}", flush=True)
+                        _hb_now = time.time()
+                        if _hb_now - MixedStream._last_heartbeat >= 5.0:
+                            MixedStream._last_heartbeat = _hb_now
+                            print(f">>> HEARTBEAT #{MixedStream._call_count}: paused={paused}", flush=True)
 
                         if paused:
                             try:
@@ -1443,6 +1451,18 @@ async def main():
                                     mark_recording_saved(get_recording_id())
                             if shutdown_requested and not recording_requested:
                                 raise RuntimeError("Shutdown requested")
+
+                            # Pace the idle loop. While paused nothing here necessarily
+                            # blocks: if a drain read is skipped or returns at once, this
+                            # returns immediately and the consumer calls straight back,
+                            # so the loop spun as fast as the CPU allowed. Measured at
+                            # roughly 4,800 iterations a second against the 10 it is meant
+                            # to run at, holding a full core while the app sat muted, and
+                            # writing a 1.6 GB log. Sleeping a chunk's worth costs nothing
+                            # while muted, because no audio is being transcribed anyway.
+                            _idle_elapsed = time.time() - _read_started
+                            if _idle_elapsed < CHUNK_SECONDS:
+                                time.sleep(CHUNK_SECONDS - _idle_elapsed)
                             return SILENCE
 
                         if args.mode == "system":
