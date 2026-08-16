@@ -3349,22 +3349,57 @@ namespace InterviewCopilot
             ThinkingHintLabel.Visibility = Visibility.Collapsed;
             ThinkingPanel.Visibility = Visibility.Visible;
 
-            // Hide both windows so they don't appear in the screenshot
-            double savedOpacity = this.Opacity;
-            this.Opacity = 0;
+            // Keep our own windows out of the screenshot.
+            //
+            // The way to do that is not to hide them. Windows can mark a window as
+            // invisible to screen capture, and a marked window is simply absent
+            // from the copied pixels while staying on screen for the person using
+            // it. So there is nothing to hide, and nothing to wait for.
+            //
+            // This used to drop both windows to zero opacity and wait for the
+            // compositor, which the user saw as the app blinking out and back on
+            // every single capture. That blink is the whole reason this felt like
+            // a screenshot tool instead of part of the app.
+            //
+            // Hiding remains as the fallback for Windows 10 builds older than
+            // version 2004, where the capture flag does not exist.
             bool answerWasVisible = answerWindow?.IsVisible == true;
-            // Hide overlay by setting Window.Opacity (not MainBorder.Opacity, which stays set)
-            if (answerWasVisible && answerWindow != null) answerWindow.Opacity = 0;
+            AnswerWindow? cloakedAnswer = answerWasVisible ? answerWindow : null;
 
-            // Let the compositor draw one frame without our windows in it before
-            // copying the screen. This was a flat 300ms, which at 60Hz is about
-            // eighteen frames of waiting for something that takes two, and the
-            // user saw it as the app blinking out and back every capture. Waiting
-            // on an actual rendered frame is both quicker and more reliable than
-            // any fixed number, and the short delay after it is the margin DWM
-            // needs to push that frame to the screen itself.
-            await WaitForRenderedFrameAsync();
-            await Task.Delay(90);
+            bool mainCloaked = WindowStealth.TryBeginCaptureHidden(this, out bool mainWasExcluded);
+
+            bool answerCloaked = true, answerWasExcluded = true;
+            if (cloakedAnswer != null)
+                answerCloaked = WindowStealth.TryBeginCaptureHidden(cloakedAnswer, out answerWasExcluded);
+
+            bool cloaked = mainCloaked && answerCloaked;
+            double savedOpacity = this.Opacity;
+
+            void RestoreWindows()
+            {
+                WindowStealth.EndCaptureHidden(this, mainWasExcluded);
+                WindowStealth.EndCaptureHidden(cloakedAnswer, answerWasExcluded);
+
+                if (cloaked) return;
+                this.Opacity = savedOpacity;
+                // Window.Opacity back to 1.0; the visual opacity the user chose
+                // stays controlled by MainBorder.Opacity.
+                if (cloakedAnswer != null) cloakedAnswer.Opacity = 1.0;
+            }
+
+            if (!cloaked)
+            {
+                this.Opacity = 0;
+                if (cloakedAnswer != null) cloakedAnswer.Opacity = 0;
+                await WaitForRenderedFrameAsync();
+                await Task.Delay(90);
+            }
+            else if (!mainWasExcluded || !answerWasExcluded)
+            {
+                // The flag was applied just now rather than already being on, so
+                // give the compositor the single frame it needs to take effect.
+                await WaitForRenderedFrameAsync();
+            }
 
             // ── Phase 2: capture ──────────────────────────────────────────────
             byte[] imageBytes;
@@ -3382,19 +3417,16 @@ namespace InterviewCopilot
             catch (Exception ex)
             {
                 DebugWindow.Log("SCREEN_ERR", ex.Message);
-                this.Opacity = savedOpacity;
-                // Restore Window.Opacity to 1.0 — visual opacity stays controlled by MainBorder.Opacity
-                if (answerWasVisible && answerWindow != null) answerWindow.Opacity = 1.0;
+                RestoreWindows();
                 AiAnswerBox.Text = "Screen capture failed. Press F12 for details.";
                 _isScreenAnalyzing = false;
                 StopThinkingUi();
                 return;
             }
 
-            // Restore windows immediately after capture
-            this.Opacity = savedOpacity;
-            // Restore Window.Opacity to 1.0 — visual opacity stays controlled by MainBorder.Opacity
-            if (answerWasVisible && answerWindow != null) answerWindow.Opacity = 1.0;
+            // Undo whatever was needed to keep us out of the shot. When the capture
+            // flag did the work this is a no-op the user never saw.
+            RestoreWindows();
 
             // Clear overlay content so user sees a clean state while analysis streams in
             if (_isCameraMode && answerWindow != null)

@@ -17,6 +17,9 @@ namespace InterviewCopilot
         [DllImport("user32.dll", SetLastError = true)]
         private static extern int SetWindowLong(IntPtr hwnd, int nIndex, int dwNewLong);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint GetWindowDisplayAffinity(IntPtr hwnd, out uint pdwAffinity);
+
         private const uint WDA_NONE = 0x00000000;
         private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
 
@@ -49,6 +52,72 @@ namespace InterviewCopilot
 
         public static void SetCaptureExclusion(IntPtr hwnd, bool enable)
             => TrySetCaptureExclusion(hwnd, enable);
+
+        /// <summary>
+        /// Makes a window invisible to screen capture so a screenshot can be taken
+        /// without hiding it first.
+        ///
+        /// This is what lets Screen Analyze feel instant. Hiding a window and
+        /// waiting for the compositor is visible to the user as the app blinking
+        /// out and back, every single capture. A window carrying
+        /// WDA_EXCLUDEFROMCAPTURE is simply absent from the copied pixels, so
+        /// there is nothing to hide and nothing to wait for.
+        ///
+        /// Returns false when Windows will not apply it, which means the caller
+        /// must fall back to hiding. That happens below Windows 10 version 2004,
+        /// where the flag does not exist.
+        /// </summary>
+        /// <param name="alreadyExcluded">
+        /// True when the window was already excluded, usually because Stealth mode
+        /// is on. The caller can then capture with no wait at all, since the screen
+        /// has never contained the window. When false the flag was just applied and
+        /// the caller should let one frame compose before capturing.
+        /// </param>
+        public static bool TryBeginCaptureHidden(Window? window, out bool alreadyExcluded)
+        {
+            alreadyExcluded = false;
+            if (window == null) return false;
+
+            try
+            {
+                IntPtr hwnd = new WindowInteropHelper(window).Handle;
+                if (hwnd == IntPtr.Zero) return false;
+
+                if (GetWindowDisplayAffinity(hwnd, out uint current) != 0 &&
+                    current == WDA_EXCLUDEFROMCAPTURE)
+                {
+                    alreadyExcluded = true;
+                    return true;
+                }
+
+                return SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) != 0;
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("STEALTH", "TryBeginCaptureHidden error: " + ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Undoes <see cref="TryBeginCaptureHidden"/>. Does nothing when the window
+        /// was already excluded before the capture, so a user running in Stealth
+        /// mode is never quietly taken out of it by taking a screenshot.
+        /// </summary>
+        public static void EndCaptureHidden(Window? window, bool wasAlreadyExcluded)
+        {
+            if (window == null || wasAlreadyExcluded) return;
+
+            try
+            {
+                IntPtr hwnd = new WindowInteropHelper(window).Handle;
+                if (hwnd != IntPtr.Zero) SetWindowDisplayAffinity(hwnd, WDA_NONE);
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("STEALTH", "EndCaptureHidden error: " + ex.Message);
+            }
+        }
 
         public static void SetStealthMode(Window window, bool enable)
         {
