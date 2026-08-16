@@ -313,56 +313,62 @@ namespace InterviewCopilot
                 Match the shape of your answer to what is on the screen.
 
                 A coding or algorithm problem:
-                ━━━ APPROACH ━━━
+                APPROACH
                 One or two lines. Name the technique.
-                ━━━ SOLUTION ━━━
+                SOLUTION
                 Complete code, in whatever language is on screen, Python if none is.
                 Comment only the lines whose logic is not obvious.
-                ━━━ COMPLEXITY ━━━
+                COMPLEXITY
                 Time: O(?)   Space: O(?)
-                ━━━ SAY THIS ━━━
+                SAY THIS
                 One sentence they can speak while writing it.
 
                 An error, failing test, or stack trace:
-                ━━━ CAUSE ━━━
+                CAUSE
                 One line. The real cause, not the symptom.
-                ━━━ FIX ━━━
+                FIX
                 The corrected code, ready to paste.
-                ━━━ SAY THIS ━━━
+                SAY THIS
                 One sentence they can speak.
 
                 A multiple choice or quiz question:
-                ━━━ ANSWER ━━━
+                ANSWER
                 The option, stated flatly.
-                ━━━ WHY ━━━
+                WHY
                 One line for why it is right. One line for why the closest wrong option
                 is wrong.
 
                 A system design or architecture diagram:
-                ━━━ SCOPE ━━━
+                SCOPE
                 What it has to do, and the scale you are assuming.
-                ━━━ DESIGN ━━━
+                DESIGN
                 The components, and how one request travels through them.
-                ━━━ TRADE-OFF ━━━
+                TRADE-OFF
                 The one an interviewer will push on.
-                ━━━ SAY THIS ━━━
+                SAY THIS
                 One sentence to open with.
 
                 A question about them, such as "tell me about a time":
-                ━━━ STRUCTURE ━━━
+                STRUCTURE
                 Situation, action, result, with [your example] everywhere their own
                 detail belongs.
-                ━━━ SAY THIS ━━━
+                SAY THIS
                 An opening sentence that is safe to say exactly as written.
 
                 Anything else:
-                ━━━ WHAT THIS IS ━━━
+                WHAT THIS IS
                 One line.
-                ━━━ DO THIS ━━━
+                DO THIS
                 The single most useful next step.
 
-                Format: plain text. Section titles exactly as shown above. Bullets use
-                the • character. No markdown, no asterisks, no backtick fences.
+                Format: plain text, nothing decorative. A section title is the bare word on
+                its own line, in capitals, with its content on the very next line and
+                no blank line between them. No lines of dashes, no markdown, no
+                asterisks, no backtick fences. Bullets, where you need them, use the
+                • character.
+
+                Keep the whole thing as short as it can be and still answer. Three
+                clean lines beat three decorated sections.
                 """);
 
             if (!string.IsNullOrWhiteSpace(resumeContext))
@@ -404,26 +410,30 @@ namespace InterviewCopilot
 
             raw = raw.Replace("\r\n", "\n").Replace("\r", "\n");
 
-            // 2. Normalize section headers: ensure exactly one blank line above and below each
+            // Section titles are bare words now. They used to be wrapped in heavy
+            // rules, ━━━ CAUSE ━━━, which looked like decoration around an answer
+            // rather than an answer, and turned a three line reply into something
+            // that had to be visually decoded before it could be read. Anything
+            // still arriving in the old shape is unwrapped here.
+            raw = Regex.Replace(raw, @"(?m)^[ \t]*[━─—=-]{2,}[ \t]*(.*?)[ \t]*[━─—=-]{2,}[ \t]*$", "$1");
+
+            // 2. A title sits directly on top of what it describes, with a blank
+            //    line separating it from the section before. Nothing between a
+            //    title and its own content: that gap is what made the old output
+            //    feel spread out and hard to scan.
             var lines  = raw.Split('\n');
             var result = new List<string>();
 
             for (int i = 0; i < lines.Length; i++)
             {
                 string line = lines[i].TrimEnd();
-                string trimmedLine = line.TrimStart();
-                bool isHeader = trimmedLine.StartsWith("━━━") && trimmedLine.EndsWith("━━━");
 
-                if (isHeader)
+                if (IsSectionTitle(line))
                 {
-                    // Remove any trailing blank lines before this header
                     while (result.Count > 0 && result[^1] == "")
                         result.RemoveAt(result.Count - 1);
-                    // One blank line above (unless this is the very first content)
                     if (result.Count > 0) result.Add("");
-                    result.Add(line);
-                    // One blank line after the header
-                    result.Add("");
+                    result.Add(line.Trim());
                 }
                 else
                 {
@@ -439,6 +449,34 @@ namespace InterviewCopilot
             while (result.Count > 0 && result[^1] == "") result.RemoveAt(result.Count - 1);
 
             return string.Join("\n", result);
+        }
+
+        /// <summary>
+        /// Whether a line is one of the short all-capitals labels the answer is
+        /// built from, such as CAUSE or SAY THIS. Deliberately strict: a sentence
+        /// the model happened to shout, a line of code in capitals, or anything
+        /// carrying punctuation is left alone, so ordinary content is never
+        /// reformatted as a heading.
+        /// </summary>
+        private static bool IsSectionTitle(string line)
+        {
+            string t = line.Trim();
+            if (t.Length is 0 or > 24) return false;
+
+            bool hasLetter = false;
+            foreach (char c in t)
+            {
+                if (char.IsLetter(c))
+                {
+                    if (char.IsLower(c)) return false;
+                    hasLetter = true;
+                }
+                else if (c != ' ')
+                {
+                    return false;
+                }
+            }
+            return hasLetter;
         }
 
         // ═════════════════════════════════════════════════════════════════════
