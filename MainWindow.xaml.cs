@@ -3443,7 +3443,16 @@ namespace InterviewCopilot
 
             string resumeCtx  = ResumeParser.ExtractFacts(ResumeTextBox.Text);
             string timestamp  = DateTime.Now.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
-            string header     = $"📸 SCREEN ANALYSIS  [{timestamp}]\n\n";
+
+            // Name what was captured. An answer about the wrong window used to be
+            // indistinguishable from a bad answer about the right one, so the only
+            // way to tell was to reason about which window happened to be in front
+            // when the key was pressed. Saying it outright turns that into a
+            // mistake the user spots instantly.
+            string target     = ScreenAnalyzer.LastCaptureTarget;
+            string header     = string.IsNullOrWhiteSpace(target)
+                ? $"📸 SCREEN ANALYSIS  [{timestamp}]\n\n"
+                : $"📸 SCREEN ANALYSIS  [{timestamp}]\nRead from: {target}\n\n";
             string sep        = "\n" + new string('─', 45) + "\n\n";
 
             // Save previous answers so we can prepend the new one on top.

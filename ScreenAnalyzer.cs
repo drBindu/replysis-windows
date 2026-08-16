@@ -49,6 +49,8 @@ namespace InterviewCopilot
         [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
         [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
         [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(
             IntPtr hwnd, int attribute, out RECT value, int size);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -96,6 +98,17 @@ namespace InterviewCopilot
         // ── Last captured context (injected into follow-up voice questions) ───
         public static string LastScreenContext { get; private set; } = "";
 
+        /// <summary>
+        /// What the last capture was pointed at, for showing above the answer.
+        ///
+        /// Without this the feature is guesswork. The user presses a key, an
+        /// answer appears, and nothing says which window it came from, so an
+        /// answer about the wrong window is indistinguishable from a bad answer
+        /// about the right one. Naming the window turns a mystery into an obvious
+        /// mistake the user can correct in one second.
+        /// </summary>
+        public static string LastCaptureTarget { get; private set; } = "";
+
         // ═════════════════════════════════════════════════════════════════════
         // CAPTURE
         // ═════════════════════════════════════════════════════════════════════
@@ -125,8 +138,12 @@ namespace InterviewCopilot
             // size instead, which is the difference between the model reading an
             // error code and inventing one, and it costs less to send.
             if (TryGetForegroundWindowBounds(out int wx, out int wy, out int ww, out int wh))
+            {
+                LastCaptureTarget = ForegroundWindowTitle();
                 return CaptureRegionCore(wx, wy, ww, wh);
+            }
 
+            LastCaptureTarget = "your screen";
             if (TryGetActiveMonitorBounds(out int x, out int y, out int w, out int h))
                 return CaptureRegionCore(x, y, w, h);
 
@@ -192,6 +209,7 @@ namespace InterviewCopilot
         /// </summary>
         public static byte[] CapturePrimaryScreen()
         {
+            LastCaptureTarget = "the main screen";
             return CaptureRegionCore(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
         }
 
@@ -203,7 +221,27 @@ namespace InterviewCopilot
         /// </summary>
         public static byte[] CaptureRegion(int x, int y, int width, int height)
         {
+            LastCaptureTarget = "the area you selected";
             return CaptureRegionCore(x, y, width, height);
+        }
+
+        /// <summary>Title of the window in front, trimmed for display.</summary>
+        private static string ForegroundWindowTitle()
+        {
+            try
+            {
+                var sb = new StringBuilder(256);
+                if (GetWindowText(GetForegroundWindow(), sb, sb.Capacity) <= 0)
+                    return "the window in front";
+
+                string title = sb.ToString().Trim();
+                if (title.Length == 0) return "the window in front";
+                return title.Length > 60 ? title[..57] + "..." : title;
+            }
+            catch
+            {
+                return "the window in front";
+            }
         }
 
         /// <summary>
