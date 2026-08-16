@@ -1,10 +1,13 @@
-# SUPERSEDED by release-windows.yml. Kept only for a future Microsoft Store
-# submission, which needs an MSIX.
+# Builds the MSIX for the Microsoft Store listing (Varoxel.Replysis, app id
+# 9N13GQC3MKK9). The other Windows channel, the .exe customers download from the
+# website, is built by release-windows.yml.
 #
-# Do not run this to ship an update. It publishes a GitHub release of its own,
-# and installed copies read the newest release to decide what to update to, so a
-# run here puts a release in front of them that contains no update package and
-# stalls everyone's updates until the next real release.
+# This deliberately does NOT publish a GitHub release. It used to, and that is a
+# trap: copies installed from the .exe look at the newest release in this repo to
+# find their update, so a Store build landing on top would contain no update
+# package and would quietly stall every one of those users until the next .exe
+# release. The MSIX is left as a build artifact for you to upload to Partner
+# Center by hand, which is a step Microsoft requires a human for anyway.
 name: Build Windows MSIX
 
 on:
@@ -121,19 +124,16 @@ jobs:
           Set-Content "InterviewCopilot.appinstaller" $xml -Encoding UTF8
           echo "Bundle URL: $bundleUrl"
 
-      # ── GitHub Release ─────────────────────────────────────────────────────
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2.3.3
+      # ── Artifact for Partner Center ────────────────────────────────────────
+      # Downloaded from the run summary and uploaded to Partner Center by hand.
+      # Deliberately not a GitHub release: see the note at the top of this file.
+      - name: Publish the bundle as a build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          tag_name: windows-v${{ env.APP_VERSION }}
-          name: Replysis for Windows v${{ env.APP_VERSION }}
-          body: |
-            ## Install
-            **Option 1 (recommended):** Download `InterviewCopilot.appinstaller` — installs and auto-updates automatically.
-            **Option 2:** Download `InterviewCopilot.msixbundle` — manual install, no auto-update.
-          files: |
-            InterviewCopilot.msixbundle
-            InterviewCopilot.appinstaller
+          name: replysis-msix-${{ env.APP_VERSION }}
+          path: InterviewCopilot.msixbundle
+          retention-days: 30
+          if-no-files-found: error
 
       # ── Deploy to Oracle Cloud ─────────────────────────────────────────────
       - name: Setup SSH key
