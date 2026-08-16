@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -45,6 +45,23 @@ namespace InterviewCopilot
         [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr hdc);
         [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr ho);
 
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT { public int Left, Top, Right, Bottom; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MONITORINFO
+        {
+            public int cbSize;
+            public RECT rcMonitor;
+            public RECT rcWork;
+            public uint dwFlags;
+        }
+
         private const int SRCCOPY          = 0x00CC0020;
         private const int SM_CXSCREEN      = 0;   // primary monitor width
         private const int SM_CYSCREEN      = 1;   // primary monitor height
@@ -52,7 +69,16 @@ namespace InterviewCopilot
         private const int SM_YVIRTUALSCREEN  = 77; // virtual screen top edge
         private const int SM_CXVIRTUALSCREEN = 78; // total width of all monitors combined
         private const int SM_CYVIRTUALSCREEN = 79; // total height of all monitors combined
+        private const uint MONITOR_DEFAULTTOPRIMARY = 0x00000001;
         #endregion
+
+        /// <summary>
+        /// The longest edge we send. Vision models resize what they receive to
+        /// roughly this before they read it, so anything larger costs upload time
+        /// and credits and is then thrown away, while anything smaller throws away
+        /// legibility we could have kept.
+        /// </summary>
+        private const int MaxImageEdge = 2048;
 
         // ── Last captured context (injected into follow-up voice questions) ───
         public static string LastScreenContext { get; private set; } = "";
@@ -62,48 +88,76 @@ namespace InterviewCopilot
         // ═════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Captures ALL connected monitors as a single wide JPEG.
-        /// On a single-monitor setup this is the primary screen only.
-        /// On dual/triple monitor setups this captures the full desktop.
-        /// JPEG quality 90 — higher than before (was 78) for better text legibility.
+        /// Captures the monitor the user is actually working on, meaning the one
+        /// holding the window that had focus when they pressed the key.
+        ///
+        /// This used to stitch every connected monitor into one wide image. On a
+        /// dual 1920x1080 setup that produced a 3840x1080 strip which was then
+        /// squashed to 2560x720, so every character on screen arrived at about two
+        /// thirds size, on a second screen that usually held nothing relevant. On
+        /// three monitors it was half size. That single decision is why answers
+        /// read as though the model was guessing: it was, because the question was
+        /// no longer legible by the time it arrived.
         /// </summary>
         public static byte[] CaptureScreen()
         {
-            // Virtual screen covers all monitors; vx/vy can be negative (left/top monitors)
-            int vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
-            int vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
-            int vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-            int vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+            if (TryGetActiveMonitorBounds(out int x, out int y, out int w, out int h))
+                return CaptureRegionCore(x, y, w, h);
 
-            // Fallback: if virtual screen metrics are unavailable, use primary only
-            if (vw <= 0 || vh <= 0) { vx = 0; vy = 0; vw = GetSystemMetrics(SM_CXSCREEN); vh = GetSystemMetrics(SM_CYSCREEN); }
-
-            return CaptureRegionCore(vx, vy, vw, vh, maxW: 2560, maxH: 1600);
+            return CapturePrimaryScreen();
         }
 
         /// <summary>
-        /// Captures only the primary monitor — smaller payload, faster API response.
-        /// Useful when all interview content is on the main display.
+        /// Captures the primary monitor, whichever screen currently has focus.
         /// </summary>
         public static byte[] CapturePrimaryScreen()
         {
-            return CaptureRegionCore(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
-                                 maxW: 1920, maxH: 1200);
+            return CaptureRegionCore(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
         }
 
         /// <summary>
         /// Captures a user-selected desktop rectangle. Coordinates are physical
         /// virtual-screen pixels and can be negative on left/top monitors.
+        /// This is the sharpest option available: a selection is usually well under
+        /// the size limit, so it is sent at full resolution with nothing resampled.
         /// </summary>
         public static byte[] CaptureRegion(int x, int y, int width, int height)
         {
-            return CaptureRegionCore(x, y, width, height, maxW: 1920, maxH: 1400);
+            return CaptureRegionCore(x, y, width, height);
+        }
+
+        /// <summary>
+        /// Bounds of the monitor holding the foreground window, in the same
+        /// physical desktop pixels BitBlt expects. False if Windows cannot say,
+        /// which happens when nothing holds focus.
+        /// </summary>
+        private static bool TryGetActiveMonitorBounds(out int x, out int y, out int w, out int h)
+        {
+            x = y = w = h = 0;
+            try
+            {
+                IntPtr monitor = MonitorFromWindow(GetForegroundWindow(), MONITOR_DEFAULTTOPRIMARY);
+                if (monitor == IntPtr.Zero) return false;
+
+                var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+                if (!GetMonitorInfoW(monitor, ref info)) return false;
+
+                x = info.rcMonitor.Left;
+                y = info.rcMonitor.Top;
+                w = info.rcMonitor.Right  - info.rcMonitor.Left;
+                h = info.rcMonitor.Bottom - info.rcMonitor.Top;
+                return w > 0 && h > 0;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>
         /// Core capture: BitBlt a region of the desktop DC into a JPEG byte array.
         /// </summary>
-        private static byte[] CaptureRegionCore(int srcX, int srcY, int srcW, int srcH, int maxW, int maxH)
+        private static byte[] CaptureRegionCore(int srcX, int srcY, int srcW, int srcH)
         {
             if (srcW <= 0 || srcH <= 0)
                 throw new InvalidOperationException("The requested screen region is invalid.");
@@ -156,14 +210,32 @@ namespace InterviewCopilot
                 DeleteObject(hBitmap);
             }
 
-            // Scale down if needed — preserves aspect ratio
-            if (srcW > maxW || srcH > maxH)
+            // Only shrink when the capture genuinely exceeds what the model reads,
+            // and shrink with a real resampling filter. TransformedBitmap picks
+            // whatever scaling mode it likes, which on text produces the broken,
+            // speckled glyphs that make a model misread a line of code.
+            if (srcW > MaxImageEdge || srcH > MaxImageEdge)
             {
-                double scale = Math.Min((double)maxW / srcW, (double)maxH / srcH);
-                bmp = new TransformedBitmap(bmp, new ScaleTransform(scale, scale));
+                double scale = Math.Min((double)MaxImageEdge / srcW, (double)MaxImageEdge / srcH);
+                int dstW = Math.Max(1, (int)Math.Round(srcW * scale));
+                int dstH = Math.Max(1, (int)Math.Round(srcH * scale));
+
+                var visual = new DrawingVisual();
+                RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);
+                using (DrawingContext dc = visual.RenderOpen())
+                    dc.DrawImage(bmp, new Rect(0, 0, dstW, dstH));
+
+                var target = new RenderTargetBitmap(dstW, dstH, 96, 96, PixelFormats.Pbgra32);
+                target.Render(visual);
+                bmp = target;
             }
 
-            var encoder = new JpegBitmapEncoder { QualityLevel = 90 }; // was 78 — higher = better text
+            // PNG, not JPEG. A screenshot is text on flat colour, which is the
+            // exact case JPEG handles worst: its compression rings around every
+            // letter edge, and at small sizes that is the difference between the
+            // model reading 'l' and reading '1'. PNG is lossless and, on this kind
+            // of image, usually no larger than the JPEG it replaces.
+            var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(bmp));
             using var ms = new MemoryStream();
             encoder.Save(ms);
@@ -180,6 +252,29 @@ namespace InterviewCopilot
         // PROMPT
         // ═════════════════════════════════════════════════════════════════════
 
+        /// <summary>
+        /// The instructions sent with every screenshot.
+        ///
+        /// This used to be six full output templates, roughly three thousand
+        /// tokens, shipped on every single request. It read well on the page and
+        /// worked badly in practice. The model had to classify the screen, recall
+        /// the matching template, and satisfy a page of formatting rules before it
+        /// had spent any attention on actually reading the screenshot, and the
+        /// reading is the hard part. Long instruction blocks are exactly what
+        /// pushes a vision model toward a fluent, generic, wrong answer.
+        ///
+        /// So it is short now, and ordered the way the work actually happens: read
+        /// the screen, then answer. The templates are reduced to their section
+        /// names, so an answer still looks the same in the app.
+        ///
+        /// One rule earns its place above all the others. The old behavioural
+        /// template demanded a result "with a specific number or metric" while the
+        /// header forbade inventing the candidate's experience. Faced with a
+        /// contradiction the model took the concrete instruction, and produced
+        /// achievements the user never had, for them to read out to an interviewer
+        /// who may well check. Nothing here asks the model to speak as the user
+        /// about their own past.
+        /// </summary>
         private static string BuildScreenPrompt(string? resumeContext)
         {
             if (!string.IsNullOrWhiteSpace(resumeContext) && resumeContext.Length > MaxResumeContextChars)
@@ -187,159 +282,92 @@ namespace InterviewCopilot
 
             var sb = new StringBuilder();
 
-            // ── Role ─────────────────────────────────────────────────────────
-            sb.AppendLine("You are an expert interview coach helping a candidate in a live interview.");
-            sb.AppendLine("Analyze the screenshot and respond using the EXACT structure shown below for the matching content type.");
-            sb.AppendLine("Base every claim on text or visuals that are actually visible. Never invent unreadable text, requirements, code, experience, or metrics.");
-            sb.AppendLine("Choose one matching content type before answering. Prioritize the interview prompt, code, error, or diagram over unrelated application chrome.");
-            sb.AppendLine("If the important text is unreadable or missing, say exactly what is visible and ask for a clearer capture instead of guessing.");
-            sb.AppendLine();
+            sb.AppendLine("""
+                You are sitting beside someone who is in a live interview right now. They
+                have just captured their screen and need something they can use within
+                seconds.
 
-            // ── Critical output rules ─────────────────────────────────────────
-            sb.AppendLine("CRITICAL OUTPUT RULES — OBEY EXACTLY:");
-            sb.AppendLine("1. Use ━━━ TITLE ━━━ as section headers — nothing else (no ##, no **, no ---).");
-            sb.AppendLine("2. One blank line after each section header, one blank line before the next header.");
-            sb.AppendLine("3. Bullets use the • character only (never -, *, numbers).");
-            sb.AppendLine("4. No markdown: no **bold**, no _italic_, no backtick code fences.");
-            sb.AppendLine("5. Code goes directly after ━━━ SOLUTION ━━━ with no fences.");
-            sb.AppendLine("6. Never truncate code — write the complete solution even if it's long.");
-            sb.AppendLine("7. Keep non-code sections short and scannable.");
-            sb.AppendLine();
+                Work in this order:
+                1. Read the screen. Find the one thing they need help with: a question, a
+                   coding problem, an error, a diagram, or a form. Ignore tabs, toolbars,
+                   chat panels, notifications, and anything else around it.
+                2. Answer that. Lead with the answer. Do not describe the screenshot back
+                   to them.
 
-            // ── Template: Coding problem ──────────────────────────────────────
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine("IF SCREEN SHOWS A CODING / ALGORITHM PROBLEM, output:");
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine();
-            sb.AppendLine("━━━ PROBLEM ━━━");
-            sb.AppendLine("[One sentence: what the problem is asking for]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ APPROACH ━━━");
-            sb.AppendLine("Brute force:  [brief — 1 sentence]  →  O(n²) time");
-            sb.AppendLine("Optimal:      [brief — 1 sentence]  →  O(n) time");
-            sb.AppendLine();
-            sb.AppendLine("━━━ SOLUTION ━━━");
-            sb.AppendLine("[Complete working code. Language = whatever is on screen, default Python.]");
-            sb.AppendLine("[Inline comments on non-obvious lines. Handle edge cases. No truncation.]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ TESTS ━━━");
-            sb.AppendLine("• Normal: [input] → [expected output]");
-            sb.AppendLine("• Edge: [empty/min/max/duplicate case] → [expected output]");
-            sb.AppendLine("• Failure or invalid case when relevant: [behavior]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ COMPLEXITY ━━━");
-            sb.AppendLine("Time: O(?)   |   Space: O(?)");
-            sb.AppendLine();
-            sb.AppendLine("━━━ EXPLANATION ━━━");
-            sb.AppendLine("[Why the approach is correct, including the key invariant or proof idea.]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ SAY THIS ━━━");
-            sb.AppendLine("• \"[Opening line to say to the interviewer before coding]\"");
-            sb.AppendLine("• \"[What to narrate as you write the key part]\"");
-            sb.AppendLine("• \"[How to wrap up and state the complexity]\"");
-            sb.AppendLine();
+                Rules that matter more than the format:
+                - Use only what you can actually see. If the part that matters is too
+                  small, cut off, or blurred, say which part you cannot read and stop.
+                  A confident wrong answer can cost them the job.
+                - Never invent their experience. No employers, projects, metrics, or
+                  numbers about them that are not on the screen. Where their own detail
+                  belongs, write [your example] and let them fill it in.
+                - Code must be complete and runnable. Never write "..." or "rest of the
+                  code unchanged".
+                - Everything that is not code stays short. They are reading this while
+                  another person is talking to them.
 
-            // ── Template: System design ───────────────────────────────────────
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine("IF SCREEN SHOWS A SYSTEM DESIGN / ARCHITECTURE DIAGRAM, output:");
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine();
-            sb.AppendLine("━━━ REQUIREMENTS & ESTIMATES ━━━");
-            sb.AppendLine("• Functional: [core user behavior]");
-            sb.AppendLine("• Non-functional: [scale, latency, availability, durability]");
-            sb.AppendLine("• Assumptions: [traffic/storage estimates, clearly labeled]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ COMPONENTS ━━━");
-            sb.AppendLine("• [Component name] — [what it does in 1 sentence]");
-            sb.AppendLine("• [repeat for each component]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ DATA FLOW ━━━");
-            sb.AppendLine("[2-3 sentences describing how data moves through the system]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ TRADE-OFFS ━━━");
-            sb.AppendLine("• [Scalability / bottleneck / consistency issue]");
-            sb.AppendLine("• [Another trade-off worth discussing]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ IMPROVEMENT ━━━");
-            sb.AppendLine("[One concrete suggestion, e.g. \"Add Redis cache between API and DB\"]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ RELIABILITY & OBSERVABILITY ━━━");
-            sb.AppendLine("• [Failure handling, retries, idempotency, and degradation]");
-            sb.AppendLine("• [Metrics, logs, traces, alerts, and an SLO]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ SAY THIS ━━━");
-            sb.AppendLine("• \"[How to open with requirements and assumptions]\"");
-            sb.AppendLine("• \"[How to narrate the critical data path]\"");
-            sb.AppendLine("• \"[How to close with the main trade-off]\"");
-            sb.AppendLine();
+                Match the shape of your answer to what is on the screen.
 
-            // ── Template: Multiple choice ─────────────────────────────────────
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine("IF SCREEN SHOWS A MULTIPLE CHOICE / QUIZ QUESTION, output:");
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine();
-            sb.AppendLine("━━━ ANSWER ━━━");
-            sb.AppendLine("[Correct option — state it directly, e.g. \"Option B\"]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ WHY ━━━");
-            sb.AppendLine("• Correct ([option]): [why it's right — 1 sentence]");
-            sb.AppendLine("• Wrong ([option]):   [why it's wrong — 1 sentence]");
-            sb.AppendLine("• Wrong ([option]):   [why it's wrong — 1 sentence]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ WATCH OUT ━━━");
-            sb.AppendLine("[Any trick or common misconception in this question]");
-            sb.AppendLine();
+                A coding or algorithm problem:
+                ━━━ APPROACH ━━━
+                One or two lines. Name the technique.
+                ━━━ SOLUTION ━━━
+                Complete code, in whatever language is on screen, Python if none is.
+                Comment only the lines whose logic is not obvious.
+                ━━━ COMPLEXITY ━━━
+                Time: O(?)   Space: O(?)
+                ━━━ SAY THIS ━━━
+                One sentence they can speak while writing it.
 
-            // ── Template: Behavioral ──────────────────────────────────────────
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine("IF SCREEN SHOWS A BEHAVIORAL / SITUATIONAL TEXT QUESTION, output:");
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine();
-            sb.AppendLine("━━━ SITUATION ━━━");
-            sb.AppendLine("[Context: where, when, what was at stake — 1-2 sentences]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ ACTION ━━━");
-            sb.AppendLine("• [Specific step you took]");
-            sb.AppendLine("• [Another step — concrete, not vague]");
-            sb.AppendLine("• [Third step if needed]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ RESULT ━━━");
-            sb.AppendLine("[Outcome with a specific number or metric]");
-            sb.AppendLine();
+                An error, failing test, or stack trace:
+                ━━━ CAUSE ━━━
+                One line. The real cause, not the symptom.
+                ━━━ FIX ━━━
+                The corrected code, ready to paste.
+                ━━━ SAY THIS ━━━
+                One sentence they can speak.
 
-            // ── Template: Error / bug ─────────────────────────────────────────
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine("IF SCREEN SHOWS AN ERROR, BUG, OR STACK TRACE, output:");
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine();
-            sb.AppendLine("━━━ ROOT CAUSE ━━━");
-            sb.AppendLine("[One sentence — the actual problem]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ FIX ━━━");
-            sb.AppendLine("[The corrected code line(s) — complete, ready to paste]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ EXPLAIN ━━━");
-            sb.AppendLine("[One sentence to say out loud to the interviewer]");
-            sb.AppendLine();
+                A multiple choice or quiz question:
+                ━━━ ANSWER ━━━
+                The option, stated flatly.
+                ━━━ WHY ━━━
+                One line for why it is right. One line for why the closest wrong option
+                is wrong.
 
-            // ── Template: General ─────────────────────────────────────────────
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine("IF SCREEN CONTENT DOES NOT MATCH ANY ABOVE, output:");
-            sb.AppendLine("─────────────────────────────────────────────────────");
-            sb.AppendLine();
-            sb.AppendLine("━━━ WHAT I SEE ━━━");
-            sb.AppendLine("[Brief description of what's on screen]");
-            sb.AppendLine();
-            sb.AppendLine("━━━ GUIDANCE ━━━");
-            sb.AppendLine("• [Most relevant interview advice]");
-            sb.AppendLine("• [Second point if needed]");
+                A system design or architecture diagram:
+                ━━━ SCOPE ━━━
+                What it has to do, and the scale you are assuming.
+                ━━━ DESIGN ━━━
+                The components, and how one request travels through them.
+                ━━━ TRADE-OFF ━━━
+                The one an interviewer will push on.
+                ━━━ SAY THIS ━━━
+                One sentence to open with.
+
+                A question about them, such as "tell me about a time":
+                ━━━ STRUCTURE ━━━
+                Situation, action, result, with [your example] everywhere their own
+                detail belongs.
+                ━━━ SAY THIS ━━━
+                An opening sentence that is safe to say exactly as written.
+
+                Anything else:
+                ━━━ WHAT THIS IS ━━━
+                One line.
+                ━━━ DO THIS ━━━
+                The single most useful next step.
+
+                Format: plain text. Section titles exactly as shown above. Bullets use
+                the • character. No markdown, no asterisks, no backtick fences.
+                """);
 
             if (!string.IsNullOrWhiteSpace(resumeContext))
             {
                 sb.AppendLine();
-                sb.AppendLine("─────────────────────────────────────────────────────");
-                sb.AppendLine("CANDIDATE BACKGROUND (reference only if directly relevant):");
-                sb.AppendLine("─────────────────────────────────────────────────────");
+                sb.AppendLine(
+                    "The candidate's background is below. Use it only to choose which of " +
+                    "their real experiences fits, and only when the screen is asking about " +
+                    "them. It is never a licence to invent detail that is not in it.");
                 sb.AppendLine(resumeContext);
             }
 

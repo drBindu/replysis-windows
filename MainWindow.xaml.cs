@@ -3295,6 +3295,29 @@ namespace InterviewCopilot
             await RunScreenAnalysis(primaryOnly: false, selectedRegion: picker.SelectedRegion);
         }
 
+        /// <summary>
+        /// Completes once the compositor has drawn a frame, so a caller that just
+        /// hid a window knows the screen no longer contains it. Falls back to a
+        /// short wait if no frame arrives, which keeps a capture from hanging on a
+        /// machine where rendering has stalled.
+        /// </summary>
+        private static Task WaitForRenderedFrameAsync()
+        {
+            var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            EventHandler? onRendered = null;
+            onRendered = (_, _) =>
+            {
+                CompositionTarget.Rendering -= onRendered;
+                done.TrySetResult(true);
+            };
+            CompositionTarget.Rendering += onRendered;
+
+            return Task.WhenAny(done.Task, Task.Delay(250))
+                       .ContinueWith(_ => CompositionTarget.Rendering -= onRendered,
+                                     TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
         private async Task RunScreenAnalysis(bool primaryOnly, Int32Rect? selectedRegion = null)
         {
             // Guard: don't double-fire while already processing
@@ -3321,7 +3344,7 @@ namespace InterviewCopilot
             UpdateMicUi();
 
             // ── Phase 1: scanning state ───────────────────────────────────────
-            string captureLabel = selectedRegion.HasValue ? "selected region" : primaryOnly ? "primary screen" : "all monitors";
+            string captureLabel = selectedRegion.HasValue ? "the selected area" : primaryOnly ? "the main screen" : "your screen";
             ThinkingLabel.Text = $"Capturing {captureLabel}...";
             ThinkingHintLabel.Visibility = Visibility.Collapsed;
             ThinkingPanel.Visibility = Visibility.Visible;
@@ -3333,8 +3356,15 @@ namespace InterviewCopilot
             // Hide overlay by setting Window.Opacity (not MainBorder.Opacity, which stays set)
             if (answerWasVisible && answerWindow != null) answerWindow.Opacity = 0;
 
-            // Give DWM time to flush the transparent frame before BitBlt
-            await Task.Delay(300);
+            // Let the compositor draw one frame without our windows in it before
+            // copying the screen. This was a flat 300ms, which at 60Hz is about
+            // eighteen frames of waiting for something that takes two, and the
+            // user saw it as the app blinking out and back every capture. Waiting
+            // on an actual rendered frame is both quicker and more reliable than
+            // any fixed number, and the short delay after it is the margin DWM
+            // needs to push that frame to the screen itself.
+            await WaitForRenderedFrameAsync();
+            await Task.Delay(90);
 
             // ── Phase 2: capture ──────────────────────────────────────────────
             byte[] imageBytes;
