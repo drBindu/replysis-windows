@@ -536,6 +536,16 @@ namespace InterviewCopilot
                 DO THIS
                 The single most useful next step.
 
+                After the answer, and always, add one final section:
+
+                SCREEN NOTES
+                A single dense line listing what is actually visible: the page or
+                window name, menu and tab labels, button labels, headings, and any
+                figures or identifiers on screen. Facts only, comma separated, no
+                commentary. This is not shown to the user. It is what you will be
+                given if they ask you something about this screen later, so include
+                the things your answer did not need but a follow-up question might.
+
                 Format: plain text, nothing decorative. A section title is the bare word on
                 its own line, in capitals, with its content on the very next line and
                 no blank line between them. No lines of dashes, no markdown, no
@@ -584,6 +594,19 @@ namespace InterviewCopilot
             raw = raw.Replace("—", "-").Replace("–", "-");             // any remaining -> hyphen
 
             raw = raw.Replace("\r\n", "\n").Replace("\r", "\n");
+
+            // SCREEN NOTES is written for the next question, not for this answer,
+            // so it is removed before display. It survives in LastScreenContext,
+            // which keeps the raw response.
+            //
+            // It exists because the context handed to a follow-up question used to
+            // be the answer itself, and an answer only mentions what it needed. A
+            // reply about credit packages said nothing about the navigation bar
+            // above it, so "what are those options at the top?" got the credit
+            // packages again, twice, with total confidence. The notes carry the
+            // parts of the screen this particular answer had no reason to name.
+            int notesAt = raw.IndexOf("\nSCREEN NOTES", StringComparison.OrdinalIgnoreCase);
+            if (notesAt >= 0) raw = raw[..notesAt];
 
             // Section titles are bare words now. They used to be wrapped in heavy
             // rules, ━━━ CAUSE ━━━, which looked like decoration around an answer

@@ -1089,7 +1089,12 @@ namespace InterviewCopilot
             return "ON THE CANDIDATE'S SCREEN RIGHT NOW (you looked at it moments ago):\n" +
                    Truncate(screen, 2_000) + "\n\n" +
                    "Use this when the question is about what is on screen. Never say you " +
-                   "cannot see the screen: you can, and this is what was there.\n\n";
+                   "cannot see the screen: you can, and this is what was there.\n" +
+                   "Answer the part of the screen they asked about. A question about " +
+                   "menus, tabs or buttons is not a question about whatever the " +
+                   "analysis happened to focus on, so do not repeat that instead. If " +
+                   "the notes above do not cover what they are asking, say which part " +
+                   "you cannot make out and offer to look again.\n\n";
         }
 
         public static string BuildEnhancedQuestion(string rawQuestion, string resumeFacts)
