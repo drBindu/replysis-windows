@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -3276,7 +3276,7 @@ namespace InterviewCopilot
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        // SCREEN ANALYSIS  (F8 = all monitors  |  F9 = primary monitor only)
+        // SCREEN ANALYSIS  (F8 = the active screen  |  F9 = the primary monitor)
         // ══════════════════════════════════════════════════════════════════════
         private bool _isScreenAnalyzing = false;
 

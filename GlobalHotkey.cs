@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -10,7 +10,7 @@ namespace InterviewCopilot
         private const int WM_KEYDOWN = 0x0100;
         private const int WM_KEYUP   = 0x0101;
         private const int VK_SPACE = 0x20;
-        private const int VK_F8  = 0x77;   // F8  = Analyze all screens (global)
+        private const int VK_F8  = 0x77;   // F8  = Analyze the active screen (global)
         private const int VK_F9  = 0x78;   // F9  = Analyze primary screen only (global)
         private const int VK_F12 = 0x7B;
         private const int VK_F4  = 0x73;   // Ctrl+Shift+F4 = kill app (no tray, no taskbar)
@@ -95,13 +95,13 @@ namespace InterviewCopilot
 
             if (isDown)
             {
-                // F8 — Analyze all screens
+                // F8 - Analyze the screen the user is working on
                 if (vkCode == VK_F8 && !IsOwnerWindowForeground() && _onScreenAnalysisPressed != null)
                 {
                     if (!_f8Down)
                     {
                         _f8Down = true;
-                        DebugWindow.Log("HOOK", "F8 detected → screen analysis (all monitors)");
+                        DebugWindow.Log("HOOK", "F8 detected → screen analysis (active screen)");
                         _onScreenAnalysisPressed.Invoke();
                     }
                     return (IntPtr)1;

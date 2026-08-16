@@ -17,8 +17,8 @@ using System.Windows.Media.Imaging;
 namespace InterviewCopilot
 {
     /// <summary>
-    /// Captures ALL connected monitors and streams the AI vision analysis token-by-token.
-    /// F8 = full virtual screen (all monitors). F9 = primary monitor only (faster).
+    /// Captures the screen and streams the AI vision analysis token-by-token.
+    /// F8 = the monitor the user is working on. F9 = the primary monitor.
     /// No extra NuGet packages — pure Win32 P/Invoke + WPF imaging.
     /// </summary>
     public static class ScreenAnalyzer
@@ -301,6 +301,10 @@ namespace InterviewCopilot
                 - Never invent their experience. No employers, projects, metrics, or
                   numbers about them that are not on the screen. Where their own detail
                   belongs, write [your example] and let them fill it in.
+                - Answer this screen, not the general topic. If an error code or a
+                  message is shown, work out what it means here, in this program,
+                  using everything else visible around it. Reciting what the code
+                  usually means is not an answer, and it is usually the wrong one.
                 - Code must be complete and runnable. Never write "..." or "rest of the
                   code unchanged".
                 - Everything that is not code stays short. They are reading this while
