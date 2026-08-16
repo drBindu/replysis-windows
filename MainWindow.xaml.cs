@@ -1910,7 +1910,7 @@ namespace InterviewCopilot
             // picture instead. This sits in the one funnel every answer passes
             // through, which means it works the same whether the user pressed
             // Space or the app is running the turn itself in Auto.
-            if (PromptBuilder.RefersToScreen(question))
+            if (_watchScreenMode || PromptBuilder.RefersToScreen(question))
             {
                 byte[]? shot = await CaptureScreenUnseenAsync();
                 if (shot != null)
@@ -3378,6 +3378,43 @@ namespace InterviewCopilot
 
         private Task HandleScreenAnalysisAsync()            => RunScreenAnalysis(primaryOnly: false);
         private Task HandlePrimaryScreenAnalysisAsync()     => RunScreenAnalysis(primaryOnly: true);
+
+        /// <summary>
+        /// True while the interviewer is sharing their screen, so every question
+        /// is answered from the screen without the user pressing anything.
+        ///
+        /// Deciding when to press Analyze is the hard part of this feature in a
+        /// real interview. The interviewer says "so, solve this one" and by the
+        /// time the user has thought about which key to press, they have been
+        /// silent for three seconds in front of someone. Turning this on once,
+        /// when sharing starts, removes the decision for the rest of the call.
+        /// </summary>
+        private bool _watchScreenMode;
+
+        private void WatchScreenOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            AnalyzePopup.IsOpen = false;
+            _watchScreenMode = !_watchScreenMode;
+            UpdateWatchScreenUi();
+            DebugWindow.Log("SCREEN", $"Screen-share watch {(_watchScreenMode ? "ON" : "OFF")}");
+
+            AiAnswerBox.Text = _watchScreenMode
+                ? "Watching the shared screen.\n\n" +
+                  "Every question now gets answered from what is on screen, so you do not need " +
+                  "to press anything when they ask you to look at something.\n\n" +
+                  "Turn this off when they stop sharing."
+                : "Stopped watching the screen.\n\n" +
+                  "Questions are answered from what is said again. Press F8 any time you want " +
+                  "the screen read.";
+        }
+
+        private void UpdateWatchScreenUi()
+        {
+            if (WatchScreenStateLabel == null) return;
+            WatchScreenStateLabel.Text = _watchScreenMode ? "ON" : "OFF";
+            WatchScreenStateLabel.Foreground = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(_watchScreenMode ? "#34E08A" : "#84E7B6"));
+        }
 
         private async Task HandleRegionScreenAnalysisAsync()
         {
