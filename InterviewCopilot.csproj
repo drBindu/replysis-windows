@@ -10,6 +10,11 @@
     <Product>Replysis AI</Product>
     <ApplicationIcon>Assets\replysis.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Program.cs is the entry point instead of the one generated from
+         App.xaml, so the updater's hooks can run before any app code. The
+         ApplicationDefinition below is downgraded to a Page to stop the build
+         generating a competing Main. -->
+    <StartupObject>InterviewCopilot.Program</StartupObject>
     <!-- Must stay equal to Identity/@Version in
          InterviewCopilotPackager\Package.appxmanifest. The in-app update check
          compares this against the latest windows-v* release tag, so if the two
@@ -21,6 +26,11 @@
 
   <ItemGroup>
     <None Remove="speechmatics_engine.py" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" SubType="Designer" Generator="MSBuild:Compile" />
   </ItemGroup>
 
   <ItemGroup>
@@ -49,6 +59,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="PdfPig" Version="0.1.15" />
     <PackageReference Include="System.Speech" Version="9.0.3" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
   <ItemGroup>

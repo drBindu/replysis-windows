@@ -1143,20 +1143,36 @@ namespace InterviewCopilot
         }
 
         /// <summary>
-        /// Tells someone running an older build that a newer one exists. Until now
-        /// the only way to find out was to open Settings and press Check for
-        /// Updates, so anyone who installed once and never looked again stayed on
-        /// an old version indefinitely.
-        /// Deliberately quiet: it waits so it never competes with the engine
-        /// starting, says nothing at all when there is no update or the lookup
-        /// fails, and uses the in-app banner rather than a dialog, which would
-        /// appear on a screen share.
+        /// Keeps an installed copy current on its own. On an installed copy the
+        /// new version is fetched in the background and swapped in the next time
+        /// the app closes, so the user never has to go looking for it and is never
+        /// interrupted to get it. On a copy that cannot update itself, a build
+        /// straight out of a folder or an older packaged install, it falls back to
+        /// simply saying a newer version exists.
+        ///
+        /// Deliberately quiet either way: it waits so it never competes with the
+        /// engine starting, says nothing at all when there is nothing to say, and
+        /// uses the in-app banner rather than a dialog, which would show up on a
+        /// screen share.
         /// </summary>
         private async Task NotifyIfUpdateAvailableAsync()
         {
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(12));
+
+                if (UpdateService.IsManaged)
+                {
+                    string? staged = await UpdateService.CheckAndStageAsync();
+                    if (string.IsNullOrEmpty(staged)) return;
+
+                    await Dispatcher.InvokeAsync(() =>
+                        ShowInAppAlert(
+                            $"Replysis {staged} is ready",
+                            "It installs by itself the next time you close and reopen Replysis. Nothing will interrupt you before then.",
+                            persist: true));
+                    return;
+                }
 
                 string? newer = await SettingsWindow.GetNewerVersionOrNullAsync();
                 if (string.IsNullOrEmpty(newer)) return;

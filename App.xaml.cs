@@ -196,6 +196,14 @@ namespace InterviewCopilot
             if (_ownsSingleInstanceMutex)
                 _singleInstanceMutex?.ReleaseMutex();
             _singleInstanceMutex?.Dispose();
+
+            // Last, once the app has finished saving and is on its way out. The
+            // updater waits for this process to disappear and then swaps the files
+            // in, so the new version is simply there the next time Replysis opens.
+            // Doing it here rather than mid-session is the whole point: an update
+            // can never take the app away from someone during an interview.
+            UpdateService.ApplyOnExit();
+
             base.OnExit(e);
         }
     }

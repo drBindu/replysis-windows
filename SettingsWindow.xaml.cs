@@ -111,8 +111,10 @@ namespace InterviewCopilot
             RefreshModelCards();
 
             // About
-            VersionLabel.Text      = System.Reflection.Assembly.GetExecutingAssembly()
-                                         .GetName().Version?.ToString(3) ?? "Unknown";
+            // On an installed copy this is the package version the updater
+            // compares against, so the number here is the one that decides whether
+            // an update is offered.
+            VersionLabel.Text      = UpdateService.CurrentVersion;
             AccountLabel.Text      = UserSession.IsLoggedIn
                                          ? (UserSession.Email ?? "Signed in")
                                          : "Free trial (not signed in)";
@@ -286,6 +288,41 @@ namespace InterviewCopilot
             if (btn != null) { btn.IsEnabled = false; btn.Content = "Checking..."; }
 
             string current = InstalledVersion();
+
+            // An installed copy updates itself, so the button downloads the new
+            // version rather than pointing the user at a website and leaving them
+            // to reinstall by hand.
+            if (UpdateService.IsManaged)
+            {
+                try
+                {
+                    if (btn != null) btn.Content = "Downloading...";
+                    string? staged = await UpdateService.CheckAndStageAsync();
+
+                    if (staged == null)
+                    {
+                        MessageBox.Show(this,
+                            $"You are up to date ({UpdateService.CurrentVersion}).",
+                            "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    // Restarting is offered, never taken. Someone may be sitting in
+                    // an interview with this window open.
+                    var answer = MessageBox.Show(this,
+                        $"Replysis {staged} has been downloaded and is ready.\n\n" +
+                        "It installs by itself the next time you close and reopen Replysis. " +
+                        "Restart now instead?",
+                        "Update Ready", MessageBoxButton.YesNo, MessageBoxImage.Information);
+
+                    if (answer == MessageBoxResult.Yes) UpdateService.ApplyAndRestart();
+                }
+                finally
+                {
+                    if (btn != null) { btn.IsEnabled = true; btn.Content = "Check for Updates..."; }
+                }
+                return;
+            }
 
             try
             {

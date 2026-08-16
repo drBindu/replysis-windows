@@ -1,0 +1,173 @@
+# Builds the installer customers download, and the update packages every
+# installed copy pulls from on its own.
+#
+# The app id 'Replysis' below is permanent. Velopack matches an installed copy
+# to its updates by that id, so changing it orphans every machine already out
+# there: they keep running the old build forever and never see another update.
+# The version, by contrast, must go up every single release, because an update
+# is only offered when the published version is higher than the installed one.
+name: Release Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, higher than the last one (e.g. 1.0.13)'
+        required: true
+      notes:
+        description: 'What changed in this release, shown to users'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  APP_ID: Replysis
+  REPO_URL: https://github.com/drBindu/replysis-windows
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.4.1
+
+      - name: Reject a version that is not a plain three-part number
+        shell: powershell
+        run: |
+          # Velopack compares versions, it does not compare tags. A malformed
+          # version here produces a release nobody can ever update to.
+          if ("${{ inputs.version }}" -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version must look like 1.0.13, got '${{ inputs.version }}'"
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.6.0
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+
+      # ── Speech engine ──────────────────────────────────────────────────────
+      # Bundled as a standalone executable so a customer needs no Python and no
+      # pip install. Built first because the app packages its output.
+      - name: Build the speech engine
+        shell: powershell
+        run: |
+          python -m venv build\engine-venv
+          powershell -ExecutionPolicy Bypass -File tools\build-engine.ps1
+
+      # ── App ────────────────────────────────────────────────────────────────
+      - name: Stamp the version into the project
+        shell: powershell
+        run: |
+          $v = "${{ inputs.version }}.0"
+          $path = "InterviewCopilot.csproj"
+          $xml = [System.IO.File]::ReadAllText($path)
+          $xml = $xml -replace '<Version>[^<]*</Version>',               "<Version>$v</Version>"
+          $xml = $xml -replace '<AssemblyVersion>[^<]*</AssemblyVersion>', "<AssemblyVersion>$v</AssemblyVersion>"
+          $xml = $xml -replace '<FileVersion>[^<]*</FileVersion>',         "<FileVersion>$v</FileVersion>"
+          [System.IO.File]::WriteAllText($path, $xml)
+
+      - name: Publish self-contained
+        shell: powershell
+        run: |
+          dotnet publish InterviewCopilot.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=false `
+            -o publish
+          if (-not (Test-Path "publish\InterviewCopilot.exe")) { throw "Publish produced no executable." }
+          if (-not (Test-Path "publish\engine\speechmatics_engine.exe")) { throw "Publish is missing the speech engine." }
+
+      # ── Signing ────────────────────────────────────────────────────────────
+      # Optional on purpose. Without a certificate the build still produces a
+      # working installer, it just shows the unrecognised-publisher prompt on a
+      # customer's first launch. Add the certificate secrets and every later
+      # release is signed with no other change.
+      - name: Import the signing certificate
+        id: signing
+        shell: powershell
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PFX)) {
+            Write-Host "No certificate configured. Building unsigned."
+            echo "available=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          $pfxPath = "$env:RUNNER_TEMP\cert.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
+          $securePass = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePass
+          echo "available=true"                       >> $env:GITHUB_OUTPUT
+          echo "thumbprint=$($cert.Thumbprint)"       >> $env:GITHUB_OUTPUT
+
+      # ── Package ────────────────────────────────────────────────────────────
+      - name: Install Velopack
+        shell: powershell
+        run: dotnet tool install -g vpk --version 1.2.0
+
+      # Pulls the previous release into the output folder so the pack step can
+      # build a delta against it. A customer on the last version then downloads
+      # only what changed instead of the whole app. Allowed to fail: the very
+      # first release has nothing to diff against.
+      - name: Fetch the previous release
+        continue-on-error: true
+        shell: powershell
+        run: |
+          vpk download github --repoUrl "${{ env.REPO_URL }}" --token "${{ secrets.GITHUB_TOKEN }}" -o Releases
+
+      # Read through the environment rather than substituted inline, so notes
+      # containing a quote cannot break the script or inject a command.
+      - name: Write the release notes
+        shell: powershell
+        env:
+          RELEASE_NOTES: ${{ inputs.notes }}
+        run: |
+          $notes = $env:RELEASE_NOTES
+          if ([string]::IsNullOrWhiteSpace($notes)) { $notes = "Improvements and fixes." }
+          [System.IO.File]::WriteAllText("release-notes.md", $notes)
+
+      - name: Pack the installer and update package
+        shell: powershell
+        run: |
+          $packArgs = @(
+            "--packId",      "${{ env.APP_ID }}",
+            "--packVersion", "${{ inputs.version }}",
+            "--packDir",     "publish",
+            "--packTitle",   "Replysis",
+            "--packAuthors", "Varoxel LLC",
+            "--mainExe",     "InterviewCopilot.exe",
+            "--icon",        "Assets\replysis.ico",
+            "--releaseNotes","release-notes.md",
+            "-o",            "Releases"
+          )
+          if ("${{ steps.signing.outputs.available }}" -eq "true") {
+            $packArgs += @("--signParams", "/fd SHA256 /sha1 ${{ steps.signing.outputs.thumbprint }} /tr http://timestamp.digicert.com /td SHA256")
+          }
+          vpk pack @packArgs
+
+      - name: Publish the release
+        shell: powershell
+        run: |
+          vpk upload github `
+            --repoUrl "${{ env.REPO_URL }}" `
+            --token "${{ secrets.GITHUB_TOKEN }}" `
+            --tag "v${{ inputs.version }}" `
+            --releaseName "Replysis ${{ inputs.version }}" `
+            --publish true `
+            --merge true `
+            -o Releases
+
+      - name: Report what shipped
+        shell: powershell
+        run: |
+          Get-ChildItem Releases | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}} | Format-Table
+          Write-Host "Download link for the website:"
+          Write-Host "${{ env.REPO_URL }}/releases/latest/download/${{ env.APP_ID }}-win-Setup.exe"

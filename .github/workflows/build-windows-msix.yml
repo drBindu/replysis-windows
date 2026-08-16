@@ -1,3 +1,10 @@
+# SUPERSEDED by release-windows.yml. Kept only for a future Microsoft Store
+# submission, which needs an MSIX.
+#
+# Do not run this to ship an update. It publishes a GitHub release of its own,
+# and installed copies read the newest release to decide what to update to, so a
+# run here puts a release in front of them that contains no update package and
+# stalls everyone's updates until the next real release.
 name: Build Windows MSIX
 
 on:
