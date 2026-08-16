@@ -47,6 +47,10 @@ namespace InterviewCopilot
 
         [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(
+            IntPtr hwnd, int attribute, out RECT value, int size);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFO lpmi);
 
@@ -110,10 +114,77 @@ namespace InterviewCopilot
         /// </summary>
         public static byte[] CaptureScreen()
         {
+            // The window in front, not the whole monitor, whenever that is a real
+            // window belonging to something else.
+            //
+            // This is both the faster and the more accurate choice, for the same
+            // reason. The model shrinks whatever it receives until the shortest
+            // side is 768 pixels, so a full 1080p screen is read at 1365x768 no
+            // matter what is sent. Small interface text does not survive that. A
+            // window that occupies half the screen arrives at close to its real
+            // size instead, which is the difference between the model reading an
+            // error code and inventing one, and it costs less to send.
+            if (TryGetForegroundWindowBounds(out int wx, out int wy, out int ww, out int wh))
+                return CaptureRegionCore(wx, wy, ww, wh);
+
             if (TryGetActiveMonitorBounds(out int x, out int y, out int w, out int h))
                 return CaptureRegionCore(x, y, w, h);
 
             return CapturePrimaryScreen();
+        }
+
+        /// <summary>
+        /// Bounds of the window in front, clipped to the monitor showing it.
+        ///
+        /// Refuses in the cases where the answer would be wrong rather than
+        /// merely different: a window of ours, since capturing ourselves would
+        /// feed the model its own last answer, and anything too small to hold a
+        /// question, where the user almost certainly means the screen behind it.
+        /// </summary>
+        private static bool TryGetForegroundWindowBounds(out int x, out int y, out int w, out int h)
+        {
+            x = y = w = h = 0;
+            try
+            {
+                IntPtr hwnd = GetForegroundWindow();
+                if (hwnd == IntPtr.Zero) return false;
+
+                GetWindowThreadProcessId(hwnd, out uint pid);
+                if (pid == (uint)Environment.ProcessId) return false;
+
+                // The window's own frame, not the invisible resize border Windows
+                // draws around it. GetWindowRect includes that padding, which puts
+                // a strip of whatever is behind into the capture.
+                const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+                RECT r;
+                if (DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS,
+                                          out r, Marshal.SizeOf<RECT>()) != 0 &&
+                    !GetWindowRect(hwnd, out r))
+                    return false;
+
+                // Clip to the monitor. A maximised window reports slightly beyond
+                // its screen, and off-screen coordinates make the copy fail.
+                if (TryGetActiveMonitorBounds(out int mx, out int my, out int mw, out int mh))
+                {
+                    int left   = Math.Max(r.Left,   mx);
+                    int top    = Math.Max(r.Top,    my);
+                    int right  = Math.Min(r.Right,  mx + mw);
+                    int bottom = Math.Min(r.Bottom, my + mh);
+                    r = new RECT { Left = left, Top = top, Right = right, Bottom = bottom };
+                }
+
+                w = r.Right - r.Left;
+                h = r.Bottom - r.Top;
+                x = r.Left;
+                y = r.Top;
+
+                // Too small to be holding the thing they want read.
+                return w >= 480 && h >= 360;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>
