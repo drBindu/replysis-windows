@@ -3493,8 +3493,12 @@ namespace InterviewCopilot
                         if (tokenCount == 1)
                             ThinkingPanel.Visibility = Visibility.Collapsed;
 
-                        // Update display every 3 tokens or on newlines (smooth streaming)
-                        if (tokenCount % 3 == 0 || token.Contains('\n'))
+                        // Paint the first few tokens the moment they land, then
+                        // settle into batches of three. Batching from the start
+                        // left a gap where the indicator had gone and no words had
+                        // appeared yet, so the fastest part of the wait was the
+                        // part that looked emptiest.
+                        if (tokenCount <= 3 || tokenCount % 3 == 0 || token.Contains('\n'))
                         {
                             AiAnswerBox.Text = $"{header}{sb}";
                             AiAnswerBox.ScrollToEnd();
