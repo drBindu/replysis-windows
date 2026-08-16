@@ -48,6 +48,8 @@ namespace InterviewCopilot
         [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
         [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+        [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
@@ -109,6 +111,37 @@ namespace InterviewCopilot
         /// </summary>
         public static string LastCaptureTarget { get; private set; } = "";
 
+        // ── The window the user was last actually working in ──────────────────
+        //
+        // Pressing the F8 hotkey leaves the other application in front, so the
+        // window to read is simply whatever is in front. Clicking the Analyze
+        // button does not: that brings us to the front, and we refuse to read
+        // ourselves, so the capture fell back to the whole screen. The user had
+        // pressed the button on our window while looking at their work, and got
+        // an answer about the desktop.
+        //
+        // So the last window that was not ours is remembered, and used when we
+        // are the one in front. Polled rather than hooked: one call every half
+        // second costs nothing, and a foreground hook is a global system hook
+        // this app does not otherwise need.
+        private static IntPtr _lastExternalWindow;
+        private static Timer? _foregroundWatcher;
+
+        public static void StartTrackingActiveWindow()
+        {
+            _foregroundWatcher ??= new Timer(_ =>
+            {
+                try
+                {
+                    IntPtr hwnd = GetForegroundWindow();
+                    if (hwnd == IntPtr.Zero) return;
+                    GetWindowThreadProcessId(hwnd, out uint pid);
+                    if (pid != (uint)Environment.ProcessId) _lastExternalWindow = hwnd;
+                }
+                catch { /* a foreground query is never worth surfacing */ }
+            }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(500));
+        }
+
         // ═════════════════════════════════════════════════════════════════════
         // CAPTURE
         // ═════════════════════════════════════════════════════════════════════
@@ -139,7 +172,7 @@ namespace InterviewCopilot
             // error code and inventing one, and it costs less to send.
             if (TryGetForegroundWindowBounds(out int wx, out int wy, out int ww, out int wh))
             {
-                LastCaptureTarget = ForegroundWindowTitle();
+                LastCaptureTarget = WindowTitle(_capturedWindow);
                 return CaptureRegionCore(wx, wy, ww, wh);
             }
 
@@ -158,15 +191,26 @@ namespace InterviewCopilot
         /// feed the model its own last answer, and anything too small to hold a
         /// question, where the user almost certainly means the screen behind it.
         /// </summary>
+        private static IntPtr _capturedWindow;
+
         private static bool TryGetForegroundWindowBounds(out int x, out int y, out int w, out int h)
         {
             x = y = w = h = 0;
+            _capturedWindow = IntPtr.Zero;
             try
             {
                 IntPtr hwnd = GetForegroundWindow();
-                if (hwnd == IntPtr.Zero) return false;
 
+                // We are in front, which means the user pressed the button on our
+                // window rather than the hotkey. Read what they were working in
+                // before they reached for us.
                 GetWindowThreadProcessId(hwnd, out uint pid);
+                if (hwnd == IntPtr.Zero || pid == (uint)Environment.ProcessId)
+                    hwnd = _lastExternalWindow;
+
+                if (hwnd == IntPtr.Zero || !IsWindow(hwnd) || IsIconic(hwnd)) return false;
+
+                GetWindowThreadProcessId(hwnd, out pid);
                 if (pid == (uint)Environment.ProcessId) return false;
 
                 // The window's own frame, not the invisible resize border Windows
@@ -196,7 +240,10 @@ namespace InterviewCopilot
                 y = r.Top;
 
                 // Too small to be holding the thing they want read.
-                return w >= 480 && h >= 360;
+                if (w < 480 || h < 360) return false;
+
+                _capturedWindow = hwnd;
+                return true;
             }
             catch
             {
@@ -225,13 +272,13 @@ namespace InterviewCopilot
             return CaptureRegionCore(x, y, width, height);
         }
 
-        /// <summary>Title of the window in front, trimmed for display.</summary>
-        private static string ForegroundWindowTitle()
+        /// <summary>Title of a window, trimmed for display.</summary>
+        private static string WindowTitle(IntPtr hwnd)
         {
             try
             {
                 var sb = new StringBuilder(256);
-                if (GetWindowText(GetForegroundWindow(), sb, sb.Capacity) <= 0)
+                if (hwnd == IntPtr.Zero || GetWindowText(hwnd, sb, sb.Capacity) <= 0)
                     return "the window in front";
 
                 string title = sb.ToString().Trim();

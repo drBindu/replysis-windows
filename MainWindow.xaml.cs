@@ -189,6 +189,11 @@ namespace InterviewCopilot
                 // accurate Live/last-seen (self-guards while logged out)
                 PresenceTracker.Start();
 
+                // Keep track of the window the user is actually working in, so
+                // pressing Analyze on our own window still reads their work
+                // rather than falling back to a picture of the whole desktop.
+                ScreenAnalyzer.StartTrackingActiveWindow();
+
                 try
                 {
                     try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
