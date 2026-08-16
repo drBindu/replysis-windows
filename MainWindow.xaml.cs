@@ -3280,6 +3280,13 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         private bool _isScreenAnalyzing = false;
 
+        /// <summary>
+        /// Size of the last screenshot sent, in KB. Recorded because the wait
+        /// after pressing F8 is mostly this number travelling up a home
+        /// connection, and that is the one part of the delay we can act on.
+        /// </summary>
+        private int _lastCaptureKb;
+
         private Task HandleScreenAnalysisAsync()            => RunScreenAnalysis(primaryOnly: false);
         private Task HandlePrimaryScreenAnalysisAsync()     => RunScreenAnalysis(primaryOnly: true);
 
@@ -3412,7 +3419,8 @@ namespace InterviewCopilot
                     : primaryOnly
                         ? ScreenAnalyzer.CapturePrimaryScreen()
                         : ScreenAnalyzer.CaptureScreen());
-                DebugWindow.Log("SCREEN", $"Captured {imageBytes.Length / 1024} KB ({captureLabel})");
+                _lastCaptureKb = imageBytes.Length / 1024;
+                DebugWindow.Log("SCREEN", $"Captured {_lastCaptureKb} KB from {ScreenAnalyzer.LastCaptureTarget}");
             }
             catch (Exception ex)
             {
@@ -3451,9 +3459,13 @@ namespace InterviewCopilot
             // mistake the user spots instantly.
             string target     = ScreenAnalyzer.LastCaptureTarget;
             string header     = string.IsNullOrWhiteSpace(target)
-                ? $"📸 SCREEN ANALYSIS  [{timestamp}]\n\n"
-                : $"📸 SCREEN ANALYSIS  [{timestamp}]\nRead from: {target}\n\n";
-            string sep        = "\n" + new string('─', 45) + "\n\n";
+                ? $"📸 SCREEN  ·  {timestamp}\n\n"
+                : $"📸 SCREEN  ·  {timestamp}  ·  {target}\n\n";
+
+            // A hairline between this answer and the ones before it. A rule of 45
+            // box characters read as the start of another section rather than the
+            // end of one, and it competed with the answer for attention.
+            string sep        = "\n" + new string('·', 12) + "\n\n";
 
             // Save previous answers so we can prepend the new one on top.
             // Treat placeholder/welcome messages as "empty" so they aren't carried forward.
