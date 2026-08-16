@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -1051,6 +1051,7 @@ namespace InterviewCopilot
                 lockBlock +
                 "FORMAT (read BEFORE answering): " + formatReminder + "\n\n" +
                 contextNote +
+                BuildScreenContextNote() +
                 historyHint +
                 "QUESTION: " + currentQuestion;
 
@@ -1066,6 +1067,30 @@ namespace InterviewCopilot
 
         private static string Truncate(string value, int maxChars) =>
             value.Length <= maxChars ? value : value[..maxChars] + "\n[truncated]";
+
+        /// <summary>
+        /// What the last Screen Analyze read, for questions that refer to it.
+        ///
+        /// The screen analysis was captured into ScreenAnalyzer.LastScreenContext
+        /// and then read by nothing at all, which meant that asking "what site is
+        /// this?" straight after analysing a screen produced "I don't have the
+        /// ability to view your screen directly." The model was right: nobody had
+        /// told it. The analysis it had just written was sitting one field away.
+        ///
+        /// Only recent captures count. Half an hour later the screen has moved on
+        /// and stale context is worse than none.
+        /// </summary>
+        private static string BuildScreenContextNote()
+        {
+            string screen = ScreenAnalyzer.LastScreenContext;
+            if (string.IsNullOrWhiteSpace(screen)) return "";
+            if (DateTime.UtcNow - ScreenAnalyzer.LastScreenContextUtc > TimeSpan.FromMinutes(10)) return "";
+
+            return "ON THE CANDIDATE'S SCREEN RIGHT NOW (you looked at it moments ago):\n" +
+                   Truncate(screen, 2_000) + "\n\n" +
+                   "Use this when the question is about what is on screen. Never say you " +
+                   "cannot see the screen: you can, and this is what was there.\n\n";
+        }
 
         public static string BuildEnhancedQuestion(string rawQuestion, string resumeFacts)
         {

@@ -101,6 +101,13 @@ namespace InterviewCopilot
         public static string LastScreenContext { get; private set; } = "";
 
         /// <summary>
+        /// When the above was captured. A screen from half an hour ago is not the
+        /// screen the question is about, and answering from it confidently is
+        /// worse than admitting nothing was seen.
+        /// </summary>
+        public static DateTime LastScreenContextUtc { get; private set; } = DateTime.MinValue;
+
+        /// <summary>
         /// What the last capture was pointed at, for showing above the answer.
         ///
         /// Without this the feature is guesswork. The user presses a key, an
@@ -718,7 +725,11 @@ namespace InterviewCopilot
             {
                 // Always update context so follow-up voice questions work
                 string full = CleanContent(accumulated.ToString());
-                if (!string.IsNullOrWhiteSpace(full)) LastScreenContext = full;
+                if (!string.IsNullOrWhiteSpace(full))
+                {
+                    LastScreenContext    = full;
+                    LastScreenContextUtc = DateTime.UtcNow;
+                }
                 res.Dispose();
             }
         }

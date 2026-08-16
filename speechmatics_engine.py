@@ -247,8 +247,20 @@ def find_wasapi_loopback_device(p):
         # rest of the session (mic goes silent for many seconds). Excluding
         # sibling-family devices from system-audio candidates entirely (both
         # initial selection and hot-swap) avoids ever touching them.
+        # ...but only while the mic is actually open. In system-audio-only mode
+        # the mic is never opened, so there is no stream to corrupt and no reason
+        # to exclude anything.
+        #
+        # That distinction is what made Interview Auto unusable on machines where
+        # the headset supplies both the microphone and the speakers, which is the
+        # normal arrangement for Sonar, Voicemeeter and similar. The exclusion
+        # removed the user's real output device, selection fell through to an
+        # unrelated one carrying no audio, that device then hung, and system
+        # audio was switched off for the session. Interview Auto listens to
+        # system audio with the mic off, so the result was total silence with
+        # nothing on screen to explain it.
         mic_family = ""
-        if "sonar" in _mic_device_name.lower():
+        if args.mode == "both" and "sonar" in _mic_device_name.lower():
             mic_family = "sonar"
 
         # Collect all loopback candidates
@@ -322,12 +334,18 @@ def find_wasapi_loopback_device(p):
 
 
 def _try_next_loopback():
-    """Round-robin to the next loopback candidate when the current one is silent."""
+    """
+    Round-robin to the next loopback candidate when the current one is silent.
+
+    Returns True when a replacement stream was opened, so callers deciding
+    whether to give up on system audio entirely can tell the difference between
+    "moved on" and "nothing left to move to".
+    """
     global sys_stream, _sys_native_rate, _sys_native_channels, _sys_chunk_frames
     global _active_loopback_index, _sys_use_loopback
 
     if len(_loopback_candidates) <= 1:
-        return
+        return False
 
     # Advance to the next candidate, skipping microphone loopbacks — they are capture
     # devices, never system output, so hot-swapping onto one would silently turn
@@ -364,8 +382,10 @@ def _try_next_loopback():
         _sys_native_channels = dev['channels']
         _sys_chunk_frames    = lb_chunk
         _sys_use_loopback    = True
+        return True
     except Exception as e:
         print(f">>> HOTSWAP failed: {e}", flush=True)
+        return False
 
 
 # ── REAL-TIME TOKEN MINTING ───────────────────────────────────────────────────
@@ -629,6 +649,7 @@ _sys_chunk_frames    = CHUNK_FRAMES
 _sys_use_loopback    = False
 _loopback_candidates   = []
 _active_loopback_index = 0
+_hang_swaps = 0   # loopbacks abandoned this session for hanging
 _mic_device_name       = ""   # set once the mic device is resolved below
 _silent_chunk_count    = 0
 SILENCE_HOTSWAP_LIMIT  = 35
@@ -778,15 +799,41 @@ SILENCE = b"\x00" * (CHUNK_FRAMES * 2)
 
 
 def disable_unresponsive_system_audio(reason: str):
-    """Drop a stuck loopback stream without closing a native read in progress."""
-    global sys_stream
+    """
+    Give up on a stuck loopback stream, after trying the other candidates.
+
+    One device hanging used to end system audio for the whole session, which is
+    the wrong conclusion to draw from one bad device. A machine typically offers
+    several loopbacks and only one of them is the speakers the meeting is
+    actually playing through; the others belong to virtual cables and capture
+    tools that accept a stream and then never return a buffer. Picking one of
+    those and stopping meant the interviewer was never heard again, and the only
+    trace was a line in a debug log the user has no reason to open.
+
+    So the next candidate is tried first, and system audio is only abandoned
+    once every one of them has failed.
+    """
+    global sys_stream, _hang_swaps
     if sys_stream is None:
         return
-    print(f">>> SYSTEM AUDIO disabled for this session — {reason}. "
-          "Running mic-only; your voice still transcribes normally.", flush=True)
+
     # A timeout leaves a daemon thread inside PyAudio's native read. Closing the
-    # stream under that thread can crash the interpreter, so abandon the reference.
+    # stream under that thread can crash the interpreter, so abandon the
+    # reference and let the thread finish on its own.
     sys_stream = None
+
+    print(f">>> SYSTEM AUDIO: [{_active_loopback_index}] stopped responding — {reason}.", flush=True)
+
+    # Each candidate gets one chance. Without the cap a machine whose loopbacks
+    # all hang would rotate between them for the whole session, paying a read
+    # timeout every time and never settling.
+    _hang_swaps += 1
+    if _hang_swaps < len(_loopback_candidates) and _try_next_loopback():
+        print(">>> SYSTEM AUDIO: switched to the next output device.", flush=True)
+        return
+
+    print(">>> SYSTEM AUDIO unavailable — no output device returned audio. "
+          "Running mic-only; your voice still transcribes normally.", flush=True)
 
 
 def mix_audio(mic_data: bytes, sys_data: bytes) -> bytes:
