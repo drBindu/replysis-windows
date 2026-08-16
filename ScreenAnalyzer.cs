@@ -73,12 +73,21 @@ namespace InterviewCopilot
         #endregion
 
         /// <summary>
-        /// The longest edge we send. Vision models resize what they receive to
-        /// roughly this before they read it, so anything larger costs upload time
-        /// and credits and is then thrown away, while anything smaller throws away
-        /// legibility we could have kept.
+        /// How large an image is worth sending.
+        ///
+        /// The model does its own resizing before it reads anything: the image is
+        /// fitted into a 2048 square, then scaled again until its shortest side is
+        /// 768 pixels. Everything above that is uploaded, paid for, and thrown
+        /// away before a single pixel is read.
+        ///
+        /// That matters here because the upload is the slowest part of pressing
+        /// F8. A full screen sent at 2048 wide is several megabytes of PNG that
+        /// the model immediately shrinks to the same picture it would have got
+        /// from a third of the bytes. Sending the shortest side at 768 costs
+        /// nothing in legibility and returns the answer noticeably sooner.
         /// </summary>
-        private const int MaxImageEdge = 2048;
+        private const int MaxShortEdge = 768;
+        private const int MaxLongEdge  = 2048;
 
         // ── Last captured context (injected into follow-up voice questions) ───
         public static string LastScreenContext { get; private set; } = "";
@@ -210,13 +219,16 @@ namespace InterviewCopilot
                 DeleteObject(hBitmap);
             }
 
-            // Only shrink when the capture genuinely exceeds what the model reads,
-            // and shrink with a real resampling filter. TransformedBitmap picks
-            // whatever scaling mode it likes, which on text produces the broken,
-            // speckled glyphs that make a model misread a line of code.
-            if (srcW > MaxImageEdge || srcH > MaxImageEdge)
+            // Shrink to what the model will actually read, and shrink with a real
+            // resampling filter. TransformedBitmap picks whatever scaling mode it
+            // likes, which on text produces the broken, speckled glyphs that make
+            // a model misread a line of code.
+            double shortEdge = Math.Min(srcW, srcH);
+            double longEdge  = Math.Max(srcW, srcH);
+            double scale = Math.Min(MaxShortEdge / shortEdge, MaxLongEdge / longEdge);
+
+            if (scale < 1.0)
             {
-                double scale = Math.Min((double)MaxImageEdge / srcW, (double)MaxImageEdge / srcH);
                 int dstW = Math.Max(1, (int)Math.Round(srcW * scale));
                 int dstH = Math.Max(1, (int)Math.Round(srcH * scale));
 
