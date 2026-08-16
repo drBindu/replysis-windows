@@ -450,12 +450,27 @@ namespace InterviewCopilot
         /// who may well check. Nothing here asks the model to speak as the user
         /// about their own past.
         /// </summary>
-        private static string BuildScreenPrompt(string? resumeContext)
+        private static string BuildScreenPrompt(string? resumeContext, string? spokenQuestion = null)
         {
             if (!string.IsNullOrWhiteSpace(resumeContext) && resumeContext.Length > MaxResumeContextChars)
                 resumeContext = resumeContext[..MaxResumeContextChars] + "\n[Candidate background truncated]";
 
             var sb = new StringBuilder();
+
+            // A question was actually asked out loud, so answer that rather than
+            // describing the screen. The interviewer said "have a look at this and
+            // walk me through it"; a summary of the window is not a reply to that.
+            if (!string.IsNullOrWhiteSpace(spokenQuestion))
+            {
+                sb.AppendLine("THE INTERVIEWER JUST ASKED, OUT LOUD:");
+                sb.AppendLine(spokenQuestion.Trim());
+                sb.AppendLine();
+                sb.AppendLine("Answer that question, using the screen below as what they are");
+                sb.AppendLine("pointing at. Answer as the candidate would speak it. If the screen");
+                sb.AppendLine("does not contain what they asked about, say which part you cannot");
+                sb.AppendLine("make out rather than answering about something else.");
+                sb.AppendLine();
+            }
 
             sb.AppendLine("""
                 You are sitting beside someone who is in a live interview right now. They
@@ -687,11 +702,11 @@ namespace InterviewCopilot
         /// appear inside try-catch blocks (C# iterator restriction).
         /// </summary>
         public static async IAsyncEnumerable<string> AnalyzeStreamAsync(
-            byte[] imageBytes, string? resumeContext = null,
+            byte[] imageBytes, string? resumeContext = null, string? spokenQuestion = null,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             string base64 = Convert.ToBase64String(imageBytes);
-            string prompt = BuildScreenPrompt(resumeContext);
+            string prompt = BuildScreenPrompt(resumeContext, spokenQuestion);
             string provider = GetProvider();
             string payloadJson = JsonSerializer.Serialize(new { image = base64, prompt, provider });
 

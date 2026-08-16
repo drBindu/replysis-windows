@@ -1837,6 +1837,59 @@ namespace InterviewCopilot
             }
         }
 
+        /// <summary>
+        /// Captures the screen with our own windows kept out of the picture,
+        /// returning null if the capture fails.
+        ///
+        /// Shared by the Analyze hotkey and by questions that turn out to be
+        /// about the screen, so both get the same instant, blink-free capture.
+        /// </summary>
+        private async Task<byte[]?> CaptureScreenUnseenAsync()
+        {
+            bool answerWasVisible = answerWindow?.IsVisible == true;
+            AnswerWindow? cloakedAnswer = answerWasVisible ? answerWindow : null;
+
+            bool mainCloaked = WindowStealth.TryBeginCaptureHidden(this, out bool mainWasExcluded);
+            bool answerCloaked = true, answerWasExcluded = true;
+            if (cloakedAnswer != null)
+                answerCloaked = WindowStealth.TryBeginCaptureHidden(cloakedAnswer, out answerWasExcluded);
+
+            bool cloaked = mainCloaked && answerCloaked;
+            double savedOpacity = this.Opacity;
+
+            if (!cloaked)
+            {
+                this.Opacity = 0;
+                if (cloakedAnswer != null) cloakedAnswer.Opacity = 0;
+                await WaitForRenderedFrameAsync();
+                await Task.Delay(90);
+            }
+            else if (!mainWasExcluded || !answerWasExcluded)
+            {
+                await WaitForRenderedFrameAsync();
+            }
+
+            try
+            {
+                return await Task.Run(() => ScreenAnalyzer.CaptureScreen());
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("SCREEN_ERR", ex.Message);
+                return null;
+            }
+            finally
+            {
+                WindowStealth.EndCaptureHidden(this, mainWasExcluded);
+                WindowStealth.EndCaptureHidden(cloakedAnswer, answerWasExcluded);
+                if (!cloaked)
+                {
+                    this.Opacity = savedOpacity;
+                    if (cloakedAnswer != null) cloakedAnswer.Opacity = 1.0;
+                }
+            }
+        }
+
         // ── Streaming iterator — NO try/catch wrapping yield statements ────────
         private async IAsyncEnumerable<string> StreamFromBackend(
             string question, string resume,
@@ -1845,6 +1898,37 @@ namespace InterviewCopilot
             // Fast-path: local responses that need no network call
             if (PromptBuilder.IsGreeting(question)) { yield return PromptBuilder.GetGreetingResponse(); yield break; }
             if (PromptBuilder.IsSmallTalk(question)) { yield return PromptBuilder.GetSmallTalkResponse(); yield break; }
+
+            // Some questions cannot be answered from the words in them. An
+            // interviewer who says "have a look at this and walk me through it"
+            // has put everything that matters on the screen and almost nothing in
+            // the sentence, so a text model receives a request with the substance
+            // missing and fills the gap confidently, which in the middle of an
+            // interview is the worst thing it could do.
+            //
+            // So the screen is captured and the question is answered from the
+            // picture instead. This sits in the one funnel every answer passes
+            // through, which means it works the same whether the user pressed
+            // Space or the app is running the turn itself in Auto.
+            if (PromptBuilder.RefersToScreen(question))
+            {
+                byte[]? shot = await CaptureScreenUnseenAsync();
+                if (shot != null)
+                {
+                    DebugWindow.Log("SCREEN",
+                        $"Question is about the screen; answering from a {shot.Length / 1024} KB capture " +
+                        $"of {ScreenAnalyzer.LastCaptureTarget}");
+
+                    await foreach (var visionToken in
+                        ScreenAnalyzer.AnalyzeStreamAsync(shot, ResumeParser.ExtractFacts(resume), question, ct))
+                        yield return visionToken;
+
+                    yield break;
+                }
+                // Capture failed. Fall through and answer from the words alone,
+                // which is weak but better than returning nothing mid-interview.
+                DebugWindow.Log("SCREEN", "Capture failed; answering from the transcript alone.");
+            }
 
             // ── 1. Send request — errors handled outside the iterator ──────────
             using HttpResponseMessage res = await SendBackendRequestAsync(question, resume, ct);

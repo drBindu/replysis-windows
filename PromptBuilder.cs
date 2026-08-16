@@ -130,6 +130,42 @@ namespace InterviewCopilot
             LiveHints = "";  // hints reset each session; company/job persist
         }
 
+        // Phrases that mean the answer is on the screen rather than in the words.
+        //
+        // An interviewer sharing a coding problem says "have a look at this" and
+        // then stops talking. Everything needed to answer is on the screen and
+        // almost none of it is in the sentence, so sending the sentence alone to a
+        // text model produces confident nonsense, which is the worst possible
+        // output in the middle of an interview.
+        private static readonly string[] ScreenReferencePhrases =
+        {
+            "on the screen", "on my screen", "on your screen", "on screen",
+            "look at this", "look at the screen", "have a look", "take a look",
+            "what do you see", "can you see", "do you see", "you can see",
+            "sharing my screen", "share my screen", "shared my screen",
+            "in front of you", "shown here", "displayed here", "up on the",
+            "solve this", "fix this", "debug this", "explain this",
+            "this code", "this error", "this problem", "this question",
+            "this diagram", "this snippet", "this function", "this output",
+            "what is this", "what's this", "read this", "walk me through this",
+        };
+
+        /// <summary>
+        /// Whether a question is about what is on screen rather than about the
+        /// candidate. When it is, the screenshot is the question, and answering
+        /// from the transcript alone cannot work however good the model is.
+        /// </summary>
+        public static bool RefersToScreen(string question)
+        {
+            if (string.IsNullOrWhiteSpace(question)) return false;
+
+            string q = question.ToLowerInvariant();
+            foreach (string phrase in ScreenReferencePhrases)
+                if (q.Contains(phrase, StringComparison.Ordinal)) return true;
+
+            return false;
+        }
+
         public static bool IsGreeting(string q)
         {
             string t = q.Trim().ToLower().Trim('.', '!', '?', ',', ' ');
