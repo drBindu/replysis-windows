@@ -509,10 +509,15 @@ parser.add_argument("--device",     type=int,   default=None,
                     help="PyAudio input device index for MIC")
 parser.add_argument("--sysdevice",  type=int,   default=None,
                     help="PyAudio input device index for system audio (VB-Cable). Auto-detected if not set.")
-parser.add_argument("--max-delay",  type=float, default=0.85,
-                    help="Speechmatics max_delay seconds. 0.7 is the LOWEST the Speechmatics RT API "
-                         "accepts — it rejects anything below 0.7 with a protocol_error and refuses to "
-                         "connect. max_delay_mode='flexible' still extends slightly at word boundaries.")
+parser.add_argument("--max-delay",  type=float, default=0.7,
+                    help="Speechmatics max_delay seconds, and the single largest delay between "
+                         "someone finishing a sentence and reading an answer to it. The words are "
+                         "held this long before they are released, so the app waits for them before "
+                         "it can ask anything, and the model it then asks replies in about 0.15s. "
+                         "0.7 is the LOWEST the Speechmatics RT API accepts: it rejects anything "
+                         "below that with a protocol_error and refuses to connect. Was 0.85, which "
+                         "spent an extra 150ms per question for accuracy that max_delay_mode "
+                         "'flexible' already protects by extending at word boundaries anyway.")
 parser.add_argument("--mode",       type=str,   default="both",
                     choices=["both", "system"],
                     help="'both' = system audio + mic (default). 'system' = system audio only, mic never opened.")
