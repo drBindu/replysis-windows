@@ -1268,6 +1268,7 @@ async def run_sarvam():
             if "401" in msg or "403" in msg or "Unauthorized" in msg or "Forbidden" in msg:
                 print(">>> FATAL: Sarvam auth failed (exit 2) — check your Sarvam API key in Settings.", flush=True)
                 sys.exit(2)
+            print(">>> STATUS: OFFLINE", flush=True)
             print(f">>> [SARVAM] disconnected/error: {e}", flush=True)
             await asyncio.sleep(reconnect_delay)
             reconnect_delay = min(reconnect_delay * 2, 30)
@@ -1817,6 +1818,11 @@ async def main():
                 print(">>> Trying next endpoint...", flush=True)
 
         if not connected:
+            # Say so out loud. The app latched "online" on the first success and
+            # had no way to learn otherwise, so a dropped session left it
+            # believing transcription still worked while the user spoke into
+            # nothing and got an empty question back.
+            print(">>> STATUS: OFFLINE", flush=True)
             print(f">>> All endpoints failed. Retrying in {reconnect_delay}s...", flush=True)
             await asyncio.sleep(reconnect_delay)
             reconnect_delay = min(reconnect_delay * 2, 60)

@@ -2642,6 +2642,19 @@ namespace InterviewCopilot
                             // The engine prints "STATUS: ONLINE" the moment Speechmatics
                             // accepts the session — that's when transcription actually works.
                             // Flip the readiness flag so the mic pill can show READY.
+                            // Transcription has stopped and is retrying. The flag
+                            // was set true on the first success and never cleared,
+                            // so a dropped session left the app believing speech
+                            // still worked: the user spoke, nothing was recorded,
+                            // and the question arrived empty with nothing on
+                            // screen to explain why.
+                            if (_engineOnline && line.Contains("STATUS: OFFLINE"))
+                            {
+                                _engineOnline = false;
+                                DebugWindow.Log("ENGINE", "Speech connection lost; reconnecting.");
+                                _ = Dispatcher.BeginInvoke(new Action(UpdateMicUi));
+                            }
+
                             if (!_engineOnline && line.Contains("STATUS: ONLINE"))
                             {
                                 _engineOnline = true;
