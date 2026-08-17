@@ -938,6 +938,8 @@ namespace InterviewCopilot
         {
             try
             {
+                await UserSession.EnsureFreshTokenAsync();
+
                 using var req = new HttpRequestMessage(HttpMethod.Post,
                     $"{SettingsWindow.GetBackendUrl()}/api/v1/interview/analyze-screen");
                 if (!string.IsNullOrEmpty(UserSession.IdToken))

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
@@ -331,6 +331,36 @@ namespace InterviewCopilot
         }
 
         // ── Silently refresh the Firebase ID token using the stored refresh token ──
+        /// <summary>
+        /// Refreshes the sign-in token when it is about to expire, so a request
+        /// is never sent with one the server will reject.
+        ///
+        /// Firebase tokens last an hour. Nothing on the answer path checked, so
+        /// an app opened before an interview, or an interview that ran past the
+        /// hour, sent an expired token, got a 401, and the 401 handler cleared
+        /// the session and dropped the user to guest credits. In the middle of
+        /// an interview, in place of an answer. The refresh token was sitting
+        /// there the whole time.
+        ///
+        /// Safe to call before every request: it returns immediately unless the
+        /// token is actually near expiry, and concurrent callers share one
+        /// refresh through the semaphore inside TryRefreshAsync.
+        /// </summary>
+        public static async Task EnsureFreshTokenAsync()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(IdToken) || string.IsNullOrEmpty(RefreshToken)) return;
+                if (!IsTokenExpired()) return;
+                await TryRefreshAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // A failed refresh must not stop the request: the server may
+                // still accept the token, and a 401 is handled downstream.
+            }
+        }
+
         public static async Task<bool> TryRefreshAsync()
         {
             if (string.IsNullOrEmpty(RefreshToken)) return false;

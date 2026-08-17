@@ -2034,6 +2034,10 @@ namespace InterviewCopilot
             var payload = new { question, resume = transportResume, provider, messages };
             string payloadJson = JsonSerializer.Serialize(payload);
             DebugWindow.Log("AI", $"Request prepared: {messages.Count} messages, {Encoding.UTF8.GetByteCount(payloadJson)} bytes");
+            // An hour-old token is rejected, and the 401 handler treats that as a
+            // sign-out: plan lost, guest credits, mid-answer.
+            await UserSession.EnsureFreshTokenAsync();
+
             using var request = new HttpRequestMessage(HttpMethod.Post,
                 $"{BackendUrl}/api/v1/interview/ask");
             if (!string.IsNullOrEmpty(UserSession.IdToken))
