@@ -22,7 +22,7 @@ namespace InterviewCopilot
         private static string BackendUrl => SettingsWindow.GetBackendUrl();
 
         // ── Tunable constants (change here, takes effect everywhere) ──────────
-        private const int    TranscriptPollMs        = 60;    // how often to read latest.txt
+        private const int    TranscriptPollMs        = 40;    // how often to read latest.txt
         private const int    ThinkingAnimMs          = 800;   // thinking dot animation interval
         private const int    CreditRefreshMinutes    = 5;     // background credits refresh
         private const int    EngineMonitorSecs       = 3;     // how often to check engine health
@@ -30,8 +30,25 @@ namespace InterviewCopilot
         private const int    CreditsCriticalThreshold= 5;     // red warning / block below this
         private const int    TranscriptRetryCount    = 5;     // retries on torn file read
         private const int    TranscriptRetryDelayMs  = 5;     // delay between retries
-        private const int    AutoTurnPunctuatedSilenceMs = 650;  // complete sentence/question
-        private const int    AutoTurnNaturalSilenceMs    = 950;  // natural pause without punctuation
+        // How long a pause has to last before Auto decides the interviewer has
+        // finished. This is dead time on top of the 0.7s the recogniser already
+        // holds words for, and it is the largest remaining delay between a
+        // question ending and an answer starting, since the model itself replies
+        // in about 0.15s.
+        //
+        // The two cases deserve different patience. A transcript ending in "?"
+        // or "." means the recogniser itself decided the sentence closed, which
+        // is a strong signal on its own and does not need most of a second of
+        // corroboration; 650ms was spending that on a question already known to
+        // be over. A pause with no punctuation is genuinely ambiguous, because
+        // people stop mid-sentence to think, so that one stays close to a full
+        // second on purpose.
+        //
+        // Firing slightly early is recoverable: the question is deduplicated, and
+        // Space interrupts an answer instantly. Firing late is not, because the
+        // candidate has already been silent in front of someone.
+        private const int    AutoTurnPunctuatedSilenceMs = 380;  // complete sentence/question
+        private const int    AutoTurnNaturalSilenceMs    = 820;  // natural pause without punctuation
         private const int    AutoTurnMinimumSpeechMs = 500;   // reject clicks/noise bursts
         private const int    AutoTurnMinimumChars    = 4;     // reject empty or tiny fragments
         private const int    RecordingSaveTimeoutMs  = 10_000;
