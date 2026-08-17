@@ -129,11 +129,28 @@ def _signal_level(data: bytes) -> int:
         return 0
 
 
-def _test_device_signal(p, dev, timeout_sec=0.4) -> int:
-    """Open a loopback device, read 80 ms of audio, return max amplitude.
-    Runs the actual open+read in a daemon thread so a hung device can't
-    block the entire startup beyond timeout_sec."""
-    result = [0]
+def _probe_device(p, dev, timeout_sec=0.4):
+    """
+    Open a loopback device, read 80 ms, and report (responded, amplitude).
+
+    The two facts are separate and only one of them was being returned. A
+    device playing nothing and a device that has frozen both measure zero
+    amplitude, so a caller seeing zero could not tell "correct device, nothing
+    playing yet" from "this device will never return audio again". Selection
+    treated them alike, and a frozen device could therefore be chosen at
+    startup and then hang the moment real audio was expected, taking system
+    audio down with it.
+
+    Which is not one machine's problem. Every Windows PC carries several
+    loopback devices, and the ones belonging to virtual cables and capture
+    tools accept a stream and then never produce a buffer. Which of them is
+    real differs on every user's machine, so the only reliable test is whether
+    the device answers.
+
+    Runs in a daemon thread so a hung device cannot block startup past
+    timeout_sec.
+    """
+    result = {'responded': False, 'level': 0}
 
     def _worker():
         try:
@@ -147,14 +164,20 @@ def _test_device_signal(p, dev, timeout_sec=0.4) -> int:
             data = ts.read(test_frames, exception_on_overflow=False)
             ts.stop_stream()
             ts.close()
-            result[0] = _signal_level(data)
+            result['level'] = _signal_level(data)
+            result['responded'] = True
         except Exception:
             pass
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
     t.join(timeout=timeout_sec)
-    return result[0]
+    return result['responded'], result['level']
+
+
+def _test_device_signal(p, dev, timeout_sec=0.4) -> int:
+    """Amplitude only, for callers that do not care whether the device answered."""
+    return _probe_device(p, dev, timeout_sec)[1]
 
 
 _timeout_warned = set()
@@ -259,9 +282,21 @@ def find_wasapi_loopback_device(p):
         # audio was switched off for the session. Interview Auto listens to
         # system audio with the mic off, so the result was total silence with
         # nothing on screen to explain it.
+        # Families confirmed to behave this way, by name fragment. Kept as a list
+        # rather than derived from the mic's name because the failure is a
+        # property of a particular driver, not of two devices happening to share
+        # a brand: excluding every same-brand loopback by default would remove
+        # working system audio from users whose hardware is fine, to prevent a
+        # problem their hardware does not have.
+        SHARED_ENGINE_FAMILIES = ("sonar",)
+
+        mic_lower  = _mic_device_name.lower()
         mic_family = ""
-        if args.mode == "both" and "sonar" in _mic_device_name.lower():
-            mic_family = "sonar"
+        if args.mode == "both":
+            for family in SHARED_ENGINE_FAMILIES:
+                if family in mic_lower:
+                    mic_family = family
+                    break
 
         # Collect all loopback candidates
         candidates = []
@@ -296,8 +331,17 @@ def find_wasapi_loopback_device(p):
         for i, dev in enumerate(candidates):
             if (default_name and default_name[:25] in dev['name']
                     and 'microphone' not in dev['name'].lower()):
+                # One short read to confirm it answers. It is the right device by
+                # definition, but "right" and "working" are different claims, and
+                # committing to a frozen one costs the whole session's system
+                # audio the moment real sound arrives.
+                responded, _ = _probe_device(p, dev, timeout_sec=0.4)
+                if not responded:
+                    print(f">>> Default output loopback [{dev['index']}] did not answer; "
+                          f"looking for another.", flush=True)
+                    break
                 _active_loopback_index = i
-                print(f">>> WASAPI loopback selected (default output, no probe): "
+                print(f">>> WASAPI loopback selected (default output): "
                       f"[{dev['index']}] {dev['name'][:45]}", flush=True)
                 return (dev['index'], dev['rate'], dev['channels'])
 
@@ -306,14 +350,17 @@ def find_wasapi_loopback_device(p):
         SIGNAL_THRESHOLD = 50
         best_pos = 0
         best_level = 0
-        first_non_mic = None
+        first_responsive = None
         for i, dev in enumerate(candidates):
             is_mic = 'microphone' in dev['name'].lower()
-            if not is_mic and first_non_mic is None:
-                first_non_mic = i
-            level = _test_device_signal(p, dev, timeout_sec=0.4)
-            print(f">>> Signal [{dev['index']}] {dev['name'][:50]}: amp={level}", flush=True)
-            if not is_mic and level > best_level:
+            responded, level = _probe_device(p, dev, timeout_sec=0.4)
+            print(f">>> Signal [{dev['index']}] {dev['name'][:50]}: "
+                  f"amp={level}{'' if responded else '  (NO RESPONSE)'}", flush=True)
+            if is_mic or not responded:
+                continue
+            if first_responsive is None:
+                first_responsive = i
+            if level > best_level:
                 best_level = level
                 best_pos   = i
 
@@ -322,11 +369,22 @@ def find_wasapi_loopback_device(p):
             dev = candidates[best_pos]
             print(f">>> WASAPI loopback selected (active audio): [{dev['index']}] amp={best_level}", flush=True)
             return (dev['index'], dev['rate'], dev['channels'])
-        else:
-            _active_loopback_index = first_non_mic if first_non_mic is not None else 0
-            dev = candidates[_active_loopback_index]
-            print(f">>> WASAPI loopback selected (first output): [{dev['index']}] {dev['name'][:45]}", flush=True)
+
+        # Nothing was playing, which is normal before the meeting starts. Take the
+        # first device that at least answered. A silent device that responds will
+        # carry audio once there is some; one that never responds never will, and
+        # picking it was how system audio died on a machine whose real speakers
+        # had been excluded.
+        if first_responsive is not None:
+            _active_loopback_index = first_responsive
+            dev = candidates[first_responsive]
+            print(f">>> WASAPI loopback selected (idle but responsive): "
+                  f"[{dev['index']}] {dev['name'][:45]}", flush=True)
             return (dev['index'], dev['rate'], dev['channels'])
+
+        print(">>> No loopback device answered. System audio unavailable on this machine; "
+              "the microphone still works normally.", flush=True)
+        return None
 
     except Exception as e:
         print(f">>> WASAPI loopback probe failed: {e}", flush=True)
