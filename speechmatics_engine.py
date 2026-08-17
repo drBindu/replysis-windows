@@ -1448,54 +1448,97 @@ async def main():
                     },
                     enable_entities  = True,
                     disfluencies     = False,
+                    # Words the recogniser is told to expect. Every entry here
+                    # biases it toward hearing that word, which is why the list
+                    # has to match the interview being had.
+                    #
+                    # It did not. It carried a previous user's analytical
+                    # chemistry vocabulary, HPLC, FTIR, GMP, ALCOA, LIMS, OOS,
+                    # OOT, CAPA, IQ/OQ/PQ, Waters Empower, Agilent ChemStation,
+                    # alongside their employer and town. Those are not harmless
+                    # extras: OOS, OOT and GC are short enough to be substituted
+                    # for ordinary words, so a software candidate saying "of
+                    # course" or "you use" was being nudged toward pharmaceutical
+                    # acronyms they have never said in their life.
+                    #
+                    # Anyone who genuinely needs those terms gets them from their
+                    # own resume through _load_extra_vocab, which is the right
+                    # mechanism: specific to that interview, not baked in for
+                    # everyone.
                     additional_vocab = [
                         {"content": "Replysis"},
-                        {"content": "AVA",              "sounds_like": ["AY-VAH", "AY-VA"]},
-                        {"content": "AVA Inc"},
-                        {"content": "HPLC",             "sounds_like": ["H-P-L-C"]},
-                        {"content": "FTIR",             "sounds_like": ["F-T-I-R"]},
-                        {"content": "GMP"},
-                        {"content": "GC"},
-                        {"content": "ALCOA"},
-                        {"content": "LIMS"},
-                        {"content": "OOS"},
-                        {"content": "OOT"},
-                        {"content": "CAPA"},
-                        {"content": "IQ/OQ/PQ"},
-                        {"content": "Waters Empower"},
-                        {"content": "Agilent ChemStation"},
-                        {"content": "Willowbrook"},
+                        {"content": "Speechmatics"},
+
+                        # Languages and runtimes
                         {"content": "TypeScript"},
                         {"content": "JavaScript"},
                         {"content": "Python"},
-                        {"content": "React"},
-                        {"content": "Node.js"},
-                        {"content": "API"},
-                        {"content": "SQL"},
-                        {"content": "NoSQL"},
-                        {"content": "AWS"},
-                        {"content": "Azure"},
-                        {"content": "Kubernetes"},
-                        {"content": "Docker"},
-                        {"content": "CI/CD"},
-                        {"content": "microservices"},
+                        {"content": "Java"},
+                        {"content": "Golang",         "sounds_like": ["go lang"]},
+                        {"content": "Rust"},
+                        {"content": "Kotlin"},
+                        {"content": "Swift"},
                         {"content": "C#",             "sounds_like": ["C sharp"]},
                         {"content": "C++",            "sounds_like": ["C plus plus"]},
                         {"content": ".NET",           "sounds_like": ["dot net"]},
+                        {"content": "Node.js",        "sounds_like": ["node J S"]},
+
+                        # Frameworks
+                        {"content": "React"},
+                        {"content": "Angular"},
+                        {"content": "Vue"},
+                        {"content": "Next.js",        "sounds_like": ["next J S"]},
                         {"content": "Spring Boot"},
                         {"content": "Hibernate"},
-                        {"content": "GraphQL",        "sounds_like": ["graph Q L"]},
-                        {"content": "gRPC",           "sounds_like": ["gee R P C"]},
-                        {"content": "PostgreSQL",     "sounds_like": ["post gress SQL"]},
+                        {"content": "Django"},
+                        {"content": "FastAPI",        "sounds_like": ["fast A P I"]},
+
+                        # Data
+                        {"content": "SQL",            "sounds_like": ["sequel"]},
+                        {"content": "NoSQL",          "sounds_like": ["no sequel"]},
+                        {"content": "PostgreSQL",     "sounds_like": ["post gress SQL", "postgres"]},
                         {"content": "MongoDB",        "sounds_like": ["mongo D B"]},
                         {"content": "Redis"},
                         {"content": "Kafka"},
+                        {"content": "Elasticsearch"},
+                        {"content": "DynamoDB",       "sounds_like": ["dynamo D B"]},
+
+                        # Platform and delivery
+                        {"content": "AWS",            "sounds_like": ["A W S"]},
+                        {"content": "Azure"},
+                        {"content": "Kubernetes",     "sounds_like": ["koo ber net ees"]},
+                        {"content": "Docker"},
                         {"content": "Terraform"},
                         {"content": "Jenkins"},
                         {"content": "GitHub"},
+                        {"content": "CI/CD",          "sounds_like": ["C I C D"]},
+                        {"content": "microservices"},
+                        {"content": "serverless"},
+
+                        # Interfaces and auth
+                        {"content": "API",            "sounds_like": ["A P I"]},
+                        {"content": "REST"},
+                        {"content": "GraphQL",        "sounds_like": ["graph Q L"]},
+                        {"content": "gRPC",           "sounds_like": ["gee R P C"]},
                         {"content": "OAuth",          "sounds_like": ["oh auth"]},
                         {"content": "JWT",            "sounds_like": ["J W T"]},
-                        {"content": "Speechmatics"},
+                        {"content": "webhook"},
+
+                        # Words interviewers actually use, and that get misheard
+                        {"content": "idempotent",     "sounds_like": ["eye dem po tent"]},
+                        {"content": "middleware"},
+                        {"content": "refactor"},
+                        {"content": "scalability"},
+                        {"content": "latency"},
+                        {"content": "throughput"},
+                        {"content": "concurrency"},
+                        {"content": "asynchronous"},
+                        {"content": "deprecated"},
+                        {"content": "schema"},
+                        {"content": "regression"},
+                        {"content": "onboarding"},
+                        {"content": "stakeholder"},
+                        {"content": "roadmap"},
                     ] + _load_extra_vocab()
                 )
 
