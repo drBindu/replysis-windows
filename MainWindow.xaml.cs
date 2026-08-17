@@ -204,7 +204,7 @@ namespace InterviewCopilot
                     // Store the delegate so we can -= it in OnClosed (prevents memory leak)
                     _cameraModeClosedHandler = () => Dispatcher.Invoke(() => ExitCameraMode());
                     answerWindow.CameraModeClosedByUser += _cameraModeClosedHandler;
-                    answerWindow.AnalyzeRequested += () => Dispatcher.Invoke(() => _ = HandleScreenAnalysisAsync());
+                    answerWindow.AnalyzeRequested += () => Dispatcher.Invoke(ToggleWatchScreen);
 
                     _debugWindow = new DebugWindow();
 
@@ -1008,6 +1008,11 @@ namespace InterviewCopilot
             _isCameraMode = true;
             NormalModeGrid.Visibility = Visibility.Collapsed;
             answerWindow.ToggleCameraMode(true);
+
+            // The switch may have been set before compact was opened, and the
+            // overlay starts from its XAML default, so it would have shown OFF
+            // while the screen was being watched.
+            answerWindow.SetWatchScreenState(_watchScreenMode);
             this.Hide();
         }
 
@@ -3436,7 +3441,16 @@ namespace InterviewCopilot
             ProfileDropdownPopup.IsOpen = false;
             SavedResumesPopup.IsOpen = false;
             ListeningModePopup.IsOpen = false;
+            ToggleWatchScreen();
+        }
 
+        /// <summary>
+        /// Flips the switch and tells both windows. The compact bar carries the
+        /// same control, and a switch that reads ON in one window and OFF in the
+        /// other is worse than having no indicator at all.
+        /// </summary>
+        private void ToggleWatchScreen()
+        {
             _watchScreenMode = !_watchScreenMode;
             UpdateWatchScreenUi();
             DebugWindow.Log("SCREEN", $"Screen-share watch {(_watchScreenMode ? "ON" : "OFF")}");
@@ -3464,6 +3478,8 @@ namespace InterviewCopilot
                 _watchScreenMode ? "#34E08A" : "#8FA3BA"));
             WatchScreenPillLabel.Foreground = brush;
             WatchScreenIcon.Foreground = brush;
+
+            answerWindow?.SetWatchScreenState(_watchScreenMode);
         }
 
         private async Task HandleRegionScreenAnalysisAsync()

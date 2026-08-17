@@ -1,4 +1,4 @@
-<Window x:Class="InterviewCopilot.AnswerWindow"
+﻿<Window x:Class="InterviewCopilot.AnswerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Replysis AI"
@@ -75,7 +75,7 @@
                                FontFamily="Segoe UI"
                                VerticalAlignment="Center"/>
 
-                    <!-- Idle hint: "· press F8 to analyze" — hidden while listening/thinking -->
+                    <!-- Idle hint, hidden while listening or thinking -->
                     <TextBlock Grid.Column="2"
                                x:Name="IdleHintLabel"
                                Text=" · press Space to listen"
@@ -91,7 +91,11 @@
                     <!-- Spacer -->
                     <Grid Grid.Column="3"/>
 
-                    <!-- Analyze button, brand emerald on a 16% emerald wash -->
+                    <!-- The same switch as the main window's pill. Compact used to
+                         carry a one-shot Analyze while the main window carried a
+                         watch toggle, so the two windows disagreed about what the
+                         one screen control does. F8 still takes a single shot from
+                         anywhere, which is what that button was for. -->
                     <Button Grid.Column="4"
                             x:Name="AnalyzeBtn"
                             Click="AnalyzeBtn_Click"
@@ -109,13 +113,15 @@
                                          <SolidColorBrush Color="#34E08A" Opacity="0.16"/>
                                     </Border.Background>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE722;"
+                                        <TextBlock x:Name="AnalyzeBtnIcon"
+                                                   Text="&#xE7F4;"
                                                    Foreground="#84E7B6"
                                                    FontSize="10"
                                                    FontFamily="Segoe MDL2 Assets"
                                                    Margin="0,0,5,0"
                                                    VerticalAlignment="Center"/>
-                                        <TextBlock Text="Analyze"
+                                        <TextBlock x:Name="AnalyzeBtnLabel"
+                                                   Text="Watch"
                                                    Foreground="#AEEFCF"
                                                    FontSize="10"
                                                    FontWeight="SemiBold"

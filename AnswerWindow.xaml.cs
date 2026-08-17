@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -234,7 +234,41 @@ namespace InterviewCopilot
             IdleHintLabel.Visibility = idle ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        // ── Analyze button ────────────────────────────────────────────────────
+        /// <summary>
+        /// Mirrors the main window's watch switch, so the two windows never
+        /// disagree about whether the screen is being read.
+        ///
+        /// The label and icon live inside the button's ControlTemplate, which has
+        /// its own namescope, so they are not fields on this class and have to be
+        /// looked up through the template once it has been applied.
+        /// </summary>
+        public void SetWatchScreenState(bool watching)
+        {
+            try
+            {
+                if (AnalyzeBtn == null) return;
+                AnalyzeBtn.ApplyTemplate();
+
+                if (AnalyzeBtn.Template?.FindName("AnalyzeBtnLabel", AnalyzeBtn) is not System.Windows.Controls.TextBlock label ||
+                    AnalyzeBtn.Template?.FindName("AnalyzeBtnIcon",  AnalyzeBtn) is not System.Windows.Controls.TextBlock icon)
+                    return;
+
+                label.Text = watching ? "Watching" : "Watch";
+
+                var brush = new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                        watching ? "#34E08A" : "#AEEFCF"));
+                label.Foreground = brush;
+                icon.Foreground  = brush;
+            }
+            catch
+            {
+                // A label that fails to repaint is not worth taking the overlay
+                // down for mid-interview.
+            }
+        }
+
+        // ── Watch switch ──────────────────────────────────────────────────────
         private void AnalyzeBtn_Click(object sender, RoutedEventArgs e)
         {
             AnalyzeRequested?.Invoke();
