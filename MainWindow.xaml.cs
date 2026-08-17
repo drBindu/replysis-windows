@@ -2045,25 +2045,64 @@ namespace InterviewCopilot
             request.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
             request.Content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
 
-            try
+            // One silent retry on a network failure.
+            //
+            // Wifi drops a packet, a phone hotspot switches cell, a VPN
+            // reconnects: all of it lasts a moment and all of it lost the
+            // question outright, telling someone mid-interview to check their
+            // connection and ask again. They cannot ask again. The interviewer
+            // has moved on.
+            //
+            // Retrying here is safe in a way retrying later would not be. Nothing
+            // has been streamed yet, so the server saw no answer delivered and
+            // refunded the credit itself, and a second attempt cannot bill twice
+            // or duplicate half an answer on screen.
+            Exception? firstFailure = null;
+            for (int attempt = 1; attempt <= 2; attempt++)
             {
-                var requestTimer = Stopwatch.StartNew();
-                HttpResponseMessage response = await _backendClient.SendAsync(
-                    request, HttpCompletionOption.ResponseHeadersRead, ct);
-                DebugWindow.Log("AI", $"Backend headers in {requestTimer.ElapsedMilliseconds}ms (HTTP {(int)response.StatusCode}).");
-                return response;
+                try
+                {
+                    var requestTimer = Stopwatch.StartNew();
+                    HttpResponseMessage response = await _backendClient.SendAsync(
+                        attempt == 1 ? request : CloneRequest(request, payloadJson),
+                        HttpCompletionOption.ResponseHeadersRead, ct);
+                    DebugWindow.Log("AI", $"Backend headers in {requestTimer.ElapsedMilliseconds}ms (HTTP {(int)response.StatusCode}).");
+                    return response;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    // User interrupted with Space. Let this propagate so AskAiAsync's
+                    // cancellation catch stays silent instead of showing a fake 503 error.
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    firstFailure = ex;
+                    DebugWindow.Log("AI_ERR", $"{ex.GetType().Name}: {ex.Message}" +
+                                              (attempt == 1 ? " — retrying once" : ""));
+                    if (attempt == 2) break;
+                    await Task.Delay(250, ct);
+                }
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+
+            throw new BackendRequestException(
+                "The answer service could not be reached. Please check your connection and try again.");
+        }
+
+        /// <summary>
+        /// A fresh copy of a request, because an HttpRequestMessage that has been
+        /// sent cannot be sent again: .NET disposes its content and throws on the
+        /// second attempt, which would turn a retry into a different error.
+        /// </summary>
+        private static HttpRequestMessage CloneRequest(HttpRequestMessage original, string payloadJson)
+        {
+            var copy = new HttpRequestMessage(original.Method, original.RequestUri)
             {
-                // User interrupted with Space. Let this propagate so AskAiAsync's
-                // cancellation catch stays silent instead of showing a fake 503 error.
-                throw;
-            }
-            catch (Exception ex)
-            {
-                DebugWindow.Log("AI_ERR", ex.Message);
-                throw new BackendRequestException("The answer service could not be reached. Please check your connection and try again.");
-            }
+                Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
+            };
+            foreach (var header in original.Headers)
+                copy.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            return copy;
         }
 
         private static async IAsyncEnumerable<string> StreamSseTokensAsync(
