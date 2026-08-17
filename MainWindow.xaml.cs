@@ -2231,16 +2231,37 @@ namespace InterviewCopilot
         // SessionsWindow reads it; kept in one place so both sides agree.
         internal const string SessionDurationTag = "DURATION_SECONDS:";
 
+        /// <summary>
+        /// Serialises session-log writes onto one background worker.
+        ///
+        /// The file is encrypted as a whole, so appending a turn means decrypting
+        /// all of it, concatenating, and encrypting all of it again. That ran on
+        /// the UI thread at the end of every answer, and its cost grows with the
+        /// length of the interview: by the fortieth question the app was
+        /// decrypting and re-encrypting the entire transcript before it could
+        /// repaint, during the interview it was recording.
+        ///
+        /// The gate keeps turns in order now that they no longer run on the one
+        /// thread that used to guarantee it.
+        /// </summary>
+        private static readonly SemaphoreSlim _sessionLogGate = new(1, 1);
+
         private void AppendToSessionLog(string q, string a)
         {
-            if (!string.IsNullOrEmpty(sessionLogPath))
+            string path = sessionLogPath;
+            if (!string.IsNullOrEmpty(path))
             {
-                try
+                _ = Task.Run(async () =>
                 {
-                    string content = SecureDataProtector.ReadProtectedFile(sessionLogPath);
-                    SecureDataProtector.WriteProtectedFile(sessionLogPath, content + $"Q: {q}\nA: {a}\n\n");
-                }
-                catch (Exception ex) { DebugWindow.Log("SESSION", $"Log write failed: {ex.Message}"); }
+                    await _sessionLogGate.WaitAsync().ConfigureAwait(false);
+                    try
+                    {
+                        string content = SecureDataProtector.ReadProtectedFile(path);
+                        SecureDataProtector.WriteProtectedFile(path, content + $"Q: {q}\nA: {a}\n\n");
+                    }
+                    catch (Exception ex) { DebugWindow.Log("SESSION", $"Log write failed: {ex.Message}"); }
+                    finally { _sessionLogGate.Release(); }
+                });
             }
             _ = CloudSessionSync.SyncTurnAsync(q, a, ResumeTextBox.Text, _sessionSeconds);
         }
