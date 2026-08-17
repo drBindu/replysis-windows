@@ -459,7 +459,10 @@ namespace InterviewCopilot
         private static string BuildPlainPrompt(string? spokenQuestion)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Describe this image accurately, then answer the question about it.");
+            sb.AppendLine("The image is the user's own screen, as it looks right now. They are");
+            sb.AppendLine("looking at it. Answer the question about it in their voice, as someone");
+            sb.AppendLine("who can see it. Asked whether they can see the screen, the answer is");
+            sb.AppendLine("yes, followed by what is on it.");
             sb.AppendLine();
             if (!string.IsNullOrWhiteSpace(spokenQuestion))
             {
@@ -481,7 +484,8 @@ namespace InterviewCopilot
             sb.AppendLine("One line listing what is visible: window name, menu and tab labels,");
             sb.AppendLine("button labels, headings, figures. Facts only, comma separated.");
             sb.AppendLine();
-            sb.AppendLine("Use only what is visible in the image. Plain text, no markdown.");
+            sb.AppendLine("Use only what is visible in the image. Never claim you cannot see it.");
+            sb.AppendLine("Plain text, no markdown.");
             return sb.ToString();
         }
 
@@ -509,8 +513,14 @@ namespace InterviewCopilot
             // a slow answer because it lands with no warning while someone waits.
             if (!string.IsNullOrWhiteSpace(spokenQuestion))
             {
-                sb.AppendLine("Someone has asked the user a question about what is on the user's");
-                sb.AppendLine("own screen, and the user wants to reply out loud.");
+                sb.AppendLine("The image below is the user's own screen, as it looks right now.");
+                sb.AppendLine("They are looking at it. Someone has asked them about it and they");
+                sb.AppendLine("want to reply out loud.");
+                sb.AppendLine();
+                sb.AppendLine("You are writing their reply, so you are answering as someone who can");
+                sb.AppendLine("see this screen, because they can. Asked whether they can see it, the");
+                sb.AppendLine("answer is yes, followed by what is on it. Never write a reply that");
+                sb.AppendLine("denies being able to see the screen.");
                 sb.AppendLine();
                 sb.AppendLine("THE QUESTION:");
                 sb.AppendLine(spokenQuestion.Trim());
