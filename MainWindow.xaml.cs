@@ -2012,14 +2012,20 @@ namespace InterviewCopilot
             PromptBuilder.SetContext(_liveHints, _companyName, _jobDescription);
             string resumeFacts = ResumeParser.ExtractFacts(resume);
             var messages = PromptBuilder.BuildMessages(resumeFacts, question, AutoModeEnabled);
-            const int MaxResumeChars = 30_000;
-            string safeResume = (resume ?? "").Length > MaxResumeChars
-                ? resume!.Substring(0, MaxResumeChars) + "\n[truncated]"
-                : (resume ?? "");
             var provider = SettingsWindow.IsGroq() ? "groq" : "openai";
-            // Auto uses the compact message set below, which already includes curated resume
-            // facts. Avoid duplicating the full raw resume over the network on every turn.
-            string transportResume = AutoModeEnabled ? string.Empty : safeResume;
+
+            // The raw resume is no longer sent at all.
+            //
+            // The backend reads that field in one place only: a fallback for when
+            // the client sends no messages array. This client always sends one,
+            // and it already carries the curated resume facts, so the field was
+            // uploaded with every question and dropped on arrival. Up to 30KB of
+            // it, over a home connection, before the answer could even be asked
+            // for.
+            //
+            // Auto mode had already stopped sending it for exactly this reason.
+            // Manual mode, which is the default, kept paying for it every time.
+            string transportResume = string.Empty;
             var payload = new { question, resume = transportResume, provider, messages };
             string payloadJson = JsonSerializer.Serialize(payload);
             DebugWindow.Log("AI", $"Request prepared: {messages.Count} messages, {Encoding.UTF8.GetByteCount(payloadJson)} bytes");
