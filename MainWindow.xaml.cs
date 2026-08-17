@@ -2918,6 +2918,18 @@ namespace InterviewCopilot
                 DateTime.UtcNow < UserSession.SpeechmaticsRetryAfterUtc) return;
             if (speechmaticsProcess == null || speechmaticsProcess.HasExited)
             {
+                // The engine is gone, so nothing is transcribing. A dropped
+                // session prints STATUS: OFFLINE on its way down and clears this,
+                // but a crashed process prints nothing at all, and the flag stayed
+                // true through every branch below including the ones that give up
+                // entirely. The app went on believing speech worked while the
+                // process that provides it no longer existed.
+                if (_engineOnline)
+                {
+                    _engineOnline = false;
+                    Dispatcher.Invoke(UpdateMicUi);
+                }
+
                 int code = -1;
                 try { code = speechmaticsProcess?.ExitCode ?? -1; } catch { }
                 if (code == SpeechRecognitionExitCodes.AudioUsageLimit)
@@ -3520,12 +3532,28 @@ namespace InterviewCopilot
             answerWindow?.SetWatchScreenState(_watchScreenMode);
         }
 
+        /// <summary>
+        /// True while the region picker is on screen. isProcessing and
+        /// _isScreenAnalyzing are only set once a capture starts, and the picker
+        /// runs before that, so nothing stopped a second F7 from opening a second
+        /// full-screen selection overlay on top of the first. Both would be
+        /// waiting for a drag, over the interview.
+        /// </summary>
+        private bool _regionPickerOpen;
+
         private async Task HandleRegionScreenAnalysisAsync()
         {
-            if (isProcessing || _isScreenAnalyzing) return;
+            if (isProcessing || _isScreenAnalyzing || _regionPickerOpen) return;
 
-            var picker = new RegionCaptureWindow();
-            bool? selected = picker.ShowDialog();
+            bool? selected;
+            RegionCaptureWindow picker;
+            _regionPickerOpen = true;
+            try
+            {
+                picker = new RegionCaptureWindow();
+                selected = picker.ShowDialog();
+            }
+            finally { _regionPickerOpen = false; }
             if (selected != true || picker.SelectedRegion.Width <= 0 || picker.SelectedRegion.Height <= 0)
                 return;
 
