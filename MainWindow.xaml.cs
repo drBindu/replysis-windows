@@ -1919,9 +1919,37 @@ namespace InterviewCopilot
                         $"Question is about the screen; answering from a {shot.Length / 1024} KB capture " +
                         $"of {ScreenAnalyzer.LastCaptureTarget}");
 
+                    // SCREEN NOTES is the model's private record of what was on
+                    // screen, kept so the next question has something to work
+                    // from. It leaked into the spoken answer here because this
+                    // path streams straight to the display and never passes
+                    // through the post-processor that strips it. The stream is
+                    // still consumed to the end after the marker, so the notes
+                    // reach the context they exist for.
+                    var visionSoFar = new StringBuilder();
+                    bool reachedNotes = false;
+
                     await foreach (var visionToken in
                         ScreenAnalyzer.AnalyzeStreamAsync(shot, ResumeParser.ExtractFacts(resume), question, ct))
-                        yield return visionToken;
+                    {
+                        if (reachedNotes) continue;
+
+                        visionSoFar.Append(visionToken);
+                        int notesAt = visionSoFar.ToString()
+                            .IndexOf("SCREEN NOTES", StringComparison.OrdinalIgnoreCase);
+                        if (notesAt < 0)
+                        {
+                            yield return visionToken;
+                            continue;
+                        }
+
+                        // The marker can arrive split across tokens, so trim from
+                        // the accumulated text rather than from this token alone.
+                        reachedNotes = true;
+                        int alreadyShown = visionSoFar.Length - visionToken.Length;
+                        if (notesAt > alreadyShown)
+                            yield return visionSoFar.ToString(alreadyShown, notesAt - alreadyShown);
+                    }
 
                     yield break;
                 }
