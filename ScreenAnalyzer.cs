@@ -458,48 +458,52 @@ namespace InterviewCopilot
             var sb = new StringBuilder();
 
             // A question was asked out loud, so the reply has to be something the
-            // candidate can say. The standing prompt below describes a screen,
-            // which is right for the Analyze hotkey, where nobody is waiting and
-            // the user reads it themselves. It is wrong here. "Daisy? Chicago
-            // Students group" came back as "A WhatsApp chat screen showing
-            // different groups" with an instruction to ask for clarification,
-            // which is an accurate description and useless to someone who has to
-            // speak in the next two seconds.
+            // person can say. Describing a screen is right for the Analyze
+            // hotkey, where nobody is waiting and the user reads it themselves.
+            // Here the only useful output is the sentence to say back.
             //
-            // So a spoken question gets its own prompt, and what it leads with is
-            // the sentence to say.
+            // The framing is deliberately plain. An earlier version opened with
+            // "you are helping someone in a live interview, in the seconds before
+            // they have to reply", and the model began answering "I'm sorry, I
+            // can't help with that" to ordinary questions like "what do you see
+            // on my screen". Read coldly, that sentence describes feeding someone
+            // answers during an assessment, and the model declined. The task is
+            // the same either way: read the screen, answer the question that was
+            // asked, phrased so it can be spoken. Saying only that gets it done
+            // instead of argued about, and an intermittent refusal is worse than
+            // a slow answer because it lands with no warning while someone waits.
             if (!string.IsNullOrWhiteSpace(spokenQuestion))
             {
-                sb.AppendLine("You are helping someone in a live interview, right now, in the");
-                sb.AppendLine("seconds before they have to reply.");
+                sb.AppendLine("Someone has asked the user a question about what is on the user's");
+                sb.AppendLine("own screen, and the user wants to reply out loud.");
                 sb.AppendLine();
-                sb.AppendLine("THEY WERE JUST ASKED, OUT LOUD:");
+                sb.AppendLine("THE QUESTION:");
                 sb.AppendLine(spokenQuestion.Trim());
                 sb.AppendLine();
-                sb.AppendLine("Whatever they were asked about is on their screen. Answer in this");
-                sb.AppendLine("shape, and nothing else:");
+                sb.AppendLine("Answer in this shape, and nothing else:");
                 sb.AppendLine();
                 sb.AppendLine("SAY THIS");
-                sb.AppendLine("The words to speak, in their own voice, first person, ready to say");
+                sb.AppendLine("The reply, written in the user's voice, first person, ready to say");
                 sb.AppendLine("out loud with no editing. Two to four sentences. Not a description");
                 sb.AppendLine("of the screen and not advice about what to do: the actual reply.");
                 sb.AppendLine();
                 sb.AppendLine("DETAIL");
-                sb.AppendLine("Only when the answer needs code, numbers, or steps they will have to");
-                sb.AppendLine("work through. Complete code, never abbreviated. Leave this section");
-                sb.AppendLine("out entirely when the spoken answer is the whole answer.");
+                sb.AppendLine("Only when the answer needs code, numbers, or steps to work through.");
+                sb.AppendLine("Complete code, never abbreviated. Leave this section out entirely");
+                sb.AppendLine("when the spoken reply is the whole answer.");
                 sb.AppendLine();
                 sb.AppendLine("SCREEN NOTES");
                 sb.AppendLine("One dense line of what is visible: window name, menu and tab labels,");
                 sb.AppendLine("button labels, headings, figures. Facts only, comma separated. Not");
-                sb.AppendLine("shown to them. It is what you will be given if they ask a follow-up.");
+                sb.AppendLine("shown to the user. It is what you will be given if they ask a");
+                sb.AppendLine("follow-up about this same screen.");
                 sb.AppendLine();
                 sb.AppendLine("Rules:");
-                sb.AppendLine("- Only what is visible. If you cannot read the part they were asked");
-                sb.AppendLine("  about, SAY THIS becomes a natural line that buys time, such as");
-                sb.AppendLine("  \"Let me scroll up so I get the exact wording.\" Never guess.");
-                sb.AppendLine("- Never invent their experience, employers, projects, or numbers.");
-                sb.AppendLine("  Where their own detail belongs, write [your example].");
+                sb.AppendLine("- Describe only what is visible. If you cannot read the part being");
+                sb.AppendLine("  asked about, SAY THIS becomes a natural line that buys a moment,");
+                sb.AppendLine("  such as \"Let me scroll up so I get the exact wording.\" Never guess.");
+                sb.AppendLine("- Never invent the user's own history, employers, projects, or");
+                sb.AppendLine("  numbers. Where their own detail belongs, write [your example].");
                 sb.AppendLine("- Plain text. Section titles exactly as above. No markdown.");
 
                 return sb.ToString();

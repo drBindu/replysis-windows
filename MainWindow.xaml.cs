@@ -1818,7 +1818,15 @@ namespace InterviewCopilot
             {
                 DebugWindow.Log("AI_ERR", ex.Message);
                 string partial = CleanAiOutput(streamedAnswer.ToString());
-                string failure = "Connection interrupted. Please try again.";
+
+                // "Connection interrupted" used to cover every failure that was not
+                // a BackendRequestException, including the ones that say exactly
+                // what went wrong and what to do: out of credits, signed out,
+                // asking too fast. Telling someone their connection dropped when
+                // their credits ran out sends them to check their wifi.
+                string failure = ex is InvalidOperationException && !string.IsNullOrWhiteSpace(ex.Message)
+                    ? ex.Message
+                    : "Connection interrupted. Please try again.";
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(partial)
                     ? failure
                     : $"{partial}\n\n{failure}";
