@@ -1816,7 +1816,16 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                DebugWindow.Log("AI_ERR", ex.Message);
+                // The type and the inner exception, not just the message. A
+                // message alone cannot distinguish a dropped socket from a
+                // rejected payload from a bug in our own capture path, and those
+                // need completely different fixes. Several failures have already
+                // been diagnosed twice over because this line threw away the one
+                // fact that identified them.
+                DebugWindow.Log("AI_ERR",
+                    $"{ex.GetType().Name}: {ex.Message}" +
+                    (ex.InnerException is null ? "" : $"  <- {ex.InnerException.GetType().Name}: {ex.InnerException.Message}"));
+
                 string partial = CleanAiOutput(streamedAnswer.ToString());
 
                 // "Connection interrupted" used to cover every failure that was not
