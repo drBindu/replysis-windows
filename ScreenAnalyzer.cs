@@ -450,6 +450,41 @@ namespace InterviewCopilot
         /// who may well check. Nothing here asks the model to speak as the user
         /// about their own past.
         /// </summary>
+        /// <summary>
+        /// The fallback prompt. It says what to do and nothing about who is
+        /// asking or why, because everything else is what the refusal was
+        /// reacting to. Output keeps the same section names so the display and
+        /// the follow-up context do not need to know which attempt answered.
+        /// </summary>
+        private static string BuildPlainPrompt(string? spokenQuestion)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Describe this image accurately, then answer the question about it.");
+            sb.AppendLine();
+            if (!string.IsNullOrWhiteSpace(spokenQuestion))
+            {
+                sb.AppendLine("QUESTION:");
+                sb.AppendLine(spokenQuestion.Trim());
+                sb.AppendLine();
+            }
+            sb.AppendLine("Reply in this shape:");
+            sb.AppendLine();
+            sb.AppendLine("SAY THIS");
+            sb.AppendLine("The answer written in the first person, two to four sentences, ready");
+            sb.AppendLine("to read aloud.");
+            sb.AppendLine();
+            sb.AppendLine("DETAIL");
+            sb.AppendLine("Code, numbers or steps, only if the answer needs them. Complete, never");
+            sb.AppendLine("abbreviated. Leave out entirely otherwise.");
+            sb.AppendLine();
+            sb.AppendLine("SCREEN NOTES");
+            sb.AppendLine("One line listing what is visible: window name, menu and tab labels,");
+            sb.AppendLine("button labels, headings, figures. Facts only, comma separated.");
+            sb.AppendLine();
+            sb.AppendLine("Use only what is visible in the image. Plain text, no markdown.");
+            return sb.ToString();
+        }
+
         private static string BuildScreenPrompt(string? resumeContext, string? spokenQuestion = null)
         {
             if (!string.IsNullOrWhiteSpace(resumeContext) && resumeContext.Length > MaxResumeContextChars)
@@ -738,12 +773,85 @@ namespace InterviewCopilot
         /// Uses helper methods for all error-prone work so yield statements never
         /// appear inside try-catch blocks (C# iterator restriction).
         /// </summary>
+        /// <summary>
+        /// Reads the screen and answers, retrying once in plainer words if the
+        /// model declines.
+        ///
+        /// It does decline, on ordinary questions like "can you see my screen?",
+        /// and the wording that sets it off is not obviously different from the
+        /// wording that does not. A refusal is the worst failure this feature
+        /// has: it arrives with no warning, looks like a considered answer, and
+        /// leaves someone silent in front of an interviewer with nothing to say.
+        /// Rewording the prompt reduces it. Only asking again removes it.
+        ///
+        /// A refusal is short and arrives at the very start, so the opening of
+        /// the answer is held back briefly and checked before any of it is shown.
+        /// The wait is a few dozen characters, which at streaming speed is not a
+        /// perceptible delay.
+        /// </summary>
         public static async IAsyncEnumerable<string> AnalyzeStreamAsync(
             byte[] imageBytes, string? resumeContext = null, string? spokenQuestion = null,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
+            var held = new List<string>();
+            var head = new StringBuilder();
+            bool refused = false, released = false;
+
+            await foreach (string token in
+                StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: false, ct))
+            {
+                if (released) { yield return token; continue; }
+
+                held.Add(token);
+                head.Append(token);
+                if (head.Length < RefusalProbeChars) continue;
+
+                if (LooksLikeRefusal(head.ToString())) { refused = true; break; }
+
+                released = true;
+                foreach (string h in held) yield return h;
+                held.Clear();
+            }
+
+            if (!refused)
+            {
+                // Answer ended before the probe filled, so it was never released.
+                foreach (string h in held) yield return h;
+                yield break;
+            }
+
+            DebugWindow.Log("SCREEN", "Model declined; asking again in plainer words.");
+            await foreach (string token in
+                StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: true, ct))
+                yield return token;
+        }
+
+        /// <summary>How much of the answer to hold back while checking for a refusal.</summary>
+        private const int RefusalProbeChars = 64;
+
+        private static readonly string[] RefusalOpenings =
+        {
+            "i'm sorry", "i am sorry", "sorry, i can", "sorry, but i",
+            "i can't help", "i cannot help", "i can't assist", "i cannot assist",
+            "i'm not able to help", "i am unable to help", "i won't be able to help",
+        };
+
+        private static bool LooksLikeRefusal(string opening)
+        {
+            string o = opening.TrimStart().ToLowerInvariant();
+            foreach (string r in RefusalOpenings)
+                if (o.StartsWith(r, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        private static async IAsyncEnumerable<string> StreamOnceAsync(
+            byte[] imageBytes, string? resumeContext, string? spokenQuestion, bool plainly,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
             string base64 = Convert.ToBase64String(imageBytes);
-            string prompt = BuildScreenPrompt(resumeContext, spokenQuestion);
+            string prompt = plainly
+                ? BuildPlainPrompt(spokenQuestion)
+                : BuildScreenPrompt(resumeContext, spokenQuestion);
             string provider = GetProvider();
             string payloadJson = JsonSerializer.Serialize(new { image = base64, prompt, provider });
 
