@@ -524,13 +524,18 @@
                                  and it is not a way of reading the screen. -->
                             <Border Style="{StaticResource ToolbarGroup}">
                                 <StackPanel Orientation="Horizontal">
+                                    <!-- A switch, not a menu. It held one item, so the
+                                         chevron promised a choice that was not there and cost
+                                         two clicks and a read to reach a thing that is either
+                                         on or off. -->
                                     <Border x:Name="AnalyzePill" Style="{StaticResource ToolbarSegment}"
-                                            MouseLeftButtonDown="AnalyzePill_Click"
-                                            ToolTip="Answer a question that is on your screen  &#183;  F8">
+                                            MouseLeftButtonDown="WatchScreenOption_Click"
+                                            ToolTip="Turn on while the interviewer is sharing their screen: every question is then answered from what is on screen.  &#183;  Any time without this: F8 reads this screen once, F9 your main screen, F7 drags a box around one part.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="&#xE722;" Style="{StaticResource ToolbarPillIcon}"/>
-                                            <TextBlock Text="ANALYZE" Style="{StaticResource ToolbarPillLabel}"/>
-                                            <TextBlock Style="{StaticResource ToolbarPillChevron}"/>
+                                            <TextBlock x:Name="WatchScreenIcon" Text="&#xE7F4;"
+                                                       Style="{StaticResource ToolbarPillIcon}"/>
+                                            <TextBlock x:Name="WatchScreenPillLabel" Text="WATCH SCREEN"
+                                                       Style="{StaticResource ToolbarPillLabel}"/>
                                         </StackPanel>
                                     </Border>
 
@@ -1079,106 +1084,6 @@
                     </Grid>
                 </Border>
             </Grid>
-
-            <!-- ================= ANALYZE POPUP ================= -->
-            <Popup x:Name="AnalyzePopup" Placement="Bottom" StaysOpen="True"
-                   AllowsTransparency="True" PopupAnimation="Fade"
-                   HorizontalOffset="-178" VerticalOffset="7">
-                <Border Padding="0,0,0,14">
-                    <Border Background="#0B131F" BorderBrush="#2A3A4F" BorderThickness="1"
-                            CornerRadius="15" Width="304" Padding="7">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="34" ShadowDepth="8" Opacity="0.62" Color="#000000"/>
-                        </Border.Effect>
-                        <StackPanel>
-                            <Grid Margin="11,8,10,9">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Margin="0,0,10,0">
-                                    <TextBlock Text="ANALYZE YOUR SCREEN" Foreground="#6F8198" FontSize="9.5"
-                                               FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Answers from what is on your screen instead of what was said"
-                                               Foreground="#C6D4E8" FontSize="11.5" FontWeight="SemiBold"
-                                               FontFamily="Segoe UI" Margin="0,3,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                                <Border Grid.Column="1" Width="24" Height="24" CornerRadius="8"
-                                        Background="#132235" VerticalAlignment="Center">
-                                    <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                               Foreground="#7F93AB" HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"/>
-                                </Border>
-                            </Grid>
-
-                            <Border Height="1" Background="#1B2A3C" Margin="8,0,8,6"/>
-
-                            <!-- Screen-share watch. Deciding when to press F8 is the hard part
-                                 of this feature during a real interview: the interviewer says
-                                 "solve this" and the moment to have pressed it has already gone.
-                                 Turning this on once, when they start sharing, takes the decision
-                                 away entirely. -->
-                            <Border Height="1" Background="#1B2A3C" Margin="8,5,8,6"/>
-
-                            <Border x:Name="WatchScreenRow" Padding="10,10" Cursor="Hand" CornerRadius="10"
-                                    Margin="1,0,1,3" MouseLeftButtonDown="WatchScreenOption_Click">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#102A1D"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="34" Height="34" CornerRadius="10" Background="#102A1D"
-                                            BorderBrush="#285D42" BorderThickness="1" Margin="0,0,11,0">
-                                        <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                                   Foreground="#34E08A" HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="They Are Sharing Their Screen" Foreground="#E9FFF2"
-                                                   FontSize="12.5" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Reads the screen for every question, no key needed"
-                                                   Foreground="#80B89A" FontSize="10.5" FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                    <Border Grid.Column="2" CornerRadius="5" Background="#12331F"
-                                            BorderBrush="#285D42" BorderThickness="1" Padding="6,2"
-                                            VerticalAlignment="Center" Margin="8,0,0,0">
-                                        <TextBlock x:Name="WatchScreenStateLabel" Text="OFF" Foreground="#84E7B6"
-                                                   FontSize="9.5" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    </Border>
-                                </Grid>
-                            </Border>
-
-                            <!-- F9 used to be documented only in a tiny line under the answer box,
-                                 so multi-monitor users never found it. Surfaced here instead of
-                                 spending a whole menu row on it. -->
-                            <Border Height="1" Background="#1B2A3C" Margin="8,5,8,0"/>
-                            <TextBlock Margin="12,8,12,7" TextWrapping="Wrap"
-                                       Foreground="#6F8198" FontSize="10.5" FontWeight="SemiBold"
-                                       FontFamily="Segoe UI">
-                                <Run Text="Any time, without this menu: press"/>
-                                <Run Text="F8" Foreground="#9FB0C6" FontWeight="Bold"/>
-                                <Run Text="to read this screen once,"/>
-                                <Run Text="F9" Foreground="#9FB0C6" FontWeight="Bold"/>
-                                <Run Text="for your main screen, or"/>
-                                <Run Text="F7" Foreground="#9FB0C6" FontWeight="Bold"/>
-                                <Run Text="to drag a box around one part."/>
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
-                </Border>
-            </Popup>
 
             <!-- ================= LISTENING MODE POPUP ================= -->
             <Popup x:Name="ListeningModePopup" Placement="Bottom" StaysOpen="True"

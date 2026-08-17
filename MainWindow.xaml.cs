@@ -352,6 +352,7 @@ namespace InterviewCopilot
                     HookPopupStealth(SavedResumesPopup);
                     HookPopupStealth(ListeningModePopup);
                     UpdateListeningModeUi();
+                    UpdateWatchScreenUi();
 
                     // First launch (no seen-flag yet): show the onboarding so new users
                     // immediately understand the flow, resume/company setup and stealth.
@@ -453,7 +454,6 @@ namespace InterviewCopilot
                 if (SavedResumesPopup   != null) SavedResumesPopup.IsOpen   = false;
                 if (ProfileDropdownPopup != null) ProfileDropdownPopup.IsOpen = false;
                 if (ListeningModePopup  != null) ListeningModePopup.IsOpen  = false;
-                if (AnalyzePopup        != null) AnalyzePopup.IsOpen        = false;
             }
             catch { }
         }
@@ -479,16 +479,6 @@ namespace InterviewCopilot
                                        IsDescendantOf(modeSource, modePopupChild);
                 bool onModePill = modeSource != null && IsDescendantOf(modeSource, AutoModePill);
                 if (!insideModePopup && !onModePill) ListeningModePopup.IsOpen = false;
-            }
-
-            if (AnalyzePopup.IsOpen)
-            {
-                var analyzeSource = e.OriginalSource as DependencyObject;
-                var analyzePopupChild = AnalyzePopup.Child as FrameworkElement;
-                bool insideAnalyzePopup = analyzePopupChild != null && analyzeSource != null &&
-                                          IsDescendantOf(analyzeSource, analyzePopupChild);
-                bool onAnalyzePill = analyzeSource != null && IsDescendantOf(analyzeSource, AnalyzePill);
-                if (!insideAnalyzePopup && !onAnalyzePill) AnalyzePopup.IsOpen = false;
             }
 
             if (!ProfileDropdownPopup.IsOpen) return;
@@ -1051,39 +1041,9 @@ namespace InterviewCopilot
             e.Handled = true;
             ProfileDropdownPopup.IsOpen = false;
             SavedResumesPopup.IsOpen = false;
-            AnalyzePopup.IsOpen = false;
             ListeningModePopup.PlacementTarget = AutoModePill;
             UpdateListeningModePopupSelection();
             ListeningModePopup.IsOpen = !ListeningModePopup.IsOpen;
-        }
-
-        // Consolidates the three previously separate icon buttons (Screen AI, Select
-        // Region, Compact Overlay) into one labeled menu. Each option below calls
-        // the exact same handler/method the old button called; F8 and F9 still fire
-        // HandleScreenAnalysisAsync/HandlePrimaryScreenAnalysisAsync directly through
-        // the keyboard hook and are unaffected by this menu.
-        private void AnalyzePill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            ProfileDropdownPopup.IsOpen = false;
-            SavedResumesPopup.IsOpen = false;
-            ListeningModePopup.IsOpen = false;
-            AnalyzePopup.PlacementTarget = AnalyzePill;
-            AnalyzePopup.IsOpen = !AnalyzePopup.IsOpen;
-        }
-
-        private void AnalyzeScreenOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            AnalyzePopup.IsOpen = false;
-            _ = HandleScreenAnalysisAsync();
-        }
-
-        private void SelectRegionOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            AnalyzePopup.IsOpen = false;
-            _ = HandleRegionScreenAnalysisAsync();
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -1208,7 +1168,6 @@ namespace InterviewCopilot
         private void CompactOverlayPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             e.Handled = true;
-            AnalyzePopup.IsOpen = false;
             ProfileDropdownPopup.IsOpen = false;
             SavedResumesPopup.IsOpen = false;
             ListeningModePopup.IsOpen = false;
@@ -3467,7 +3426,11 @@ namespace InterviewCopilot
 
         private void WatchScreenOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            AnalyzePopup.IsOpen = false;
+            e.Handled = true;
+            ProfileDropdownPopup.IsOpen = false;
+            SavedResumesPopup.IsOpen = false;
+            ListeningModePopup.IsOpen = false;
+
             _watchScreenMode = !_watchScreenMode;
             UpdateWatchScreenUi();
             DebugWindow.Log("SCREEN", $"Screen-share watch {(_watchScreenMode ? "ON" : "OFF")}");
@@ -3484,10 +3447,17 @@ namespace InterviewCopilot
 
         private void UpdateWatchScreenUi()
         {
-            if (WatchScreenStateLabel == null) return;
-            WatchScreenStateLabel.Text = _watchScreenMode ? "ON" : "OFF";
-            WatchScreenStateLabel.Foreground = new SolidColorBrush(
-                (Color)ColorConverter.ConvertFromString(_watchScreenMode ? "#34E08A" : "#84E7B6"));
+            if (WatchScreenPillLabel == null || WatchScreenIcon == null) return;
+
+            // The label carries the state, because a switch whose only feedback is
+            // a word inside a menu tells you nothing once the menu is shut, and
+            // this one has to be readable at a glance mid-interview.
+            WatchScreenPillLabel.Text = _watchScreenMode ? "WATCHING" : "WATCH SCREEN";
+
+            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
+                _watchScreenMode ? "#34E08A" : "#8FA3BA"));
+            WatchScreenPillLabel.Foreground = brush;
+            WatchScreenIcon.Foreground = brush;
         }
 
         private async Task HandleRegionScreenAnalysisAsync()
