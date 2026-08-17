@@ -1099,7 +1099,7 @@
                                 <StackPanel Margin="0,0,10,0">
                                     <TextBlock Text="ANALYZE YOUR SCREEN" Foreground="#6F8198" FontSize="9.5"
                                                FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="For a question you can see but cannot say out loud"
+                                    <TextBlock Text="Answers from what is on your screen instead of what was said"
                                                Foreground="#C6D4E8" FontSize="11.5" FontWeight="SemiBold"
                                                FontFamily="Segoe UI" Margin="0,3,0,0" TextWrapping="Wrap"/>
                                 </StackPanel>
@@ -1112,79 +1112,6 @@
                             </Grid>
 
                             <Border Height="1" Background="#1B2A3C" Margin="8,0,8,6"/>
-
-                            <Border Padding="10,10" Cursor="Hand" CornerRadius="10" Margin="1,0,1,3"
-                                    MouseLeftButtonDown="AnalyzeScreenOption_Click">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#102A1D"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="34" Height="34" CornerRadius="10" Background="#102A1D"
-                                            BorderBrush="#285D42" BorderThickness="1" Margin="0,0,11,0">
-                                        <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                                   Foreground="#34E08A" HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Read My Screen" Foreground="#E9FFF2" FontSize="12.5"
-                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Answers whatever question is on screen"
-                                                   Foreground="#80B89A" FontSize="10.5" FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                    <Border Grid.Column="2" CornerRadius="5" Background="#12331F"
-                                            BorderBrush="#285D42" BorderThickness="1" Padding="6,2"
-                                            VerticalAlignment="Center" Margin="8,0,0,0">
-                                        <TextBlock Text="F8" Foreground="#84E7B6" FontSize="9.5"
-                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    </Border>
-                                </Grid>
-                            </Border>
-
-                            <Border Padding="10,10" Cursor="Hand" CornerRadius="10" Margin="1,0,1,3"
-                                    MouseLeftButtonDown="SelectRegionOption_Click">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#152337"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="34" Height="34" CornerRadius="10" Background="#172438"
-                                            BorderBrush="#2A3A4F" BorderThickness="1" Margin="0,0,11,0">
-                                        <TextBlock Text="&#xE7C5;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                                   Foreground="#A9B6C8" HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Pick Just One Part" Foreground="#EEF4FB" FontSize="12.5"
-                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Drag a box around a coding problem or diagram"
-                                                   Foreground="#7F93AB" FontSize="10.5" FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
 
                             <!-- Screen-share watch. Deciding when to press F8 is the hard part
                                  of this feature during a real interview: the interviewer says
@@ -1240,9 +1167,13 @@
                             <TextBlock Margin="12,8,12,7" TextWrapping="Wrap"
                                        Foreground="#6F8198" FontSize="10.5" FontWeight="SemiBold"
                                        FontFamily="Segoe UI">
-                                <Run Text="Two monitors? Press"/>
+                                <Run Text="Any time, without this menu: press"/>
+                                <Run Text="F8" Foreground="#9FB0C6" FontWeight="Bold"/>
+                                <Run Text="to read this screen once,"/>
                                 <Run Text="F9" Foreground="#9FB0C6" FontWeight="Bold"/>
-                                <Run Text="to read only your main one."/>
+                                <Run Text="for your main screen, or"/>
+                                <Run Text="F7" Foreground="#9FB0C6" FontWeight="Bold"/>
+                                <Run Text="to drag a box around one part."/>
                             </TextBlock>
                         </StackPanel>
                     </Border>

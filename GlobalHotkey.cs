@@ -10,6 +10,7 @@ namespace InterviewCopilot
         private const int WM_KEYDOWN = 0x0100;
         private const int WM_KEYUP   = 0x0101;
         private const int VK_SPACE = 0x20;
+        private const int VK_F7  = 0x76;   // F7  = Drag a box around one part (global)
         private const int VK_F8  = 0x77;   // F8  = Analyze the active screen (global)
         private const int VK_F9  = 0x78;   // F9  = Analyze primary screen only (global)
         private const int VK_F12 = 0x7B;
@@ -21,10 +22,12 @@ namespace InterviewCopilot
         private readonly Action? _onSpaceReleased;
         private readonly Action? _onF12Pressed;
         private readonly Action? _onKillPressed;
+        private readonly Action? _onRegionAnalysisPressed;
         private readonly Action? _onScreenAnalysisPressed;
         private readonly Action? _onPrimaryScreenAnalysisPressed;
 
         private bool _spaceDown = false;
+        private bool _f7Down = false;
         private bool _f8Down = false;
         private bool _f9Down = false;
         private bool _f12Down = false;
@@ -39,7 +42,8 @@ namespace InterviewCopilot
             Action? onF12Pressed = null,
             Action? onKillPressed = null,
             Action? onScreenAnalysisPressed = null,
-            Action? onPrimaryScreenAnalysisPressed = null)
+            Action? onPrimaryScreenAnalysisPressed = null,
+            Action? onRegionAnalysisPressed = null)
         {
             _onSpacePressed                  = onSpacePressed;
             _onSpaceReleased                 = onSpaceReleased;
@@ -47,6 +51,7 @@ namespace InterviewCopilot
             _onKillPressed                   = onKillPressed;
             _onScreenAnalysisPressed         = onScreenAnalysisPressed;
             _onPrimaryScreenAnalysisPressed  = onPrimaryScreenAnalysisPressed;
+            _onRegionAnalysisPressed         = onRegionAnalysisPressed;
             _proc = HookCallback;
             _hookId = SetHook(_proc);
 
@@ -95,6 +100,21 @@ namespace InterviewCopilot
 
             if (isDown)
             {
+                // F7 - Drag a box around one part. Reaching this needed the app
+                // window in front, which is the one place it cannot be during an
+                // interview, so the sharpest and fastest way to read a screen was
+                // effectively unreachable when it mattered.
+                if (vkCode == VK_F7 && !IsOwnerWindowForeground() && _onRegionAnalysisPressed != null)
+                {
+                    if (!_f7Down)
+                    {
+                        _f7Down = true;
+                        DebugWindow.Log("HOOK", "F7 detected → screen analysis (pick a region)");
+                        _onRegionAnalysisPressed.Invoke();
+                    }
+                    return (IntPtr)1;
+                }
+
                 // F8 - Analyze the screen the user is working on
                 if (vkCode == VK_F8 && !IsOwnerWindowForeground() && _onScreenAnalysisPressed != null)
                 {
@@ -157,6 +177,7 @@ namespace InterviewCopilot
             // focus-dependent inconsistency entirely.
             if (isUp)
             {
+                if (vkCode == VK_F7) _f7Down = false;
                 if (vkCode == VK_F8) _f8Down = false;
                 if (vkCode == VK_F9) _f9Down = false;
                 if (vkCode == VK_F12) _f12Down = false;

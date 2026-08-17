@@ -254,6 +254,11 @@ namespace InterviewCopilot
                             {
                                 try { await HandlePrimaryScreenAnalysisAsync(); }
                                 catch (Exception ex) { DebugWindow.Log("SCREEN_ERR", ex.Message); StopThinkingUi(); }
+                            }),
+                            onRegionAnalysisPressed:        () => _ = Dispatcher.InvokeAsync(async () =>
+                            {
+                                try { await HandleRegionScreenAnalysisAsync(); }
+                                catch (Exception ex) { DebugWindow.Log("SCREEN_ERR", ex.Message); StopThinkingUi(); }
                             })
                         );
                         _globalHotkey.OwnerWindowHandle = mainHwnd;
@@ -1602,23 +1607,47 @@ namespace InterviewCopilot
             string question = "";
             try
             {
+                // Speechmatics runs behind live speech, so after the key is
+                // released the tail of the sentence is still arriving. This waits
+                // for it, and how long it waits is felt directly: every
+                // millisecond here happens before the request is even sent, and
+                // the model itself answers in about 0.15s. Measured end to end,
+                // this wait was the largest single part of the delay between
+                // speaking and reading, larger than the model and the network
+                // together.
+                //
+                // Polling four times more often finds the same moment sooner. The
+                // cap is unchanged, and the file being read is a few hundred
+                // bytes on local disk.
                 question = ReadLatestTxtSafe().Trim();
                 int stableCount = 0;
-                for (int i = 0; i < 16; i++)   // ~1.28s cap
+                int emptyCount  = 0;
+                for (int i = 0; i < 64; i++)   // 20ms x 64 = the same ~1.28s cap
                 {
-                    await Task.Delay(80, ct);  // throws if the user interrupted
+                    await Task.Delay(20, ct);  // throws if the user interrupted
                     string t = ReadLatestTxtSafe().Trim();
                     if (t.Length > question.Length)
                     {
                         question = t;
                         stableCount = 0;
+                        emptyCount  = 0;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(question))
+                    {
+                        // Text has stopped growing: the utterance has landed.
+                        stableCount++;
+                        if (stableCount >= 5) break;   // 100ms of quiet
                     }
                     else
                     {
-                        // Once text has stopped growing for ~160ms the utterance has landed.
-                        stableCount++;
-                        if (!string.IsNullOrWhiteSpace(question) && stableCount >= 2)
-                            break;
+                        // Nothing has been transcribed at all. Waiting out the
+                        // full cap for a sentence that was never spoken cost more
+                        // than a second before the app could even say it had
+                        // heard nothing, which is the case where the delay is
+                        // most obvious because there is no answer at the end of
+                        // it either.
+                        emptyCount++;
+                        if (emptyCount >= 20) break;   // 400ms of silence
                     }
                 }
             }
