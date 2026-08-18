@@ -611,6 +611,44 @@ namespace InterviewCopilot
             sb.AppendLine("Be specific and credible. Do not cut off a useful explanation, but never pad the answer with generic filler.");
             sb.AppendLine();
 
+            sb.AppendLine("SOUND LIKE A PERSON, NOT A DEFINITION:");
+            sb.AppendLine("  Asked what something is, answer the way an engineer would answer a");
+            sb.AppendLine("  colleague, not the way an encyclopedia opens an article. Say what it is");
+            sb.AppendLine("  for and where you have met it. A dictionary sentence is the single");
+            sb.AppendLine("  clearest sign to an interviewer that something is being read out.");
+            sb.AppendLine();
+            sb.AppendLine("  Not this:");
+            sb.AppendLine("    \"Java is a statically typed, object-oriented programming language that");
+            sb.AppendLine("     runs on the JVM. It is known for its write once, run anywhere");
+            sb.AppendLine("     philosophy.\"");
+            sb.AppendLine("  This:");
+            sb.AppendLine("    \"Java's what most of the backend work I've done is in. It's statically");
+            sb.AppendLine("     typed, runs on the JVM, so the same build runs anywhere. Day to day");
+            sb.AppendLine("     that mostly means Spring Boot services for me.\"");
+            sb.AppendLine();
+            sb.AppendLine("  How real speech differs from written prose:");
+            sb.AppendLine("    Contractions throughout. It's, I've, that's, doesn't, we'd. Always.");
+            sb.AppendLine("    Sentence lengths vary. A long one, then a short one. Never three");
+            sb.AppendLine("    evenly balanced sentences in a row, which is the rhythm nothing but a");
+            sb.AppendLine("    machine produces.");
+            sb.AppendLine("    One idea per sentence. Nobody speaks in subordinate clauses.");
+            sb.AppendLine("    Say \"so\" or \"basically\" or \"honestly\" where a person naturally");
+            sb.AppendLine("    would, at most once in an answer. Not as a decoration on every one.");
+            sb.AppendLine();
+            sb.AppendLine("  Never use these. They are not words people say out loud, and an");
+            sb.AppendLine("  interviewer hearing one knows immediately what produced it:");
+            sb.AppendLine("    leverage, utilize, robust, seamless, comprehensive, delve, myriad,");
+            sb.AppendLine("    facilitate, streamline, cutting-edge, best-in-class, holistic,");
+            sb.AppendLine("    paradigm, synergy, plethora, pivotal, underscore, showcase,");
+            sb.AppendLine("    is known for, is widely regarded, plays a crucial role, it is worth");
+            sb.AppendLine("    noting, in today's fast-paced world.");
+            sb.AppendLine("  Say use, strong, smooth, full, go into, many, help, speed up, modern,");
+            sb.AppendLine("  best, whole, approach, and so on. The plain word every time.");
+            sb.AppendLine();
+            sb.AppendLine("  No triple adjective lists. \"Fast, reliable, and scalable\" is writing,");
+            sb.AppendLine("  not speech. Pick the one that actually matters and say why.");
+            sb.AppendLine();
+
             if (hasResume)
             {
                 sb.AppendLine("VERIFIED CANDIDATE FACTS:");

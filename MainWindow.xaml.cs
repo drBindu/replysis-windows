@@ -2198,6 +2198,40 @@ namespace InterviewCopilot
             }
         }
 
+        /// <summary>
+        /// Words that do not survive being said out loud. Each maps to what a
+        /// person would have used instead, chosen to keep the grammar intact so
+        /// the swap is invisible rather than obviously patched.
+        /// </summary>
+        private static readonly (string Tell, string Plain)[] AiTellReplacements =
+        {
+            ("leverages",     "uses"),
+            ("leveraging",    "using"),
+            ("leverage",      "use"),
+            ("utilizes",      "uses"),
+            ("utilizing",     "using"),
+            ("utilize",       "use"),
+            ("facilitates",   "helps"),
+            ("facilitate",    "help"),
+            ("streamlines",   "speeds up"),
+            ("streamline",    "speed up"),
+            ("robust",        "solid"),
+            ("seamless",      "smooth"),
+            ("seamlessly",    "smoothly"),
+            ("comprehensive", "complete"),
+            ("myriad",        "many"),
+            ("plethora",      "plenty"),
+            ("pivotal",       "key"),
+            ("holistic",      "overall"),
+            ("cutting-edge",  "modern"),
+            ("best-in-class", "best"),
+            ("delve into",    "get into"),
+            ("delve",         "dig"),
+            ("showcase",      "show"),
+            ("underscores",   "shows"),
+            ("underscore",    "show"),
+        };
+
         private string CleanAiOutput(string ans)
         {
             ans = Regex.Replace(ans, @"```[a-z]*|```", "").Trim();
@@ -2234,6 +2268,16 @@ namespace InterviewCopilot
                 @"(?:\s+(?:earlier|before|already|just now))?\s*[,:]?\s*",
                 "",
                 RegexOptions.IgnoreCase);
+
+            // Swap the words that give a machine away.
+            //
+            // The prompt forbids these, and a prompt is a request. This runs on
+            // the finished answer, so the interviewer never hears "leverage" or
+            // "robust" because one instruction out of forty got less attention.
+            // Every replacement is the plain word a person would have said, so
+            // the sentence still reads correctly after the swap.
+            foreach (var (tell, plain) in AiTellReplacements)
+                ans = Regex.Replace(ans, $@"{tell}", plain, RegexOptions.IgnoreCase);
 
             // Re-capitalise whatever now starts the answer.
             if (ans.Length > 0 && char.IsLower(ans[0]))
