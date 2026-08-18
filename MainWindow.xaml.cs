@@ -2277,7 +2277,7 @@ namespace InterviewCopilot
             // Every replacement is the plain word a person would have said, so
             // the sentence still reads correctly after the swap.
             foreach (var (tell, plain) in AiTellReplacements)
-                ans = Regex.Replace(ans, $@"{tell}", plain, RegexOptions.IgnoreCase);
+                ans = Regex.Replace(ans, $@"\b{Regex.Escape(tell)}\b", plain, RegexOptions.IgnoreCase);
 
             // Re-capitalise whatever now starts the answer.
             if (ans.Length > 0 && char.IsLower(ans[0]))

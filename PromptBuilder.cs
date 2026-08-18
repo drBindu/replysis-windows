@@ -1172,7 +1172,15 @@ namespace InterviewCopilot
 
             string userMsg =
                 lockBlock +
-                "FORMAT (read BEFORE answering): " + formatReminder + "\n\n" +
+                // Stated here as well as in the system prompt. This sits directly
+                // above the question, which is where the model is actually
+                // looking, and the per-type reminders it follows most closely
+                // said nothing about the second part.
+                "FORMAT (read BEFORE answering): " + formatReminder + "\n" +
+                "Then, unless this was a greeting, small talk, or a one-sentence " +
+                "yes/no, add a blank line, the words MORE TO SAY on their own " +
+                "line, and 2 to 4 bullet lines of what you could add if pushed. " +
+                "That section is the only place bullets belong.\n\n" +
                 contextNote +
                 BuildScreenContextNote() +
                 historyHint +
