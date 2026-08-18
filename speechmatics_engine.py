@@ -1274,6 +1274,37 @@ async def run_sarvam():
             reconnect_delay = min(reconnect_delay * 2, 30)
 
 
+# Which recognition model to ask for.
+#
+# "melia-1" is Speechmatics' newest and, on published aggregate word error
+# rate, their most accurate. "enhanced" is the older name this engine used and
+# is now documented as kept only for backward compatibility.
+#
+# It is requested rather than assumed. If an account or plan does not carry
+# melia-1 the session is rejected at StartRecognition, and a rejected session
+# means no transcription at all, which is a far worse outcome than an older
+# model. So the first rejection downgrades for the rest of the run and the
+# reconnect loop carries on, rather than retrying a request that will keep
+# being refused.
+_speech_model = "melia-1"
+
+
+def _downgrade_model_if_rejected(err_text: str) -> bool:
+    """True when the error was the model being refused, and a downgrade happened."""
+    global _speech_model
+    if _speech_model != "melia-1":
+        return False
+    lowered = str(err_text).lower()
+    if any(k in lowered for k in
+           ("operating_point", "melia", "not_allowed", "invalid_model",
+            "model", "unsupported", "forbidden", "403")):
+        _speech_model = "enhanced"
+        print(">>> melia-1 unavailable on this account; using enhanced for this session.",
+              flush=True)
+        return True
+    return False
+
+
 # ── MAIN WITH AUTO-RECONNECT ──────────────────────────────────────────────────
 async def main():
     # Route Speechmatics-unsupported languages (Telugu, etc.) to Sarvam AI and skip
@@ -1438,7 +1469,7 @@ async def main():
                 conf = TranscriptionConfig(
                     language        = args.language,
                     **_lang_extra,
-                    operating_point = "enhanced",
+                    operating_point = _speech_model,
                     max_delay       = args.max_delay,
                     max_delay_mode  = "flexible",
                     enable_partials = True,
@@ -1828,6 +1859,12 @@ async def main():
             except Exception as e:
                 err = str(e)
                 print(f">>> ERROR on {endpoint}: {err}", flush=True)
+
+                # The newer model was refused. Drop to the older one and retry
+                # immediately rather than working through the remaining endpoints
+                # with a request every one of them will also refuse.
+                if _downgrade_model_if_rejected(err):
+                    continue
 
                 # Auth failures: WebSocket sends {'type': 'not_authorised'} which
                 # becomes "Not Authorized" in the exception message. Catch all variants.
