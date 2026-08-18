@@ -9,13 +9,18 @@ not assumed:
 |---|---|
 | Auto mode: hear the question, answer without a keypress | **missing** |
 | Watch Screen: read the screen for every question | **missing** |
-| Region capture: drag a box around one part | **missing** |
-| Credits window | **missing** |
-| Screen analysis (F8 equivalent) | present |
+| Screen analysis | present |
+| Region capture | present, via `screencapture -i` |
+| Credits polling | present |
 | Compact overlay | present |
-| Auto-update | present |
+| Auto-update (Sparkle) | present |
 | Stealth / capture exclusion | present |
 | Sessions, debug window | present |
+
+Names differ between the two apps, so searching for a Windows class name gives
+a wrong answer. Mac region capture is a flag on its screenshot call, not a
+`RegionCapture` window. This table was built wrong twice that way before it was
+checked against what the code actually does.
 
 **And 71 commits of changes** to features Mac does have, between 2026-08-13 and
 2026-08-18, while the Mac client stood still at `ba7f2ba`.
@@ -41,6 +46,23 @@ Mac repo:     https://github.com/moto123a/interview-copilot-mac
 The Windows commit messages carry the reasoning for each change.
 `git log --since=2026-08-13` is the full list, and each message says what was
 wrong before, which is usually the part worth keeping.
+
+---
+
+## Before anything else: two Mac commits exist only on the Windows machine
+
+The Mac checkout on the Windows desktop is two commits ahead of GitHub, and
+neither was ever pushed:
+
+```
+ba7f2ba  Add Mac region capture and technical answer structure
+9b067c4  Add Mac preflight checks and reconnect backoff
+```
+
+GitHub's newest Mac commit is 2026-08-07. Cloning the repo on the Mac machine
+gets neither of these, and the region capture work is one of them. Push them
+from the Windows machine first, or that work gets rebuilt from scratch or
+concluded never to have happened.
 
 ---
 
@@ -94,12 +116,10 @@ call. Capture per question, not continuously: a capture a second for half an
 hour is eighteen hundred vision calls and several times a month of credits,
 for frames nobody asked about.
 
-**Region capture.** Drag a box around one part of the screen. This is the
-sharpest and fastest way to read a screen, because a small selection is sent
-without being resized, so the text survives at full size. On Windows it is
-F7, reachable without opening any window.
-
-**Credits window.** Mac has no in-app view of the balance.
+Region capture already exists on Mac. Worth knowing that it is the sharpest and
+fastest way to read a screen, because a small selection is sent without being
+resized so the text survives at full size, which makes it worth reaching
+without opening a window. Windows put it on F7 for that reason.
 
 ---
 
