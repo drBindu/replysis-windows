@@ -2214,6 +2214,31 @@ namespace InterviewCopilot
             ans = Regex.Replace(ans, @"(\S)[ \t]*[—–―][ \t]+", "$1, ");   // mid-sentence break -> comma
             ans = ans.Replace("—", "-").Replace("–", "-").Replace("―", "-");  // any remaining -> hyphen
             ans = Regex.Replace(ans, @",\s*,", ",");           // collapse accidental double commas
+
+            // Drop an opening callback to something that was never said.
+            //
+            // Shown the previous turn as context, the model reaches for
+            // continuity it has not earned: "Yeah so like I mentioned, Java is a
+            // statically typed language" as the very first answer about Java. The
+            // one person who cannot be fooled by that is the interviewer, who
+            // knows exactly what was said, and it reads as evasion or as not
+            // listening.
+            //
+            // Stripped here as well as forbidden in the prompt, because this
+            // arrives mid-sentence in a live interview and a rule the model can
+            // quietly ignore is not enough on its own.
+            ans = Regex.Replace(
+                ans,
+                @"^\s*(?:yeah[,\s]+|yes[,\s]+|so[,\s]+|well[,\s]+|right[,\s]+)*" +
+                @"(?:so\s+)?(?:like|as)\s+(?:i|I)\s+(?:mentioned|said|noted|touched on|explained)" +
+                @"(?:\s+(?:earlier|before|already|just now))?\s*[,:]?\s*",
+                "",
+                RegexOptions.IgnoreCase);
+
+            // Re-capitalise whatever now starts the answer.
+            if (ans.Length > 0 && char.IsLower(ans[0]))
+                ans = char.ToUpper(ans[0]) + ans[1..];
+
             ans = Regex.Replace(ans, @"[ \t]{2,}", " ");       // collapse doubled spaces
 
             ans = ans.Replace("\r\n", "\n").Replace("\r", "\n");

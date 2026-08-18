@@ -1080,7 +1080,12 @@ namespace InterviewCopilot
                     "CHECK BEFORE ANSWERING:\n" +
                     "  - Already answered this topic? -> reuse that answer consistently.\n" +
                     "  - Drill-down on last answer? -> MICRO: pull exact fact, 1-2 sentences.\n" +
-                    "  - Brand new topic? -> use format reminder above.\n\n";
+                    "  - Brand new topic? -> use format reminder above.\n" +
+                    "  - Never open by referring back. \"As I mentioned\", \"like I said\" and\n" +
+                    "    \"as I touched on\" are true only if that exact topic appears above.\n" +
+                    "    The last turn is shown to you as context, not as something you said\n" +
+                    "    about this question. Claiming to have covered something you did not\n" +
+                    "    is heard as evasion by the one person who knows what was said.\n\n";
             }
 
             string userMsg =
