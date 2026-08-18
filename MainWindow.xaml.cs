@@ -2286,6 +2286,21 @@ namespace InterviewCopilot
             ans = Regex.Replace(ans, @"[ \t]{2,}", " ");       // collapse doubled spaces
 
             ans = ans.Replace("\r\n", "\n").Replace("\r", "\n");
+
+            // Normalise the depth section's bullets.
+            //
+            // Asked for a bullet the model reaches for a hyphen, which reads as a
+            // dash mid-sentence rather than as a list, and the whole point of this
+            // section is being scannable in one glance while somebody is talking.
+            // Only lines after the MORE TO SAY marker are touched, so a hyphen
+            // inside the spoken answer above stays a hyphen.
+            int moreAt = ans.IndexOf("MORE TO SAY", StringComparison.OrdinalIgnoreCase);
+            if (moreAt >= 0)
+            {
+                string head = ans[..moreAt];
+                string tail = Regex.Replace(ans[moreAt..], @"(?m)^[ \t]*[-*–—]\s+", "• ");
+                ans = head + tail;
+            }
             ans = Regex.Replace(ans, @"\n{3,}", "\n\n");
             return ans.Trim();
         }

@@ -706,8 +706,9 @@ namespace InterviewCopilot
             sb.AppendLine();
             sb.AppendLine("  Then, on its own line, the word:");
             sb.AppendLine("    MORE TO SAY");
-            sb.AppendLine("  followed by 2 to 4 short lines, each starting with the bullet character");
-            sb.AppendLine("  and each a different thing that could be added if the interviewer wants");
+            sb.AppendLine("  followed by 4 to 6 short lines, each opening with the character • and");
+            sb.AppendLine("  one space, never a hyphen and never an asterisk, and each a different");
+            sb.AppendLine("  thing that could be added if the interviewer wants");
             sb.AppendLine("  depth: a specific example, a trade-off, a number, an edge case, what you");
             sb.AppendLine("  would do differently. Not a summary of the answer above, and not a");
             sb.AppendLine("  continuation of the same sentence. Each one has to stand on its own as");
@@ -1179,7 +1180,8 @@ namespace InterviewCopilot
                 "FORMAT (read BEFORE answering): " + formatReminder + "\n" +
                 "Then, unless this was a greeting, small talk, or a one-sentence " +
                 "yes/no, add a blank line, the words MORE TO SAY on their own " +
-                "line, and 2 to 4 bullet lines of what you could add if pushed. " +
+                "line, and 4 to 6 lines of what you could add if pushed, each " +
+                "beginning with the bullet character and a space. " +
                 "That section is the only place bullets belong.\n\n" +
                 contextNote +
                 BuildScreenContextNote() +
