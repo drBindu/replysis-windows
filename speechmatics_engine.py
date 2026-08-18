@@ -1276,17 +1276,25 @@ async def run_sarvam():
 
 # Which recognition model to ask for.
 #
-# "melia-1" is Speechmatics' newest and, on published aggregate word error
-# rate, their most accurate. "enhanced" is the older name this engine used and
-# is now documented as kept only for backward compatibility.
+# "enhanced", not melia-1, and not by oversight. Melia-1 is Speechmatics'
+# newest and most accurate model on paper, and it validates against a
+# different schema that rejects almost everything this engine depends on:
 #
-# It is requested rather than assumed. If an account or plan does not carry
-# melia-1 the session is rejected at StartRecognition, and a rejected session
-# means no transcription at all, which is a far worse outcome than an older
-# model. So the first rejection downgrades for the rest of the run and the
-# reconnect loop carries on, rather than retrying a request that will keep
-# being refused.
-_speech_model = "melia-1"
+#   additional_vocab        the interview's own vocabulary
+#   punctuation_overrides   the sentence endings Auto uses to detect a turn
+#   enable_entities         numbers and names formatted properly
+#   max_delay               the latency control, tuned to its 0.7s floor
+#   max_delay_mode          the flexible extension at word boundaries
+#
+# Requesting it was tried and took transcription down completely: every
+# endpoint refused the session, on every retry, and the app could not hear
+# anything at all. Better accuracy on a model that cannot be told which words
+# to expect, cannot be told when a sentence ended, and cannot be tuned for
+# latency is not better accuracy for this product.
+#
+# Revisit only alongside rebuilding turn detection and vocabulary around
+# whatever melia-1 does support.
+_speech_model = "enhanced"
 
 
 def _downgrade_model_if_rejected(err_text: str) -> bool:
@@ -1294,10 +1302,18 @@ def _downgrade_model_if_rejected(err_text: str) -> bool:
     global _speech_model
     if _speech_model != "melia-1":
         return False
+    # The refusal does not mention the model by name. Melia-1 validates against
+    # a different schema, so what comes back is a list of properties that are
+    # suddenly not allowed: additional_vocab, punctuation_overrides,
+    # enable_entities, max_delay, max_delay_mode. The first version of this
+    # matched on "not_allowed" with an underscore and the API says "is not
+    # allowed" with a space, so nothing matched, nothing downgraded, and every
+    # endpoint refused every retry with no transcription at all.
     lowered = str(err_text).lower()
     if any(k in lowered for k in
-           ("operating_point", "melia", "not_allowed", "invalid_model",
-            "model", "unsupported", "forbidden", "403")):
+           ("is not allowed", "oneof", "invalid input", "protocol_error",
+            "operating_point", "melia", "invalid_model", "unsupported",
+            "forbidden", "403")):
         _speech_model = "enhanced"
         print(">>> melia-1 unavailable on this account; using enhanced for this session.",
               flush=True)
