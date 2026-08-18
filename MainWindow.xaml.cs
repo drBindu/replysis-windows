@@ -1575,6 +1575,9 @@ namespace InterviewCopilot
             // _spaceHandling across the async grace window) means a Space press during this
             // window routes straight to InterruptAiAndListen and re-listens in ONE press,
             // instead of being swallowed until the AI happened to start.
+            // The clock the user actually experiences starts here, when they
+            // stop speaking, not when the request is sent.
+            _turnStopwatch = Stopwatch.StartNew();
             isListening = false; isMuted = true; _flushing = true;
             try { _aiCts?.Dispose(); } catch { }
             _aiCts = new System.Threading.CancellationTokenSource();
@@ -1645,6 +1648,7 @@ namespace InterviewCopilot
             if (!string.IsNullOrWhiteSpace(question))
                 TranscriptTextBlock.Text = question;
             WritePauseFlag();   // final has landed — safe to pause the engine
+            _waitedForWordsMs = _turnStopwatch?.ElapsedMilliseconds ?? 0;
             DebugWindow.Log("MIC", $"[{source}] firing AI ({question.Length} chars)");
 
             if (string.IsNullOrWhiteSpace(question))
@@ -1778,7 +1782,12 @@ namespace InterviewCopilot
                     {
                         thinkingTimer?.Stop();
                         ThinkingPanel.Visibility = Visibility.Collapsed;
-                        DebugWindow.Log("AI", $"First token in {answerTimer.ElapsedMilliseconds}ms");
+                        long total = _turnStopwatch?.ElapsedMilliseconds ?? 0;
+                        long model = answerTimer.ElapsedMilliseconds;
+                        DebugWindow.Log("SPEED",
+                            $"stopped speaking -> first word: {total}ms  " +
+                            $"(waiting for transcript {_waitedForWordsMs}ms, " +
+                            $"network + model {model}ms)");
                     }
                     // Paint the first token immediately. After that, repaint every two
                     // tokens (or on a newline) to keep the stream smooth without
@@ -3680,6 +3689,15 @@ namespace InterviewCopilot
         /// waiting for a drag, over the interview.
         /// </summary>
         private bool _regionPickerOpen;
+
+        /// <summary>
+        /// Times the wait the user actually feels: from releasing the key to the
+        /// first word appearing. Server-side measurements kept saying the model
+        /// answers in 0.15s while the person in front of the app was waiting
+        /// seconds, because almost none of that time was the model.
+        /// </summary>
+        private Stopwatch? _turnStopwatch;
+        private long _waitedForWordsMs;
 
         private async Task HandleRegionScreenAnalysisAsync()
         {
