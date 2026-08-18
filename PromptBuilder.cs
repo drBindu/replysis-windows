@@ -611,6 +611,56 @@ namespace InterviewCopilot
             sb.AppendLine("Be specific and credible. Do not cut off a useful explanation, but never pad the answer with generic filler.");
             sb.AppendLine();
 
+            if (hasResume)
+            {
+                sb.AppendLine("VERIFIED CANDIDATE FACTS:");
+                sb.AppendLine(Truncate(resumeFacts, 4_500));
+                sb.AppendLine("Use only facts and numbers present above. If a detail is absent, speak qualitatively.");
+                sb.AppendLine();
+            }
+            else
+            {
+                sb.AppendLine("No resume facts are available. This does NOT mean the candidate lacks skill or expertise.");
+                sb.AppendLine("Answer knowledge and coding questions confidently. Never apologize, refuse, or say you are not a professional or expert.");
+                sb.AppendLine("Avoid only unsupported personal history: do not invent employers, project names, dates, metrics, or achievements.");
+                sb.AppendLine();
+            }
+
+            if (!string.IsNullOrWhiteSpace(CompanyName) || !string.IsNullOrWhiteSpace(JobDesc))
+            {
+                sb.AppendLine("TARGET CONTEXT:");
+                if (!string.IsNullOrWhiteSpace(CompanyName))
+                    sb.AppendLine($"Company: {Truncate(CompanyName, 120)}");
+                if (!string.IsNullOrWhiteSpace(JobDesc))
+                    sb.AppendLine($"Role: {Truncate(JobDesc, 500)}");
+                sb.AppendLine("Tailor the answer naturally when relevant; do not force the company name into every response.");
+                sb.AppendLine();
+            }
+
+            if (!string.IsNullOrWhiteSpace(LiveHints))
+            {
+                sb.AppendLine("CANDIDATE HINTS:");
+                sb.AppendLine(Truncate(LiveHints, 600));
+                sb.AppendLine();
+            }
+            AppendSharedVoiceRules(sb);
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// The rules about how an answer should sound and how it should be
+        /// shaped, shared by both system prompts.
+        ///
+        /// There are two, one for Auto and one for Manual, and they had drifted
+        /// apart. Everything written to make answers sound spoken rather than
+        /// written went into the Auto one alone, so the mode most people use was
+        /// still returning encyclopedia definitions and no depth section, and
+        /// nothing about the change appeared to have worked. Rules that must hold
+        /// for every answer now live in one place and are appended to both.
+        /// </summary>
+        private static void AppendSharedVoiceRules(StringBuilder sb)
+        {
             sb.AppendLine("SOUND LIKE A PERSON, NOT A DEFINITION:");
             sb.AppendLine("  Asked what something is, answer the way an engineer would answer a");
             sb.AppendLine("  colleague, not the way an encyclopedia opens an article. Say what it is");
@@ -649,39 +699,6 @@ namespace InterviewCopilot
             sb.AppendLine("  not speech. Pick the one that actually matters and say why.");
             sb.AppendLine();
 
-            if (hasResume)
-            {
-                sb.AppendLine("VERIFIED CANDIDATE FACTS:");
-                sb.AppendLine(Truncate(resumeFacts, 4_500));
-                sb.AppendLine("Use only facts and numbers present above. If a detail is absent, speak qualitatively.");
-                sb.AppendLine();
-            }
-            else
-            {
-                sb.AppendLine("No resume facts are available. This does NOT mean the candidate lacks skill or expertise.");
-                sb.AppendLine("Answer knowledge and coding questions confidently. Never apologize, refuse, or say you are not a professional or expert.");
-                sb.AppendLine("Avoid only unsupported personal history: do not invent employers, project names, dates, metrics, or achievements.");
-                sb.AppendLine();
-            }
-
-            if (!string.IsNullOrWhiteSpace(CompanyName) || !string.IsNullOrWhiteSpace(JobDesc))
-            {
-                sb.AppendLine("TARGET CONTEXT:");
-                if (!string.IsNullOrWhiteSpace(CompanyName))
-                    sb.AppendLine($"Company: {Truncate(CompanyName, 120)}");
-                if (!string.IsNullOrWhiteSpace(JobDesc))
-                    sb.AppendLine($"Role: {Truncate(JobDesc, 500)}");
-                sb.AppendLine("Tailor the answer naturally when relevant; do not force the company name into every response.");
-                sb.AppendLine();
-            }
-
-            if (!string.IsNullOrWhiteSpace(LiveHints))
-            {
-                sb.AppendLine("CANDIDATE HINTS:");
-                sb.AppendLine(Truncate(LiveHints, 600));
-                sb.AppendLine();
-            }
-
             sb.AppendLine("ANSWER SHAPE — TWO PARTS, ALWAYS IN THIS ORDER:");
             sb.AppendLine("  First, the spoken answer. Exactly what to say out loud, nothing else, at");
             sb.AppendLine("  the length the question deserves. This is the part read while someone is");
@@ -703,8 +720,6 @@ namespace InterviewCopilot
             sb.AppendLine("  The bullets are the one place bullets are allowed. The spoken answer");
             sb.AppendLine("  above them is still flowing sentences, never a list.");
             sb.AppendLine();
-
-            return sb.ToString();
         }
 
         private static string BuildSystemPrompt(string resumeFacts)
@@ -905,13 +920,17 @@ namespace InterviewCopilot
             sb.AppendLine();
 
             sb.AppendLine("PERMANENTLY BANNED:");
-            sb.AppendLine("  - Bullet symbols ( dot or asterisk ) anywhere in output");
+            sb.AppendLine("  - Bullet symbols anywhere in the spoken answer. They belong only under");
+            sb.AppendLine("    MORE TO SAY, described below.");
             sb.AppendLine("  - Em-dashes or en-dashes anywhere. Use a comma or period instead.");
             sb.AppendLine("  - Resume sentences quoted word-for-word");
             sb.AppendLine("  - Invented numbers, percentages, or before/after stats that aren't in your resume");
             sb.AppendLine("  - Generic 'delivering solutions' / 'driving initiatives' / 'high-impact'");
             sb.AppendLine("  - Filler openers ('Great question', 'In my role as')");
             sb.AppendLine("  - Agreeing with an interviewer-suggested value that contradicts your prior answer");
+            sb.AppendLine();
+
+            AppendSharedVoiceRules(sb);
 
             return sb.ToString();
         }
