@@ -113,8 +113,28 @@ namespace InterviewCopilot
         private static readonly Regex RxStartsWithDigit = new(@"^\d",      RegexOptions.Compiled);
         private static readonly Regex RxEmailOrUrlChar   = new(@"[@|/\\]", RegexOptions.Compiled);
 
+        /// <summary>
+        /// Month names spelled out, rather than "three to nine letters".
+        ///
+        /// Text pulled out of a .docx loses the spacing between formatting runs,
+        /// so a job title runs straight into the date after it: "neerApril 2024",
+        /// "IDecember 2022", "entistFeb 2017". A pattern that accepts any short
+        /// run of letters captured those whole, the month lookup failed, and the
+        /// job was discarded without a word.
+        ///
+        /// On a real five-job resume four were thrown away and only the oldest
+        /// survived, because it happened to be the one preceded by a space. The
+        /// app then told the candidate they had one year of experience, and named
+        /// a job they left in 2017, in the middle of an interview. Naming the
+        /// months means the match starts at the month wherever it begins, and the
+        /// glued prefix is simply not part of it.
+        /// </summary>
+        private const string MonthNames =
+            "Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|" +
+            "Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?";
+
         private static readonly Regex DatePattern = new Regex(
-            @"([A-Za-z]{3,9})\s+(\d{4})\s*[-–—]\s*(Present|Till\s*Date|[A-Za-z]{3,9}\s+\d{4})",
+            $@"({MonthNames})\s*(\d{{4}})\s*[-–—]\s*(Present|Till\s*Date|(?:{MonthNames})\s*\d{{4}})",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         public static List<JobEntry> ExtractJobs(string resume)
