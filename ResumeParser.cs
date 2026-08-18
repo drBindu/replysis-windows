@@ -72,10 +72,38 @@ namespace InterviewCopilot
             var jobs = ExtractJobs(resume);
             int totalMonths = CalculateTotalMonths(jobs);
 
-            sb.AppendLine($"Total Experience: {totalMonths / 12} years {totalMonths % 12} months");
-            sb.AppendLine("Work History:");
-            foreach (var job in jobs)
-                sb.AppendLine($"  - {job.Label} | {job.DateRange} ({job.Months} months)");
+            // State a total only when the dates were actually understood.
+            //
+            // Resumes are written every way a person can imagine, and no pattern
+            // will read all of them. What it must never do is answer with
+            // confidence from a misreading: this said "1 year" to a candidate
+            // with eleven, because four of their five roles had been discarded
+            // and the survivor was the oldest.
+            //
+            // So when nothing parsed, no number is claimed, and the raw dates
+            // are handed over for the model to read instead. An answer built
+            // from the resume's own words is worth far more than a total that
+            // is wrong and sounds certain.
+            if (jobs.Count > 0)
+            {
+                sb.AppendLine($"Total Experience: {totalMonths / 12} years {totalMonths % 12} months");
+                sb.AppendLine("Work History:");
+                foreach (var job in jobs)
+                    sb.AppendLine($"  - {job.Label} | {job.DateRange} ({job.Months} months)");
+            }
+            else
+            {
+                sb.AppendLine("Total Experience: could not be read from this resume.");
+                sb.AppendLine("Do not state a number of years. Describe the roles below instead,");
+                sb.AppendLine("and if asked directly for a total, give the range of years covered.");
+                sb.AppendLine("Lines mentioning dates:");
+                foreach (var line in resume.Split('\n'))
+                {
+                    string t = line.Trim();
+                    if (t.Length is > 4 and < 200 && RxHasYear.IsMatch(t))
+                        sb.AppendLine("  " + t);
+                }
+            }
 
             // 3. Skills
             sb.AppendLine("Skills:");
@@ -109,6 +137,9 @@ namespace InterviewCopilot
             public int StartIdx { get; set; }
             public int EndIdx { get; set; }
         }
+
+        /// <summary>Any line carrying a plausible year, for the fallback above.</summary>
+        private static readonly Regex RxHasYear = new(@"(19|20)\d{2}", RegexOptions.Compiled);
 
         private static readonly Regex RxStartsWithDigit = new(@"^\d",      RegexOptions.Compiled);
         private static readonly Regex RxEmailOrUrlChar   = new(@"[@|/\\]", RegexOptions.Compiled);

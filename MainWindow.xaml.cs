@@ -3524,22 +3524,63 @@ namespace InterviewCopilot
             UpdateResumeCardState();
         }
 
+        /// <summary>
+        /// Text out of a .docx, with the gaps the document actually contains.
+        ///
+        /// Two things were being lost, both silently, and together they made the
+        /// app misread a resume badly enough to misstate someone's career.
+        ///
+        /// Tabs produce no character. InnerText concatenates the runs and drops
+        /// the tab elements between them, so a line laid out as
+        /// "AI Engineer [tab] April 2024" arrives as "AI EngineerApril 2024".
+        /// One resume held 23 of them. Everything that reads this text
+        /// afterwards then has to cope with words fused to the words after them.
+        ///
+        /// Tables were skipped entirely. Elements&lt;Paragraph&gt;() returns only
+        /// the paragraphs that are direct children of the body, and a paragraph
+        /// inside a table is a child of a cell. Resumes are very often laid out
+        /// in tables, and every one of those lines was simply absent.
+        ///
+        /// Tabs and line breaks become spaces and newlines. Nothing is inserted
+        /// anywhere the document did not already have a gap, so a word split
+        /// across two runs for formatting stays one word.
+        /// </summary>
         private static string ExtractDocxText(string filePath)
         {
             using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(filePath, false);
             var body = doc.MainDocumentPart?.Document?.Body;
             if (body == null) return "";
+
             var sb = new System.Text.StringBuilder();
-            foreach (var para in body.Elements<DocumentFormat.OpenXml.Wordprocessing.Paragraph>())
+
+            // Descendants, not Elements: this reaches paragraphs inside tables.
+            foreach (var para in body.Descendants<DocumentFormat.OpenXml.Wordprocessing.Paragraph>())
             {
-                string line = para.InnerText;
-                if (!string.IsNullOrWhiteSpace(line))
+                var line = new System.Text.StringBuilder();
+                foreach (var node in para.Descendants())
                 {
-                    if (sb.Length + line.Length + Environment.NewLine.Length > MaxResumeTextChars)
-                        throw new InvalidDataException("The document contains too much text.");
-                    sb.AppendLine(line);
+                    switch (node)
+                    {
+                        case DocumentFormat.OpenXml.Wordprocessing.TabChar:
+                            line.Append(' ');
+                            break;
+                        case DocumentFormat.OpenXml.Wordprocessing.Break:
+                            line.Append(' ');
+                            break;
+                        case DocumentFormat.OpenXml.Wordprocessing.Text t:
+                            line.Append(t.Text);
+                            break;
+                    }
                 }
+
+                string text = line.ToString().Trim();
+                if (text.Length == 0) continue;
+
+                if (sb.Length + text.Length + Environment.NewLine.Length > MaxResumeTextChars)
+                    throw new InvalidDataException("The document contains too much text.");
+                sb.AppendLine(text);
             }
+
             return sb.ToString().Trim();
         }
 
