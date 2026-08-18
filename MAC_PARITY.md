@@ -49,20 +49,26 @@ wrong before, which is usually the part worth keeping.
 
 ---
 
-## Before anything else: two Mac commits exist only on the Windows machine
+## Read this before trusting the table above
 
-The Mac checkout on the Windows desktop is two commits ahead of GitHub, and
-neither was ever pushed:
+The feature table was produced by reading a copy of the Mac source that sits on
+the Windows machine, and that copy is stale. It is not where the Mac app is
+developed; the working code lives on the Mac itself. So the table describes
+some older state of the Mac app, and every row of it may be wrong.
 
-```
-ba7f2ba  Add Mac region capture and technical answer structure
-9b067c4  Add Mac preflight checks and reconnect backoff
-```
+It is kept because it is a useful starting list of things to check, and useless
+as a statement of fact. **Verify each row against the Mac code before acting on
+it.** Where a row is wrong, correct this file.
 
-GitHub's newest Mac commit is 2026-08-07. Cloning the repo on the Mac machine
-gets neither of these, and the region capture work is one of them. Push them
-from the Windows machine first, or that work gets rebuilt from scratch or
-concluded never to have happened.
+The same caution applies to the sections below where they say the Mac app lacks
+something. What the Mac app actually has is a question only the Mac machine can
+answer.
+
+One concrete symptom of the split: that stale Windows-side copy is two commits
+ahead of GitHub, and GitHub's newest Mac commit is 2026-08-07. Neither of those
+is necessarily what the Mac machine holds. Do not push from the Windows copy to
+resolve it; find out what the Mac has first, since pushing a stale branch over
+newer work is the one outcome worse than the confusion.
 
 ---
 
