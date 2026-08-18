@@ -617,6 +617,20 @@ namespace InterviewCopilot
                 sb.AppendLine(Truncate(resumeFacts, 4_500));
                 sb.AppendLine("Use only facts and numbers present above. If a detail is absent, speak qualitatively.");
                 sb.AppendLine();
+                sb.AppendLine("The employers listed above are the only ones this candidate has worked");
+                sb.AppendLine("for. Name no other company as somewhere they worked, ever, in any");
+                sb.AppendLine("answer or example. Asked what came before a role you cannot place,");
+                sb.AppendLine("say which of the roles above you mean, or ask which one they mean.");
+                sb.AppendLine("Asked about a company that is not listed, say you did not work there.");
+                sb.AppendLine();
+                sb.AppendLine("This is not hypothetical. Asked what came before Macy's, the answer");
+                sb.AppendLine("began \"I spent one year at Uber\", and a later answer described work");
+                sb.AppendLine("in \"Uber's real-time dispatch system\". There is no Uber above. An");
+                sb.AppendLine("interviewer holding the CV sees a company that is not on it.");
+                sb.AppendLine();
+                sb.AppendLine("A technical example needs no employer. \"In a dispatch system\" is");
+                sb.AppendLine("safe and makes the same point; \"at Uber\" is a claim about their life.");
+                sb.AppendLine();
             }
             else
             {
@@ -709,10 +723,22 @@ namespace InterviewCopilot
             sb.AppendLine("  followed by 4 to 6 short lines, each opening with the character • and");
             sb.AppendLine("  one space, never a hyphen and never an asterisk, and each a different");
             sb.AppendLine("  thing that could be added if the interviewer wants");
-            sb.AppendLine("  depth: a specific example, a trade-off, a number, an edge case, what you");
-            sb.AppendLine("  would do differently. Not a summary of the answer above, and not a");
+            sb.AppendLine("  depth: a trade-off, an edge case, a decision and why it was made, what");
+            sb.AppendLine("  you would do differently. Not a summary of the answer above, and not a");
             sb.AppendLine("  continuation of the same sentence. Each one has to stand on its own as");
             sb.AppendLine("  something worth saying next.");
+            sb.AppendLine();
+            sb.AppendLine("  These bullets invent nothing. No percentage, no metric, no team size,");
+            sb.AppendLine("  no salary, no employer, no project name, unless that exact detail sits");
+            sb.AppendLine("  in the verified facts above.");
+            sb.AppendLine();
+            sb.AppendLine("  This section asked for \"a number\" once, and produced \"reduced runtime");
+            sb.AppendLine("  by 40%\", \"cut hallucinations by 70%\", a team of six, and a salary");
+            sb.AppendLine("  range, none of which the candidate had ever said. They would have read");
+            sb.AppendLine("  those out to someone holding their CV.");
+            sb.AppendLine();
+            sb.AppendLine("  Where a real figure belongs and none is known, write it so they can");
+            sb.AppendLine("  complete it: \"we handled about [your number] a day\".");
             sb.AppendLine();
             sb.AppendLine("  Skip MORE TO SAY entirely for greetings, small talk, yes/no logistics,");
             sb.AppendLine("  and anything already answered in one sentence. There is nothing to add");
@@ -999,7 +1025,11 @@ namespace InterviewCopilot
                 "yes/no, add a blank line, the words MORE TO SAY on their own " +
                 "line, and 4 to 6 lines of what you could add if pushed, each " +
                 "beginning with the bullet character and a space. " +
-                "That section is the only place bullets belong.\n\n" +
+                "That section is the only place bullets belong.\n" +
+                "Nothing in either part may be invented: no employer, percentage, " +
+                "metric, team size, salary or project name that is not in the " +
+                "verified facts. Where a figure belongs and none is known, write " +
+                "[your number] rather than choosing one.\n\n" +
                 contextNote +
                 BuildScreenContextNote() +
                 historyHint +
