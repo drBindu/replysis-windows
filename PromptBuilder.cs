@@ -805,34 +805,47 @@ namespace InterviewCopilot
             // Conflict push: interviewer is asserting a different value than what's locked.
             // ALWAYS MICRO — hold your ground in 1-2 sentences, no bullets, no elaboration.
             if (HasLockedConflict(question))
-                return "1-2 short sentences. NO bullets. Politely correct, restate your locked answer. " +
+                return "1-2 short sentences. Politely correct, restate your locked answer. " +
                        "Example: 'Actually I said Python earlier, that's still my answer.' Don't justify.";
 
             // Drill-down always short — cite exact prior specifics
             if (isDrillDown)
-                return "1-2 short sentences. NO bullets. CITE the exact specifics from your earlier answer " +
+                return "1-2 short sentences. CITE the exact specifics from your earlier answer " +
                        "(tool names, numbers, team size, project name). Start with the fact itself. " +
                        "Never invent new contradicting facts.";
 
+            // None of these mention bullets, deliberately.
+            //
+            // They used to say "NO bullets" to keep a spoken answer from turning
+            // into a list, which the system prompt already requires. Sitting
+            // directly above the question, where the model looks hardest, it was
+            // read as forbidding the MORE TO SAY section as well, so a clean
+            // question like "how many years of experience do you have" came back
+            // with the answer and nothing to follow it. The same question with a
+            // messier transcript classified elsewhere and kept its depth, which
+            // is how it looked like a regression rather than a rule.
+            //
+            // The lengths below still hold the spoken answer short. That was the
+            // part worth keeping.
             string q = question.ToLower();
             switch (qType)
             {
                 case QuestionType.Preference:
                     return "2 natural spoken sentences. Give the preference directly, then one concise reason. " +
-                           "NO bullets and no long explanation.";
+                           "No long explanation.";
 
                 case QuestionType.YesNo:
                     if (q.Contains("stem") || q.Contains("visa") || q.Contains("sponsorship"))
-                        return "2-3 short sentences in plain language. NO bullets. Example: " +
+                        return "2-3 short sentences in plain language. Example: " +
                                "'Yeah I'm on STEM OPT, so no sponsorship needed for the next two years.'";
                     if (q.Contains("relocat"))
-                        return "1 short sentence. NO bullets. Casual opener + Yes/No + openness.";
+                        return "1 short sentence. Casual opener + Yes/No + openness.";
                     if (q.Contains("background") || q.Contains("drug"))
-                        return "1 short sentence. NO bullets. Confident yes, no fluff.";
-                    return "1-2 short sentences. NO bullets. Direct answer + one detail.";
+                        return "1 short sentence. Confident yes, no fluff.";
+                    return "1-2 short sentences. Direct answer + one detail.";
 
                 case QuestionType.Availability:
-                    return "1 sentence. NO bullets. State notice period naturally. Example: " +
+                    return "1 sentence. State notice period naturally. Example: " +
                            "'I can give two weeks notice, could start the week after.'";
 
                 case QuestionType.Logistics:
@@ -840,7 +853,7 @@ namespace InterviewCopilot
                            "If they ask why or for a preference, give the answer plus one genuine reason, 2-3 sentences maximum.";
 
                 case QuestionType.Salary:
-                    return "2-3 sentences. NO bullets. State a range only when it appears in the resume or live hints. " +
+                    return "2-3 sentences. State a range only when it appears in the resume or live hints. " +
                            "Otherwise express flexibility and ask to consider the role scope and total package. Never invent a salary number.";
 
                 case QuestionType.Intro:
@@ -872,24 +885,24 @@ namespace InterviewCopilot
                            "P4: How it turned out (use a real number ONLY if your resume has one, otherwise describe it qualitatively). NEVER invent stats.";
 
                 case QuestionType.Weakness:
-                    return "2-3 SHORT paragraphs. NO bullets. Real weakness, no humble-brags. " +
+                    return "2-3 SHORT paragraphs. Real weakness, no humble-brags. " +
                            "Casual: 'honestly, I used to...' Mention steps + evidence of progress.";
 
                 case QuestionType.WhyRole:
-                    return "2-3 SHORT paragraphs. NO bullets. Name something CONCRETE about THIS company. " +
+                    return "2-3 SHORT paragraphs. Name something CONCRETE about THIS company. " +
                            "No generic 'I'm passionate about your mission' fluff.";
 
                 case QuestionType.Situational:
-                    return "2-3 SHORT paragraphs. NO bullets. P1: A real past situation. P2: How it applies. Concrete specifics.";
+                    return "2-3 SHORT paragraphs. P1: A real past situation. P2: How it applies. Concrete specifics.";
 
                 case QuestionType.ContextStatement:
-                    return "1-2 SHORT conversational sentences acknowledging what the interviewer shared. Do NOT launch into your own introduction. NO bullets.";
+                    return "1-2 SHORT conversational sentences acknowledging what the interviewer shared. Do NOT launch into your own introduction.";
 
                 case QuestionType.MemoryRecall:
                     return "1-2 SHORT sentences ONLY. Answer exactly what was asked. DO NOT add your own background. Stop there.";
 
                 case QuestionType.FollowUp:
-                    return "1-2 SHORT paragraphs. NO bullets. Add NEW detail only, never repeat prior content.";
+                    return "1-2 SHORT paragraphs. Add NEW detail only, never repeat prior content.";
 
                 default:
                     return "This is a general question, use your judgment. Read what the interviewer is ACTUALLY " +
