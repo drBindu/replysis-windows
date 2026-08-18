@@ -184,9 +184,24 @@ namespace InterviewCopilot
                     var entry = ParseMatch(match);
                     if (entry == null) continue;
 
-                    // Label is either the same line (minus dates) or the previous line
+                    // The label was taken from this line or the one above it, and
+                    // resumes very commonly put the employer on the line BELOW the
+                    // dates:
+                    //
+                    //     Role: Gen AI Engineer    April 2024 - Present
+                    //     UHG, Minneapolis, MN
+                    //
+                    // Looking only backwards captured the job title and left the
+                    // employer out, so asked to name the companies they had worked
+                    // for, the app could only offer the single one that happened to
+                    // be glued onto its own date line. Four employers were in the
+                    // document and absent from everything built out of it.
                     string label = t.Replace(match.Value, "").Trim().TrimEnd('|', '-', ' ');
                     if (label.Length < 3) label = lastHeader;
+
+                    string below = NextLineIfEmployer(lines, i);
+                    if (below.Length > 0)
+                        label = label.Length > 0 ? label + " | " + below : below;
 
                     entry.Label = label;
                     jobs.Add(entry);
@@ -197,6 +212,45 @@ namespace InterviewCopilot
             }
 
             return jobs;
+        }
+
+
+        /// <summary>
+        /// The line after a date range, when it reads like an employer rather
+        /// than the start of the duties.
+        ///
+        /// Deliberately cautious: a wrong employer attached to a role is worse
+        /// than none, because the candidate would read it out. Section headings
+        /// and bullet lists are excluded, and anything long enough to be a
+        /// sentence is left alone.
+        /// </summary>
+        private static readonly string[] NotAnEmployer =
+        {
+            "responsibilit", "environment", "duties", "description", "project",
+            "client", "technolog", "skills", "achievement", "summary", "role:",
+        };
+
+        private static string NextLineIfEmployer(string[] lines, int dateLineIndex)
+        {
+            for (int j = dateLineIndex + 1; j < lines.Length && j <= dateLineIndex + 2; j++)
+            {
+                string next = lines[j].Trim();
+                if (next.Length == 0) continue;
+
+                // Bullets and long lines are the work, not the employer.
+                if (next.Length > 80) return "";
+                if (next[0] is '•' or '-' or '*' or '●') return "";
+
+                string lower = next.ToLowerInvariant();
+                foreach (string word in NotAnEmployer)
+                    if (lower.StartsWith(word)) return "";
+
+                // A second date range means the next job began; this is not an employer.
+                if (DatePattern.IsMatch(next)) return "";
+
+                return next.TrimEnd('.', ',', ' ');
+            }
+            return "";
         }
 
         private static JobEntry? ParseMatch(Match m)
