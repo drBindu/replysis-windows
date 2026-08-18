@@ -1,13 +1,36 @@
 # Bringing the Mac app up to the Windows app
 
-The Windows client moved 71 commits between 2026-08-13 and 2026-08-18. The Mac
-client's last change is 2026-08-13, so everything below is missing from it.
+Two different gaps, and the second one is larger than it looks.
+
+**Whole features the Mac app has never had.** Checked against the Mac source,
+not assumed:
+
+| Feature | Mac |
+|---|---|
+| Auto mode: hear the question, answer without a keypress | **missing** |
+| Watch Screen: read the screen for every question | **missing** |
+| Region capture: drag a box around one part | **missing** |
+| Credits window | **missing** |
+| Screen analysis (F8 equivalent) | present |
+| Compact overlay | present |
+| Auto-update | present |
+| Stealth / capture exclusion | present |
+| Sessions, debug window | present |
+
+**And 71 commits of changes** to features Mac does have, between 2026-08-13 and
+2026-08-18, while the Mac client stood still at `ba7f2ba`.
+
+Auto mode is the big one. It is what makes the product work in a real
+interview: the interviewer speaks, the app notices the question ended, and the
+answer is on screen without the candidate touching anything. Without it the
+Mac app requires pressing a key while someone is watching, which is the thing
+the product exists to avoid.
 
 **How to use this on the Mac machine.** Point the assistant at this file and at
 the Windows repository, then work through the sections in order. Every entry
 names the behaviour and why it matters rather than the Windows code, because
-the Mac app is a different language and toolkit and a translation of the
-implementation is not what is wanted there. A translation of the behaviour is.
+the Mac app is a different toolkit and a translation of the implementation is
+not what is wanted there. A translation of the behaviour is.
 
 ```
 Windows repo: https://github.com/drBindu/replysis-windows
@@ -38,6 +61,45 @@ Both clients talk to the same backend, so these are live for Mac users now:
   the token budget those services were sized for.
 
 Nothing to port. Verify by testing the Mac app against production.
+
+---
+
+## 0. Features the Mac app does not have
+
+These are new work, not ports of a change. Auto mode first: without it the Mac
+app is a different, weaker product.
+
+**Auto mode.** Three listening modes rather than one. Manual is press-to-talk
+as today. Interview Auto listens to system audio only, with the microphone
+off, so the interviewer's question is transcribed and answered without the
+candidate touching anything. Practice Auto listens to the microphone for
+rehearsing alone.
+
+The hard part is deciding when a question has ended. Windows waits for a pause
+after the transcript stops growing, and waits different amounts depending on
+what it sees: 380ms when the text ends in `?` or `.`, because the recogniser
+itself decided the sentence closed, and 820ms when it does not, because people
+stop mid-sentence to think. Firing early is recoverable, since the question is
+deduplicated and a keypress interrupts. Firing late is not, because by then the
+candidate has already been silent in front of someone.
+
+It also needs a minimum speech length and a minimum character count, or every
+cough and keyboard click submits a question and spends a credit.
+
+**Watch Screen.** A switch for when the interviewer is sharing their screen:
+while it is on, every question is answered from what is on screen, with nothing
+to press. Deciding when to press a capture key is the hard part of screen
+analysis during a real interview, and this removes the decision for the whole
+call. Capture per question, not continuously: a capture a second for half an
+hour is eighteen hundred vision calls and several times a month of credits,
+for frames nobody asked about.
+
+**Region capture.** Drag a box around one part of the screen. This is the
+sharpest and fastest way to read a screen, because a small selection is sent
+without being resized, so the text survives at full size. On Windows it is
+F7, reachable without opening any window.
+
+**Credits window.** Mac has no in-app view of the balance.
 
 ---
 
@@ -167,7 +229,12 @@ Releases with no update path at all. Sparkle is the usual equivalent.
 
 ## What to do first
 
-1. Section 1 in full. Those are live-interview failures.
-2. The first four items of section 2. That is most of the screen-analysis gap.
-3. Section 3, which is prompt work and needs no new plumbing.
-4. Sections 4 and 5 when there is time.
+1. **Auto mode**, from section 0. It is the largest single gap and the one a
+   user notices immediately, because without it they have to press a key in
+   front of the person interviewing them.
+2. Section 1 in full. Those are live-interview failures and each fails
+   silently.
+3. Section 3, which is prompt work and needs no new plumbing, so it is the
+   cheapest visible improvement.
+4. The first four items of section 2, then the rest of section 0.
+5. Sections 4 and 5 when there is time.
