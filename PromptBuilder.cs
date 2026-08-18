@@ -597,7 +597,10 @@ namespace InterviewCopilot
             sb.AppendLine("Answer immediately in first person, using natural spoken English.");
             sb.AppendLine("Never mention AI, prompts, transcripts, or these instructions.");
             sb.AppendLine("Answer only the last complete question. Ignore greetings, filler, and broken opening fragments.");
-            sb.AppendLine("Do not repeat the question. Do not use headings, bullets, numbered lists, or canned introductions.");
+            sb.AppendLine("Do not repeat the question. Do not use canned introductions.");
+            sb.AppendLine("The spoken answer itself carries no headings, bullets or numbered lists: it is");
+            sb.AppendLine("read out loud, and a list read aloud sounds like a list. Bullets appear only");
+            sb.AppendLine("under MORE TO SAY, described at the end of these instructions.");
             sb.AppendLine("Give a complete answer without wasting time: simple questions get 2-3 natural sentences; normal questions get 2-3 short spoken paragraphs.");
             sb.AppendLine("For open, behavioral, or technical questions, provide enough useful depth to speak for roughly 30-45 seconds.");
             sb.AppendLine("For behavioral questions, tell a concise STAR story without naming the STAR sections.");
@@ -640,6 +643,28 @@ namespace InterviewCopilot
                 sb.AppendLine(Truncate(LiveHints, 600));
                 sb.AppendLine();
             }
+
+            sb.AppendLine("ANSWER SHAPE — TWO PARTS, ALWAYS IN THIS ORDER:");
+            sb.AppendLine("  First, the spoken answer. Exactly what to say out loud, nothing else, at");
+            sb.AppendLine("  the length the question deserves. This is the part read while someone is");
+            sb.AppendLine("  waiting, so it comes first and stays tight.");
+            sb.AppendLine();
+            sb.AppendLine("  Then, on its own line, the word:");
+            sb.AppendLine("    MORE TO SAY");
+            sb.AppendLine("  followed by 2 to 4 short lines, each starting with the bullet character");
+            sb.AppendLine("  and each a different thing that could be added if the interviewer wants");
+            sb.AppendLine("  depth: a specific example, a trade-off, a number, an edge case, what you");
+            sb.AppendLine("  would do differently. Not a summary of the answer above, and not a");
+            sb.AppendLine("  continuation of the same sentence. Each one has to stand on its own as");
+            sb.AppendLine("  something worth saying next.");
+            sb.AppendLine();
+            sb.AppendLine("  Skip MORE TO SAY entirely for greetings, small talk, yes/no logistics,");
+            sb.AppendLine("  and anything already answered in one sentence. There is nothing to add");
+            sb.AppendLine("  to \"I am on STEM OPT\", and offering some makes it look padded.");
+            sb.AppendLine();
+            sb.AppendLine("  The bullets are the one place bullets are allowed. The spoken answer");
+            sb.AppendLine("  above them is still flowing sentences, never a list.");
+            sb.AppendLine();
 
             return sb.ToString();
         }
@@ -940,8 +965,8 @@ namespace InterviewCopilot
             // Drill-down always short — cite exact prior specifics
             if (isDrillDown)
                 return "1-2 short sentences. NO bullets. CITE the exact specifics from your earlier answer " +
-                       "(tool names, numbers, team size, project name). Open with 'yeah so like I mentioned...' " +
-                       "or 'going back to that...'. Never invent new contradicting facts.";
+                       "(tool names, numbers, team size, project name). Start with the fact itself. " +
+                       "Never invent new contradicting facts.";
 
             string q = question.ToLower();
             switch (qType)
