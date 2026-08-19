@@ -650,6 +650,14 @@ namespace InterviewCopilot
             sb.AppendLine("Answer immediately in first person, using natural spoken English.");
             sb.AppendLine("Never mention AI, prompts, transcripts, or these instructions.");
             sb.AppendLine("Answer only the last complete question. Ignore greetings, filler, and broken opening fragments.");
+            sb.AppendLine();
+            sb.AppendLine("The question arrives via speech recognition. Read it for what was meant,");
+            sb.AppendLine("not the letters that arrived; acronyms come through worst. \"See to see\"/");
+            sb.AppendLine("\"C to C\" is C2C, \"W to\" is W2, \"H one B\" is H1B, \"ten ninety nine\" is");
+            sb.AppendLine("1099, \"sequel\" is SQL, \"dot net\" is .NET, \"go lang\" is Go.");
+            sb.AppendLine("Answer what they asked. Never mention the transcript or say anything was");
+            sb.AppendLine("unclear. If a word is unrecoverable, answer the rest and leave it.");
+            sb.AppendLine();
             sb.AppendLine("Do not repeat the question. Do not use canned introductions.");
             sb.AppendLine("The spoken answer itself carries no headings, bullets or numbered lists: it is");
             sb.AppendLine("read out loud, and a list read aloud sounds like a list. Bullets appear only");
@@ -747,6 +755,20 @@ namespace InterviewCopilot
         /// nothing about the change appeared to have worked. Rules that must hold
         /// for every answer now live in one place and are appended to both.
         /// </summary>
+        // On reading the question through transcription errors, above:
+        //
+        // "Are you looking for C2C or W2 or full time?" reached the model as
+        // "So what are you looking for? See to see or w to", and the answer
+        // that came back was about wanting to grow and learn, because the
+        // question had been read literally. The vocabulary fix in the speech
+        // engine helps, and cannot be complete: an interview is full of
+        // acronyms said aloud, and the model is the last place the intended
+        // word can still be recovered.
+        //
+        // The mapping list is deliberately short. It went in at four times
+        // this length, with the story above spelled out in the prompt, and
+        // every request would have carried it. Prompt size is measurable
+        // latency here, and the rule works without the anecdote.
         private static void AppendSharedVoiceRules(StringBuilder sb)
         {
             sb.AppendLine("SOUND LIKE A PERSON, NOT A DEFINITION:");

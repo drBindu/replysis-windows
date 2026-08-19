@@ -114,6 +114,9 @@ namespace InterviewCopilot
         // arriving. Empty except between recognising a continuation and sending it.
         private string _autoContinuationPrefix = "";
 
+        // The tail last joined on, so the same one cannot be joined on twice.
+        private string _lastAutoSubmittedFragment = "";
+
         // The longest gap this speaker has left in the MIDDLE of the current turn.
         // Used to tell a slow talker's pause from the end of their question.
         private double _autoLongestMidTurnGapMs = 0;
@@ -1487,10 +1490,6 @@ namespace InterviewCopilot
 
             var now = DateTime.UtcNow;
 
-            // Anything arriving in the transcript is somebody speaking.
-            if (_autoTranscriptChangedUtc > _lastSpeechHeardUtc)
-                _lastSpeechHeardUtc = _autoTranscriptChangedUtc;
-
             if (now - _lastSpeechHeardUtc >= IdleListeningTimeout)
             {
                 DebugWindow.Log("METER",
@@ -1580,6 +1579,25 @@ namespace InterviewCopilot
                 }
             }
             catch (Exception ex) { DebugWindow.Log("METER", $"Allowance fetch failed: {ex.Message}"); }
+        }
+
+        /// <summary>Best-effort final report, on the way out.</summary>
+        private void FlushListeningMeterOnExit()
+        {
+            try
+            {
+                if (_listeningSinceUtc != DateTime.MinValue)
+                {
+                    _unreportedListeningSeconds += (DateTime.UtcNow - _listeningSinceUtc).TotalSeconds;
+                    _listeningSinceUtc = DateTime.MinValue;
+                }
+                if (_unreportedListeningSeconds < 30) return;
+
+                int minutes = Math.Max(1, (int)Math.Round(_unreportedListeningSeconds / 60.0));
+                _unreportedListeningSeconds = 0;
+                ReportListeningMinutesAsync(minutes).Wait(TimeSpan.FromMilliseconds(1_500));
+            }
+            catch { }
         }
 
         private async Task ReportListeningMinutesAsync(int minutes)
@@ -1760,12 +1778,26 @@ namespace InterviewCopilot
             bool isContinuation = LooksLikeContinuation(candidateQuestion, now);
             bool isCompleteQuestion = isContinuation ||
                                       IsLikelyCompleteAutomaticQuestion(candidateQuestion);
-            bool isRecentDuplicate = !isContinuation &&
-                                     string.Equals(
-                                         candidateQuestion,
-                                         _lastAutoSubmittedQuestion,
-                                         StringComparison.OrdinalIgnoreCase) &&
-                                     now - _lastAutoSubmitUtc < TimeSpan.FromSeconds(12);
+            // A continuation skips the duplicate check against the merged
+            // question, since the tail never equals it. It still needs one of
+            // its own: HandleSpaceUp has early exits that release the latch
+            // without clearing the transcript, and the very same tail would
+            // then be seen again, still inside the window, and joined on a
+            // second time. "...and full time. And full time."
+            bool isRepeatedFragment = isContinuation &&
+                                      string.Equals(
+                                          candidateQuestion,
+                                          _lastAutoSubmittedFragment,
+                                          StringComparison.OrdinalIgnoreCase) &&
+                                      now - _lastAutoSubmitUtc < TimeSpan.FromSeconds(12);
+
+            bool isRecentDuplicate = isRepeatedFragment ||
+                                     (!isContinuation &&
+                                      string.Equals(
+                                          candidateQuestion,
+                                          _lastAutoSubmittedQuestion,
+                                          StringComparison.OrdinalIgnoreCase) &&
+                                      now - _lastAutoSubmitUtc < TimeSpan.FromSeconds(12));
             if (!isCompleteQuestion || isRecentDuplicate)
             {
                 if (!isCompleteQuestion &&
@@ -1812,6 +1844,7 @@ namespace InterviewCopilot
 
             _autoTurnSubmitting = true;
             _autoContinuationPrefix = isContinuation ? _lastAutoSubmittedQuestion : "";
+            _lastAutoSubmittedFragment = isContinuation ? candidateQuestion : "";
             _lastAutoSubmittedQuestion = isContinuation
                 ? MergeContinuation(_lastAutoSubmittedQuestion, candidateQuestion)
                 : candidateQuestion;
@@ -3008,8 +3041,12 @@ namespace InterviewCopilot
             else if (isListening) { c = Colors.LimeGreen; label = "LISTENING"; }
             else if (!_engineOnline && UserSession.SpeechmaticsLastStatusCode == 402)
             {
+                // Two limits, two messages. "NO CREDITS" beside a badge showing
+                // two thousand credits reads as a bug rather than a limit.
                 c = Color.FromRgb(239, 68, 68);
-                label = "NO CREDITS";
+                label = UserSession.SpeechmaticsOutOfListeningTime
+                    ? "NO LISTENING TIME"
+                    : "NO CREDITS";
             }
             else if (!_engineOnline && UserSession.SpeechmaticsLastStatusCode == 401)
             {
@@ -3139,6 +3176,13 @@ namespace InterviewCopilot
                     TranscriptScroll.ScrollToBottom();
                     if (_isCameraMode && answerWindow != null)
                         answerWindow.UpdateQuestion(text);
+
+                    // Speech arriving is speech arriving, whichever mode is on.
+                    // The idle timer used to read _autoTranscriptChangedUtc, which
+                    // only Auto winds, so in Press Space mode it saw silence while
+                    // somebody was talking and would cut the microphone off three
+                    // minutes into a long answer.
+                    _lastSpeechHeardUtc = DateTime.UtcNow;
 
                     if (AutoModeEnabled)
                     {
@@ -4622,6 +4666,18 @@ namespace InterviewCopilot
             _engineMonitorTimer?.Stop();
             _sessionTimer?.Stop();
             _autoModeNoticeTimer?.Stop();
+            _listeningMeterTimer?.Stop();
+
+            // Listening time accumulates between reports, and closing the app
+            // mid-interview would have thrown that away. Reporting as you go
+            // was meant to stop exactly this, and the last minute was the one
+            // case still going unpaid: closing the window is the most likely
+            // moment for it, not the least.
+            //
+            // Bounded, because a shutdown must not hang on a network call. If
+            // it does not land in a second and a half the minute is lost, which
+            // is the same as before and no worse.
+            FlushListeningMeterOnExit();
 
             // The job-context save is debounced by 500ms, so an edit typed just
             // before closing is still sitting in that window. Flush it before

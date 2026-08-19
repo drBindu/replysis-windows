@@ -53,6 +53,18 @@ namespace InterviewCopilot
         private static DateTime _speechmaticsRetryAfterUtc = DateTime.MinValue;
         private static DateTime _speechmaticsExpiresAtUtc = DateTime.MinValue;
         public static int SpeechmaticsLastStatusCode { get; private set; }
+
+        /// <summary>
+        /// Why a 402 came back, since there are now two reasons and they need
+        /// different words.
+        ///
+        /// Credits meter questions and listening time meters the microphone,
+        /// and either can run out first. Both arrive as 402, so without this
+        /// somebody who had spent their thirty hours but still had two thousand
+        /// credits was told "NO CREDITS" while the badge showed those credits.
+        /// A message that contradicts the screen beside it is worse than none.
+        /// </summary>
+        public static bool SpeechmaticsOutOfListeningTime { get; private set; }
         public static DateTime SpeechmaticsRetryAfterUtc
         {
             get { lock (_smKeyLock) return _speechmaticsRetryAfterUtc; }
@@ -127,6 +139,19 @@ namespace InterviewCopilot
                         return false;
                     }
 
+                    if ((int)res.StatusCode == 402)
+                    {
+                        // The backend names which limit was hit. Anything else
+                        // stays "credits", which is what it was before both
+                        // limits existed.
+                        bool audioLimit = body.Contains("audio-limit", StringComparison.OrdinalIgnoreCase)
+                                       || body.Contains("listening time", StringComparison.OrdinalIgnoreCase);
+                        lock (_smKeyLock) SpeechmaticsOutOfListeningTime = audioLimit;
+                        DebugWindow.Log("STT_KEY", audioLimit
+                            ? "402: monthly listening time used up"
+                            : "402: out of credits");
+                    }
+
                     lock (_smKeyLock)
                         _speechmaticsRetryAfterUtc = DateTime.UtcNow.AddSeconds(30);
                     DebugWindow.Log("STT_KEY", $"HTTP {(int)res.StatusCode}: {body[..Math.Min(body.Length, 120)]}");
@@ -152,6 +177,7 @@ namespace InterviewCopilot
                     _speechmaticsExpiresAtUtc = DateTime.UtcNow.AddSeconds(expiresIn);
                     _speechmaticsRetryAfterUtc = DateTime.MinValue;
                     SpeechmaticsLastStatusCode = 0;
+                    SpeechmaticsOutOfListeningTime = false;
                 }
                 SaveCachedSpeechmaticsKey();
                 DebugWindow.Log("STT_KEY", $"Temporary key fetched; valid for {expiresIn} seconds");
