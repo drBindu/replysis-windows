@@ -488,7 +488,7 @@
                             <Border x:Name="AutoModePill" Style="{StaticResource ToolbarPill}"
                                     Margin="8,0,0,0"
                                     MouseLeftButtonDown="AutoModePill_Click"
-                                    ToolTip="Choose Manual, Interview Auto or Practice Auto">
+                                    ToolTip="Choose how the question reaches the app: you press a key, a real interview, or practising alone">
                                 <Border.Effect>
                                     <DropShadowEffect x:Name="AutoModeGlow" BlurRadius="11" ShadowDepth="0"
                                                       Opacity="0" Color="#34E08A"/>
@@ -1104,7 +1104,7 @@
                                 <StackPanel>
                                     <TextBlock Text="LISTENING MODE" Foreground="#6F8198" FontSize="9.5"
                                                FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Choose how each question starts"
+                                    <TextBlock Text="How does the question reach the app?"
                                                Foreground="#C6D4E8" FontSize="11.5" FontWeight="SemiBold"
                                                FontFamily="Segoe UI" Margin="0,3,0,0"/>
                                 </StackPanel>
@@ -1144,9 +1144,9 @@
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Manual" Foreground="#EEF4FB" FontSize="12.5"
+                                        <TextBlock Text="I'll press a key" Foreground="#EEF4FB" FontSize="12.5"
                                                    FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Press Space to listen, then Space to answer"
+                                        <TextBlock Text="Press Space to listen, Space again for the answer"
                                                    Foreground="#7F93AB" FontSize="10.5" FontWeight="SemiBold"
                                                    FontFamily="Segoe UI" Margin="0,2,0,0"/>
                                     </StackPanel>
@@ -1182,9 +1182,9 @@
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Interview Auto" Foreground="#E9FFF2" FontSize="12.5"
+                                        <TextBlock Text="Real interview" Foreground="#E9FFF2" FontSize="12.5"
                                                    FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Meeting audio only · microphone stays off"
+                                        <TextBlock Text="They speak, the answer appears. You press nothing. Hears the meeting, not your microphone."
                                                    Foreground="#80B89A" FontSize="10.5" FontWeight="SemiBold"
                                                    FontFamily="Segoe UI" Margin="0,2,0,0"/>
                                     </StackPanel>
@@ -1221,9 +1221,9 @@
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Practice Auto" Foreground="#E8FBFF" FontSize="12.5"
+                                        <TextBlock Text="Practising alone" Foreground="#E8FBFF" FontSize="12.5"
                                                    FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Ask with your voice · no meeting required"
+                                        <TextBlock Text="You speak, the answer appears. No interviewer needed."
                                                    Foreground="#78B8C8" FontSize="10.5" FontWeight="SemiBold"
                                                    FontFamily="Segoe UI" Margin="0,2,0,0"/>
                                     </StackPanel>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -87,11 +87,11 @@ namespace InterviewCopilot
             if (_autoModeActive)
             {
                 AutoModeAudioNoticeTitle.Text = _autoModeUsesMic
-                    ? "PRACTICE AUTO ACTIVE"
-                    : "INTERVIEW AUTO ACTIVE";
+                    ? "PRACTISING ALONE IS ON"
+                    : "REAL INTERVIEW IS ON";
                 AutoModeAudioNoticeBody.Text = _autoModeUsesMic
-                    ? "Your microphone is temporarily included so you can ask questions without a meeting. Your saved manual choice is unchanged."
-                    : "System audio only is temporarily active for meeting questions. Your microphone stays off and your saved manual choice is unchanged.";
+                    ? "Your microphone is included while this mode is on, so you can ask questions with no interviewer. The choice you saved here is unchanged."
+                    : "This mode hears the meeting only, so your microphone stays off. The choice you saved here is unchanged.";
             }
             CloudSyncCheckBox.IsChecked = cfg.CloudSyncEnabled;
             StealthCheckBox.IsChecked   = cfg.StealthMode;
