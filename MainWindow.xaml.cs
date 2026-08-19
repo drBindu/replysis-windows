@@ -1390,6 +1390,177 @@ namespace InterviewCopilot
             HandleSpaceDown("AUTO");
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        // LISTENING TIME
+        //
+        // Credits count questions. Speechmatics charges by the hour of audio,
+        // and nothing was counting that, so the expensive half of the bill was
+        // invisible: a microphone left open all afternoon cost real money and
+        // showed up nowhere.
+        //
+        // Two halves. This side measures the time and reports it as it goes,
+        // rather than at the end, because an app that is closed, crashes or
+        // loses its connection would otherwise have listened for free. The
+        // server keeps the running total and refuses a new speech token once
+        // the month's allowance is gone.
+        //
+        // And the mic switches itself off after a long silence. Most of the
+        // waste will never be anybody being greedy, it will be somebody who
+        // opened the app and went to lunch, and an empty room costs the same
+        // per hour as an interview.
+        // ══════════════════════════════════════════════════════════════════════
+        private static readonly TimeSpan ListeningReportInterval = TimeSpan.FromMinutes(1);
+
+        /// <summary>
+        /// How long a silence has to run before the microphone gives up.
+        ///
+        /// Three minutes, because in a real interview somebody speaks every few
+        /// seconds and even a long thinking pause is well under a minute. It is
+        /// meant to catch an empty room, never a person deciding what to say.
+        /// </summary>
+        private static readonly TimeSpan IdleListeningTimeout = TimeSpan.FromMinutes(3);
+
+        private DispatcherTimer? _listeningMeterTimer;
+        private DateTime _listeningSinceUtc = DateTime.MinValue;
+        private DateTime _lastSpeechHeardUtc = DateTime.MinValue;
+        private double _unreportedListeningSeconds;
+        private int _audioMinutesRemaining = -1;   // -1 = unknown or unlimited
+
+        private void StartListeningMeter()
+        {
+            _listeningSinceUtc  = DateTime.UtcNow;
+            _lastSpeechHeardUtc = DateTime.UtcNow;
+
+            if (_listeningMeterTimer == null)
+            {
+                _listeningMeterTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                _listeningMeterTimer.Tick += (_, _) => ListeningMeterTick();
+            }
+            _listeningMeterTimer.Start();
+        }
+
+        private void StopListeningMeter()
+        {
+            _listeningMeterTimer?.Stop();
+            if (_listeningSinceUtc != DateTime.MinValue)
+            {
+                _unreportedListeningSeconds += (DateTime.UtcNow - _listeningSinceUtc).TotalSeconds;
+                _listeningSinceUtc = DateTime.MinValue;
+            }
+            // Anything past half a minute still counts. Rounding every short
+            // turn down to nothing would make an interview of brief exchanges
+            // free, which is the opposite of what the meter is for.
+            if (_unreportedListeningSeconds >= 30)
+            {
+                int minutes = Math.Max(1, (int)Math.Round(_unreportedListeningSeconds / 60.0));
+                _unreportedListeningSeconds = 0;
+                _ = ReportListeningMinutesAsync(minutes);
+            }
+        }
+
+        private void ListeningMeterTick()
+        {
+            if (!isListening) { StopListeningMeter(); return; }
+
+            var now = DateTime.UtcNow;
+
+            // Anything arriving in the transcript is somebody speaking.
+            if (_autoTranscriptChangedUtc > _lastSpeechHeardUtc)
+                _lastSpeechHeardUtc = _autoTranscriptChangedUtc;
+
+            if (now - _lastSpeechHeardUtc >= IdleListeningTimeout)
+            {
+                DebugWindow.Log("METER",
+                    $"No speech for {IdleListeningTimeout.TotalMinutes:0} minutes; stopping the microphone.");
+                StopForIdle();
+                return;
+            }
+
+            if (_listeningSinceUtc != DateTime.MinValue)
+            {
+                _unreportedListeningSeconds += (now - _listeningSinceUtc).TotalSeconds;
+                _listeningSinceUtc = now;
+            }
+
+            if (_unreportedListeningSeconds >= ListeningReportInterval.TotalSeconds)
+            {
+                int minutes = (int)(_unreportedListeningSeconds / 60);
+                _unreportedListeningSeconds -= minutes * 60.0;
+                _ = ReportListeningMinutesAsync(minutes);
+            }
+        }
+
+        /// <summary>
+        /// Ends a listening session nobody is using, and says so plainly.
+        ///
+        /// Silently muting would be worse than the waste it prevents: someone
+        /// coming back to the app would speak into a microphone they believed
+        /// was on. So it stops, explains, and says how to start again.
+        /// </summary>
+        private void StopForIdle()
+        {
+            StopListeningMeter();
+            isListening = false;
+            isMuted = true;
+            WritePauseFlag();
+            if (AutoModeEnabled) _autoTurnSubmitting = false;
+
+            AiAnswerBox.Text =
+                $"The microphone switched off after {IdleListeningTimeout.TotalMinutes:0} minutes of silence, "
+                + "so your listening time is not spent on an empty room. Press Space to start again.";
+            if (answerWindow != null) answerWindow.UpdateAnswer(AiAnswerBox.Text);
+            UpdateMicUi();
+        }
+
+        private async Task ReportListeningMinutesAsync(int minutes)
+        {
+            if (minutes <= 0) return;
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Post,
+                    $"{BackendUrl}/api/v1/usage/listening");
+                if (!string.IsNullOrEmpty(UserSession.IdToken))
+                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
+                req.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
+                req.Content = new StringContent("{\"minutes\":" + minutes + "}",
+                    System.Text.Encoding.UTF8, "application/json");
+
+                using var res = await _creditsClient.SendAsync(req);
+                if (!res.IsSuccessStatusCode)
+                {
+                    DebugWindow.Log("METER", $"Report failed: HTTP {(int)res.StatusCode}");
+                    return;
+                }
+
+                string body = await res.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("remainingMinutes", out var rem))
+                {
+                    _audioMinutesRemaining = rem.GetInt32();
+                    DebugWindow.Log("METER", $"Reported {minutes} min; {_audioMinutesRemaining} left this month.");
+                    WarnIfListeningTimeLow();
+                }
+            }
+            catch (Exception ex) { DebugWindow.Log("METER", $"Report error: {ex.Message}"); }
+        }
+
+        /// <summary>
+        /// Warns before the allowance runs out, not once it already has.
+        ///
+        /// Transcription stopping without warning in the middle of an interview
+        /// is the worst possible way to learn a limit exists.
+        /// </summary>
+        private void WarnIfListeningTimeLow()
+        {
+            if (_audioMinutesRemaining < 0) return;   // unlimited, or not known yet
+            if (_audioMinutesRemaining > 15) return;
+
+            Dispatcher.Invoke(() => ShowListeningModeNotice(
+                _audioMinutesRemaining <= 0
+                    ? "LISTENING TIME USED UP"
+                    : $"{_audioMinutesRemaining} MIN LEFT THIS MONTH"));
+        }
+
         private void ResetAutoTurnDetection()
         {
             _autoTurnSubmitting = false;
@@ -1784,6 +1955,7 @@ namespace InterviewCopilot
                 if (answerWindow != null) answerWindow.UpdateQuestion("");
                 DeletePauseFlag();
                 DebugWindow.Log("MIC", $"[{source}] UNMUTED — listening");
+                StartListeningMeter();
                 if (AutoModeEnabled) ResetAutoTurnDetection();
                 UpdateMicUi();
             }
@@ -1819,6 +1991,7 @@ namespace InterviewCopilot
                 if (heldMs < 200)
                 {
                     DebugWindow.Log("MIC", $"[{source}] Quick space tap ignored ({heldMs}ms) — re-muting");
+                    StopListeningMeter();
                     isListening = false; WritePauseFlag(); isMuted = true;
                     ReleaseAutoLatch();
                     UpdateMicUi();
@@ -1833,6 +2006,7 @@ namespace InterviewCopilot
             // The clock the user actually experiences starts here, when they
             // stop speaking, not when the request is sent.
             _turnStopwatch = Stopwatch.StartNew();
+            StopListeningMeter();
             isListening = false; isMuted = true; _flushing = true;
             try { _aiCts?.Dispose(); } catch { }
             _aiCts = new System.Threading.CancellationTokenSource();
