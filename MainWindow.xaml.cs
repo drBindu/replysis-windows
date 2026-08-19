@@ -1919,6 +1919,22 @@ namespace InterviewCopilot
 
             if (string.IsNullOrWhiteSpace(question))
             {
+                // Empty because they said nothing is normal and needs no comment.
+                // Empty because the speech service never started is not, and it
+                // looked identical: press Space, speak, get nothing, with the
+                // only clue in a debug window nobody has open.
+                if (!_engineOnline)
+                {
+                    var wait = UserSession.SpeechmaticsRetryAfterUtc - DateTime.UtcNow;
+                    AiAnswerBox.Text = wait > TimeSpan.Zero
+                        ? $"Speech is still starting up. It should be listening again in about "
+                          + (wait.TotalMinutes >= 1
+                             ? $"{(int)Math.Ceiling(wait.TotalMinutes)} minute" + (wait.TotalMinutes >= 2 ? "s" : "")
+                             : $"{Math.Max(1, (int)wait.TotalSeconds)} seconds")
+                          + ". Nothing you said was lost, because nothing was being heard yet."
+                        : "Speech has not connected yet, so nothing was heard. It is retrying on its own.";
+                    if (answerWindow != null) answerWindow.UpdateAnswer(AiAnswerBox.Text);
+                }
                 UpdateMicUi();   // nothing said — plain mute
                 return;
             }
@@ -2764,8 +2780,16 @@ namespace InterviewCopilot
             // so tell the user to wait a moment rather than letting them speak into a void.
             else if (!_engineOnline && DateTime.UtcNow < UserSession.SpeechmaticsRetryAfterUtc)
             {
+                // A bare "WAITING" is indistinguishable from the app being idle,
+                // and this state can last the best part of an hour. Someone sat
+                // pressing Space and speaking into it, with nothing on screen
+                // saying the speech service had not started. Counting down at
+                // least says it is a wait with an end.
+                var left = UserSession.SpeechmaticsRetryAfterUtc - DateTime.UtcNow;
                 c = Color.FromRgb(245, 178, 60);
-                label = "WAITING";
+                label = left.TotalMinutes >= 1
+                    ? $"WAITING {(int)left.TotalMinutes}m"
+                    : $"WAITING {Math.Max(1, (int)left.TotalSeconds)}s";
             }
             // Backing off between restart attempts. Distinct from CONNECTING so a
             // first connection is not confused with a recovery that is already

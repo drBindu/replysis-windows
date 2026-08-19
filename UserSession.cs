@@ -79,6 +79,7 @@ namespace InterviewCopilot
             lock (_smKeyLock)
             {
                 if (HasValidSpeechmaticsKey) return Task.FromResult(true);
+                if (TryLoadCachedSpeechmaticsKey()) return Task.FromResult(true);
                 SpeechmaticsKey = "";
                 _speechmaticsExpiresAtUtc = DateTime.MinValue;
                 if (DateTime.UtcNow < _speechmaticsRetryAfterUtc) return Task.FromResult(false);
@@ -152,6 +153,7 @@ namespace InterviewCopilot
                     _speechmaticsRetryAfterUtc = DateTime.MinValue;
                     SpeechmaticsLastStatusCode = 0;
                 }
+                SaveCachedSpeechmaticsKey();
                 DebugWindow.Log("STT_KEY", $"Temporary key fetched; valid for {expiresIn} seconds");
                 return true;
             }
@@ -164,6 +166,83 @@ namespace InterviewCopilot
             }
         }
 
+        // ── Token cache on disk ──────────────────────────────────────────────
+        //
+        // The token the server mints is good for about an hour, and it was kept
+        // only in memory: closing the app threw away a perfectly valid one and
+        // the next launch asked for another. The server allows twelve per
+        // account per hour, so a dozen restarts, or an afternoon of testing,
+        // exhausted the allowance and transcription stopped for the rest of the
+        // hour with no way to hurry it along.
+        //
+        // The limit itself is right, and is there to stop someone scripting the
+        // endpoint to drain quota. The waste was on this side. Reusing the token
+        // until it actually expires means a normal user spends about one an hour
+        // however many times they open the app.
+        //
+        // It also explains the Mac reporting the same fault at the same moment:
+        // the allowance is per account, so both apps were locked out together
+        // and neither had done anything wrong.
+        //
+        // Written through DPAPI like the session file, so it is readable only by
+        // this Windows user on this machine.
+        private static string SpeechmaticsKeyPath => Path.Combine(SessionDir, "sttkey.json");
+
+        private sealed class CachedSttKey
+        {
+            public string Key { get; set; } = "";
+            public DateTime ExpiresAtUtc { get; set; }
+        }
+
+        private static bool TryLoadCachedSpeechmaticsKey()
+        {
+            try
+            {
+                if (!File.Exists(SpeechmaticsKeyPath)) return false;
+
+                string raw = File.ReadAllText(SpeechmaticsKeyPath);
+                if (SecureDataProtector.IsProtected(raw) &&
+                    !SecureDataProtector.TryUnprotect(raw, out raw)) return false;
+
+                var cached = JsonSerializer.Deserialize<CachedSttKey>(raw);
+                if (cached == null || string.IsNullOrWhiteSpace(cached.Key)) return false;
+
+                // The same minute of headroom the in-memory check uses, so a token
+                // is never handed to the engine moments before it dies.
+                if (DateTime.UtcNow >= cached.ExpiresAtUtc.AddSeconds(-60)) return false;
+
+                SpeechmaticsKey = cached.Key;
+                _speechmaticsExpiresAtUtc = cached.ExpiresAtUtc;
+                DebugWindow.Log("STT_KEY",
+                    $"Reusing cached key; {(int)(cached.ExpiresAtUtc - DateTime.UtcNow).TotalSeconds}s left");
+                return true;
+            }
+            catch { return false; }
+        }
+
+        private static void SaveCachedSpeechmaticsKey()
+        {
+            try
+            {
+                Directory.CreateDirectory(SessionDir);
+                string json;
+                lock (_smKeyLock)
+                    json = JsonSerializer.Serialize(new CachedSttKey
+                    {
+                        Key = SpeechmaticsKey,
+                        ExpiresAtUtc = _speechmaticsExpiresAtUtc,
+                    });
+                File.WriteAllText(SpeechmaticsKeyPath, SecureDataProtector.Protect(json));
+            }
+            catch (Exception ex) { DebugWindow.Log("STT_KEY", $"Key cache write failed: {ex.Message}"); }
+        }
+
+        private static void DeleteCachedSpeechmaticsKey()
+        {
+            try { if (File.Exists(SpeechmaticsKeyPath)) File.Delete(SpeechmaticsKeyPath); }
+            catch { }
+        }
+
         public static void InvalidateSpeechmaticsKey()
         {
             lock (_smKeyLock)
@@ -174,6 +253,7 @@ namespace InterviewCopilot
                 SpeechmaticsLastStatusCode = 0;
                 _smKeyInFlight = null;
             }
+            DeleteCachedSpeechmaticsKey();
         }
 
         // ── Avatar initials ──
