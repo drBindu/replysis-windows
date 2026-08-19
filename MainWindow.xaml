@@ -488,7 +488,7 @@
                             <Border x:Name="AutoModePill" Style="{StaticResource ToolbarPill}"
                                     Margin="8,0,0,0"
                                     MouseLeftButtonDown="AutoModePill_Click"
-                                    ToolTip="Choose how the question reaches the app: you press a key, a real interview, or practising alone">
+                                    ToolTip="Who the app listens to: you press Space, a real interview, or practice">
                                 <Border.Effect>
                                     <DropShadowEffect x:Name="AutoModeGlow" BlurRadius="11" ShadowDepth="0"
                                                       Opacity="0" Color="#34E08A"/>
@@ -1104,7 +1104,7 @@
                                 <StackPanel>
                                     <TextBlock Text="LISTENING MODE" Foreground="#6F8198" FontSize="9.5"
                                                FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="How does the question reach the app?"
+                                    <TextBlock Text="Who is the app listening to?"
                                                Foreground="#C6D4E8" FontSize="11.5" FontWeight="SemiBold"
                                                FontFamily="Segoe UI" Margin="0,3,0,0"/>
                                 </StackPanel>
@@ -1144,11 +1144,11 @@
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="I'll press a key" Foreground="#EEF4FB" FontSize="12.5"
+                                        <TextBlock Text="Press Space" Foreground="#EEF4FB" FontSize="12.5"
                                                    FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Press Space to listen, Space again for the answer"
+                                        <TextBlock Text="You start and stop it yourself"
                                                    Foreground="#7F93AB" FontSize="10.5" FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap" />
                                     </StackPanel>
                                     <TextBlock x:Name="ManualModeCheck" Grid.Column="2" Text="&#xE73E;"
                                                FontFamily="Segoe MDL2 Assets" FontSize="12"
@@ -1182,11 +1182,11 @@
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Real interview" Foreground="#E9FFF2" FontSize="12.5"
+                                        <TextBlock Text="Interview" Foreground="#E9FFF2" FontSize="12.5"
                                                    FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="They speak, the answer appears. You press nothing. Hears the meeting, not your microphone."
+                                        <TextBlock Text="Hears the interviewer. Answers on its own."
                                                    Foreground="#80B89A" FontSize="10.5" FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap" />
                                     </StackPanel>
                                     <TextBlock x:Name="InterviewModeCheck" Grid.Column="2" Text="&#xE73E;"
                                                FontFamily="Segoe MDL2 Assets" FontSize="12"
@@ -1221,11 +1221,11 @@
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Practising alone" Foreground="#E8FBFF" FontSize="12.5"
+                                        <TextBlock Text="Practice" Foreground="#E8FBFF" FontSize="12.5"
                                                    FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="You speak, the answer appears. No interviewer needed."
+                                        <TextBlock Text="Hears you. Answers on its own."
                                                    Foreground="#78B8C8" FontSize="10.5" FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap" />
                                     </StackPanel>
                                     <TextBlock x:Name="PracticeModeCheck" Grid.Column="2" Text="&#xE73E;"
                                                FontFamily="Segoe MDL2 Assets" FontSize="12"

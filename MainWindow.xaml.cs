@@ -1255,9 +1255,9 @@ namespace InterviewCopilot
 
             string modeName = mode switch
             {
-                ListeningMode.InterviewAuto => "Real interview (hears the meeting, not your microphone)",
-                ListeningMode.PracticeAuto => "Practising alone (hears you and the meeting)",
-                _ => "I'll press a key"
+                ListeningMode.InterviewAuto => "Interview mode: hears the interviewer, not you",
+                ListeningMode.PracticeAuto => "Practice mode: hears you",
+                _ => "Press Space"
             };
             DebugWindow.Log("MODE", $"Selected {modeName}. Saved audio preference was not changed.");
         }
@@ -1281,31 +1281,31 @@ namespace InterviewCopilot
                     AutoModePill.Background = Brush("#102A1D");
                     AutoModePill.BorderBrush = Brush("#2C7B50");
                     AutoModeDot.Fill = Brush("#34E08A");
-                    AutoModeLabel.Text = "REAL INTERVIEW";
+                    AutoModeLabel.Text = "INTERVIEW";
                     AutoModeLabel.Foreground = Brush("#B8F5D3");
                     AutoModeChevron.Foreground = Brush("#73C998");
                     AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#34E08A");
                     AutoModeGlow.Opacity = 0.42;
-                    AutoModePill.ToolTip = "Real interview: they speak, the answer appears, you press nothing. Hears the meeting, not your microphone.";
+                    AutoModePill.ToolTip = "Hears the interviewer and answers on its own. Your microphone stays off.";
                     break;
 
                 case ListeningMode.PracticeAuto:
                     AutoModePill.Background = Brush("#0C2731");
                     AutoModePill.BorderBrush = Brush("#22768B");
                     AutoModeDot.Fill = Brush("#38CFF2");
-                    AutoModeLabel.Text = "PRACTISING";
+                    AutoModeLabel.Text = "PRACTICE";
                     AutoModeLabel.Foreground = Brush("#BDEFFC");
                     AutoModeChevron.Foreground = Brush("#70C6DA");
                     AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#38CFF2");
                     AutoModeGlow.Opacity = 0.38;
-                    AutoModePill.ToolTip = "Practising alone: you speak, the answer appears. No interviewer needed.";
+                    AutoModePill.ToolTip = "Hears you and answers on its own. No interviewer needed.";
                     break;
 
                 default:
                     AutoModePill.Background = Brush("#101827");
                     AutoModePill.BorderBrush = Brush("#26364C");
                     AutoModeDot.Fill = Brush("#607086");
-                    AutoModeLabel.Text = "I PRESS A KEY";
+                    AutoModeLabel.Text = "PRESS SPACE";
                     AutoModeLabel.Foreground = Brush("#A9B6C8");
                     AutoModeChevron.Foreground = Brush("#6F8198");
                     AutoModeGlow.Opacity = 0;
