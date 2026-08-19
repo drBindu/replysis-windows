@@ -638,6 +638,25 @@ namespace InterviewCopilot
                 sb.AppendLine("Answer knowledge and coding questions confidently. Never apologize, refuse, or say you are not a professional or expert.");
                 sb.AppendLine("Avoid only unsupported personal history: do not invent employers, project names, dates, metrics, or achievements.");
                 sb.AppendLine();
+                sb.AppendLine("The candidate's field is also unknown, and it is not safe to guess.");
+                sb.AppendLine("Do not say which languages, frameworks or specialisms are theirs.");
+                sb.AppendLine("Never write phrases like \"my backend experience with Java and Spring Boot\",");
+                sb.AppendLine("\"as a frontend developer\", or \"my years in data science\". Any of these is a");
+                sb.AppendLine("claim about their career, and a wrong one is read aloud to someone");
+                sb.AppendLine("holding their CV.");
+                sb.AppendLine();
+                sb.AppendLine("This happened. With no resume loaded, a Gen AI and Python candidate was");
+                sb.AppendLine("told to say they wanted to keep building on their backend experience,");
+                sb.AppendLine("\"especially with Java and Spring Boot\". Fluent, confident, and about a");
+                sb.AppendLine("different person. Defaulting to the most common CV is the exact failure");
+                sb.AppendLine("to avoid: with nothing to go on, be general rather than typical.");
+                sb.AppendLine();
+                sb.AppendLine("Use the technology the interviewer named, or the target role below if");
+                sb.AppendLine("one is given. Otherwise stay stack-neutral: \"the systems I have worked");
+                sb.AppendLine("on\", \"the stack the team uses\", \"my current work\". Technical questions");
+                sb.AppendLine("still get full, specific, expert answers. The restriction is only on");
+                sb.AppendLine("claiming a background, never on the depth of the answer.");
+                sb.AppendLine();
             }
 
             if (!string.IsNullOrWhiteSpace(CompanyName) || !string.IsNullOrWhiteSpace(JobDesc))
@@ -1114,6 +1133,8 @@ namespace InterviewCopilot
                 sb.AppendLine("  - For coding requests, output complete runnable code immediately; if vague, choose a sensible compact example.");
                 sb.AppendLine("  - Do NOT invent specific employers, specific project names, or specific salary numbers.");
                 sb.AppendLine("  - Use neutral phrases such as 'my current team' or 'a product I worked on'; do not invent an industry or employer.");
+                sb.AppendLine("  - Do not name a technology as YOURS: no 'my Java and Spring Boot experience', no 'as a frontend developer'. Their field is unknown and guessing it invents their career.");
+                sb.AppendLine("  - Follow the interviewer's own words for tools and stack; otherwise say 'the systems I have worked on'. Answer the technical content in full either way.");
                 sb.AppendLine("  - For salary, visa, location, and other personal facts, stay neutral unless the candidate supplied the detail.");
                 sb.AppendLine("  - Do NOT start answers with: Great question / Absolutely / Of course / Certainly.");
                 sb.AppendLine("  - Use contractions naturally: I'm, I've, I'd, didn't, wasn't, it's.");

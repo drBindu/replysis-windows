@@ -1586,6 +1586,37 @@ async def main():
                         {"content": "onboarding"},
                         {"content": "stakeholder"},
                         {"content": "roadmap"},
+
+                        # How the job itself is worded.
+                        #
+                        # These are asked in the first two minutes of almost every
+                        # US contract screen, and they were the words the engine
+                        # got worst, because they are letters and numbers rather
+                        # than words: "C2C" came through as "See to see" and "W2"
+                        # as "w to". The candidate then heard an answer written
+                        # for a question nobody asked.
+                        #
+                        # Every spelling a person actually says is listed, since
+                        # the same term is spoken "C two C", "C to C" and "corp
+                        # to corp" by three different recruiters in one week.
+                        {"content": "C2C",            "sounds_like": ["see to see", "C to C", "see two see", "C two C"]},
+                        {"content": "W2",             "sounds_like": ["W to", "double you two", "W two", "dubya two"]},
+                        {"content": "1099",           "sounds_like": ["ten ninety nine", "one thousand ninety nine"]},
+                        {"content": "corp to corp",   "sounds_like": ["corp two corp", "core to core"]},
+                        {"content": "full time",      "sounds_like": ["full time"]},
+                        {"content": "part time"},
+                        {"content": "contract to hire", "sounds_like": ["contract two hire", "C two H"]},
+                        {"content": "H1B",            "sounds_like": ["H one B", "age one bee", "H 1 B"]},
+                        {"content": "OPT",            "sounds_like": ["O P T"]},
+                        {"content": "CPT",            "sounds_like": ["C P T"]},
+                        {"content": "EAD",            "sounds_like": ["E A D"]},
+                        {"content": "green card"},
+                        {"content": "visa"},
+                        {"content": "notice period"},
+                        {"content": "relocation"},
+                        {"content": "onsite",         "sounds_like": ["on site"]},
+                        {"content": "hybrid"},
+                        {"content": "remote"},
                     ] + _load_extra_vocab()
                 )
 

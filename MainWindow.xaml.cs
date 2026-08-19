@@ -108,6 +108,10 @@ namespace InterviewCopilot
         private string _lastAutoSubmittedQuestion = "";
         private DateTime _lastAutoSubmitUtc = DateTime.MinValue;
         private DateTime _autoTranscriptChangedUtc = DateTime.MinValue;
+
+        // The longest gap this speaker has left in the MIDDLE of the current turn.
+        // Used to tell a slow talker's pause from the end of their question.
+        private double _autoLongestMidTurnGapMs = 0;
         private DateTime _autoListeningStartedUtc = DateTime.MinValue;
 
         private DispatcherTimer? transcriptTimer;
@@ -231,6 +235,7 @@ namespace InterviewCopilot
                     SavePathLabel.Text = AppDataFolder;
                     LoadHints(); LoadJobContext(); LoadSavedResumes();
                     UpdateSavedResumesButton();
+                    RestoreLastResume();
                     // Expand the resume panel WITHOUT focusing the resume text box.
                     // SwitchToResumeTab() would call ResumeTextBox.Focus(), which left a
                     // text field holding keyboard focus on startup — and the global Space
@@ -1386,6 +1391,7 @@ namespace InterviewCopilot
             _autoLastTranscript = "";
             _autoListeningStartedUtc = DateTime.UtcNow;
             _autoTranscriptChangedUtc = DateTime.UtcNow;
+            _autoLongestMidTurnGapMs = 0;
         }
 
         private void TrySubmitAutomaticTurn(string transcript)
@@ -1417,9 +1423,27 @@ namespace InterviewCopilot
             bool hasClosingPunctuation = candidateQuestion.EndsWith("?", StringComparison.Ordinal) ||
                                          candidateQuestion.EndsWith(".", StringComparison.Ordinal) ||
                                          candidateQuestion.EndsWith("!", StringComparison.Ordinal);
+            if (EndsMidSentence(question))
+            {
+                if (!string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
+                {
+                    _lastAutoRejectedTranscript = question;
+                    DebugWindow.Log("AUTO", "Ends on a word that cannot finish a sentence; still listening.");
+                }
+                return;
+            }
+
             int requiredSilenceMs = hasClosingPunctuation
                 ? AutoTurnPunctuatedSilenceMs
                 : AutoTurnNaturalSilenceMs;
+
+            // Give a slow speaker room. Someone whose phrases are 700ms apart has
+            // not finished after 380ms of quiet, they are drawing breath. Waiting
+            // 1.5x their own longest pause reads as "they really have stopped"
+            // without holding a fast speaker back, since their gaps are small.
+            int paceFloorMs = (int)Math.Round(_autoLongestMidTurnGapMs * 1.5);
+            if (paceFloorMs > requiredSilenceMs)
+                requiredSilenceMs = Math.Min(paceFloorMs, 1_600);
             if (question.Length < AutoTurnMinimumChars ||
                 now - _autoListeningStartedUtc < TimeSpan.FromMilliseconds(AutoTurnMinimumSpeechMs) ||
                 now - _autoTranscriptChangedUtc < TimeSpan.FromMilliseconds(requiredSilenceMs))
@@ -1430,6 +1454,70 @@ namespace InterviewCopilot
             _lastAutoSubmitUtc = now;
             DebugWindow.Log("AUTO", $"Turn stable for {requiredSilenceMs}ms; submitting {candidateQuestion.Length} normalized characters.");
             HandleSpaceUp("AUTO");
+        }
+
+        /// <summary>
+        /// Remembers the longest pause this speaker has taken while still talking.
+        ///
+        /// The silence thresholds are one number for everybody, and people do not
+        /// share a speaking speed. A slow speaker leaves 700ms between phrases,
+        /// which is longer than the 380ms that counts as "they have finished",
+        /// so their question was submitted while they were still asking it. Their
+        /// remaining words then arrived as the start of the next question.
+        ///
+        /// Their own pauses are the only fair yardstick, so the wait is measured
+        /// against those rather than against an average of everyone.
+        /// </summary>
+        private void NoteAutoSpeechPace(DateTime now)
+        {
+            if (_autoTranscriptChangedUtc == DateTime.MinValue) return;
+            double gapMs = (now - _autoTranscriptChangedUtc).TotalMilliseconds;
+
+            // Above two seconds it is no longer a pause inside a sentence: they
+            // stopped, and something else (a slow packet, thinking) explains it.
+            if (gapMs > _autoLongestMidTurnGapMs && gapMs <= 2_000)
+                _autoLongestMidTurnGapMs = gapMs;
+        }
+
+        /// <summary>
+        /// Words that cannot be the last word of a finished question.
+        ///
+        /// "Are you looking for C2C or W2 or full time" is punctuated by the
+        /// engine the moment it hears "for", and the options arrive after. The
+        /// text ended "or w to", the pause was long enough, and the answer went
+        /// out to a question missing its actual content.
+        ///
+        /// A trailing conjunction, preposition or article is proof the sentence
+        /// is unfinished no matter how long the silence runs, so this outranks
+        /// the timer entirely. Nothing is lost by waiting: if they really did
+        /// stop on "or", their next word arrives and the turn submits then.
+        /// </summary>
+        private static readonly HashSet<string> DanglingTailWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "or", "and", "but", "nor", "plus", "versus", "vs",
+            "to", "of", "for", "with", "without", "from", "into", "onto",
+            "in", "on", "at", "by", "about", "over", "under", "between",
+            "the", "a", "an", "your", "my", "our", "their", "its", "this", "that",
+            "is", "are", "was", "were", "be", "been", "being", "am",
+            "do", "does", "did", "have", "has", "had",
+            "can", "could", "would", "should", "will", "shall", "may", "might", "must",
+            "you", "we", "they", "he", "she", "it", "i",
+            "like", "such", "any", "some", "more", "most", "very", "really", "so",
+            "if", "when", "while", "because", "than", "then",
+        };
+
+        private static bool EndsMidSentence(string question)
+        {
+            if (string.IsNullOrWhiteSpace(question)) return false;
+
+            // Punctuation the speaker actually reached means they landed somewhere.
+            char last = question.TrimEnd()[^1];
+            if (last is '?' or '.' or '!' or ':' or ';') return false;
+
+            var words = Regex.Matches(question, @"[\p{L}\p{N}']+");
+            if (words.Count == 0) return false;
+
+            return DanglingTailWords.Contains(words[^1].Value);
         }
 
         private static bool IsLikelyCompleteAutomaticQuestion(string question)
@@ -2607,6 +2695,7 @@ namespace InterviewCopilot
 
                     if (AutoModeEnabled)
                     {
+                        NoteAutoSpeechPace(DateTime.UtcNow);
                         _autoLastTranscript = text;
                         _autoTranscriptChangedUtc = DateTime.UtcNow;
                     }
@@ -4396,7 +4485,9 @@ namespace InterviewCopilot
                 MessageBox.Show(this, "No resume text to save.", "Save Resume", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            string name = "Resume · " + DateTime.Now.ToString("MMM d, h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+            string name = string.IsNullOrWhiteSpace(_loadedResumeName)
+                ? "Resume · " + DateTime.Now.ToString("MMM d, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)
+                : _loadedResumeName;
             _savedResumes.Insert(0, (name, content));
             if (_savedResumes.Count > 10) _savedResumes.RemoveAt(_savedResumes.Count - 1);
             PersistSavedResumes();
@@ -4404,6 +4495,39 @@ namespace InterviewCopilot
         }
 
         private void LoadSavedResume(string content) => ResumeTextBox.Text = content;
+
+        /// <summary>
+        /// Puts the most recently saved resume back in the box on startup.
+        ///
+        /// The resumes were being saved and listed, but never reloaded, so every
+        /// launch began with an empty box. Nothing said so: the panel is collapsed
+        /// by default and an empty card looks like a normal one, and the user had
+        /// uploaded the file days earlier and reasonably believed the app still
+        /// had it.
+        ///
+        /// With no resume the model has no facts, so it answers as a generic
+        /// software engineer. In session #277 it told a Gen AI and Python
+        /// candidate to say they wanted to build on their "backend experience,
+        /// especially with Java and Spring Boot". Every word was fluent and
+        /// none of it was them. That is worse than an error message, because
+        /// they were about to read it out loud.
+        /// </summary>
+        private void RestoreLastResume()
+        {
+            try
+            {
+                if (_savedResumes.Count == 0) return;
+                if (!string.IsNullOrWhiteSpace(ResumeTextBox.Text)) return;
+
+                var (name, content) = _savedResumes[0];
+                if (string.IsNullOrWhiteSpace(content)) return;
+
+                _loadedResumeName = name;
+                ResumeTextBox.Text = content;   // fires TextChanged -> shows the loaded card
+                DebugWindow.Log("RESUME", $"Restored last resume ({content.Length} chars): {name}");
+            }
+            catch { }
+        }
 
         private void UpdateSavedResumesButton()
         {
