@@ -758,6 +758,8 @@ namespace InterviewCopilot
             if (UserSession.IsLoggedIn)
                 await UserSession.TryRefreshAsync();
 
+            await FetchListeningTimeAsync();
+
             void CLog(string msg) => DebugWindow.Log("CREDITS", msg);
 
             CLog($"Fetching... guest={UserSession.IsGuestSession}");
@@ -817,15 +819,36 @@ namespace InterviewCopilot
                     else
                     {
                         string display = credits >= 1000 ? $"{credits / 1000.0:F1}k" : credits.ToString("N0");
-                        CreditsLabel.Text = $"⚡ {display}";
+
+                        // Two limits stop an interview, and showing only one of them
+                        // is how a support ticket starts. Somebody with two thousand
+                        // credits on the badge and no listening time left reads a
+                        // healthy number and a dead microphone, and concludes the
+                        // app is broken rather than that they reached a limit.
+                        //
+                        // So both are shown, and whichever one is actually about to
+                        // stop them is the one coloured. Credits alone were never
+                        // the whole truth: they meter questions, and the microphone
+                        // bills by the hour.
+                        CreditsLabel.Text = _audioMinutesRemaining >= 0
+                            ? $"⚡ {display}   ⏱ {FormatListeningTime(_audioMinutesRemaining)}"
+                            : $"⚡ {display}";
                         CreditsIcon.Text = "";
 
                         // Pure glass: badge stays neutral; only the numeral flips to soft
                         // red when the balance is genuinely critical.
                         SetCreditsBadgeStyle("", "");
-                        string creditColor = credits > CreditsCriticalThreshold ? "#FFFFFF" : "#F87171";
+                        bool creditsLow = credits <= CreditsCriticalThreshold;
+                        bool timeLow    = _audioMinutesRemaining >= 0 && _audioMinutesRemaining <= 15;
+                        string creditColor = (creditsLow || timeLow) ? "#F87171" : "#FFFFFF";
                         CreditsLabel.Foreground = new SolidColorBrush(
                             (Color)ColorConverter.ConvertFromString(creditColor));
+
+                        CreditsPlanLabel.Text = _audioMinutesRemaining == 0
+                            ? "  no listening time left"
+                            : "";
+                        CreditsPlanLabel.Visibility = _audioMinutesRemaining == 0
+                            ? Visibility.Visible : Visibility.Collapsed;
                     }
                     CLog($"Badge set to: {CreditsLabel.Text}");
                 });
@@ -1512,6 +1535,53 @@ namespace InterviewCopilot
             UpdateMicUi();
         }
 
+        /// <summary>
+        /// Listening time in the units a person would say it in.
+        ///
+        /// "1672" is a number nobody can price against their afternoon; "27h
+        /// 52m" is. Minutes only below an hour, because that is when it starts
+        /// to matter and precision is worth the width.
+        /// </summary>
+        private static string FormatListeningTime(int minutes)
+        {
+            if (minutes <= 0) return "0m";
+            if (minutes < 60) return $"{minutes}m";
+            int hours = minutes / 60;
+            int rest  = minutes % 60;
+            return rest == 0 ? $"{hours}h" : $"{hours}h {rest}m";
+        }
+
+        /// <summary>
+        /// Reads the listening allowance without spending any of it.
+        ///
+        /// Called beside the credits fetch, so the badge is right from the
+        /// moment the app opens rather than only after the first minute of an
+        /// interview has been reported.
+        /// </summary>
+        private async Task FetchListeningTimeAsync()
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get,
+                    $"{BackendUrl}/api/v1/usage/listening");
+                if (!string.IsNullOrEmpty(UserSession.IdToken))
+                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
+                req.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
+
+                using var res = await _creditsClient.SendAsync(req);
+                if (!res.IsSuccessStatusCode) return;
+
+                string body = await res.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("remainingMinutes", out var rem))
+                {
+                    _audioMinutesRemaining = rem.GetInt32();
+                    DebugWindow.Log("METER", $"{_audioMinutesRemaining} listening minutes left this month.");
+                }
+            }
+            catch (Exception ex) { DebugWindow.Log("METER", $"Allowance fetch failed: {ex.Message}"); }
+        }
+
         private async Task ReportListeningMinutesAsync(int minutes)
         {
             if (minutes <= 0) return;
@@ -1539,6 +1609,7 @@ namespace InterviewCopilot
                     _audioMinutesRemaining = rem.GetInt32();
                     DebugWindow.Log("METER", $"Reported {minutes} min; {_audioMinutesRemaining} left this month.");
                     WarnIfListeningTimeLow();
+                    _ = FetchAndDisplayCreditsAsync(force: true);
                 }
             }
             catch (Exception ex) { DebugWindow.Log("METER", $"Report error: {ex.Message}"); }
