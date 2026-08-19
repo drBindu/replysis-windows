@@ -110,6 +110,10 @@ namespace InterviewCopilot
         private DateTime _lastAutoSubmitUtc = DateTime.MinValue;
         private DateTime _autoTranscriptChangedUtc = DateTime.MinValue;
 
+        // The question already asked, waiting to be joined to the tail still
+        // arriving. Empty except between recognising a continuation and sending it.
+        private string _autoContinuationPrefix = "";
+
         // The longest gap this speaker has left in the MIDDLE of the current turn.
         // Used to tell a slow talker's pause from the end of their question.
         private double _autoLongestMidTurnGapMs = 0;
@@ -1389,10 +1393,117 @@ namespace InterviewCopilot
         private void ResetAutoTurnDetection()
         {
             _autoTurnSubmitting = false;
+            _autoContinuationPrefix = "";
             _autoLastTranscript = "";
             _autoListeningStartedUtc = DateTime.UtcNow;
             _autoTranscriptChangedUtc = DateTime.UtcNow;
             _autoLongestMidTurnGapMs = 0;
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // CONTINUATIONS
+        //
+        // Silence cannot tell "finished" from "still thinking". An interviewer
+        // who says "what's the difference between W2 and C2C", pauses, and then
+        // adds "and full time" leaves a gap identical to the end of a question.
+        // Slow speakers, laggy calls and people who think mid-sentence all
+        // produce it, and no threshold fixes it: longer feels sluggish for
+        // everyone, shorter cuts people off.
+        //
+        // So the guess is allowed to be wrong and then corrected. When the tail
+        // arrives it is joined to what was already asked and the whole question
+        // is answered again, replacing the half answer on screen. The candidate
+        // sees an answer immediately either way, and a better one if there was
+        // more coming.
+        //
+        // Without this the tail was not merely unmerged, it was discarded: "and
+        // full time" is not a question by itself, so it was rejected as an
+        // incomplete fragment and never answered at all.
+        // ══════════════════════════════════════════════════════════════════════
+        private static readonly HashSet<string> QuestionStarters = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "what", "why", "how", "when", "where", "who", "which", "can", "could",
+            "would", "will", "do", "does", "did", "are", "is", "was", "were",
+            "have", "has", "should",
+        };
+
+        private static readonly HashSet<string> InterviewCommands = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "tell", "explain", "describe", "walk", "share", "discuss", "design",
+            "implement", "compare", "define", "introduce", "summarize", "write",
+            "create", "build", "code", "program", "solve", "develop", "generate", "show",
+        };
+
+        private static readonly TimeSpan ContinuationWindow = TimeSpan.FromSeconds(12);
+
+        /// <summary>Words that join a tail onto the sentence before it.</summary>
+        private static readonly HashSet<string> ContinuationOpeners = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "and", "or", "but", "also", "plus", "versus", "vs", "nor",
+            "instead", "rather", "besides", "along", "including", "except",
+        };
+
+        /// <summary>
+        /// Noises that are not a continuation of anything. Without this, an
+        /// interviewer saying "okay" after an answer would re-run the previous
+        /// question and charge a credit for it.
+        /// </summary>
+        private static readonly HashSet<string> ContinuationFillers = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "okay", "ok", "yes", "yeah", "yep", "no", "nope", "right", "sure",
+            "thanks", "thank you", "got it", "great", "good", "nice", "cool",
+            "perfect", "understood", "makes sense", "fine", "alright", "mm hmm",
+            "uh huh", "hmm", "sorry", "hello", "hi",
+        };
+
+        private bool LooksLikeContinuation(string candidate, DateTime now)
+        {
+            if (string.IsNullOrWhiteSpace(_lastAutoSubmittedQuestion)) return false;
+            if (now - _lastAutoSubmitUtc > ContinuationWindow) return false;
+
+            string[] words = Regex.Matches(candidate, @"[\p{L}\p{N}']+")
+                                  .Cast<Match>()
+                                  .Select(m => m.Value.ToLowerInvariant())
+                                  .ToArray();
+            if (words.Length < 2) return false;
+
+            // A tail is short. Anything longer is the interviewer moving on, even
+            // if they happened to begin it with "and".
+            if (words.Length > 8) return false;
+
+            if (ContinuationFillers.Contains(string.Join(" ", words))) return false;
+
+            // It has to add something. "And, um, and" is not more question.
+            bool addsContent = words.Any(w => !ContinuationOpeners.Contains(w) &&
+                                              !ContinuationFillers.Contains(w));
+            if (!addsContent) return false;
+
+            // Either it is joined on explicitly, or it does not ask anything by
+            // itself, which is exactly what the tail of an interrupted sentence
+            // looks like.
+            //
+            // "Asks nothing" is the test, not "is not a sentence". "C2C or W2 or
+            // full time." is a well-formed sentence and still obviously the rest
+            // of "what are you looking for": it names options and poses no
+            // question. Judged on sentence-completeness it was missed.
+            bool asksSomething = candidate.Contains('?') ||
+                                 QuestionStarters.Contains(words[0]) ||
+                                 InterviewCommands.Contains(words[0]);
+
+            return ContinuationOpeners.Contains(words[0]) || !asksSomething;
+        }
+
+        /// <summary>
+        /// Joins a tail onto the question it belongs to, without repeating the
+        /// joining word or doubling the punctuation.
+        /// </summary>
+        private static string MergeContinuation(string asked, string tail)
+        {
+            string left = (asked ?? "").TrimEnd().TrimEnd('?', '.', '!', ',', ' ');
+            string right = (tail ?? "").Trim();
+            if (left.Length == 0) return right;
+            if (right.Length == 0) return asked ?? "";
+            return left + " " + right;
         }
 
         private void TrySubmitAutomaticTurn(string transcript)
@@ -1404,8 +1515,11 @@ namespace InterviewCopilot
             string question = transcript.Trim();
             string candidateQuestion = PromptBuilder.NormalizeInterviewerQuestion(question);
             DateTime now = DateTime.UtcNow;
-            bool isCompleteQuestion = IsLikelyCompleteAutomaticQuestion(candidateQuestion);
-            bool isRecentDuplicate = string.Equals(
+            bool isContinuation = LooksLikeContinuation(candidateQuestion, now);
+            bool isCompleteQuestion = isContinuation ||
+                                      IsLikelyCompleteAutomaticQuestion(candidateQuestion);
+            bool isRecentDuplicate = !isContinuation &&
+                                     string.Equals(
                                          candidateQuestion,
                                          _lastAutoSubmittedQuestion,
                                          StringComparison.OrdinalIgnoreCase) &&
@@ -1455,8 +1569,13 @@ namespace InterviewCopilot
                 return;
 
             _autoTurnSubmitting = true;
-            _lastAutoSubmittedQuestion = candidateQuestion;
+            _autoContinuationPrefix = isContinuation ? _lastAutoSubmittedQuestion : "";
+            _lastAutoSubmittedQuestion = isContinuation
+                ? MergeContinuation(_lastAutoSubmittedQuestion, candidateQuestion)
+                : candidateQuestion;
             _lastAutoSubmitUtc = now;
+            if (isContinuation)
+                DebugWindow.Log("AUTO", $"Continuation heard; re-answering the whole question: {_lastAutoSubmittedQuestion}");
             DebugWindow.Log("AUTO", $"{ending} ending, stable for {requiredSilenceMs}ms; submitting {candidateQuestion.Length} normalized characters.");
             HandleSpaceUp("AUTO");
         }
@@ -1593,17 +1712,11 @@ namespace InterviewCopilot
             bool hasQuestionMark = question.Contains('?');
 
             string first = words[0];
-            bool isQuestionStarter = first is "what" or "why" or "how" or "when" or
-                "where" or "who" or "which" or "can" or "could" or "would" or "will" or
-                "do" or "does" or "did" or "are" or "is" or "was" or "were" or "have" or
-                "has" or "should";
+            bool isQuestionStarter = QuestionStarters.Contains(first);
             if (isQuestionStarter)
                 return words.Length >= 2 || (hasQuestionMark && first is "what" or "why" or "how");
 
-            bool isInterviewCommand = first is "tell" or "explain" or "describe" or "walk" or
-                "share" or "discuss" or "design" or "implement" or "compare" or "define" or
-                "introduce" or "summarize" or "write" or "create" or "build" or "code" or
-                "program" or "solve" or "develop" or "generate" or "show";
+            bool isInterviewCommand = InterviewCommands.Contains(first);
             if (isInterviewCommand)
             {
                 if (first == "tell" && words.Length == 2 && words[1] == "me") return false;
@@ -1786,6 +1899,17 @@ namespace InterviewCopilot
             }
             catch (Exception ex) { DebugWindow.Log("MIC", $"HandleSpaceUp flush error: {ex.Message}"); }
             finally { _flushing = false; }
+
+            // A tail joins the question it belongs to. The transcript was cleared
+            // when listening restarted, so what arrived here is only "and full
+            // time"; sent alone it would be answered as if that were the whole
+            // question, which is how it read on screen before this existed.
+            if (source == "AUTO" && !string.IsNullOrWhiteSpace(_autoContinuationPrefix))
+            {
+                if (!string.IsNullOrWhiteSpace(question))
+                    question = MergeContinuation(_autoContinuationPrefix, question);
+                _autoContinuationPrefix = "";
+            }
 
             if (!string.IsNullOrWhiteSpace(question))
                 TranscriptTextBlock.Text = question;
