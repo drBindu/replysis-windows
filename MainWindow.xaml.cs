@@ -4320,6 +4320,105 @@ namespace InterviewCopilot
             ScheduleJobContextSave();
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        // SCREENING DETAILS
+        //
+        // Work type, authorization, availability and pay are asked in the first
+        // two minutes of nearly every contract screen, and none of them are on
+        // a resume. Without them the app could only guess, and it guessed like
+        // a model rather than like this candidate: asked "C2C, W2 or full time?"
+        // it produced a paragraph about wanting to grow, which answers nothing
+        // and sounds evasive to a recruiter who asked a yes/no question.
+        //
+        // The user is the only one who knows, so they are asked once, in setup,
+        // and it is remembered. Anything left on "Not specified" is left out of
+        // the prompt entirely, so a blank stays vague instead of becoming an
+        // invented number.
+        // ══════════════════════════════════════════════════════════════════════
+        private const string PrefUnset = "Not specified";
+
+        private static readonly string[] WorkTypeOptions =
+        {
+            PrefUnset, "C2C (corp to corp)", "W2 contract", "C2H (contract to hire)",
+            "Full time / permanent", "1099 independent", "Open to any of these",
+        };
+
+        private static readonly string[] WorkAuthOptions =
+        {
+            PrefUnset, "US citizen", "Green card", "H1B", "H4 EAD", "OPT", "CPT",
+            "TN visa", "L2 EAD", "Authorized, no sponsorship needed",
+            "Will need sponsorship", "Prefer not to answer",
+        };
+
+        private static readonly string[] AvailabilityOptions =
+        {
+            PrefUnset, "Immediately", "1 week", "2 weeks", "3 weeks",
+            "1 month", "2 months", "Flexible",
+        };
+
+        private static readonly string[] WorkLocationOptions =
+        {
+            PrefUnset, "Remote only", "Hybrid", "Onsite", "Open to relocation",
+            "Remote, can travel", "Open to any of these",
+        };
+
+        private string _workType     = PrefUnset;
+        private string _workAuth     = PrefUnset;
+        private string _availability = PrefUnset;
+        private string _workLocation = PrefUnset;
+        private string _payExpectation = "";
+        private bool   _screeningPrefsLoading;
+
+        private void InitScreeningPrefCombos()
+        {
+            FillCombo(WorkTypeCombo,     WorkTypeOptions,     _workType);
+            FillCombo(WorkAuthCombo,     WorkAuthOptions,     _workAuth);
+            FillCombo(AvailabilityCombo, AvailabilityOptions, _availability);
+            FillCombo(WorkLocationCombo, WorkLocationOptions, _workLocation);
+
+            static void FillCombo(System.Windows.Controls.ComboBox box, string[] options, string selected)
+            {
+                if (box == null) return;
+                box.Items.Clear();
+                foreach (string option in options) box.Items.Add(option);
+                box.SelectedItem = options.Contains(selected) ? selected : options[0];
+            }
+        }
+
+        private void ScreeningPref_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (_screeningPrefsLoading) return;
+            _workType     = WorkTypeCombo?.SelectedItem     as string ?? PrefUnset;
+            _workAuth     = WorkAuthCombo?.SelectedItem     as string ?? PrefUnset;
+            _availability = AvailabilityCombo?.SelectedItem as string ?? PrefUnset;
+            _workLocation = WorkLocationCombo?.SelectedItem as string ?? PrefUnset;
+            PushScreeningPrefsToPrompt();
+            ScheduleJobContextSave();
+        }
+
+        private void PayExpectationBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            _payExpectation = PayExpectationBox.Text;
+            if (PayExpectationWatermark != null)
+                PayExpectationWatermark.Visibility = string.IsNullOrWhiteSpace(_payExpectation)
+                    ? Visibility.Visible : Visibility.Collapsed;
+            if (_screeningPrefsLoading) return;
+            PushScreeningPrefsToPrompt();
+            ScheduleJobContextSave();
+        }
+
+        private void PushScreeningPrefsToPrompt()
+        {
+            PromptBuilder.WorkType       = Clean(_workType);
+            PromptBuilder.WorkAuth       = Clean(_workAuth);
+            PromptBuilder.Availability   = Clean(_availability);
+            PromptBuilder.WorkLocation   = Clean(_workLocation);
+            PromptBuilder.PayExpectation = (_payExpectation ?? "").Trim();
+
+            static string Clean(string value) =>
+                string.IsNullOrWhiteSpace(value) || value == PrefUnset ? "" : value;
+        }
+
         private void ScheduleJobContextSave()
         {
             _jobContextSaveTimer?.Stop();
@@ -4577,15 +4676,46 @@ namespace InterviewCopilot
                 if (JobDescWatermark != null)
                     JobDescWatermark.Visibility = string.IsNullOrWhiteSpace(_jobDescription)
                         ? Visibility.Visible : Visibility.Collapsed;
+
+                _workType     = Read("workType");
+                _workAuth     = Read("workAuth");
+                _availability = Read("availability");
+                _workLocation = Read("workLocation");
+                _payExpectation = doc.TryGetProperty("pay", out var p) ? p.GetString() ?? "" : "";
+
+                string Read(string key) =>
+                    doc.TryGetProperty(key, out var v) ? v.GetString() ?? PrefUnset : PrefUnset;
             }
             catch { }
+            finally
+            {
+                // Filling the boxes raises SelectionChanged, which would write the
+                // defaults straight back over what was just restored.
+                _screeningPrefsLoading = true;
+                try
+                {
+                    InitScreeningPrefCombos();
+                    if (PayExpectationBox != null) PayExpectationBox.Text = _payExpectation;
+                }
+                finally { _screeningPrefsLoading = false; }
+                PushScreeningPrefsToPrompt();
+            }
         }
 
         private void SaveJobContext()
         {
             try
             {
-                var obj  = new { company = _companyName, job = _jobDescription };
+                var obj = new
+                {
+                    company      = _companyName,
+                    job          = _jobDescription,
+                    workType     = _workType,
+                    workAuth     = _workAuth,
+                    availability = _availability,
+                    workLocation = _workLocation,
+                    pay          = _payExpectation,
+                };
                 string json = JsonSerializer.Serialize(obj);
                 string path = Path.Combine(AppDataFolder, "jobcontext.json");
                 WriteProtectedLocalText(path, json);

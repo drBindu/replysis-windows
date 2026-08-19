@@ -704,6 +704,7 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="1*"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <!-- Title -->
@@ -865,6 +866,79 @@
                                                Text="Paste the role &amp; requirements: title, must-have skills, tech stack, seniority."/>
                                 </Grid>
                             </Border>
+
+                            <!-- What the candidate wants: never on a resume, always asked -->
+                            <StackPanel Grid.Row="8" Margin="0,14,0,0">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
+                                    <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                               Foreground="#66FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="WHAT YOU WANT" Foreground="#B4B4BA" FontSize="10.5"
+                                               FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                    <TextBlock Text="  the screening questions" Foreground="#40FFFFFF"
+                                               FontSize="9.5" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Work type" Foreground="#7E90A8" FontSize="10"
+                                                   FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
+                                        <ComboBox x:Name="WorkTypeCombo" Style="{StaticResource DarkComboBox}"
+                                                  SelectionChanged="ScreeningPref_Changed"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Work authorization" Foreground="#7E90A8" FontSize="10"
+                                                   FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
+                                        <ComboBox x:Name="WorkAuthCombo" Style="{StaticResource DarkComboBox}"
+                                                  SelectionChanged="ScreeningPref_Changed"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Can start" Foreground="#7E90A8" FontSize="10"
+                                                   FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
+                                        <ComboBox x:Name="AvailabilityCombo" Style="{StaticResource DarkComboBox}"
+                                                  SelectionChanged="ScreeningPref_Changed"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Where" Foreground="#7E90A8" FontSize="10"
+                                                   FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
+                                        <ComboBox x:Name="WorkLocationCombo" Style="{StaticResource DarkComboBox}"
+                                                  SelectionChanged="ScreeningPref_Changed"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="Pay" Foreground="#7E90A8" FontSize="10"
+                                           FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
+                                <Border Background="#1AFFFFFF" CornerRadius="8"
+                                        BorderBrush="#22FFFFFF" BorderThickness="1">
+                                    <Grid>
+                                        <TextBox x:Name="PayExpectationBox" Background="Transparent"
+                                                 Foreground="#F0F0F2" BorderThickness="0"
+                                                 Padding="10,7" FontSize="12" FontFamily="Segoe UI" FontWeight="SemiBold"
+                                                 CaretBrush="#AAAAAA" TextChanged="PayExpectationBox_TextChanged"/>
+                                        <TextBlock x:Name="PayExpectationWatermark"
+                                                   Text="e.g. $65/hr on C2C, or $140k base"
+                                                   Foreground="#66FFFFFF" FontSize="12" FontWeight="SemiBold" Margin="10,7"
+                                                   FontFamily="Segoe UI" IsHitTestVisible="False"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+
+                                <TextBlock Text="Left blank, the app stays vague instead of guessing a number for you."
+                                           Foreground="#5A6A7E" FontSize="9.5" FontWeight="SemiBold"
+                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="2,6,0,0"/>
+                            </StackPanel>
 
                             <!-- Hidden ASK/GUIDE + SavePath (kept for code-behind) -->
                             <Grid Grid.Row="7" Visibility="Collapsed">

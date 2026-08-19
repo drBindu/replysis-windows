@@ -26,6 +26,59 @@ namespace InterviewCopilot
         public static string CompanyName { get; private set; } = "";
         public static string JobDesc     { get; private set; } = "";
 
+        // What the candidate is looking for. Set from the setup panel, and empty
+        // whenever they left the field alone, so an unanswered field never turns
+        // into a confident answer.
+        public static string WorkType       { get; set; } = "";
+        public static string WorkAuth       { get; set; } = "";
+        public static string Availability   { get; set; } = "";
+        public static string WorkLocation   { get; set; } = "";
+        public static string PayExpectation { get; set; } = "";
+
+        private static bool HasScreeningPrefs =>
+            !string.IsNullOrWhiteSpace(WorkType) || !string.IsNullOrWhiteSpace(WorkAuth) ||
+            !string.IsNullOrWhiteSpace(Availability) || !string.IsNullOrWhiteSpace(WorkLocation) ||
+            !string.IsNullOrWhiteSpace(PayExpectation);
+
+        /// <summary>
+        /// The answers to the questions a recruiter opens with, which no resume
+        /// carries: work type, authorization, notice period, location, pay.
+        ///
+        /// Asked "C2C, W2 or full time?" with none of this, the model produced
+        /// a paragraph about wanting to grow. That reads as dodging a direct
+        /// question, and it is the first thing a screener writes down.
+        ///
+        /// Only fields the candidate actually filled in appear here. A blank one
+        /// is deliberately left out, so the answer stays honestly vague rather
+        /// than inventing a rate or a visa status on their behalf.
+        /// </summary>
+        private static void AppendScreeningPrefs(StringBuilder sb)
+        {
+            if (!HasScreeningPrefs) return;
+
+            sb.AppendLine("WHAT THIS CANDIDATE IS LOOKING FOR (they told us; treat as fact):");
+            if (!string.IsNullOrWhiteSpace(WorkType))
+                sb.AppendLine($"Work type: {Truncate(WorkType, 60)}");
+            if (!string.IsNullOrWhiteSpace(WorkAuth))
+                sb.AppendLine($"Work authorization: {Truncate(WorkAuth, 60)}");
+            if (!string.IsNullOrWhiteSpace(Availability))
+                sb.AppendLine($"Can start: {Truncate(Availability, 40)}");
+            if (!string.IsNullOrWhiteSpace(WorkLocation))
+                sb.AppendLine($"Location: {Truncate(WorkLocation, 60)}");
+            if (!string.IsNullOrWhiteSpace(PayExpectation))
+                sb.AppendLine($"Pay: {Truncate(PayExpectation, 120)}");
+            sb.AppendLine();
+            sb.AppendLine("Asked any of these, lead with the answer in the first few words, then");
+            sb.AppendLine("one short line of flexibility if it is true. \"I'm looking for C2C, and");
+            sb.AppendLine("I can start in two weeks\" is the whole answer. Do not open with a");
+            sb.AppendLine("paragraph about growth; a screener asked a direct question and is");
+            sb.AppendLine("waiting to tick a box.");
+            sb.AppendLine("Say nothing about a field not listed above. Asked about one, say it is");
+            sb.AppendLine("open or ask what the role offers. Never invent a rate, a visa status or");
+            sb.AppendLine("a notice period.");
+            sb.AppendLine();
+        }
+
         public static void SetContext(string hints, string company, string job)
         {
             LiveHints   = Truncate(hints?.Trim()   ?? "", 4_000);
@@ -669,6 +722,8 @@ namespace InterviewCopilot
                 sb.AppendLine("Tailor the answer naturally when relevant; do not force the company name into every response.");
                 sb.AppendLine();
             }
+
+            AppendScreeningPrefs(sb);
 
             if (!string.IsNullOrWhiteSpace(LiveHints))
             {
