@@ -47,8 +47,9 @@ namespace InterviewCopilot
         // Firing slightly early is recoverable: the question is deduplicated, and
         // Space interrupts an answer instantly. Firing late is not, because the
         // candidate has already been silent in front of someone.
-        private const int    AutoTurnPunctuatedSilenceMs = 380;  // complete sentence/question
-        private const int    AutoTurnNaturalSilenceMs    = 820;  // natural pause without punctuation
+        private const int    AutoTurnFinishedSilenceMs = 300;   // punctuated, lands on a real word
+        private const int    AutoTurnNaturalSilenceMs  = 820;   // could still be a pause
+        private const int    AutoTurnMaxSilenceMs      = 1_250; // never wait longer than this
         private const int    AutoTurnMinimumSpeechMs = 500;   // reject clicks/noise bursts
         private const int    AutoTurnMinimumChars    = 4;     // reject empty or tiny fragments
         private const int    RecordingSaveTimeoutMs  = 10_000;
@@ -1420,10 +1421,8 @@ namespace InterviewCopilot
                 return;
             }
 
-            bool hasClosingPunctuation = candidateQuestion.EndsWith("?", StringComparison.Ordinal) ||
-                                         candidateQuestion.EndsWith(".", StringComparison.Ordinal) ||
-                                         candidateQuestion.EndsWith("!", StringComparison.Ordinal);
-            if (EndsMidSentence(question))
+            TurnEnding ending = ClassifyTurnEnding(candidateQuestion);
+            if (ending == TurnEnding.Unfinished)
             {
                 if (!string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
                 {
@@ -1433,17 +1432,23 @@ namespace InterviewCopilot
                 return;
             }
 
-            int requiredSilenceMs = hasClosingPunctuation
-                ? AutoTurnPunctuatedSilenceMs
-                : AutoTurnNaturalSilenceMs;
+            // Waiting longer is only ever right when it is genuinely unclear
+            // whether they stopped. Making every question wait for the worst
+            // case is the same bug in the other direction: the candidate sits
+            // in silence after a question that plainly ended.
+            int requiredSilenceMs;
+            if (ending == TurnEnding.Finished)
+            {
+                requiredSilenceMs = AutoTurnFinishedSilenceMs;
+            }
+            else
+            {
+                requiredSilenceMs = AutoTurnNaturalSilenceMs;
+                int paceFloorMs = (int)Math.Round(_autoLongestMidTurnGapMs * 1.3);
+                if (paceFloorMs > requiredSilenceMs)
+                    requiredSilenceMs = Math.Min(paceFloorMs, AutoTurnMaxSilenceMs);
+            }
 
-            // Give a slow speaker room. Someone whose phrases are 700ms apart has
-            // not finished after 380ms of quiet, they are drawing breath. Waiting
-            // 1.5x their own longest pause reads as "they really have stopped"
-            // without holding a fast speaker back, since their gaps are small.
-            int paceFloorMs = (int)Math.Round(_autoLongestMidTurnGapMs * 1.5);
-            if (paceFloorMs > requiredSilenceMs)
-                requiredSilenceMs = Math.Min(paceFloorMs, 1_600);
             if (question.Length < AutoTurnMinimumChars ||
                 now - _autoListeningStartedUtc < TimeSpan.FromMilliseconds(AutoTurnMinimumSpeechMs) ||
                 now - _autoTranscriptChangedUtc < TimeSpan.FromMilliseconds(requiredSilenceMs))
@@ -1452,7 +1457,7 @@ namespace InterviewCopilot
             _autoTurnSubmitting = true;
             _lastAutoSubmittedQuestion = candidateQuestion;
             _lastAutoSubmitUtc = now;
-            DebugWindow.Log("AUTO", $"Turn stable for {requiredSilenceMs}ms; submitting {candidateQuestion.Length} normalized characters.");
+            DebugWindow.Log("AUTO", $"{ending} ending, stable for {requiredSilenceMs}ms; submitting {candidateQuestion.Length} normalized characters.");
             HandleSpaceUp("AUTO");
         }
 
@@ -1480,44 +1485,93 @@ namespace InterviewCopilot
         }
 
         /// <summary>
-        /// Words that cannot be the last word of a finished question.
+        /// How the transcript ends, which decides how long to wait before answering.
+        ///
+        /// The wait was one number for every question, and that cannot be right:
+        /// too short and it answers while the interviewer is still asking, too
+        /// long and the candidate sits in silence after a question that clearly
+        /// ended. Both were reported, days apart, from the same setting.
+        ///
+        /// So the two are told apart instead of averaged. Most questions end
+        /// unmistakably and get answered faster than before; only the genuinely
+        /// unclear ones wait, and only they pay for it.
+        /// </summary>
+        private enum TurnEnding
+        {
+            /// <summary>Ended on a word no sentence can end on. Never submit.</summary>
+            Unfinished,
+            /// <summary>Punctuated and lands on a real word. Answer quickly.</summary>
+            Finished,
+            /// <summary>Could go either way. Give them room.</summary>
+            Unclear,
+        }
+
+        /// <summary>
+        /// Words no English sentence can end on, whatever the punctuation.
         ///
         /// "Are you looking for C2C or W2 or full time" is punctuated by the
-        /// engine the moment it hears "for", and the options arrive after. The
-        /// text ended "or w to", the pause was long enough, and the answer went
-        /// out to a question missing its actual content.
+        /// engine the moment it hears "for", and the options arrive after. A
+        /// question mark after a preposition or a conjunction is the engine
+        /// hearing a pause, not the speaker finishing.
         ///
-        /// A trailing conjunction, preposition or article is proof the sentence
-        /// is unfinished no matter how long the silence runs, so this outranks
-        /// the timer entirely. Nothing is lost by waiting: if they really did
-        /// stop on "or", their next word arrives and the turn submits then.
+        /// Conjunctions, prepositions and determiners only. Pronouns are
+        /// deliberately absent: "How would you scale this?" and "Have you done
+        /// that?" are finished questions, and treating them as half-spoken
+        /// would slow down the ordinary case to guard against a rare one.
         /// </summary>
-        private static readonly HashSet<string> DanglingTailWords = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> NeverEndsSentence = new(StringComparer.OrdinalIgnoreCase)
         {
             "or", "and", "but", "nor", "plus", "versus", "vs",
             "to", "of", "for", "with", "without", "from", "into", "onto",
             "in", "on", "at", "by", "about", "over", "under", "between",
-            "the", "a", "an", "your", "my", "our", "their", "its", "this", "that",
+            "the", "a", "an", "my", "our", "your", "their", "its",
+            "than", "because", "while", "if", "such", "like", "per",
+        };
+
+        /// <summary>
+        /// Words that, with no punctuation after them, mean the sentence is
+        /// still running. Wider than the list above, because without a full
+        /// stop even "do you" or "have they" is plainly mid-air.
+        /// </summary>
+        private static readonly HashSet<string> DanglingTailWords = new(StringComparer.OrdinalIgnoreCase)
+        {
             "is", "are", "was", "were", "be", "been", "being", "am",
             "do", "does", "did", "have", "has", "had",
             "can", "could", "would", "should", "will", "shall", "may", "might", "must",
-            "you", "we", "they", "he", "she", "it", "i",
-            "like", "such", "any", "some", "more", "most", "very", "really", "so",
-            "if", "when", "while", "because", "than", "then",
+            "you", "we", "they", "he", "she", "it", "i", "that", "this",
+            "any", "some", "more", "most", "very", "really", "so",
+            "when", "then", "what", "which", "who", "how",
         };
 
-        private static bool EndsMidSentence(string question)
+        private static TurnEnding ClassifyTurnEnding(string question)
         {
-            if (string.IsNullOrWhiteSpace(question)) return false;
+            if (string.IsNullOrWhiteSpace(question)) return TurnEnding.Unclear;
 
-            // Punctuation the speaker actually reached means they landed somewhere.
-            char last = question.TrimEnd()[^1];
-            if (last is '?' or '.' or '!' or ':' or ';') return false;
+            string trimmed = question.TrimEnd();
+            char last = trimmed[^1];
+            bool punctuated = last is '?' or '.' or '!';
 
-            var words = Regex.Matches(question, @"[\p{L}\p{N}']+");
-            if (words.Count == 0) return false;
+            var words = Regex.Matches(trimmed, @"[\p{L}\p{N}']+");
+            if (words.Count == 0) return TurnEnding.Unclear;
 
-            return DanglingTailWords.Contains(words[^1].Value);
+            string tail = words[^1].Value;
+
+            // Nothing can follow these and still be a finished sentence, so the
+            // speaker is mid-air no matter what the engine punctuated.
+            if (NeverEndsSentence.Contains(tail))
+                return punctuated ? TurnEnding.Unclear : TurnEnding.Unfinished;
+
+            // No full stop yet, and hanging on an auxiliary or a pronoun: still
+            // going. Waiting costs nothing, because their next word submits it.
+            if (!punctuated && DanglingTailWords.Contains(tail))
+                return TurnEnding.Unfinished;
+
+            // Punctuated and landing on a real word: "Tell me about yourself.",
+            // "How would you scale this?", "What is a closure?". The ordinary
+            // case, and it should feel immediate.
+            if (punctuated) return TurnEnding.Finished;
+
+            return TurnEnding.Unclear;
         }
 
         private static bool IsLikelyCompleteAutomaticQuestion(string question)
