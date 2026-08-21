@@ -190,6 +190,52 @@ readable.
 
 ---
 
+## Changes since this file was first written
+
+Kept up to date as the Windows app changes, so nothing has to be rediscovered
+by reading diffs. Newest first.
+
+**Screen answers are on by default, and the toolbar button does the thing.**
+"Watch screen" was a toolbar switch that started off every launch, so the
+feature most likely to matter in a coding round was the one a candidate had
+to remember to arm with an interviewer already talking. It is now a setting,
+on by default and remembered. The toolbar holds the action instead: READ
+SCREEN with F8 beside it, and pressing it reads the screen there and then.
+The label no longer changes when pressed, because a control whose text
+changes is read as a switch and this one is not.
+
+**Nothing heard at all stops the microphone after 45 seconds, not 3 minutes.**
+Three minutes is right for a pause inside a conversation. It is far too
+patient for a session where not one word arrived, which is a key pressed by
+mistake — and waiting three minutes to notice turned a stray press into a
+notice that appeared over and over. Once anything has been said, the old
+three minutes applies for the rest of that session.
+
+**The idle notice goes in the badge, never in the answer.** It used to be
+written into the answer panel, so an answer somebody was still reading was
+replaced by a message about the microphone — and it fired exactly when they
+were reading a long one with the mic still open.
+
+**A rate limit is reported as a rate limit.** "The AI service is temporarily
+unavailable" is true and useless: nothing is broken, this minute's allowance
+is spent, and it returns on its own. The message now says so with a wait
+time, and refuses to report a wait under fifteen seconds — an early version
+printed "try again in about 1 seconds", which is worse than saying nothing.
+
+**A 429 fails at once rather than three times.** Splitting the screen read
+from the code writing added an attempt at the front, so a rate limit failed
+through the read, an eight-second retry, and a fallback to the same model on
+the same key. Sixteen seconds to learn what was known at the first response,
+and it looked like a fault rather than a limit.
+
+**Only a screen that moved counts as a second view.** A page with a live
+"2,332 Online" counter produces different bytes every two seconds, so every
+capture was kept as a new view and every question carried two pictures of the
+same screen — twice the tokens for nothing. A coarse 16x16 greyscale
+signature tells scrolling from a ticking counter.
+
+---
+
 ## Where the reasoning lives
 
 The Windows commit messages, `git log` on `windowsNative`, one commit per
