@@ -2504,10 +2504,86 @@ namespace InterviewCopilot
                 {
                     _preparedShot = shot;
                     _preparedShotUtc = DateTime.UtcNow;
+                    await UploadPreparedShotAsync(shot);
                 }
             }
             catch { /* a missed prepared shot just means capturing on demand */ }
             finally { _preparingShot = false; }
+        }
+
+        // The picture, sent while nobody is waiting.
+        //
+        // Timed on a real capture: 1,483ms from the candidate stopping speaking
+        // to the first word, of which the model was 720ms. Most of the rest was
+        // the screenshot going up the wire, and taking it early only removed the
+        // capture, not the upload.
+        //
+        // So the upload moves too. The shot is already taken before the question
+        // exists, so it is sent then, and what travels on the path that matters
+        // is an id short enough to fit in a tweet.
+        //
+        // The server holds it in memory for ninety seconds, hands it back only
+        // to the identity that sent it, and gives it back exactly once.
+        private string _preparedShotId = "";
+        private DateTime _preparedShotIdUtc = DateTime.MinValue;
+
+        // Its own lifetime, shorter than the server's ninety seconds, so the app
+        // gives up on an id before the server does rather than sending one that
+        // has just gone.
+        private static readonly TimeSpan PreparedShotIdMaxAge = TimeSpan.FromSeconds(60);
+
+        private async Task UploadPreparedShotAsync(byte[] shot)
+        {
+            try
+            {
+                var sw = Stopwatch.StartNew();
+                using var req = new HttpRequestMessage(HttpMethod.Post,
+                    $"{BackendUrl}/api/v1/interview/screen-cache");
+                if (!string.IsNullOrEmpty(UserSession.IdToken))
+                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
+                req.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
+                req.Content = new StringContent(
+                    JsonSerializer.Serialize(new { image = Convert.ToBase64String(shot) }),
+                    System.Text.Encoding.UTF8, "application/json");
+
+                using var res = await _creditsClient.SendAsync(req);
+                if (!res.IsSuccessStatusCode)
+                {
+                    // Not worth a word to the user: the next question simply
+                    // sends the bytes the old way and is a little slower.
+                    DebugWindow.Log("SCREEN", $"Early upload declined: HTTP {(int)res.StatusCode}");
+                    _preparedShotId = "";
+                    return;
+                }
+
+                using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+                _preparedShotId = doc.RootElement.TryGetProperty("imageId", out var id)
+                    ? id.GetString() ?? "" : "";
+                _preparedShotIdUtc = DateTime.UtcNow;
+                DebugWindow.Log("SCREEN",
+                    $"Screenshot sent ahead in {sw.ElapsedMilliseconds}ms; the question now carries an id.");
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("SCREEN", $"Early upload failed: {ex.Message}");
+                _preparedShotId = "";
+            }
+        }
+
+        /// <summary>
+        /// The id of a screenshot already sitting on the server, or empty when
+        /// there is none to use.
+        /// </summary>
+        private string TakePreparedShotId()
+        {
+            if (string.IsNullOrEmpty(_preparedShotId)) return "";
+            if (DateTime.UtcNow - _preparedShotIdUtc > PreparedShotIdMaxAge) return "";
+            if (DateTime.UtcNow - _preparedShotUtc > PreparedShotMaxAge) return "";
+
+            // Spent once, exactly as the server treats it.
+            string id = _preparedShotId;
+            _preparedShotId = "";
+            return id;
         }
 
         /// <summary>
@@ -2616,7 +2692,8 @@ namespace InterviewCopilot
                     bool reachedNotes = false;
 
                     await foreach (var visionToken in
-                        ScreenAnalyzer.AnalyzeStreamAsync(shot, ResumeParser.ExtractFacts(resume), question, ct))
+                        ScreenAnalyzer.AnalyzeStreamAsync(shot, ResumeParser.ExtractFacts(resume), question,
+                                                          TakePreparedShotId(), ct))
                     {
                         if (reachedNotes) continue;
 

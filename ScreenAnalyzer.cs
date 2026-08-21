@@ -874,6 +874,7 @@ namespace InterviewCopilot
         /// </summary>
         public static async IAsyncEnumerable<string> AnalyzeStreamAsync(
             byte[] imageBytes, string? resumeContext = null, string? spokenQuestion = null,
+            string? preparedImageId = null,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             var held = new List<string>();
@@ -881,7 +882,8 @@ namespace InterviewCopilot
             bool refused = false, released = false;
 
             await foreach (string token in
-                StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: false, ct))
+                StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: false,
+                                preparedImageId, ct))
             {
                 if (released) { yield return token; continue; }
 
@@ -905,7 +907,8 @@ namespace InterviewCopilot
 
             DebugWindow.Log("SCREEN", "Model declined; asking again in plainer words.");
             await foreach (string token in
-                StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: true, ct))
+                StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: true,
+                                preparedImageId: null, ct))
                 yield return token;
         }
 
@@ -929,14 +932,25 @@ namespace InterviewCopilot
 
         private static async IAsyncEnumerable<string> StreamOnceAsync(
             byte[] imageBytes, string? resumeContext, string? spokenQuestion, bool plainly,
+            string? preparedImageId = null,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
-            string base64 = Convert.ToBase64String(imageBytes);
             string prompt = plainly
                 ? BuildPlainPrompt(spokenQuestion)
                 : BuildScreenPrompt(resumeContext, spokenQuestion);
             string provider = GetProvider();
-            string payloadJson = JsonSerializer.Serialize(new { image = base64, prompt, provider });
+
+            // When the picture went up before the question, send the id instead.
+            // The bytes are still carried on the fallback path, and on a retry,
+            // because an id is spent the moment the server hands it back.
+            string payloadJson = !string.IsNullOrEmpty(preparedImageId)
+                ? JsonSerializer.Serialize(new { imageId = preparedImageId, prompt, provider })
+                : JsonSerializer.Serialize(new
+                  {
+                      image = Convert.ToBase64String(imageBytes),
+                      prompt,
+                      provider
+                  });
 
             // ── Send request via helper (never throws) ────────────────────────
             var (res, sendError) = await SendVisionRequestSafeAsync(payloadJson, ct);
