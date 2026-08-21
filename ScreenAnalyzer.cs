@@ -658,6 +658,14 @@ namespace InterviewCopilot
                 sb.AppendLine("it was accurate and it answered nothing, in front of somebody waiting");
                 sb.AppendLine("to hear how the candidate would solve it.");
                 sb.AppendLine();
+                sb.AppendLine("An unclear question is asked about, not answered around. When the");
+                sb.AppendLine("question arrives half-transcribed — \"do you know coding or coding");
+                sb.AppendLine("language? You\" — ask for it again in one short line and stop:");
+                sb.AppendLine("\"Sorry, could you say that again?\" Do not fill the gap with an");
+                sb.AppendLine("inventory of the screen. Listing the problem number, the language");
+                sb.AppendLine("selected and which panel it is in reads as stalling, and it tells");
+                sb.AppendLine("them nothing they cannot see.");
+                sb.AppendLine();
                 sb.AppendLine("Confirming sight is at most four words, and only when they asked:");
                 sb.AppendLine("\"Yes, I can see it.\" Then the actual answer, immediately. Asked to");
                 sb.AppendLine("solve something, solve it, with the code. Asked how you would");
