@@ -2152,8 +2152,35 @@ namespace InterviewCopilot
                     else if (!string.IsNullOrWhiteSpace(question))
                     {
                         // Text has stopped growing: the utterance has landed.
+                        //
+                        // Unless it plainly has not. A question ending on "or",
+                        // "to" or "you" with no full stop is a sentence still in
+                        // the air, and pressing Space is not proof it finished —
+                        // people press it the moment they stop talking, and
+                        // often a beat before.
+                        //
+                        // Every listening mode reads a sentence the same way
+                        // now. Auto had this and Press Space did not, so the
+                        // mode most people use was the one that cut them off:
+                        // "do you know coding or coding language? You" went to
+                        // the model exactly like that, and came back an answer
+                        // to nothing.
+                        //
+                        // Waiting is bounded and costs nothing when they really
+                        // had finished, because a finished sentence does not
+                        // reach this branch at all.
                         stableCount++;
-                        if (stableCount >= 5) break;   // 100ms of quiet
+                        int stableNeeded =
+                            ClassifyTurnEnding(PromptBuilder.NormalizeInterviewerQuestion(question))
+                                == TurnEnding.Unfinished ? 40 : 5;   // 800ms, or 100ms
+
+                        if (stableCount >= stableNeeded)
+                        {
+                            if (stableNeeded > 5)
+                                DebugWindow.Log("MIC",
+                                    "Question looked unfinished; waited for the rest before sending.");
+                            break;
+                        }
                     }
                     else
                     {
