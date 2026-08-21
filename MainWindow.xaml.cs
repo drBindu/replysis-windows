@@ -2053,7 +2053,7 @@ namespace InterviewCopilot
                 // answer actually begins instead of flashing it and clearing it at once.
                 if (source != "AUTO")
                 {
-                    AiAnswerBox.Text = "";
+                    ClearAnswer();
                     if (answerWindow != null) answerWindow.UpdateAnswer("");
                 }
                 if (answerWindow != null) answerWindow.UpdateQuestion("");
@@ -2329,7 +2329,7 @@ namespace InterviewCopilot
                 // appears in the Interviewer transcript, so we don't repeat a "Q:" label
                 // here, and each new question replaces the previous answer instead of
                 // stacking old ones underneath.
-                AiAnswerBox.Text = "";
+                ClearAnswer();
                 if (answerWindow != null) { answerWindow.UpdateAnswer(""); answerWindow.UpdateQuestion(q); }
 
                 int tokenCount = 0;
@@ -2355,8 +2355,7 @@ namespace InterviewCopilot
                     if (tokenCount == 1 || tokenCount % 2 == 0 || token.Contains('\n'))
                     {
                         string soFar = CleanAiOutput(streamedAnswer.ToString());
-                        AiAnswerBox.Text = soFar;
-                        AiAnswerBox.ScrollToEnd();
+                        ShowAnswer(soFar, scrollToEnd: true);
                         if (answerWindow != null) answerWindow.UpdateAnswer(soFar);
                     }
                 }
@@ -2364,7 +2363,7 @@ namespace InterviewCopilot
                 string final = CleanAiOutput(streamedAnswer.ToString());
                 if (string.IsNullOrWhiteSpace(final))
                     throw new BackendRequestException("No answer was returned. Please try again.");
-                AiAnswerBox.Text = final;
+                ShowAnswer(final, scrollToEnd: false);
                 AiAnswerBox.ScrollToHome();   // land at the top so the answer reads from the start
                 if (answerWindow != null) { answerWindow.UpdateAnswer(final); answerWindow.UpdateQuestion(q); }
                 PromptBuilder.AddToHistory(q, final);
@@ -2464,7 +2463,7 @@ namespace InterviewCopilot
         // is a problem statement that sits still; four seconds of it is the same
         // screen. Past that it is captured fresh, because being fast about the
         // wrong screen is worse than being slow about the right one.
-        private static readonly TimeSpan PreparedShotMaxAge = TimeSpan.FromSeconds(4);
+        private static readonly TimeSpan PreparedShotMaxAge = TimeSpan.FromMilliseconds(1_500);
 
         private DispatcherTimer? _preparedShotTimer;
         private byte[]? _preparedShot;
@@ -3047,7 +3046,12 @@ namespace InterviewCopilot
 
         private string CleanAiOutput(string ans)
         {
-            ans = Regex.Replace(ans, @"```[a-z]*|```", "").Trim();
+            // Fences stay. They were stripped here because everything was shown in
+            // one prose box and a stray ``` was just noise on screen. The code
+            // panel needs them: they are how it knows where code starts and ends,
+            // and removing them first put the code straight back into the
+            // paragraph it was meant to be lifted out of.
+            ans = ans.Trim();
             ans = Regex.Replace(ans, @"\*{1,3}([^*\n]+)\*{1,3}", "$1");   // strip **bold**
             ans = Regex.Replace(ans, @"_{1,3}([^_\n]+)_{1,3}", "$1");      // strip _italic_
             ans = Regex.Replace(ans, @"(?m)^#{1,6}\s+", "");               // strip # headers (line-start only, preserves C#)
@@ -4137,7 +4141,7 @@ namespace InterviewCopilot
         {
             TranscriptTextBlock.Text = "";
             TranscriptHint.Visibility = Visibility.Visible;
-            AiAnswerBox.Text = "";
+            ClearAnswer();
             StarBadge.Visibility = Visibility.Collapsed;
             if (answerWindow != null) { answerWindow.UpdateAnswer(""); answerWindow.UpdateQuestion(""); }
             PromptBuilder.ClearHistory();
@@ -4145,6 +4149,116 @@ namespace InterviewCopilot
         }
 
         private bool _lastAnswerEmpty = true;
+        // ══════════════════════════════════════════════════════════════════════
+        // THE ANSWER, AND THE CODE, SHOWN SEPARATELY
+        //
+        // Both used to land in the same box: a wrapped, proportional font sized
+        // for prose. Indentation collapsed, long lines folded mid-expression,
+        // and the part a candidate has to read most carefully was the hardest
+        // thing on the screen to read. It also had to be picked out of the
+        // surrounding sentences by eye before it could be copied.
+        //
+        // They are different things and are treated as such. Prose stays above
+        // in the reading font; code goes below in a monospace panel that does
+        // not wrap, with a copy button, because pasting it into the editor is
+        // the next thing that happens to it.
+        // ══════════════════════════════════════════════════════════════════════
+
+        /// <summary>Everything between fences in the current answer.</summary>
+        private string _currentAnswerCode = "";
+
+        private static readonly Regex FencedCode =
+            new(@"```[ \t]*([A-Za-z0-9+#_-]*)[ \t]*\r?\n(.*?)(?:```|$)",
+                RegexOptions.Singleline | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Complexity, when the answer states it. Matched loosely because models
+        /// write it every way there is: "O(n)", "Time: O(n log n)", "time
+        /// complexity is O(1) space".
+        /// </summary>
+        private static readonly Regex ComplexityLine =
+            new(@"^.*\bO\s*\(\s*[^)]{1,24}\)\s*.*$",
+                RegexOptions.Multiline | RegexOptions.Compiled);
+
+        /// <summary>Clears both halves, so no answer is shown beside older code.</summary>
+        private void ClearAnswer()
+        {
+            AiAnswerBox.Text = "";
+            _currentAnswerCode = "";
+            if (CodePanel != null) CodePanel.Visibility = Visibility.Collapsed;
+            if (ComplexityBar != null) ComplexityBar.Visibility = Visibility.Collapsed;
+        }
+
+        private void ShowAnswer(string answer, bool scrollToEnd)
+        {
+            string prose = answer;
+            var code = new StringBuilder();
+            string language = "";
+
+            foreach (Match m in FencedCode.Matches(answer))
+            {
+                if (language.Length == 0) language = m.Groups[1].Value.Trim();
+                if (code.Length > 0) code.AppendLine();
+                code.Append(m.Groups[2].Value.TrimEnd());
+            }
+
+            // A fence that has opened and not yet closed is still arriving. Its
+            // text is already in the panel, so leaving the half-written fence in
+            // the prose as well would show the same code twice, once badly.
+            prose = FencedCode.Replace(prose, "").Trim();
+
+            AiAnswerBox.Text = prose;
+            if (scrollToEnd) AiAnswerBox.ScrollToEnd();
+
+            string codeText = code.ToString().Trim();
+            if (codeText.Length == 0)
+            {
+                _currentAnswerCode = "";
+                CodePanel.Visibility = Visibility.Collapsed;
+                ComplexityBar.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            _currentAnswerCode = codeText;
+            CodeBox.Text = codeText;
+            CodeLanguageLabel.Text = language.Length > 0 ? language.ToLowerInvariant() : "";
+            CodePanel.Visibility = Visibility.Visible;
+
+            ShowComplexity(prose);
+        }
+
+        /// <summary>
+        /// Lifts a complexity line out of the prose and shows it under the code,
+        /// where it is read at the same moment as the code it describes.
+        /// </summary>
+        private void ShowComplexity(string prose)
+        {
+            foreach (Match m in ComplexityLine.Matches(prose))
+            {
+                string line = m.Value.Trim(' ', '\t', '-', '*', '\u2022');
+                if (line.Length is < 4 or > 160) continue;
+
+                ComplexityLabel.Text = line;
+                ComplexityBar.Visibility = Visibility.Visible;
+                return;
+            }
+            ComplexityBar.Visibility = Visibility.Collapsed;
+        }
+
+        private void CopyCodeBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_currentAnswerCode)) return;
+            try
+            {
+                Clipboard.SetText(_currentAnswerCode);
+                CopyCodeBtn.Content = "Copied";
+                var revert = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                revert.Tick += (_, _) => { revert.Stop(); CopyCodeBtn.Content = "Copy code"; };
+                revert.Start();
+            }
+            catch (Exception ex) { DebugWindow.Log("UI", $"Copy failed: {ex.Message}"); }
+        }
+
         private void AiAnswerBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
         {
             bool empty = string.IsNullOrEmpty(AiAnswerBox.Text);
@@ -4194,7 +4308,7 @@ namespace InterviewCopilot
             // Don't increment here — StartNewSession's while(File.Exists) scan is the sole source of truth
             TranscriptTextBlock.Text = "";
             TranscriptHint.Visibility = Visibility.Visible;
-            AiAnswerBox.Text = "";
+            ClearAnswer();
             StarBadge.Visibility = Visibility.Collapsed;
             if (answerWindow != null) { answerWindow.UpdateAnswer(""); answerWindow.UpdateQuestion(""); }
             await StartNewSessionAsync();

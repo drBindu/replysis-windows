@@ -991,6 +991,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
                                 <Border Grid.Row="0" Background="#16FFFFFF" CornerRadius="15,15,0,0"
@@ -1090,6 +1091,83 @@
                                         </TextBlock>
                                     </Grid>
                                 </ScrollViewer>
+
+                                <!-- ══════════════════════════════════════════
+                                     CODE, IN ITS OWN PLACE
+
+                                     Code was arriving in the same wrapped,
+                                     proportional-font box as the spoken answer.
+                                     Indentation collapsed, long lines folded
+                                     mid-expression, and the thing a candidate has
+                                     to read most carefully was the hardest thing
+                                     on the screen to read.
+
+                                     It gets a panel: monospace, no wrapping, its
+                                     own scrollbars, and a copy button, because
+                                     the next thing anyone does with it is paste
+                                     it into the editor.
+                                ══════════════════════════════════════════ -->
+                                <Border x:Name="CodePanel" Grid.Row="3" Visibility="Collapsed"
+                                        Background="#0B1220" CornerRadius="10" Margin="16,0,16,14"
+                                        BorderBrush="#22344F" BorderThickness="1">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <Grid Grid.Row="0" Margin="12,9,10,7">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="&#xE943;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                           Foreground="#5EA9F5" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="SOLUTION" Foreground="#BFD4EE" FontSize="10.5"
+                                                           FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="CodeLanguageLabel" Text="" Foreground="#6F8DB0"
+                                                           FontSize="10" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                                           Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <Button x:Name="CopyCodeBtn" Content="Copy code" Cursor="Hand"
+                                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                    Click="CopyCodeBtn_Click"
+                                                    Foreground="#CFE2FA" FontSize="10.5" FontWeight="Bold"
+                                                    FontFamily="Segoe UI" BorderThickness="0" Padding="9,4"
+                                                    Background="#172942">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="#223A5C"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                        </Grid>
+
+                                        <TextBox x:Name="CodeBox" Grid.Row="1"
+                                                 Background="Transparent" Foreground="#DCE9F7"
+                                                 BorderThickness="0" Padding="12,0,12,10"
+                                                 FontFamily="Cascadia Mono, Consolas, Courier New"
+                                                 FontSize="12.5" IsReadOnly="True"
+                                                 TextWrapping="NoWrap" AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 HorizontalScrollBarVisibility="Auto"
+                                                 SelectionBrush="#55FFFFFF"
+                                                 MaxHeight="240"/>
+
+                                        <Border x:Name="ComplexityBar" Grid.Row="2" Visibility="Collapsed"
+                                                Background="#0E1A2B" CornerRadius="0,0,9,9" Padding="12,7">
+                                            <TextBlock x:Name="ComplexityLabel" Text=""
+                                                       Foreground="#8FB6E2" FontSize="11" FontWeight="SemiBold"
+                                                       FontFamily="Segoe UI" TextWrapping="Wrap"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
                             </Grid>
                         </Border>
 

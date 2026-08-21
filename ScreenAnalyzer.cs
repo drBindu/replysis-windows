@@ -683,7 +683,12 @@ namespace InterviewCopilot
                 sb.AppendLine("  such as \"Let me scroll up so I get the exact wording.\" Never guess.");
                 sb.AppendLine("- Never invent the user's own history, employers, projects, or");
                 sb.AppendLine("  numbers. Where their own detail belongs, write [your example].");
-                sb.AppendLine("- Plain text. Section titles exactly as above. No markdown.");
+                sb.AppendLine("- Plain text and section titles exactly as above. No markdown, with");
+                sb.AppendLine("  one exception: code goes inside a fence, ```language on its own");
+                sb.AppendLine("  line before it and ``` on its own line after. The app lifts");
+                sb.AppendLine("  anything fenced into a monospace panel of its own, so fence every");
+                sb.AppendLine("  line of code and nothing else. Code left outside a fence is shown");
+                sb.AppendLine("  in a proportional font with its indentation flattened.");
 
                 return sb.ToString();
             }
@@ -780,7 +785,10 @@ namespace InterviewCopilot
                 Format: plain text, nothing decorative. A section title is the bare word on
                 its own line, in capitals, with its content on the very next line and
                 no blank line between them. No lines of dashes, no markdown, no
-                asterisks, no backtick fences. Bullets, where you need them, use the
+                asterisks. Code is the one exception and must be fenced: ```language
+                on its own line before it, ``` on its own line after, so the app can
+                show it in a monospace panel instead of flattening it into prose.
+                Bullets, where you need them, use the
                 • character.
 
                 Keep the whole thing as short as it can be and still answer. Three
@@ -817,7 +825,9 @@ namespace InterviewCopilot
             raw = Regex.Replace(raw, @"\*([^*\n]+)\*",       "$1");   // *italic*
             raw = Regex.Replace(raw, @"_{1,2}([^_\n]+)_{1,2}", "$1"); // _italic_
             raw = Regex.Replace(raw, @"(?m)^#{1,6}\s+", "");          // ## headers
-            raw = Regex.Replace(raw, @"```[a-zA-Z]*\r?\n?", "");      // code fences
+            // Fences are kept on purpose. The code panel uses them to find where
+            // the code starts and ends; stripping them here put the code straight
+            // back into the paragraph it was meant to be lifted out of.
 
             // Rewrite AI-tell long dashes into plain human punctuation. The ━ (U+2501)
             // used for section headers is a different character and is left untouched.
