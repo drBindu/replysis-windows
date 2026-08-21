@@ -678,6 +678,19 @@ namespace InterviewCopilot
                 sb.AppendLine("  Title bars, tabs, logos and menu names are all in the image; read");
                 sb.AppendLine("  them. Only if the name is genuinely not visible, describe it by");
                 sb.AppendLine("  what it does rather than calling it \"an application\".");
+                sb.AppendLine("- Say when the question is cut off, and ask for the rest.");
+                sb.AppendLine("  A coding problem often runs past the bottom of the screen. If the");
+                sb.AppendLine("  statement, the examples or the constraints are clearly incomplete —");
+                sb.AppendLine("  text ends mid-sentence, a section is missing, a scrollbar shows more");
+                sb.AppendLine("  below — do not answer from half of it. Say so in the user's own");
+                sb.AppendLine("  voice, as a line they can speak out loud while they scroll:");
+                sb.AppendLine("    \"Let me scroll down and read the constraints before I answer.\"");
+                sb.AppendLine("    \"Give me a second, I want to see the rest of the examples.\"");
+                sb.AppendLine("  Then add one line beginning NEED: naming exactly what is missing,");
+                sb.AppendLine("  such as NEED: the constraints and the third example.");
+                sb.AppendLine("  Scrolling is captured, so the next answer will have both halves.");
+                sb.AppendLine("  Answering a half-read question confidently is the worst outcome");
+                sb.AppendLine("  here: it sounds right and it is wrong, and nobody can tell which.");
                 sb.AppendLine("- Describe only what is visible. If you cannot read the part being");
                 sb.AppendLine("  asked about, SAY THIS becomes a natural line that buys a moment,");
                 sb.AppendLine("  such as \"Let me scroll up so I get the exact wording.\" Never guess.");
@@ -945,7 +958,7 @@ namespace InterviewCopilot
         /// </summary>
         public static async IAsyncEnumerable<string> AnalyzeStreamAsync(
             byte[] imageBytes, string? resumeContext = null, string? spokenQuestion = null,
-            string? preparedImageId = null,
+            System.Collections.Generic.IReadOnlyList<string>? preparedImageIds = null,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             var held = new List<string>();
@@ -954,7 +967,7 @@ namespace InterviewCopilot
 
             await foreach (string token in
                 StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: false,
-                                preparedImageId, ct))
+                                preparedImageIds, ct))
             {
                 if (released) { yield return token; continue; }
 
@@ -979,7 +992,7 @@ namespace InterviewCopilot
             DebugWindow.Log("SCREEN", "Model declined; asking again in plainer words.");
             await foreach (string token in
                 StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: true,
-                                preparedImageId: null, ct))
+                                preparedImageIds: null, ct))
                 yield return token;
         }
 
@@ -1003,7 +1016,7 @@ namespace InterviewCopilot
 
         private static async IAsyncEnumerable<string> StreamOnceAsync(
             byte[] imageBytes, string? resumeContext, string? spokenQuestion, bool plainly,
-            string? preparedImageId = null,
+            System.Collections.Generic.IReadOnlyList<string>? preparedImageIds = null,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             string prompt = plainly
@@ -1014,8 +1027,8 @@ namespace InterviewCopilot
             // When the picture went up before the question, send the id instead.
             // The bytes are still carried on the fallback path, and on a retry,
             // because an id is spent the moment the server hands it back.
-            string payloadJson = !string.IsNullOrEmpty(preparedImageId)
-                ? JsonSerializer.Serialize(new { imageId = preparedImageId, prompt, provider })
+            string payloadJson = preparedImageIds is { Count: > 0 }
+                ? JsonSerializer.Serialize(new { imageIds = preparedImageIds, prompt, provider })
                 : JsonSerializer.Serialize(new
                   {
                       image = Convert.ToBase64String(imageBytes),

@@ -2526,6 +2526,22 @@ namespace InterviewCopilot
         private string _preparedShotId = "";
         private DateTime _preparedShotIdUtc = DateTime.MinValue;
 
+        // The last few views of the screen, oldest first.
+        //
+        // A coding problem rarely fits on one screen. The candidate scrolls to
+        // read it, and any single screenshot then holds the statement or the
+        // constraints but not both, so the answer was built from half a
+        // question with no way to tell from reading it.
+        //
+        // Keeping the views that differ turns scrolling into exactly the right
+        // behaviour: by the time they ask, the app has seen the whole problem,
+        // in the order they read it.
+        private readonly List<string> _recentShotIds = new();
+
+        // Three is a scrolled problem statement. More is a screen recording,
+        // and the cost of reading them lands on somebody waiting to speak.
+        private const int MaxShotsPerQuestion = 3;
+
         // Its own lifetime, shorter than the server's ninety seconds, so the app
         // gives up on an id before the server does rather than sending one that
         // has just gone.
@@ -2581,6 +2597,13 @@ namespace InterviewCopilot
                     ? id.GetString() ?? "" : "";
                 _preparedShotIdUtc = DateTime.UtcNow;
                 _uploadedShotFingerprint = fingerprint;
+
+                if (!string.IsNullOrEmpty(_preparedShotId))
+                {
+                    _recentShotIds.Add(_preparedShotId);
+                    while (_recentShotIds.Count > MaxShotsPerQuestion)
+                        _recentShotIds.RemoveAt(0);
+                }
                 DebugWindow.Log("SCREEN",
                     $"Screenshot sent ahead in {sw.ElapsedMilliseconds}ms; the question now carries an id.");
             }
@@ -2595,16 +2618,28 @@ namespace InterviewCopilot
         /// The id of a screenshot already sitting on the server, or empty when
         /// there is none to use.
         /// </summary>
-        private string TakePreparedShotId()
+        /// <summary>
+        /// Every view held on the server for this question, oldest first, or an
+        /// empty list when there is nothing usable.
+        /// </summary>
+        private List<string> TakePreparedShotIds()
         {
-            if (string.IsNullOrEmpty(_preparedShotId)) return "";
-            if (DateTime.UtcNow - _preparedShotIdUtc > PreparedShotIdMaxAge) return "";
-            if (DateTime.UtcNow - _preparedShotUtc > PreparedShotMaxAge) return "";
+            var ids = new List<string>();
+            if (string.IsNullOrEmpty(_preparedShotId)) return ids;
+            if (DateTime.UtcNow - _preparedShotIdUtc > PreparedShotIdMaxAge) return ids;
+            if (DateTime.UtcNow - _preparedShotUtc > PreparedShotMaxAge) return ids;
 
-            // Spent once, exactly as the server treats it.
-            string id = _preparedShotId;
+            ids.AddRange(_recentShotIds);
+            if (!ids.Contains(_preparedShotId)) ids.Add(_preparedShotId);
+
+            // Each id is good for one question on the server too, so the whole
+            // set is spent together and the next question starts fresh.
+            _recentShotIds.Clear();
             _preparedShotId = "";
-            return id;
+
+            if (ids.Count > 1)
+                DebugWindow.Log("SCREEN", $"Sending {ids.Count} views of the screen, as scrolled.");
+            return ids;
         }
 
         /// <summary>
@@ -2753,7 +2788,7 @@ namespace InterviewCopilot
 
                     await foreach (var visionToken in
                         ScreenAnalyzer.AnalyzeStreamAsync(shot, ResumeParser.ExtractFacts(resume), question,
-                                                          TakePreparedShotId(), ct))
+                                                          TakePreparedShotIds(), ct))
                     {
                         if (reachedNotes) continue;
 
