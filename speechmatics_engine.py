@@ -1322,236 +1322,6 @@ def _downgrade_model_if_rejected(err_text: str) -> bool:
 
 
 # ── MAIN WITH AUTO-RECONNECT ──────────────────────────────────────────────────
-# ══════════════════════════════════════════════════════════════════════════════
-# GROQ WHISPER ENGINE
-#
-# A transcriber that costs nothing, for when Speechmatics will not talk to us.
-#
-# Speechmatics is the better engine and stays the default: it streams, and it
-# returns words about 0.7s behind the speaker. But it is a paid contract, and
-# when that contract lapses it does not degrade, it refuses:
-#
-#   'type': 'not_allowed', 'reason': 'Contract blocked: Credit Balance Exhausted'
-#
-# Every endpoint, every retry, for as long as the balance is zero. The app then
-# sat on "connecting" forever and nothing could be tested, which is the worst
-# possible time to have no second option — the product does not work at all
-# without transcription.
-#
-# Whisper on Groq is free on the same key the answers already use. It is not a
-# streaming API: it takes a finished audio file. So instead of streaming, this
-# waits for the speaker to pause and sends what they just said.
-#
-# That sounds slower and mostly is not. The wait is the pause plus the round
-# trip, around 1.2s against Speechmatics' 0.7s, because a pause is exactly the
-# moment a question ends and the answer is wanted. What it cannot do is show
-# words as they are spoken; the transcript arrives a phrase at a time.
-#
-# Good enough to build and test the whole product against, and a real safety
-# net if the paid contract ever lapses mid-interview again.
-#
-# NOT REACHABLE YET. It reads GROQ_API_KEY from the environment, and the app
-# never has one: paid keys stay on the server by design, and the only key that
-# ships is the public Firebase client key. Speechmatics works because the
-# server mints a short-lived token; Groq has no equivalent.
-#
-# Making this live needs a backend endpoint that accepts the audio and calls
-# Groq itself, the same shape as every other paid call. Written and left ready
-# because the failure it covers has now happened once, mid-test, with no
-# second option at all.
-# ══════════════════════════════════════════════════════════════════════════════
-
-WHISPER_MODEL       = "whisper-large-v3-turbo"
-WHISPER_URL         = "https://api.groq.com/openai/v1/audio/transcriptions"
-
-# A phrase ends when the room goes quiet for this long. Short enough to feel
-# responsive, long enough that a slow speaker's mid-sentence breath does not
-# chop their question in half. The turn detector in the app applies its own,
-# larger judgement on top of this.
-WHISPER_SILENCE_MS  = 700
-
-# Nothing shorter is worth a request: it is a cough or a chair.
-WHISPER_MIN_SPEECH_MS = 400
-
-# Nothing longer either. Whisper accepts far more, but a request that big is a
-# monologue nobody is waiting on, and holding it back would look like a hang.
-WHISPER_MAX_PHRASE_MS = 25_000
-
-# Amplitude below this is a quiet room rather than speech. Deliberately the
-# same figure the device prober uses, so a microphone that passes selection
-# also passes here.
-WHISPER_SPEECH_AMP  = 400
-
-
-def _pcm_amplitude(chunk: bytes) -> int:
-    """Mean absolute sample value. Cheap, and enough to tell speech from a room."""
-    if not chunk:
-        return 0
-    try:
-        import array
-        samples = array.array("h")
-        samples.frombytes(chunk[: len(chunk) - (len(chunk) % 2)])
-        if not samples:
-            return 0
-        return int(sum(abs(v) for v in samples) / len(samples))
-    except Exception:
-        return 0
-
-
-def _pcm_to_wav(pcm: bytes) -> bytes:
-    """Wrap raw 16kHz mono s16le in a WAV header, which is what the API wants."""
-    import struct
-    return (b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt "
-            + struct.pack("<IHHIIHH", 16, 1, 1, SAMPLE_RATE, SAMPLE_RATE * 2, 2, 16)
-            + b"data" + struct.pack("<I", len(pcm)) + pcm)
-
-
-# Whisper invents speech in silence. Given a near-silent clip it will happily
-# return "Thank you." or "you", confidently, every time — a documented quirk,
-# not a bug to be fixed here. Anything on this list that arrives as the WHOLE
-# of a phrase is discarded, because a real interviewer saying only "thank you"
-# is not a question worth answering either.
-WHISPER_HALLUCINATIONS = {
-    "you", "thank you", "thanks", "thank you.", "you.", "bye", "bye.",
-    "thanks for watching", "thanks for watching!", "thank you for watching",
-    "subscribe", ".", "!", "?", "the", "uh", "um", "mm",
-}
-
-
-def _whisper_usable(text: str) -> bool:
-    cleaned = text.strip().lower().strip(" .,!?")
-    if len(cleaned) < 2:
-        return False
-    return cleaned not in {h.strip(" .,!?") for h in WHISPER_HALLUCINATIONS}
-
-
-async def run_groq_whisper(api_key: str):
-    """Transcribe by phrase using Groq Whisper, honouring the same flags as the
-    Speechmatics path: pause.flag mutes, reset.flag clears, shutdown.flag exits."""
-    import urllib.request
-    import urllib.error
-    import uuid
-
-    print("", flush=True)
-    print("===============================================", flush=True)
-    print("   GROQ WHISPER ENGINE: READY  (free tier)", flush=True)
-    print("   Phrase-at-a-time, not word-by-word.", flush=True)
-    print("===============================================", flush=True)
-    print(">>> STATUS: ONLINE", flush=True)
-
-    loop = asyncio.get_event_loop()
-    transcript_parts = []
-    speech = bytearray()
-    silence_ms = 0
-    speech_ms = 0
-    chunk_ms = int(CHUNK_FRAMES / SAMPLE_RATE * 1000) or 100
-
-    def post_audio(pcm: bytes) -> str:
-        """Blocking upload, run off the event loop so audio keeps draining."""
-        boundary = "----replysis" + uuid.uuid4().hex
-        parts = []
-        for name, value in (("model", WHISPER_MODEL),
-                            ("response_format", "json"),
-                            ("temperature", "0"),
-                            ("language", args.language or "en")):
-            parts.append(
-                f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n"
-                .encode())
-        parts.append(
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
-            f"filename=\"a.wav\"\r\nContent-Type: audio/wav\r\n\r\n".encode())
-        parts.append(_pcm_to_wav(pcm))
-        parts.append(f"\r\n--{boundary}--\r\n".encode())
-        body = b"".join(parts)
-
-        req = urllib.request.Request(WHISPER_URL, data=body, method="POST")
-        req.add_header("Authorization", f"Bearer {api_key}")
-        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
-        try:
-            with urllib.request.urlopen(req, timeout=30) as res:
-                return json.loads(res.read().decode("utf-8", "replace")).get("text", "")
-        except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", "replace")[:200]
-            print(f">>> WHISPER HTTP {e.code}: {detail}", flush=True)
-            # A daily cap is not a transient blip and should read as itself.
-            if e.code == 429:
-                print(">>> Whisper is rate limited; the next phrase will retry.", flush=True)
-            return ""
-        except Exception as ex:
-            print(f">>> WHISPER error: {ex}", flush=True)
-            return ""
-
-    while True:
-        if os.path.exists(SHUTDOWN_FLAG):
-            print(">>> Shutdown flag detected. Exiting cleanly.", flush=True)
-            try:
-                os.remove(SHUTDOWN_FLAG)
-            except Exception:
-                pass
-            return
-
-        if os.path.exists(RESET_FLAG):
-            transcript_parts = []
-            speech = bytearray()
-            silence_ms = 0
-            speech_ms = 0
-            _write_latest("")
-            try:
-                os.remove(RESET_FLAG)
-            except Exception:
-                pass
-
-        if os.path.exists(PAUSE_FLAG):
-            # Muted. Drop whatever was mid-phrase rather than transcribing it
-            # later out of context and charging a request for it.
-            speech = bytearray()
-            silence_ms = 0
-            speech_ms = 0
-            await asyncio.sleep(0.05)
-            continue
-
-        chunk = await loop.run_in_executor(None, _sarvam_read_chunk)
-        if not chunk:
-            await asyncio.sleep(0.01)
-            continue
-
-        if _pcm_amplitude(chunk) >= WHISPER_SPEECH_AMP:
-            speech.extend(chunk)
-            speech_ms += chunk_ms
-            silence_ms = 0
-        elif speech:
-            # Keep the quiet tail: a phrase clipped at the last loud sample
-            # loses the end of the final word, which is where question marks
-            # and plurals live.
-            speech.extend(chunk)
-            silence_ms += chunk_ms
-
-        ended = speech and (silence_ms >= WHISPER_SILENCE_MS
-                            or speech_ms >= WHISPER_MAX_PHRASE_MS)
-        if not ended:
-            await asyncio.sleep(0.005)
-            continue
-
-        pcm = bytes(speech)
-        had_speech_ms = speech_ms
-        speech = bytearray()
-        silence_ms = 0
-        speech_ms = 0
-
-        if had_speech_ms < WHISPER_MIN_SPEECH_MS:
-            continue
-
-        text = await loop.run_in_executor(None, post_audio, pcm)
-        if not text or not _whisper_usable(text):
-            continue
-
-        transcript_parts.append(text.strip())
-        # The app reads the whole transcript, so send the phrase joined to what
-        # came before rather than only the newest piece.
-        _write_latest(" ".join(transcript_parts).strip())
-        print(f">>> WHISPER phrase ({had_speech_ms}ms): {text.strip()[:80]}", flush=True)
-
-
 async def main():
     # Route Speechmatics-unsupported languages (Telugu, etc.) to Sarvam AI and skip
     # the entire Speechmatics path below.
@@ -2168,34 +1938,27 @@ async def main():
                     print(">>> FATAL: AUDIO_USAGE_EXCEEDED. Speechmatics audio usage limit has been reached.", flush=True)
                     raise SystemExit(3)  # C# surfaces this as a non-retriable service-limit state.
 
-                # A lapsed contract is not a network blip and retrying is not a
-                # plan. Speechmatics refuses every endpoint, on every attempt,
-                # for as long as the balance is zero:
+                # A blocked contract looked like nothing at all. It is not an auth
+                # failure and not a usage limit, so it fell through to "trying next
+                # endpoint" and the engine retried on a doubling backoff forever
+                # while the app showed "connecting":
                 #
                 #   'type': 'not_allowed',
                 #   'reason': 'Contract blocked: Credit Balance Exhausted'
                 #
-                # The engine retried on a doubling backoff and the app showed
-                # "connecting" indefinitely, which is the least useful thing it
-                # could say: nothing was connecting and nothing would.
-                #
-                # Whisper is worse — a phrase at a time instead of word by word,
-                # and about half a second slower — so it is never the default.
-                # But the alternative here is no transcription at all, which
-                # means no product.
+                # Exiting as an auth failure is the useful thing to do, because the
+                # token in hand was minted by the blocked account and will never
+                # work again. That code makes the app throw the cached token away
+                # and fetch a new one, which is exactly the right move: it fails
+                # again while the contract is still blocked, and it recovers by
+                # itself the moment billing is restored or the key is replaced.
                 if ("contract blocked" in err.lower()
                         or "credit balance exhausted" in err.lower()):
-                    print(">>> Speechmatics contract is blocked: " + err.strip()[:120], flush=True)
-                    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
-                    if groq_key:
-                        print(">>> Falling back to Groq Whisper so transcription keeps working.", flush=True)
-                        print(">>> Phrases, not live words, and a little slower. "
-                              "Restore Speechmatics billing for the better engine.", flush=True)
-                        await run_groq_whisper(groq_key)
-                        return
-                    print(">>> FATAL: Speechmatics contract blocked and no GROQ_API_KEY to fall back on.",
-                          flush=True)
-                    raise SystemExit(3)
+                    print(">>> FATAL: SPEECHMATICS CONTRACT BLOCKED — " + err.strip()[:140], flush=True)
+                    print(">>> The account has no credit. Transcription cannot run until "
+                          "billing is restored or the key is replaced.", flush=True)
+                    raise SystemExit(2)
+
                 if "404" in err:
                     print(">>> 404 on this endpoint — SDK may be outdated.", flush=True)
                     print(">>> Run: pip install --upgrade speechmatics", flush=True)
