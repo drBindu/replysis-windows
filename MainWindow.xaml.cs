@@ -382,6 +382,13 @@ namespace InterviewCopilot
                     HookPopupStealth(SavedResumesPopup);
                     HookPopupStealth(ListeningModePopup);
                     UpdateListeningModeUi();
+
+                    // On by default, and remembered. It used to start off every
+                    // time, so the feature most likely to matter in a coding
+                    // round was the one somebody had to remember to switch on
+                    // with an interviewer already speaking.
+                    _watchScreenMode = SettingsWindow.GetWatchScreenEnabled();
+                    if (_watchScreenMode) StartPreparedShots();
                     UpdateWatchScreenUi();
 
                     // First launch (no seen-flag yet): show the onboarding so new users
@@ -4862,9 +4869,14 @@ namespace InterviewCopilot
         /// same control, and a switch that reads ON in one window and OFF in the
         /// other is worse than having no indicator at all.
         /// </summary>
+        /// <summary>The toolbar button now does what F8 does.</summary>
+        private void ReadScreenPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+            => _ = HandleScreenAnalysisAsync();
+
         private void ToggleWatchScreen()
         {
             _watchScreenMode = !_watchScreenMode;
+            SettingsWindow.SetWatchScreenEnabled(_watchScreenMode);
             UpdateWatchScreenUi();
             DebugWindow.Log("SCREEN", $"Screen-share watch {(_watchScreenMode ? "ON" : "OFF")}");
 
@@ -4892,10 +4904,11 @@ namespace InterviewCopilot
         {
             if (WatchScreenPillLabel == null || WatchScreenIcon == null) return;
 
-            // The label carries the state, because a switch whose only feedback is
-            // a word inside a menu tells you nothing once the menu is shut, and
-            // this one has to be readable at a glance mid-interview.
-            WatchScreenPillLabel.Text = _watchScreenMode ? "WATCHING" : "WATCH SCREEN";
+            // The button is an action now, so the label stays put and only the
+            // colour says whether screen answers are armed. A control whose
+            // label changes under the cursor is read as a switch, and this one
+            // is not: pressing it reads the screen either way.
+            WatchScreenPillLabel.Text = "READ SCREEN";
 
             var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
                 _watchScreenMode ? "#34E08A" : "#8FA3BA"));

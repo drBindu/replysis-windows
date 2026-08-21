@@ -528,13 +528,22 @@
                                          chevron promised a choice that was not there and cost
                                          two clicks and a read to reach a thing that is either
                                          on or off. -->
+                                    <!-- The button does the thing, rather than arming it.
+                                         "Watch screen" was a switch that started off, so
+                                         the feature most needed in a coding round was the
+                                         one a candidate had to remember to turn on with an
+                                         interviewer already talking. That is now a setting,
+                                         on by default, and the toolbar holds the action
+                                         somebody actually presses. -->
                                     <Border x:Name="AnalyzePill" Style="{StaticResource ToolbarSegment}"
-                                            MouseLeftButtonDown="WatchScreenOption_Click"
-                                            ToolTip="Turn on while the interviewer is sharing their screen: every question is then answered from what is on screen.  &#183;  Any time without this: F8 reads this screen once, F9 your main screen, F7 drags a box around one part.">
+                                            MouseLeftButtonDown="ReadScreenPill_Click"
+                                            ToolTip="Read the screen now and answer from it, without saying anything.  &#183;  F8 this screen, F9 your main screen, F7 drag a box around one part.  &#183;  Answering from the screen when the interviewer asks about it is a setting, on by default.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock x:Name="WatchScreenIcon" Text="&#xE7F4;"
                                                        Style="{StaticResource ToolbarPillIcon}"/>
-                                            <TextBlock x:Name="WatchScreenPillLabel" Text="WATCH SCREEN"
+                                            <TextBlock x:Name="WatchScreenPillLabel" Text="READ SCREEN"
+                                                       Style="{StaticResource ToolbarPillLabel}"/>
+                                            <TextBlock Text="F8" Margin="7,0,0,0" Opacity="0.55"
                                                        Style="{StaticResource ToolbarPillLabel}"/>
                                         </StackPanel>
                                     </Border>

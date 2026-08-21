@@ -95,6 +95,7 @@ namespace InterviewCopilot
             }
             CloudSyncCheckBox.IsChecked = cfg.CloudSyncEnabled;
             StealthCheckBox.IsChecked   = cfg.StealthMode;
+            WatchScreenCheckBox.IsChecked = cfg.WatchScreenEnabled;
             RefreshMicCards();
 
             LoadLanguages(cfg.TranscriptLanguage);
@@ -455,6 +456,7 @@ namespace InterviewCopilot
                 AudioDeviceIndex  = SelectedDeviceIndex,   // persist the chosen mic across restarts
                 CloudSyncEnabled  = CloudSyncCheckBox.IsChecked == true,
                 StealthMode       = StealthCheckBox.IsChecked == true,
+                WatchScreenEnabled = WatchScreenCheckBox.IsChecked == true,
                 TranscriptLanguage = SelectedLanguageCode(),
                 // Carry the Sarvam key through — it's not an editable field here, so pull the
                 // stored value. Without this, saving Settings would wipe it (fresh AppConfig).
@@ -535,6 +537,20 @@ namespace InterviewCopilot
             // Default ~25% on the slider = mostly transparent glass out of the box.
             public double MainWindowOpacity  { get; set; } = 0.62;
             public double OverlayOpacity     { get; set; } = 0.62;
+
+            /// <summary>
+            /// Whether questions are answered from the screen without being asked
+            /// to look at it. On by default.
+            ///
+            /// It used to be a toolbar switch that started off, so the feature
+            /// most likely to be needed in a coding round was the one a candidate
+            /// had to remember to turn on, in the seconds before an interviewer
+            /// started talking. Nobody reads a toolbar under that pressure.
+            ///
+            /// It costs nothing while nothing is asked: the screen is only read
+            /// when a question arrives that is actually about it.
+            /// </summary>
+            public bool   WatchScreenEnabled { get; set; } = true;
             // true  = system audio + mic (default)
             // false = system audio only  (mic never opened — fully invisible, no OS mic indicator)
             public bool   MicCaptureEnabled  { get; set; } = true;
@@ -671,6 +687,14 @@ namespace InterviewCopilot
         public static bool IsGroq() => LoadConfig().ModelIndex != IdxOpenAi;
 
         public static bool   GetMicCaptureEnabled() => LoadConfig().MicCaptureEnabled;
+        public static bool   GetWatchScreenEnabled() => LoadConfig().WatchScreenEnabled;
+
+        public static void SetWatchScreenEnabled(bool enabled)
+        {
+            var config = LoadConfig();
+            config.WatchScreenEnabled = enabled;
+            SaveConfig(config);
+        }
         public static int    GetAudioDeviceIndex()  => LoadConfig().AudioDeviceIndex;
         public static string GetTranscriptLanguage()
         {
