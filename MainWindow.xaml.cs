@@ -1534,10 +1534,17 @@ namespace InterviewCopilot
             WritePauseFlag();
             if (AutoModeEnabled) _autoTurnSubmitting = false;
 
-            AiAnswerBox.Text =
-                $"The microphone switched off after {IdleListeningTimeout.TotalMinutes:0} minutes of silence, "
-                + "so your listening time is not spent on an empty room. Press Space to start again.";
-            if (answerWindow != null) answerWindow.UpdateAnswer(AiAnswerBox.Text);
+            // Said in the badge, not in the answer.
+            //
+            // It used to overwrite AiAnswerBox, so an answer somebody was still
+            // reading was replaced by a notice about the microphone. The
+            // microphone going quiet is worth knowing and is not worth losing
+            // the answer over, and it happened every time they read a long one
+            // with the mic still on — which is exactly when the answer mattered
+            // most.
+            ShowListeningModeNotice(
+                $"MIC OFF AFTER {IdleListeningTimeout.TotalMinutes:0} MIN QUIET — SPACE TO RESUME");
+            DebugWindow.Log("METER", "Microphone stopped after the idle timeout.");
             UpdateMicUi();
         }
 
