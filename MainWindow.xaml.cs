@@ -2592,6 +2592,13 @@ namespace InterviewCopilot
         // and the cost of reading them lands on somebody waiting to speak.
         private const int MaxShotsPerQuestion = 3;
 
+        // How much of the coarse signature must differ before two captures count
+        // as different parts of the page. Sixteen of 256 cells is a scroll; a
+        // counter ticking over moves none of them.
+        private const int MinSignatureChange = 16;
+
+        private string _lastKeptSignature = "";
+
         // Its own lifetime, shorter than the server's ninety seconds, so the app
         // gives up on an id before the server does rather than sending one that
         // has just gone.
@@ -2599,6 +2606,17 @@ namespace InterviewCopilot
 
         // What was last sent, so the same still screen is not sent again.
         private string _uploadedShotFingerprint = "";
+
+        /// <summary>How many of the 256 cells differ. 256 when either is missing.</summary>
+        private static int SignatureDistance(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b) || a.Length != b.Length) return 256;
+
+            int differing = 0;
+            for (int i = 0; i < a.Length; i++)
+                if (a[i] != b[i]) differing++;
+            return differing;
+        }
 
         private async Task UploadPreparedShotAsync(byte[] shot)
         {
@@ -2650,8 +2668,29 @@ namespace InterviewCopilot
 
                 if (!string.IsNullOrEmpty(_preparedShotId))
                 {
-                    _recentShotIds.Add((_preparedShotId, shot.Length));
-                    Dispatcher.Invoke(RescanAfterScrollIfArmed);
+                    // Only a screen that moved is a second view worth sending.
+                    //
+                    // A page with a live "2,332 Online" counter and a blinking
+                    // caret produces a different image every two seconds, so
+                    // every capture was kept as a new view and every question
+                    // carried two pictures of the same screen. Twice the tokens
+                    // for nothing, against an allowance of eight thousand a
+                    // minute, which is why testing kept ending in "temporarily
+                    // unavailable".
+                    string signature = ScreenAnalyzer.LastCaptureSignature;
+                    bool pageMoved = SignatureDistance(signature, _lastKeptSignature) >= MinSignatureChange;
+
+                    if (pageMoved || _recentShotIds.Count == 0)
+                    {
+                        _lastKeptSignature = signature;
+                        _recentShotIds.Add((_preparedShotId, shot.Length));
+                        Dispatcher.Invoke(RescanAfterScrollIfArmed);
+                    }
+                    else
+                    {
+                        // Same view, newer picture: replace rather than add.
+                        _recentShotIds[^1] = (_preparedShotId, shot.Length);
+                    }
                     while (_recentShotIds.Count > MaxShotsPerQuestion)
                         _recentShotIds.RemoveAt(0);
                 }

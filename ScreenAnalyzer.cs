@@ -471,6 +471,8 @@ namespace InterviewCopilot
             // letter edge, and at small sizes that is the difference between the
             // model reading 'l' and reading '1'. PNG is lossless and, on this kind
             // of image, usually no larger than the JPEG it replaces.
+            LastCaptureSignature = CoarseSignature(bmp);
+
             byte[] full = EncodePng(bmp);
 
             // Then take the colours out, which is where the size actually is.
@@ -498,6 +500,46 @@ namespace InterviewCopilot
                 return indexed;
             }
             return full;
+        }
+
+        /// <summary>
+        /// A rough fingerprint of what the screen looks like, ignoring detail.
+        ///
+        /// Two captures are only worth sending together when they show
+        /// different parts of the page. Comparing the exact bytes cannot tell
+        /// that: a LeetCode page has a "2,332 Online" counter and a caret that
+        /// change every second, so every capture differed, every one was kept
+        /// as a new view, and every question went out carrying two pictures of
+        /// the same screen — twice the tokens for nothing, on an allowance of
+        /// eight thousand a minute.
+        ///
+        /// Sixteen by sixteen, sixteen levels of grey. A scroll moves whole
+        /// blocks of the page and changes this a lot; a ticking counter and a
+        /// blinking cursor do not move it at all.
+        /// </summary>
+        public static string LastCaptureSignature { get; private set; } = "";
+
+        private static string CoarseSignature(BitmapSource bmp)
+        {
+            try
+            {
+                var small = new TransformedBitmap(bmp,
+                    new ScaleTransform(16.0 / bmp.PixelWidth, 16.0 / bmp.PixelHeight));
+                var grey = new FormatConvertedBitmap(small, PixelFormats.Gray8, null, 0);
+
+                var pixels = new byte[16 * 16];
+                grey.CopyPixels(pixels, 16, 0);
+
+                var sb = new StringBuilder(256);
+                foreach (byte value in pixels) sb.Append((value >> 4).ToString("x1"));
+                return sb.ToString();
+            }
+            catch
+            {
+                // No signature means "treat it as different", which is the old
+                // behaviour: correct, just not as cheap.
+                return Guid.NewGuid().ToString("N");
+            }
         }
 
         private static byte[] EncodePng(BitmapSource bmp)
