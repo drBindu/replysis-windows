@@ -2532,10 +2532,30 @@ namespace InterviewCopilot
         // has just gone.
         private static readonly TimeSpan PreparedShotIdMaxAge = TimeSpan.FromSeconds(60);
 
+        // What was last sent, so the same still screen is not sent again.
+        private string _uploadedShotFingerprint = "";
+
         private async Task UploadPreparedShotAsync(byte[] shot)
         {
             try
             {
+                // An interview screen sits still. A problem statement is read for
+                // minutes, and every two seconds the app was sending the same
+                // pixels again, purely to hold an id it already had.
+                //
+                // Only a screen that changed is worth sending. The id already on
+                // hand still points at an identical picture, so nothing is lost
+                // by staying quiet, and the traffic drops to what actually
+                // happens rather than what the timer does.
+                string fingerprint = Convert.ToBase64String(
+                    System.Security.Cryptography.SHA256.HashData(shot));
+                if (fingerprint == _uploadedShotFingerprint && !string.IsNullOrEmpty(_preparedShotId))
+                {
+                    // Keep the existing id alive against its own clock.
+                    _preparedShotIdUtc = DateTime.UtcNow;
+                    return;
+                }
+
                 var sw = Stopwatch.StartNew();
                 using var req = new HttpRequestMessage(HttpMethod.Post,
                     $"{BackendUrl}/api/v1/interview/screen-cache");
@@ -2553,6 +2573,7 @@ namespace InterviewCopilot
                     // sends the bytes the old way and is a little slower.
                     DebugWindow.Log("SCREEN", $"Early upload declined: HTTP {(int)res.StatusCode}");
                     _preparedShotId = "";
+                    _uploadedShotFingerprint = "";
                     return;
                 }
 
@@ -2560,6 +2581,7 @@ namespace InterviewCopilot
                 _preparedShotId = doc.RootElement.TryGetProperty("imageId", out var id)
                     ? id.GetString() ?? "" : "";
                 _preparedShotIdUtc = DateTime.UtcNow;
+                _uploadedShotFingerprint = fingerprint;
                 DebugWindow.Log("SCREEN",
                     $"Screenshot sent ahead in {sw.ElapsedMilliseconds}ms; the question now carries an id.");
             }
