@@ -2536,7 +2536,17 @@ namespace InterviewCopilot
         // Keeping the views that differ turns scrolling into exactly the right
         // behaviour: by the time they ask, the app has seen the whole problem,
         // in the order they read it.
-        private readonly List<string> _recentShotIds = new();
+        private readonly List<(string Id, int Bytes)> _recentShotIds = new();
+
+        // How much picture one question may carry.
+        //
+        // Raising the full-screen resolution so the text could be read took a
+        // capture to about 380 KB. Three of those is a megabyte and a half of
+        // base64, which the provider refuses outright with a 413, and the
+        // candidate reads "temporarily unavailable" with an interviewer
+        // waiting. Views are added newest-first until this is reached, so the
+        // screen they are looking at now is always the one that fits.
+        private const int MaxTotalShotBytes = 700 * 1024;
 
         // Three is a scrolled problem statement. More is a screen recording,
         // and the cost of reading them lands on somebody waiting to speak.
@@ -2600,7 +2610,7 @@ namespace InterviewCopilot
 
                 if (!string.IsNullOrEmpty(_preparedShotId))
                 {
-                    _recentShotIds.Add(_preparedShotId);
+                    _recentShotIds.Add((_preparedShotId, shot.Length));
                     while (_recentShotIds.Count > MaxShotsPerQuestion)
                         _recentShotIds.RemoveAt(0);
                 }
@@ -2629,7 +2639,19 @@ namespace InterviewCopilot
             if (DateTime.UtcNow - _preparedShotIdUtc > PreparedShotIdMaxAge) return ids;
             if (DateTime.UtcNow - _preparedShotUtc > PreparedShotMaxAge) return ids;
 
-            ids.AddRange(_recentShotIds);
+            // Newest first while measuring, so the current screen is never the
+            // one dropped for size, then reversed so the model reads the page
+            // top to bottom in the order it was scrolled.
+            int total = 0;
+            for (int i = _recentShotIds.Count - 1; i >= 0; i--)
+            {
+                var (id, bytes) = _recentShotIds[i];
+                if (ids.Count > 0 && total + bytes > MaxTotalShotBytes) break;
+                total += bytes;
+                ids.Add(id);
+            }
+            ids.Reverse();
+
             if (!ids.Contains(_preparedShotId)) ids.Add(_preparedShotId);
 
             // Each id is good for one question on the server too, so the whole
