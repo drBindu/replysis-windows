@@ -2649,21 +2649,38 @@ namespace InterviewCopilot
         {
             var ids = new List<string>();
             if (string.IsNullOrEmpty(_preparedShotId)) return ids;
+            if (_recentShotIds.Count == 0) { ids.Add(_preparedShotId); _preparedShotId = ""; return ids; }
             if (DateTime.UtcNow - _preparedShotIdUtc > PreparedShotIdMaxAge) return ids;
             if (DateTime.UtcNow - _preparedShotUtc > PreparedShotMaxAge) return ids;
 
-            // Newest first while measuring, so the current screen is never the
-            // one dropped for size, then reversed so the model reads the page
-            // top to bottom in the order it was scrolled.
+            // The newest view and the oldest one, not the last two.
+            //
+            // Someone reading a problem scrolls from the top down, so the oldest
+            // view held is the top of the statement and the newest is wherever
+            // they are now. Taking the last two instead loses the statement
+            // whenever they scroll slowly enough to fill the buffer — three
+            // views of the bottom half, and the question itself gone.
+            //
+            // The newest is added first so it is never the one dropped for size:
+            // it is the screen they are actually looking at.
             int total = 0;
-            for (int i = _recentShotIds.Count - 1; i >= 0; i--)
+            var chosen = new List<(string Id, int Bytes)>();
+
+            var newest = _recentShotIds[^1];
+            chosen.Add(newest);
+            total += newest.Bytes;
+
+            if (_recentShotIds.Count > 1)
             {
-                var (id, bytes) = _recentShotIds[i];
-                if (ids.Count > 0 && total + bytes > MaxTotalShotBytes) break;
-                total += bytes;
-                ids.Add(id);
+                var oldest = _recentShotIds[0];
+                if (total + oldest.Bytes <= MaxTotalShotBytes)
+                {
+                    chosen.Insert(0, oldest);   // top of the page first
+                    total += oldest.Bytes;
+                }
             }
-            ids.Reverse();
+
+            foreach (var (id, _) in chosen) ids.Add(id);
 
             if (!ids.Contains(_preparedShotId)) ids.Add(_preparedShotId);
 
