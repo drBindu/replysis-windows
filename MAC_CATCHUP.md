@@ -112,7 +112,78 @@ time." is well formed and is obviously the rest of "what are you looking
 for". Exclude fillers by name, or "okay" after an answer re-runs the previous
 question and spends a credit.
 
-### 5. Screenshots: what took a day to learn
+### 5. Ask what the candidate wants, because no resume says
+
+"Are you looking for C2C or W2 or full time?" is asked in the first two
+minutes of nearly every US contract screen, and the answer appears on no
+resume ever written. With nothing to go on the app produced a paragraph about
+wanting to grow and learn, which answers none of it and reads to a screener
+as dodging a direct question.
+
+Interview Setup now carries five things, saved with the company and role so
+they are answered once rather than before every interview:
+
+- **Work type** — C2C (corp to corp), W2 contract, C2H, full time, 1099,
+  open to any
+- **Work authorization** — citizen, green card, H1B, H4 EAD, OPT, CPT, TN,
+  L2 EAD, no sponsorship needed, will need sponsorship, prefer not to answer
+- **Can start** — immediately through two months, or flexible
+- **Where** — remote, hybrid, onsite, open to relocation
+- **Pay** — free text, because "$65/hr on C2C" and "$140k base" are not the
+  same shape
+
+Anything left on "Not specified" is left out of the prompt entirely. A blank
+must never become a confident answer: inventing a visa status or a rate on
+somebody's behalf is worse than saying it is open, and both are things the
+recruiter writes down.
+
+When these are set the answer leads with the answer — "I'm looking for C2C,
+and I can start in two weeks" — with one line of flexibility after it if
+true, rather than a paragraph about growth.
+
+### 6. The resume, and what happens without one
+
+**Reload the last resume on launch.** Resumes were being saved and listed but
+never put back, so every launch started with an empty box and nothing said
+so: the panel is collapsed by default and an empty card looks like a normal
+one. The user had uploaded the file days earlier and reasonably believed the
+app still had it.
+
+**With no resume, the model must not invent a field.** The rules forbade
+inventing employers, dates and metrics, and said nothing about a tech stack.
+So a Gen AI and Python candidate was told to say they wanted to keep building
+on their backend experience, "especially with Java and Spring Boot". Fluent,
+confident, and about a different person — with nothing to go on the model
+reaches for the most common CV in existence, which is the one failure that
+sounds most convincing.
+
+It must stay stack-neutral or follow the words the interviewer used.
+Technical depth is untouched: the limit is on claiming a background, never on
+answering.
+
+### 7. Teach the speech engine the words this interview uses
+
+Letters and numbers are what speech recognition gets worst, and they open
+almost every contract screen. "C2C" came through as "See to see", "W2" as "w
+to", and the candidate got an answer to a question nobody asked.
+
+Added to the vocabulary with every spoken form recruiters actually use, since
+the same term arrives as "C two C", "C to C" and "corp to corp" from three
+different people in a week: C2C, W2, 1099, corp to corp, contract to hire,
+H1B, OPT, CPT, EAD, green card, visa, notice period, relocation, onsite,
+hybrid, remote.
+
+**And tell the model the question came through speech recognition.** It
+should read for what was meant, not the letters that arrived. A short mapping
+in the prompt costs little and catches what the vocabulary misses.
+
+Note: the vocabulary list is rejected outright by some Speechmatics models —
+melia-1 validates against a different schema and refuses `additional_vocab`,
+`punctuation_overrides`, `enable_entities`, `max_delay` and
+`max_delay_mode`. Asking for it took transcription down completely, on every
+endpoint, on every retry.
+
+### 8. Screenshots: what took a day to learn
 
 **Take it before the question.** In a watch mode every question is a screen
 question, so capture on a timer and keep one ready. Removes capture and
@@ -137,7 +208,7 @@ never mentioned "Compile Error" printed in red across half the same screen.
 for an explicit hotkey and wrong for a mode left running, where the target
 becomes whichever window was clicked last.
 
-### 6. Say what cannot be seen, then answer again when it can
+### 9. Say what cannot be seen, then answer again when it can
 
 A coding problem rarely fits on one screen. If the statement is cut off, give
 the candidate a line to say out loud — "let me scroll down and read the
@@ -148,7 +219,7 @@ asked them to scroll and then ignored them for doing it; they had to work out
 that they should ask the same question twice. Once only, within twenty-five
 seconds, and never while an answer is streaming or they are speaking.
 
-### 7. Answer the question, not the screen
+### 10. Answer the question, not the screen
 
 Three separate failures, all the same shape:
 
@@ -165,7 +236,7 @@ And the one nobody asks for: **if the screen shows a compile error or a
 failed test, lead with it.** Nobody in an interview says "can you solve that
 error" — they wait to see whether you notice.
 
-### 8. Code belongs in its own panel
+### 11. Code belongs in its own panel
 
 Prose and code were sharing one wrapped, proportional-font box. Indentation
 collapsed, long lines folded mid-expression, and the part that has to be read
