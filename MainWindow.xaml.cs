@@ -2546,7 +2546,20 @@ namespace InterviewCopilot
         // candidate reads "temporarily unavailable" with an interviewer
         // waiting. Views are added newest-first until this is reached, so the
         // screen they are looking at now is always the one that fits.
-        private const int MaxTotalShotBytes = 700 * 1024;
+        //
+        // 700 KB was wrong and quietly disabled the whole feature. A full-screen
+        // capture is about 384 KB, so two of them is 768 KB, so the second was
+        // always dropped and every question went out with a single view. The log
+        // said nothing, because the line that reports multiple views only prints
+        // when there is more than one.
+        //
+        // Measured against the provider directly: 1.9 MB of base64 in one request
+        // is accepted. Two captures is roughly 1 MB of PNG, near 1.4 MB encoded,
+        // which sits inside that with room for the prompt. Two views is also what
+        // the problem actually needs — the half above the fold and the half
+        // below — and the server drops to the newest one if a request is refused
+        // anyway.
+        private const int MaxTotalShotBytes = 1_000 * 1024;
 
         // Three is a scrolled problem statement. More is a screen recording,
         // and the cost of reading them lands on somebody waiting to speak.
@@ -2659,8 +2672,9 @@ namespace InterviewCopilot
             _recentShotIds.Clear();
             _preparedShotId = "";
 
-            if (ids.Count > 1)
-                DebugWindow.Log("SCREEN", $"Sending {ids.Count} views of the screen, as scrolled.");
+            DebugWindow.Log("SCREEN", ids.Count > 1
+                ? $"Sending {ids.Count} views of the screen, as scrolled ({total / 1024} KB)."
+                : $"Sending 1 view ({total / 1024} KB); no earlier view fit the budget.");
             return ids;
         }
 
