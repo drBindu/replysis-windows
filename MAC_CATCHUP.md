@@ -1,0 +1,202 @@
+# What the Windows app learned, for the Mac app
+
+Hand this to the Mac session. It is written to be read cold, by someone with
+no memory of the Windows work.
+
+Everything here came from one person testing in front of a real screen. None
+of it was found by reading code, which is why the reasoning matters more than
+the diffs: the same mistakes are waiting in any client that talks to the same
+backend.
+
+---
+
+## The backend is shared, so half of this is already yours
+
+The Mac app talks to the same server. These are live and need nothing from
+the Mac side:
+
+**Answers no longer depend on one model.** Order is `gpt-oss-20b`, then
+`gpt-oss-120b`, then OpenAI if the account is active. Groq meters tokens per
+model, so the second is a whole separate allowance, not a share of one. The
+fallback used to be OpenAI alone, and when that account lapsed a rate limit
+became a hard failure.
+
+**Screen analysis runs on Groq**, `qwen/qwen3.6-27b`, free on the same key.
+The code used to say no Groq vision model existed. It was wrong: asking each
+model for an image is how you find out, and qwen answers "image must have at
+least 2 pixels", which is a complaint about the test pixel and means it read
+the image.
+
+**Coding answers are written by a different model than the one that reads the
+screen.** The vision model reports what is there — statement, language,
+existing code, the error and its line — and `gpt-oss-120b` writes the answer
+from that description, never seeing the picture. Asked to fix an LRU Cache,
+the vision model had produced three implementations across three attempts,
+each broken differently: `Node head, tail;` declared as objects then used
+with `head->nxt`, a variable used after being deleted, a single method with
+no class around it. That is not a prompting problem, it is a 27B vision model
+being asked to write correct C++.
+
+**Screenshots can be sent ahead.** `POST /api/v1/interview/screen-cache` with
+`{image}` returns `{imageId}`; the question then carries `imageIds` instead
+of the bytes. Held in memory ninety seconds, returned only to the identity
+that sent it, and returned exactly once. Sending bytes inline still works.
+
+**Several views of one screen are accepted.** `imageIds` takes up to three,
+oldest first; the model is told they are one page read top to bottom.
+
+**Listening time is metered and capped.** `POST /api/v1/usage/listening` with
+`{minutes}`. Free 60 minutes a month, pro 900, max 1800, written to
+`audioMinutesUsed` on the user document — the same field the website uses, so
+one allowance covers every client. `GET /api/v1/stt/key` returns 402 with
+`{"reason":"audio-limit"}` once it is gone. **The Mac app is capped by this
+but does not report to it**, so its minutes never accumulate. That is the
+largest single gap.
+
+---
+
+## What the Mac app has to build itself
+
+### 1. Do not throw away the speech token on quit
+
+The token is good for about an hour and was kept in memory only, so every
+launch spent a new one against a twelve-per-hour allowance. A dozen restarts
+locked the account out — on both apps at once, because the allowance is per
+account.
+
+Persist it, encrypted, and reuse it until it actually expires. Delete the
+cached copy whenever a token is rejected, or a dead one survives on disk for
+its full hour and nothing on screen explains the failure.
+
+### 2. "Contract blocked" is not a transient error
+
+Speechmatics answers `{'type': 'not_allowed', 'reason': 'Contract blocked:
+Credit Balance Exhausted'}` when the balance runs out. It matched nothing, so
+the engine retried on a doubling backoff forever and the UI said
+"connecting". Treat it as an auth failure: drop the cached token, say plainly
+that the account has no credit, and it will recover by itself when billing is
+restored.
+
+### 3. Read a sentence before answering it
+
+Silence cannot tell "finished" from "still thinking". Both directions were
+reported days apart: answering mid-question, then feeling sluggish.
+
+Classify how the transcript ends and wait accordingly:
+
+- **Finished** — punctuation, landing on a real word. 300ms.
+- **Unclear** — punctuation, but landing on a preposition, conjunction or
+  determiner. A question mark after "for" is the engine hearing a breath, not
+  the speaker stopping: "What are you looking for?" was followed by "C2C or
+  W2 or full time". 820ms, or 1.3x that speaker's own longest pause, capped.
+- **Unfinished** — hanging with no punctuation at all. Never submit; their
+  next word submits it.
+
+Pronouns must not be in the strict list. "How would you scale this?" is a
+finished question.
+
+**This applies to push-to-talk too.** People press the key the moment they
+stop talking and often a beat before, so the flush waits 800ms instead of
+100ms when the transcript plainly has not finished. Telling users to press
+more carefully is not a fix.
+
+### 4. Join a continuation instead of answering half
+
+When a tail arrives within twelve seconds — short, adds something, and either
+opens with a joining word or asks nothing by itself — merge it with the
+question already asked and answer the whole thing, replacing what is on
+screen.
+
+"Asks nothing" is the test, not "is not a sentence". "C2C or W2 or full
+time." is well formed and is obviously the rest of "what are you looking
+for". Exclude fillers by name, or "okay" after an answer re-runs the previous
+question and spends a credit.
+
+### 5. Screenshots: what took a day to learn
+
+**Take it before the question.** In a watch mode every question is a screen
+question, so capture on a timer and keep one ready. Removes capture and
+encode from the wait entirely.
+
+**Send it before the question too.** That was the larger half: 1,483ms to
+first word, of which the model was 720ms and most of the rest was the picture
+going up the wire.
+
+**Do not re-send a still screen.** A page with a live "2,332 Online" counter
+produces different bytes every two seconds. Compare a coarse signature —
+16x16, sixteen greys — so scrolling counts and a ticking counter does not.
+Comparing exact bytes doubled the token cost of every question.
+
+**A whole monitor needs more resolution than a window.** At a 768 short edge a
+1920x1080 screen becomes 1365x768 and body text goes from fourteen pixels to
+ten, which is where a vision model stops reading and starts recalling. The
+evidence was an answer that named Two Sum, described the right approach, and
+never mentioned "Compile Error" printed in red across half the same screen.
+
+**Watching means the whole screen.** Targeting the foreground window is right
+for an explicit hotkey and wrong for a mode left running, where the target
+becomes whichever window was clicked last.
+
+### 6. Say what cannot be seen, then answer again when it can
+
+A coding problem rarely fits on one screen. If the statement is cut off, give
+the candidate a line to say out loud — "let me scroll down and read the
+constraints before I answer" — and name what is missing.
+
+Then **answer again by yourself when the screen changes.** The first version
+asked them to scroll and then ignored them for doing it; they had to work out
+that they should ask the same question twice. Once only, within twenty-five
+seconds, and never while an answer is streaming or they are speaking.
+
+### 7. Answer the question, not the screen
+
+Three separate failures, all the same shape:
+
+- Asked "you can see my screen, right? Can you solve this?", it confirmed it
+  could see the screen and never solved anything. There is one real question
+  there and it is the second.
+- Asked "which language do you prefer?" while watching, it answered about a
+  code editor. Watching a screen does not make every question about it, and
+  behavioural questions are most of an interview.
+- Given a half-transcribed question, it listed the problem number and the
+  selected language while asking for the rest. Ask in one line and stop.
+
+And the one nobody asks for: **if the screen shows a compile error or a
+failed test, lead with it.** Nobody in an interview says "can you solve that
+error" — they wait to see whether you notice.
+
+### 8. Code belongs in its own panel
+
+Prose and code were sharing one wrapped, proportional-font box. Indentation
+collapsed, long lines folded mid-expression, and the part that has to be read
+most carefully was the hardest thing on screen to read.
+
+Monospace, no wrapping, its own scrollbars, a copy button, complexity
+underneath. The prompts must emit fenced code for this to work, and anything
+stripping fences before display has to stop.
+
+---
+
+## Things that will look like bugs and are not
+
+**"The AI service is temporarily unavailable"** during testing is almost
+always the free Groq tier: 8,000 tokens a minute, and one full-screen view
+costs 1,809 of them. Four screen questions a minute. It is now reported as a
+rate limit with a wait, not as an outage.
+
+**`detail: low` does not help.** Measured: 1,809 prompt tokens either way on
+this model. Image size is the only lever, and image size is what makes text
+readable.
+
+---
+
+## Where the reasoning lives
+
+The Windows commit messages, `git log` on `windowsNative`, one commit per
+fault, each explaining what broke and why the fix is shaped that way. That
+history is the point: several bugs today were caused by earlier fixes, and
+without knowing why a number was chosen the next session will change it back.
+
+`MAC_PARITY.md` in the same repo is the older feature-gap list and is
+**unverified** — it was built by grepping Windows class names against a stale
+Mac copy. Treat it as a prompt for questions, not as fact.
