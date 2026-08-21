@@ -2664,7 +2664,10 @@ namespace InterviewCopilot
             try
             {
                 var sw = Stopwatch.StartNew();
-                byte[]? shot = await Task.Run(() => ScreenAnalyzer.CaptureScreen());
+                // Watching means the whole monitor. Pointing at one window is
+                // for F8, where the user chose the window by being in it.
+                bool wholeScreen = _watchScreenMode;
+                byte[]? shot = await Task.Run(() => ScreenAnalyzer.CaptureScreen(wholeScreen));
                 DebugWindow.Log("SCREEN",
                     $"Capture+encode took {sw.ElapsedMilliseconds}ms ({(shot?.Length ?? 0) / 1024} KB)");
                 return shot;
@@ -4503,9 +4506,12 @@ namespace InterviewCopilot
 
             AiAnswerBox.Text = _watchScreenMode
                 ? "Watching the shared screen.\n\n" +
-                  "Every question now gets answered from what is on screen, so you do not need " +
-                  "to press anything when they ask you to look at something.\n\n" +
-                  "Turn this off when they stop sharing."
+                  "Every question now gets answered from your whole screen, so you do not need " +
+                  "to press anything when they ask you to look at something, and it does not " +
+                  "matter which window you clicked last.\n\n" +
+                  "Keep the problem large on screen. The whole monitor is read at once, so a " +
+                  "maximised window is easier for it than a small one.\n\n" +
+                  "Turn this off when they stop sharing. F8 still reads just the window you are in."
                 : "Stopped watching the screen.\n\n" +
                   "Questions are answered from what is said again. Press F8 any time you want " +
                   "the screen read.";

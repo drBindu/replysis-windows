@@ -165,8 +165,38 @@ namespace InterviewCopilot
         /// read as though the model was guessing: it was, because the question was
         /// no longer legible by the time it arrived.
         /// </summary>
-        public static byte[] CaptureScreen()
+        public static byte[] CaptureScreen() => CaptureScreen(wholeScreen: false);
+
+        /// <summary>
+        /// A picture of what the user is looking at.
+        /// </summary>
+        /// <param name="wholeScreen">
+        /// True while Watch Screen is on, where the whole monitor is the honest
+        /// reading of what was switched on.
+        ///
+        /// Targeting the window in front is right for a deliberate F8: the user
+        /// is pointing at something. It is wrong for a mode left running, where
+        /// the target then depends on which window happened to be clicked last
+        /// — and during a screen share that is very often the wrong one. Asked
+        /// about a coding problem after clicking back into a chat window, the
+        /// app read the chat window and answered about that, and nothing on
+        /// screen explained why.
+        ///
+        /// The cost is real and worth stating: a 1920x1080 screen is read at
+        /// 1365x768, so small text is smaller than it would be from a single
+        /// window. Predictable and slightly softer beats sharp and pointed at
+        /// the wrong thing.
+        /// </param>
+        public static byte[] CaptureScreen(bool wholeScreen)
         {
+            if (wholeScreen)
+            {
+                LastCaptureTarget = "your screen";
+                if (TryGetActiveMonitorBounds(out int mx, out int my, out int mw, out int mh))
+                    return CaptureRegionCore(mx, my, mw, mh);
+                return CapturePrimaryScreen();
+            }
+
             // The window in front, not the whole monitor, whenever that is a real
             // window belonging to something else.
             //
