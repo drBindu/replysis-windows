@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -73,6 +73,35 @@ namespace InterviewCopilot
         /// has never contained the window. When false the flag was just applied and
         /// the caller should let one frame compose before capturing.
         /// </param>
+        /// <summary>
+        /// Whether this window can be hidden from a screen capture at all.
+        ///
+        /// Asked before doing something repeatedly. Where the answer is no, the
+        /// caller falls back to dropping the opacity, which is fine once and a
+        /// flickering window when it happens every two seconds.
+        ///
+        /// Sets the flag and puts it back, because there is no way to ask
+        /// without trying. A window already excluded is left alone.
+        /// </summary>
+        public static bool CanHideFromCapture(Window? window)
+        {
+            if (window == null) return false;
+            try
+            {
+                IntPtr hwnd = new WindowInteropHelper(window).Handle;
+                if (hwnd == IntPtr.Zero) return false;
+
+                if (GetWindowDisplayAffinity(hwnd, out uint current) != 0 &&
+                    current == WDA_EXCLUDEFROMCAPTURE)
+                    return true;
+
+                if (SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) == 0) return false;
+                SetWindowDisplayAffinity(hwnd, WDA_NONE);
+                return true;
+            }
+            catch { return false; }
+        }
+
         public static bool TryBeginCaptureHidden(Window? window, out bool alreadyExcluded)
         {
             alreadyExcluded = false;

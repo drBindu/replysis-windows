@@ -195,6 +195,34 @@ readable.
 Kept up to date as the Windows app changes, so nothing has to be rediscovered
 by reading diffs. Newest first.
 
+**Preparing screenshots only happens during an actual interview.** Making
+screen answers the default quietly turned the two-second capture into a
+screenshot every two seconds for as long as the app was open, uploaded
+whenever the picture changed — which while somebody is working is constantly.
+Around eleven megabytes a minute of their connection, and their screen.
+Gated on the microphone having been used in the last five minutes: open the
+app and leave it, and nothing is captured at all.
+
+**And not at all on a machine that cannot hide the app from a capture.** The
+fallback drops the window opacity to zero for ninety milliseconds. Once,
+before an answer, that is invisible; every two seconds it is a flickering
+window. Probe once and cache the answer — the probe sets the exclusion flag
+and puts it back, so asking repeatedly churns the flag and leaves brief
+windows where the app really is capturable.
+
+**The compact overlay must strip code fences.** The main window lifts fenced
+code into a monospace panel and stopped stripping fences so it could find
+them. The overlay has no such panel and got the same text, so a candidate in
+compact mode — used when someone is sitting across a desk — read their answer
+with ```cpp printed through the middle of it. Strip the fence lines, keep the
+code: in compact mode that window is the only place it appears.
+
+**Collapse code in older history turns.** Every prompt carries the last few
+turns, so a behavioural question asked after a coding one arrived at the
+model with sixty lines of C++ attached, charged for on every request from
+then on. The most recent turn keeps its code, because "can you optimise
+that?" needs the thing being optimised; older turns keep "[code given]".
+
 **Screen answers are on by default, and the toolbar button does the thing.**
 "Watch screen" was a toolbar switch that started off every launch, so the
 feature most likely to matter in a coding round was the one a candidate had

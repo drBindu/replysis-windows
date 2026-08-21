@@ -2094,6 +2094,7 @@ namespace InterviewCopilot
                 if (answerWindow != null) answerWindow.UpdateQuestion("");
                 DeletePauseFlag();
                 DebugWindow.Log("MIC", $"[{source}] UNMUTED — listening");
+                _lastMicUseUtc = DateTime.UtcNow;
                 StartListeningMeter();
                 if (AutoModeEnabled) ResetAutoTurnDetection();
                 UpdateMicUi();
@@ -2532,6 +2533,17 @@ namespace InterviewCopilot
         private DateTime _preparedShotUtc = DateTime.MinValue;
         private volatile bool _preparingShot;
 
+        // How recently the microphone must have been used for screen preparation
+        // to be worth doing. Long enough to cover a gap between questions, short
+        // enough that an app left open all afternoon captures nothing.
+        private static readonly TimeSpan PrepareShotsAfterMicWithin = TimeSpan.FromMinutes(5);
+
+        private DateTime _lastMicUseUtc = DateTime.MinValue;
+        private bool _warnedNoCloak;
+
+        // Whether this machine can hide the app from a capture. Null until asked.
+        private bool? _canHideFromCapture;
+
         private void StartPreparedShots()
         {
             if (_preparedShotTimer == null)
@@ -2556,6 +2568,41 @@ namespace InterviewCopilot
             // request for the network, and cloaking our own windows mid-answer is
             // visible to the user.
             if (!_watchScreenMode || _preparingShot || isProcessing || _isScreenAnalyzing) return;
+
+            // And never when no interview is happening.
+            //
+            // Screen answers became the default, which quietly turned this into
+            // a screenshot every two seconds for as long as the app was open —
+            // uploaded whenever the picture changed, which while somebody is
+            // working is constantly. Nobody asked for that, it is their screen,
+            // and it is around eleven megabytes a minute of their connection.
+            //
+            // The microphone having been used recently is what "an interview is
+            // happening" means here. Open the app and leave it, and nothing is
+            // captured at all.
+            if (DateTime.UtcNow - _lastMicUseUtc > PrepareShotsAfterMicWithin) return;
+
+            // If our own windows cannot be hidden from a capture, the fallback
+            // drops the opacity to zero for ninety milliseconds. Once, before an
+            // answer, that is invisible. Every two seconds, forever, it is a
+            // flickering window. On such a machine the screen is read on demand
+            // only, which costs a fraction of a second and nothing else.
+            // Asked once. The probe sets the exclusion flag and puts it back, so
+            // running it every two seconds would churn that flag forever and
+            // leave brief windows where the app really is capturable.
+            _canHideFromCapture ??= WindowStealth.CanHideFromCapture(this);
+
+            if (_canHideFromCapture == false)
+            {
+                if (!_warnedNoCloak)
+                {
+                    _warnedNoCloak = true;
+                    DebugWindow.Log("SCREEN",
+                        "This machine cannot hide the app from a capture; preparing screenshots is off "
+                        + "to avoid flicker. F8 still reads the screen on demand.");
+                }
+                return;
+            }
 
             _preparingShot = true;
             try

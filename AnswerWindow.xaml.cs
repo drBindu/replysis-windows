@@ -286,6 +286,22 @@ namespace InterviewCopilot
         {
             if (string.IsNullOrWhiteSpace(text)) return text;
             text = text.Replace("\r\n", "\n").Replace("\r", "\n");
+
+            // Take the fences off without taking the code out.
+            //
+            // The main window lifts fenced code into a monospace panel of its
+            // own, and stopped stripping the fences so that it could find them.
+            // This overlay has no such panel and was handed the same text, so a
+            // candidate in compact mode — the mode used when somebody is sitting
+            // across a desk from them — read their answer with ```cpp printed
+            // through the middle of it.
+            //
+            // The code itself stays. In compact mode this window is the only
+            // place it appears.
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text, @"^[ \t]*```[A-Za-z0-9+#_-]*[ \t]*$\n?", "",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            text = text.Replace("```", "");
             if (!text.Contains("•")) return text.Trim();
 
             var lines  = text.Split('\n');

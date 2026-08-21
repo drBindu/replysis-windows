@@ -152,10 +152,42 @@ namespace InterviewCopilot
         // PUBLIC API
         // =====================================================================
 
+        /// <summary>
+        /// Replaces a fenced code block with a note that one was given.
+        ///
+        /// Every prompt carries the last few turns, and a coding answer puts its
+        /// whole solution in there — so a behavioural question asked after one
+        /// arrives at the model with sixty lines of C++ attached, which it does
+        /// not need and which is charged for on every request from then on. On
+        /// an allowance of eight thousand tokens a minute that is not a rounding
+        /// error.
+        ///
+        /// The most recent turn keeps its code, because "can you optimise that?"
+        /// is a real follow-up and needs the thing being optimised. Older turns
+        /// keep only the fact that code was given, which is all the continuity
+        /// they were providing.
+        /// </summary>
+        private static readonly Regex HistoryCodeBlock =
+            new(@"```[A-Za-z0-9+#_-]*?
+.*?(?:```|$)",
+                RegexOptions.Singleline | RegexOptions.Compiled);
+
+        private static string CollapseCode(string answer) =>
+            HistoryCodeBlock.Replace(answer, "[code given]").Trim();
+
         public static void AddToHistory(string question, string answer)
         {
             question = Truncate(question, MaxHistoryQuestionChars);
             answer = Truncate(answer, MaxHistoryAnswerChars);
+
+            // The turn that was most recent becomes an older turn now, so its
+            // code is collapsed as this one arrives.
+            if (History.Count > 0)
+            {
+                var (previousQuestion, previousAnswer) = History[^1];
+                History[^1] = (previousQuestion, CollapseCode(previousAnswer));
+            }
+
             History.Add((question, answer));
             if (History.Count > MaxHistoryTurns) History.RemoveAt(0);
             TrackCoveredContent(question + " " + answer);
