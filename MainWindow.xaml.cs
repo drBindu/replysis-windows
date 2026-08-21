@@ -2602,6 +2602,40 @@ namespace InterviewCopilot
             return await CaptureScreenUnseenAsync();
         }
 
+        /// <summary>
+        /// Where the private notes section starts, or -1.
+        ///
+        /// Matches a line that is exactly "SCREEN" or begins "SCREEN NOTES".
+        /// Written as a line test rather than a phrase test because the model
+        /// does not always finish the heading, and a half-written one used to
+        /// reach the user: an answer that ended on the word "SCREEN".
+        ///
+        /// A spoken reply does not begin a line with SCREEN in capitals, so
+        /// this cannot swallow anything the candidate was meant to say.
+        /// </summary>
+        private static int IndexOfNotesHeading(StringBuilder buffer)
+        {
+            string text = buffer.ToString();
+            int from = 0;
+            while (true)
+            {
+                int at = text.IndexOf("SCREEN", from, StringComparison.Ordinal);
+                if (at < 0) return -1;
+
+                // A line beginning with SCREEN in capitals is the heading,
+                // whatever follows it on that line.
+                //
+                // The real failure was not a tidy "SCREEN NOTES" on its own
+                // line. The model wrote "SCREEN what is this claude is open and
+                // behind that vs studio", echoing the question straight into
+                // the answer, and requiring the word NOTES or a line break
+                // missed exactly that.
+                bool atLineStart = at == 0 || text[at - 1] == '\n' || text[at - 1] == '\r';
+                if (atLineStart) return at;
+                from = at + 1;
+            }
+        }
+
         private async Task<byte[]?> CaptureScreenUnseenAsync()
         {
             bool answerWasVisible = answerWindow?.IsVisible == true;
@@ -2689,6 +2723,8 @@ namespace InterviewCopilot
                     // still consumed to the end after the marker, so the notes
                     // reach the context they exist for.
                     var visionSoFar = new StringBuilder();
+                    var visionClock = Stopwatch.StartNew();
+                    long visionFirstTokenMs = -1;
                     bool reachedNotes = false;
 
                     await foreach (var visionToken in
@@ -2697,9 +2733,23 @@ namespace InterviewCopilot
                     {
                         if (reachedNotes) continue;
 
+                        if (visionFirstTokenMs < 0 && !string.IsNullOrEmpty(visionToken))
+                        {
+                            visionFirstTokenMs = visionClock.ElapsedMilliseconds;
+                            DebugWindow.Log("SCREEN",
+                                $"First word back in {visionFirstTokenMs}ms after the question landed.");
+                        }
+
                         visionSoFar.Append(visionToken);
-                        int notesAt = visionSoFar.ToString()
-                            .IndexOf("SCREEN NOTES", StringComparison.OrdinalIgnoreCase);
+
+                        // Cut at the heading, however the model writes it.
+                        //
+                        // This looked only for "SCREEN NOTES" and the model wrote
+                        // "SCREEN" on its own line, so the heading was shown to the
+                        // user as the last word of their answer. The notes are for
+                        // the next question, never for this one, so the line itself
+                        // is the marker rather than the exact phrase.
+                        int notesAt = IndexOfNotesHeading(visionSoFar);
                         if (notesAt < 0)
                         {
                             yield return visionToken;
@@ -2714,6 +2764,8 @@ namespace InterviewCopilot
                             yield return visionSoFar.ToString(alreadyShown, notesAt - alreadyShown);
                     }
 
+                    DebugWindow.Log("SCREEN",
+                        $"Screen answer finished in {visionClock.ElapsedMilliseconds}ms.");
                     yield break;
                 }
                 // Capture failed. Fall through and answer from the words alone,
