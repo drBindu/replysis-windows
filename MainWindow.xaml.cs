@@ -1453,6 +1453,20 @@ namespace InterviewCopilot
         /// </summary>
         private static readonly TimeSpan IdleListeningTimeout = TimeSpan.FromMinutes(3);
 
+        /// <summary>
+        /// How long to wait when nothing has been said at all.
+        ///
+        /// Three minutes is right for a pause inside a conversation. It is far
+        /// too patient for a session where not one word arrived: pressing Space
+        /// and saying nothing is a stray keypress, not a pause, and waiting
+        /// three minutes to notice meant the notice appeared over and over while
+        /// somebody was reading an answer with the microphone still open.
+        /// </summary>
+        private static readonly TimeSpan SilentSessionTimeout = TimeSpan.FromSeconds(45);
+
+        // Whether anything was heard at all in the current listening session.
+        private bool _heardAnythingThisSession;
+
         private DispatcherTimer? _listeningMeterTimer;
         private DateTime _listeningSinceUtc = DateTime.MinValue;
         private DateTime _lastSpeechHeardUtc = DateTime.MinValue;
@@ -1463,6 +1477,7 @@ namespace InterviewCopilot
         {
             _listeningSinceUtc  = DateTime.UtcNow;
             _lastSpeechHeardUtc = DateTime.UtcNow;
+            _heardAnythingThisSession = false;
 
             if (_listeningMeterTimer == null)
             {
@@ -1497,10 +1512,15 @@ namespace InterviewCopilot
 
             var now = DateTime.UtcNow;
 
-            if (now - _lastSpeechHeardUtc >= IdleListeningTimeout)
+            TimeSpan patience = _heardAnythingThisSession
+                ? IdleListeningTimeout
+                : SilentSessionTimeout;
+
+            if (now - _lastSpeechHeardUtc >= patience)
             {
-                DebugWindow.Log("METER",
-                    $"No speech for {IdleListeningTimeout.TotalMinutes:0} minutes; stopping the microphone.");
+                DebugWindow.Log("METER", _heardAnythingThisSession
+                    ? $"No speech for {IdleListeningTimeout.TotalMinutes:0} minutes; stopping the microphone."
+                    : $"Nothing heard in {SilentSessionTimeout.TotalSeconds:0}s; stopping the microphone.");
                 StopForIdle();
                 return;
             }
@@ -1542,8 +1562,9 @@ namespace InterviewCopilot
             // the answer over, and it happened every time they read a long one
             // with the mic still on — which is exactly when the answer mattered
             // most.
-            ShowListeningModeNotice(
-                $"MIC OFF AFTER {IdleListeningTimeout.TotalMinutes:0} MIN QUIET — SPACE TO RESUME");
+            ShowListeningModeNotice(_heardAnythingThisSession
+                ? $"MIC OFF AFTER {IdleListeningTimeout.TotalMinutes:0} MIN QUIET — SPACE TO RESUME"
+                : "MIC OFF — NOTHING HEARD");
             DebugWindow.Log("METER", "Microphone stopped after the idle timeout.");
             UpdateMicUi();
         }
@@ -3680,6 +3701,7 @@ namespace InterviewCopilot
                     // somebody was talking and would cut the microphone off three
                     // minutes into a long answer.
                     _lastSpeechHeardUtc = DateTime.UtcNow;
+                    _heardAnythingThisSession = true;
 
                     if (AutoModeEnabled)
                     {
