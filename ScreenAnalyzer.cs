@@ -410,11 +410,63 @@ namespace InterviewCopilot
             // letter edge, and at small sizes that is the difference between the
             // model reading 'l' and reading '1'. PNG is lossless and, on this kind
             // of image, usually no larger than the JPEG it replaces.
+            byte[] full = EncodePng(bmp);
+
+            // Then take the colours out, which is where the size actually is.
+            //
+            // A real capture measured 239 KB, and every byte is uploaded twice:
+            // once to our server and again to the model. On a normal home
+            // connection that upload is most of the wait, more than the model,
+            // which answers in about half a second.
+            //
+            // An editor or a browser is a handful of flat colours and text. Two
+            // hundred and fifty six of them, chosen from the image itself, is
+            // more than such a screen contains, so the glyphs come through
+            // exactly as sharp while the file gets several times smaller. This
+            // is not JPEG's kind of loss: no edge is softened, only shades that
+            // were never there are removed.
+            //
+            // Photographs and gradients are the case it cannot help, and there
+            // it can even come out larger. So both are measured and the smaller
+            // one is sent, which also means a failure here costs nothing.
+            byte[] indexed = TryEncodeIndexedPng(bmp);
+            if (indexed != null && indexed.Length > 0 && indexed.Length < full.Length)
+            {
+                DebugWindow.Log("SCREEN",
+                    $"Capture {full.Length / 1024} KB -> {indexed.Length / 1024} KB after palette reduction");
+                return indexed;
+            }
+            return full;
+        }
+
+        private static byte[] EncodePng(BitmapSource bmp)
+        {
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(bmp));
             using var ms = new MemoryStream();
             encoder.Save(ms);
             return ms.ToArray();
+        }
+
+        /// <summary>
+        /// The same image reduced to a 256-colour palette built from its own
+        /// pixels. Returns null if anything about it fails, so the caller simply
+        /// keeps the full-colour version.
+        /// </summary>
+        private static byte[]? TryEncodeIndexedPng(BitmapSource bmp)
+        {
+            try
+            {
+                var palette = new BitmapPalette(bmp, 256);
+                var converted = new FormatConvertedBitmap(bmp, PixelFormats.Indexed8, palette, 0);
+                converted.Freeze();
+                return EncodePng(converted);
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("SCREEN", $"Palette reduction skipped: {ex.Message}");
+                return null;
+            }
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -544,6 +596,14 @@ namespace InterviewCopilot
                 sb.AppendLine("follow-up about this same screen.");
                 sb.AppendLine();
                 sb.AppendLine("Rules:");
+                sb.AppendLine("- Name things. \"Visual Studio\", \"Chrome\", \"the LeetCode Two Sum");
+                sb.AppendLine("  page\", \"a Postgres query in DBeaver\". Never \"an application\", \"an");
+                sb.AppendLine("  IDE\", \"a code editor\", \"a document\". A person looking at their own");
+                sb.AppendLine("  screen says what it is, and hedging is the one thing that makes a");
+                sb.AppendLine("  reply sound like it came from something that cannot really see.");
+                sb.AppendLine("  Title bars, tabs, logos and menu names are all in the image; read");
+                sb.AppendLine("  them. Only if the name is genuinely not visible, describe it by");
+                sb.AppendLine("  what it does rather than calling it \"an application\".");
                 sb.AppendLine("- Describe only what is visible. If you cannot read the part being");
                 sb.AppendLine("  asked about, SAY THIS becomes a natural line that buys a moment,");
                 sb.AppendLine("  such as \"Let me scroll up so I get the exact wording.\" Never guess.");
