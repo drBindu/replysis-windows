@@ -2440,6 +2440,92 @@ namespace InterviewCopilot
         /// Shared by the Analyze hotkey and by questions that turn out to be
         /// about the screen, so both get the same instant, blink-free capture.
         /// </summary>
+        // ══════════════════════════════════════════════════════════════════════
+        // SCREENSHOT TAKEN BEFORE IT IS ASKED FOR
+        //
+        // Everything between the question ending and the answer starting is time
+        // the candidate spends silent, and capturing the screen sits right in the
+        // middle of it: hide our own windows, wait for the frame, grab the pixels,
+        // downscale them, encode a PNG, then encode a second one to compare sizes.
+        // None of that depends on the question.
+        //
+        // In Watch Screen mode every question is a screen question, so it can all
+        // happen beforehand and be waiting. The measured cost of the capture then
+        // leaves the path entirely and what is left is the upload and the model,
+        // which answered in 0.72s when timed directly.
+        //
+        // Deliberately only in Watch Screen mode. Grabbing the screen on a timer
+        // when the user has not asked for that is not a performance decision, and
+        // it is not one to make quietly on their behalf.
+        // ══════════════════════════════════════════════════════════════════════
+        private static readonly TimeSpan PreparedShotInterval = TimeSpan.FromSeconds(2);
+
+        // How stale a prepared shot may be and still be used. An interview screen
+        // is a problem statement that sits still; four seconds of it is the same
+        // screen. Past that it is captured fresh, because being fast about the
+        // wrong screen is worse than being slow about the right one.
+        private static readonly TimeSpan PreparedShotMaxAge = TimeSpan.FromSeconds(4);
+
+        private DispatcherTimer? _preparedShotTimer;
+        private byte[]? _preparedShot;
+        private DateTime _preparedShotUtc = DateTime.MinValue;
+        private volatile bool _preparingShot;
+
+        private void StartPreparedShots()
+        {
+            if (_preparedShotTimer == null)
+            {
+                _preparedShotTimer = new DispatcherTimer { Interval = PreparedShotInterval };
+                _preparedShotTimer.Tick += (_, _) => _ = PrepareShotAsync();
+            }
+            _preparedShotTimer.Start();
+            _ = PrepareShotAsync();   // one straight away, so the first question benefits
+        }
+
+        private void StopPreparedShots()
+        {
+            _preparedShotTimer?.Stop();
+            _preparedShot = null;
+            _preparedShotUtc = DateTime.MinValue;
+        }
+
+        private async Task PrepareShotAsync()
+        {
+            // Never while an answer is being produced: the capture would fight the
+            // request for the network, and cloaking our own windows mid-answer is
+            // visible to the user.
+            if (!_watchScreenMode || _preparingShot || isProcessing || _isScreenAnalyzing) return;
+
+            _preparingShot = true;
+            try
+            {
+                byte[]? shot = await CaptureScreenUnseenAsync();
+                if (shot != null && shot.Length > 0)
+                {
+                    _preparedShot = shot;
+                    _preparedShotUtc = DateTime.UtcNow;
+                }
+            }
+            catch { /* a missed prepared shot just means capturing on demand */ }
+            finally { _preparingShot = false; }
+        }
+
+        /// <summary>
+        /// The prepared screenshot when there is a fresh one, otherwise a new
+        /// capture. Same bytes either way; the only difference is who waited.
+        /// </summary>
+        private async Task<byte[]?> GetScreenshotForAnswerAsync()
+        {
+            byte[]? prepared = _preparedShot;
+            if (prepared != null && DateTime.UtcNow - _preparedShotUtc <= PreparedShotMaxAge)
+            {
+                int ageMs = (int)(DateTime.UtcNow - _preparedShotUtc).TotalMilliseconds;
+                DebugWindow.Log("SCREEN", $"Using a screenshot taken {ageMs}ms ago; no capture wait.");
+                return prepared;
+            }
+            return await CaptureScreenUnseenAsync();
+        }
+
         private async Task<byte[]?> CaptureScreenUnseenAsync()
         {
             bool answerWasVisible = answerWindow?.IsVisible == true;
@@ -2467,7 +2553,11 @@ namespace InterviewCopilot
 
             try
             {
-                return await Task.Run(() => ScreenAnalyzer.CaptureScreen());
+                var sw = Stopwatch.StartNew();
+                byte[]? shot = await Task.Run(() => ScreenAnalyzer.CaptureScreen());
+                DebugWindow.Log("SCREEN",
+                    $"Capture+encode took {sw.ElapsedMilliseconds}ms ({(shot?.Length ?? 0) / 1024} KB)");
+                return shot;
             }
             catch (Exception ex)
             {
@@ -2508,7 +2598,7 @@ namespace InterviewCopilot
             // Space or the app is running the turn itself in Auto.
             if (_watchScreenMode || PromptBuilder.RefersToScreen(question))
             {
-                byte[]? shot = await CaptureScreenUnseenAsync();
+                byte[]? shot = await GetScreenshotForAnswerAsync();
                 if (shot != null)
                 {
                     DebugWindow.Log("SCREEN",
@@ -4275,6 +4365,13 @@ namespace InterviewCopilot
             UpdateWatchScreenUi();
             DebugWindow.Log("SCREEN", $"Screen-share watch {(_watchScreenMode ? "ON" : "OFF")}");
 
+            // Watching means every question is a screen question, so the screen
+            // can be captured before one is asked instead of during the silence
+            // after it. Only while watching: taking the screen on a timer when
+            // the user has not asked for that is not a performance decision.
+            if (_watchScreenMode) StartPreparedShots();
+            else                  StopPreparedShots();
+
             AiAnswerBox.Text = _watchScreenMode
                 ? "Watching the shared screen.\n\n" +
                   "Every question now gets answered from what is on screen, so you do not need " +
@@ -4667,6 +4764,7 @@ namespace InterviewCopilot
             _sessionTimer?.Stop();
             _autoModeNoticeTimer?.Stop();
             _listeningMeterTimer?.Stop();
+            _preparedShotTimer?.Stop();
 
             // Listening time accumulates between reports, and closing the app
             // mid-interview would have thrown that away. Reporting as you go

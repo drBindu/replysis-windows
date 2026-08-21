@@ -457,9 +457,22 @@ namespace InterviewCopilot
         {
             try
             {
+                // The source has to be frozen first. A FormatConvertedBitmap
+                // built on a live RenderTargetBitmap cannot itself be frozen,
+                // and freezing it threw "This Freezable cannot be frozen" —
+                // which the catch below swallowed, so every capture quietly
+                // went out at full colour and the saving never happened once.
+                if (bmp.CanFreeze && !bmp.IsFrozen) bmp.Freeze();
+
                 var palette = new BitmapPalette(bmp, 256);
                 var converted = new FormatConvertedBitmap(bmp, PixelFormats.Indexed8, palette, 0);
-                converted.Freeze();
+
+                // Freeze when it will, carry on when it will not. This runs on a
+                // background thread that owns the bitmap either way, so freezing
+                // is a nicety here rather than a requirement, and it is not worth
+                // losing the whole saving over.
+                if (converted.CanFreeze && !converted.IsFrozen) converted.Freeze();
+
                 return EncodePng(converted);
             }
             catch (Exception ex)
