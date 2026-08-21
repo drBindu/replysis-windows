@@ -204,6 +204,46 @@ namespace InterviewCopilot
         };
 
         /// <summary>
+        /// Questions about the person, which no screenshot can help with.
+        ///
+        /// While Watch Screen is on, every question was going through the screen
+        /// path, so "which language do you prefer?" came back as an answer about
+        /// a code editor. That is a non-answer, it costs the tokens of reading a
+        /// picture nobody asked about, and it quietly tells the interviewer that
+        /// something is looking at the screen.
+        /// </summary>
+        private static readonly string[] PersonalQuestionPhrases =
+        {
+            "tell me about yourself", "about yourself", "walk me through your",
+            "your experience", "your background", "your resume", "your cv",
+            "your strength", "your weakness", "your biggest", "your greatest",
+            "why do you want", "why are you leaving", "why did you leave",
+            "where do you see yourself", "your career", "your goal",
+            "do you prefer", "which language do you", "favourite", "favorite",
+            "how are you", "salary", "expectation", "notice period",
+            "c2c", "w2", "full time", "relocat", "visa", "sponsor",
+            "any questions for", "tell me a time", "tell me about a time",
+            "have you worked with", "how many years", "comfortable with",
+        };
+
+        /// <summary>
+        /// True when the question is plainly about the candidate. Deliberately
+        /// narrow: anything it is unsure about stays on the screen path, because
+        /// while a screen is being shared most questions really are about it.
+        /// </summary>
+        public static bool IsPersonalQuestion(string question)
+        {
+            if (string.IsNullOrWhiteSpace(question)) return false;
+            if (RefersToScreen(question)) return false;   // "this code" wins
+
+            string q = question.ToLowerInvariant();
+            foreach (string phrase in PersonalQuestionPhrases)
+                if (q.Contains(phrase, StringComparison.Ordinal)) return true;
+
+            return false;
+        }
+
+        /// <summary>
         /// Whether a question is about what is on screen rather than about the
         /// candidate. When it is, the screenshot is the question, and answering
         /// from the transcript alone cannot work however good the model is.

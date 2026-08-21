@@ -2918,7 +2918,14 @@ namespace InterviewCopilot
             // picture instead. This sits in the one funnel every answer passes
             // through, which means it works the same whether the user pressed
             // Space or the app is running the turn itself in Auto.
-            if (_watchScreenMode || PromptBuilder.RefersToScreen(question))
+            // Watching a screen does not make every question about it. A
+            // behavioural question sent down this path comes back as an answer
+            // about a code editor, in the wrong shape, having paid to read a
+            // picture nobody asked about.
+            bool aboutTheScreen = PromptBuilder.RefersToScreen(question)
+                || (_watchScreenMode && !PromptBuilder.IsPersonalQuestion(question));
+
+            if (aboutTheScreen)
             {
                 byte[]? shot = await GetScreenshotForAnswerAsync();
                 if (shot != null)
