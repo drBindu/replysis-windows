@@ -2624,6 +2624,7 @@ namespace InterviewCopilot
                 if (!string.IsNullOrEmpty(_preparedShotId))
                 {
                     _recentShotIds.Add((_preparedShotId, shot.Length));
+                    Dispatcher.Invoke(RescanAfterScrollIfArmed);
                     while (_recentShotIds.Count > MaxShotsPerQuestion)
                         _recentShotIds.RemoveAt(0);
                 }
@@ -2743,6 +2744,78 @@ namespace InterviewCopilot
                 if (atLineStart) return at;
                 from = at + 1;
             }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // ANSWERING AGAIN ONCE THEY HAVE SCROLLED
+        //
+        // The answer asked for the rest of the page — "let me scroll down and
+        // read the constraints" — and then nothing happened. The candidate
+        // scrolled, and waited, and no better answer came, because the app only
+        // answers when it is asked and scrolling is not asking.
+        //
+        // That is the app telling somebody to do something and then ignoring
+        // them for doing it. Having asked for the rest of the page, it waits for
+        // the screen to change and answers the same question again, now with
+        // both halves.
+        //
+        // Once only, and briefly. Answering repeatedly as somebody scrolls
+        // through a document would spend a credit per scroll and put a new
+        // answer on screen every two seconds while they are trying to read.
+        // ══════════════════════════════════════════════════════════════════════
+        private static readonly TimeSpan RescanWindow = TimeSpan.FromSeconds(25);
+
+        private string _rescanQuestion = "";
+        private DateTime _rescanArmedUtc = DateTime.MinValue;
+
+        /// <summary>
+        /// Phrases the answer uses when it cannot see all of the question. NEED:
+        /// is the marker the prompt asks for; the rest are what the model
+        /// writes when it follows the spirit and not the letter.
+        /// </summary>
+        private static readonly string[] AskedForMorePage =
+        {
+            "NEED:", "scroll down", "scroll up", "see the rest", "read the rest",
+            "the constraints before", "rest of the examples", "rest of the question",
+        };
+
+        private void ArmRescanIfAnswerAskedToScroll(string answer, string question)
+        {
+            if (string.IsNullOrWhiteSpace(answer) || string.IsNullOrWhiteSpace(question)) return;
+
+            bool askedForMore = AskedForMorePage.Any(
+                phrase => answer.Contains(phrase, StringComparison.OrdinalIgnoreCase));
+            if (!askedForMore) return;
+
+            _rescanQuestion = question;
+            _rescanArmedUtc = DateTime.UtcNow;
+            DebugWindow.Log("SCREEN", "Answer asked for the rest of the page; will answer again once it changes.");
+
+            Dispatcher.Invoke(() => ShowListeningModeNotice("SCROLL — I WILL ANSWER AGAIN"));
+        }
+
+        /// <summary>
+        /// Called when a newly captured screen differs from the last one. Answers
+        /// the same question again if that is what the previous answer asked for.
+        /// </summary>
+        private void RescanAfterScrollIfArmed()
+        {
+            if (string.IsNullOrEmpty(_rescanQuestion)) return;
+
+            if (DateTime.UtcNow - _rescanArmedUtc > RescanWindow)
+            {
+                _rescanQuestion = "";
+                return;
+            }
+
+            // Never while an answer is already being produced, or while they are
+            // speaking: they have moved on and this would talk over them.
+            if (isProcessing || isListening || _flushing) return;
+
+            string question = _rescanQuestion;
+            _rescanQuestion = "";
+            DebugWindow.Log("SCREEN", "Screen changed; answering the same question with the rest of the page.");
+            _ = AskAiAsync(question);
         }
 
         private async Task<byte[]?> CaptureScreenUnseenAsync()
@@ -2876,6 +2949,7 @@ namespace InterviewCopilot
                             yield return visionSoFar.ToString(alreadyShown, notesAt - alreadyShown);
                     }
 
+                    ArmRescanIfAnswerAskedToScroll(visionSoFar.ToString(), question);
                     DebugWindow.Log("SCREEN",
                         $"Screen answer finished in {visionClock.ElapsedMilliseconds}ms.");
                     yield break;
