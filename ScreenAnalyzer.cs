@@ -97,6 +97,29 @@ namespace InterviewCopilot
         private const int MaxShortEdge = 768;
         private const int MaxLongEdge  = 2048;
 
+        /// <summary>
+        /// The same caps, raised, for a capture of the whole monitor.
+        ///
+        /// A single window arrives close to its real size and reads well at 768.
+        /// A 1920x1080 screen does not: it is shrunk to 1365x768, and LeetCode's
+        /// body text goes from about fourteen pixels to ten, which is the edge of
+        /// what a vision model reads reliably.
+        ///
+        /// The evidence that it had gone over that edge was an answer that named
+        /// Two Sum, described the right approach, and never mentioned the words
+        /// "Compile Error" printed in large red type across the right-hand half
+        /// of the same screen. Two Sum is the most memorised problem there is, so
+        /// a recalled answer and a read one look the same — until the question is
+        /// about something the model has not seen before.
+        ///
+        /// The 768 cap was there to keep the upload short. The upload now happens
+        /// before the question is asked, so on the path anyone waits on it costs
+        /// nothing, and the only remaining cost is the model reading more pixels.
+        /// Reading the screen correctly is what the feature is for.
+        /// </summary>
+        private const int MaxShortEdgeFullScreen = 1_100;
+        private const int MaxLongEdgeFullScreen  = 2_560;
+
         // ── Last captured context (injected into follow-up voice questions) ───
         public static string LastScreenContext { get; private set; } = "";
 
@@ -117,6 +140,11 @@ namespace InterviewCopilot
         /// mistake the user can correct in one second.
         /// </summary>
         public static string LastCaptureTarget { get; private set; } = "";
+
+        // Which caps the downscale should use. Set by CaptureScreen before the
+        // pixels are touched, read by the resize; a whole monitor needs more
+        // room than a single window to stay readable.
+        private static bool _capturingWholeScreen;
 
         // ── The window the user was last actually working in ──────────────────
         //
@@ -189,6 +217,7 @@ namespace InterviewCopilot
         /// </param>
         public static byte[] CaptureScreen(bool wholeScreen)
         {
+            _capturingWholeScreen = wholeScreen;
             if (wholeScreen)
             {
                 LastCaptureTarget = "your screen";
@@ -418,7 +447,9 @@ namespace InterviewCopilot
             // a model misread a line of code.
             double shortEdge = Math.Min(srcW, srcH);
             double longEdge  = Math.Max(srcW, srcH);
-            double scale = Math.Min(MaxShortEdge / shortEdge, MaxLongEdge / longEdge);
+            double shortCap = _capturingWholeScreen ? MaxShortEdgeFullScreen : MaxShortEdge;
+            double longCap  = _capturingWholeScreen ? MaxLongEdgeFullScreen  : MaxLongEdge;
+            double scale = Math.Min(shortCap / shortEdge, longCap / longEdge);
 
             if (scale < 1.0)
             {
