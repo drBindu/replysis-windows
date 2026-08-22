@@ -497,6 +497,31 @@ Unknown short flags are left alone.
 a loopback as well and mix the machine's own output into a feed that already
 contains it.
 
+**The FIFO reader has to be paced like an audio device, not read like a file.**
+This is the bug that replaced the one below, and it was worse. A read on a
+quiet FIFO raises EAGAIN, and answering that by manufacturing a chunk of
+silence and returning immediately means the caller loops and silence is
+produced as fast as the CPU allows. Measured on Mac at 141,980 silence chunks
+— 14,198 seconds of audio — in a thirty second run against twelve seconds of
+real speech. About 470x realtime, burying the speech at 400:1, and the
+transcript came back empty.
+
+Worse than what it replaced, because it broke the normal path rather than the
+edge case: a session that never cycled its writer still worked under the old
+bug, and nothing worked at all under this one.
+
+A device hands over 1600 frames every 100ms and blocks in between. A FIFO
+hands over what it has and says EAGAIN, so the waiting a device does for free
+has to be done explicitly. select() on the fd with the remainder of the chunk
+period does it: it returns the instant data arrives and costs nothing while it
+does not. Every path out of read now takes about one chunk duration — audio,
+silence, quiet writer, no writer at all.
+
+The test that catches this is rate, not behaviour. "Does it produce silence
+when quiet" passes at any speed, which is why two rounds of state-machine
+testing missed it. Feed N seconds and assert the reader consumes about N
+seconds.
+
 **The FIFO reader survives a writer that comes and goes.** The first version
 died the moment one closed, which on macOS is a normal event rather than an
 edge case: the CoreAudio tap stops and starts while the engine keeps running,

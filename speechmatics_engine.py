@@ -865,27 +865,34 @@ try:
             """
             A PyAudio-shaped reader over a FIFO of 16kHz mono s16le.
 
-            The first version of this died the moment a writer closed, which on
-            macOS is a normal event rather than an edge case: the app's CoreAudio
-            tap stops and starts while the engine keeps running, and every mode
-            switch restarts it. Measured failure was 85,895 lines of "I/O
-            operation on closed file" in fourteen seconds — about 6,100 a second,
-            never recovering, and enough to flush every other diagnostic out of a
-            rotating log within seconds. The transcript was gone for the rest of
-            the session.
+            Two bugs have lived here, and the second was worse than the first.
 
-            Two faults compounded. The reopen closed the handle and then called a
-            blocking open() on a FIFO with no writer, which does not return; and
-            because the closed handle was left in place, every later read raised
-            on it rather than retrying. The object was permanently broken while
-            looking alive.
+            The first died when a writer closed: it shut the handle, called a
+            blocking open() on a FIFO nobody was writing to, and left the closed
+            handle in place when that did not return. Every later read raised on
+            it. Measured on macOS at 85,895 errors in fourteen seconds.
 
-            So: never block, never leave a dead handle behind, and use what a
-            non-blocking FIFO already tells us. Opened O_NONBLOCK, a read raises
-            BlockingIOError while a writer is attached but quiet, and returns
-            empty only when every writer has gone. Those are exactly the two
-            cases that need telling apart, and they need no timers to
-            distinguish.
+            The fix for that introduced the second. A read on a quiet FIFO
+            raises EAGAIN, and the reader answered it by manufacturing a chunk
+            of silence and returning immediately — so the caller looped, and it
+            produced silence as fast as the CPU allowed. Measured at 141,980
+            silence chunks, 14,198 seconds of audio, in a thirty second run
+            against twelve seconds of real speech: roughly 470x realtime,
+            burying the speech at 400:1 and returning an empty transcript.
+
+            That one was worse because it broke the normal path rather than the
+            edge case. A session that never cycled its writer still worked under
+            the first bug; under the second nothing worked at all.
+
+            The lesson is that this has to behave like an audio device, not like
+            a file. A device hands over 1600 frames every 100ms and blocks in
+            between; a FIFO hands over what it has and says EAGAIN. So the
+            waiting a device does for free has to be done here explicitly, and
+            every path out of read() takes about one chunk duration whether it
+            found audio, silence, or no writer at all.
+
+            select() is what does the waiting: it returns the instant data
+            arrives, and costs nothing while it does not.
             """
 
             COMPLAIN_EVERY = 5.0    # seconds between log lines, at most
@@ -899,13 +906,12 @@ try:
             def _open(self):
                 """Attach if a writer is there. Never blocks, never raises.
 
-                Attempted on every read that finds no handle, not on a timer.
-                A throttle here was costing up to half a second of audio each
-                time the tap cycled — and the tap cycles on every mode switch,
-                so that is the interviewer's speech, not idle time. Opening a
-                FIFO with O_NONBLOCK returns immediately whether or not a writer
-                is there, so there is nothing to protect against by waiting.
-                Only the complaining is throttled.
+                Attempted on every read that finds no handle, not on a timer. A
+                throttle here cost up to half a second of audio each time the
+                tap cycled, and the tap cycles on every mode switch, so that is
+                the interviewer speaking rather than idle time. Opening a FIFO
+                with O_NONBLOCK returns immediately whether or not a writer is
+                there, so there is nothing to protect against by waiting.
                 """
                 try:
                     flags = os.O_RDONLY
@@ -932,35 +938,59 @@ try:
                 self._next_complain = now + self.COMPLAIN_EVERY
                 print(f">>> SYS FIFO: {message}", flush=True)
 
+            @staticmethod
+            def _rest(deadline):
+                """Sleep out the remainder of this chunk's time, if any."""
+                left = deadline - time.monotonic()
+                if left > 0:
+                    time.sleep(left)
+
             def read(self, frames, exception_on_overflow=False):
                 want = frames * 2                      # s16le mono
-                silence = b"\x00" * want
+                deadline = time.monotonic() + frames / float(SAMPLE_RATE)
+
+                def padded(buf):
+                    """One buffer's worth, silence where the audio was not."""
+                    self._rest(deadline)
+                    return buf + b"\x00" * (want - len(buf))
 
                 if self._fd is None:
                     self._open()
                     if self._fd is None:
-                        return silence
+                        return padded(b"")
 
                 buf = b""
                 while len(buf) < want:
                     try:
                         chunk = os.read(self._fd, want - len(buf))
                     except BlockingIOError:
-                        # A writer is attached and has nothing for us this
-                        # instant. Silence for the gap, handle kept.
-                        return buf + b"\x00" * (want - len(buf))
+                        # A writer is attached and has nothing this instant.
+                        # Wait for it, up to the rest of this chunk's time —
+                        # returning immediately here is what produced silence
+                        # at 470x realtime.
+                        left = deadline - time.monotonic()
+                        if left <= 0:
+                            return padded(buf)
+                        try:
+                            import select
+                            ready, _, _ = select.select([self._fd], [], [], left)
+                        except Exception:
+                            time.sleep(min(left, 0.005))
+                            continue
+                        if not ready:
+                            return padded(buf)
+                        continue
                     except Exception as e:
                         self._drop()
                         self._complain(f"read failed, will reattach ({e})")
-                        return silence
+                        return padded(buf)
 
                     if not chunk:
                         # Empty from a non-blocking FIFO means every writer has
-                        # gone. Let the handle go and try again shortly; the tap
-                        # comes back and so does the transcript.
+                        # gone. Let the handle go and reattach on the next read.
                         self._drop()
                         self._complain("writer closed, waiting for it to return")
-                        return buf + b"\x00" * (want - len(buf))
+                        return padded(buf)
 
                     buf += chunk
                 return buf
