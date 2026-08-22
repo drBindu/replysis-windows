@@ -256,6 +256,40 @@ is the same thing F8 has always done silently. Its label does not change when
 pressed: a control whose text changes is read as a switch, and this one is
 not. Only its colour says whether screen answers are armed.
 
+**The three hotkeys, precisely.** All global — they work while another
+application has focus, which is the entire point, and they are ignored while
+our own window is in front so they never fire on the app itself.
+
+| Key | Captures | Use |
+|---|---|---|
+| **F8** | the window currently in front | the usual one |
+| **F9** | the primary monitor, whole | when the thing is not in a window |
+| **F7** | a box the user drags | one part of a crowded screen |
+
+**What pressing F8 actually does, in order:**
+
+1. Hides the app's own windows from the capture, so the answer is not
+   photographed into the next question.
+2. Captures the foreground window — which is whatever application the user is
+   in, because our window is not focused when a global hotkey fires.
+3. Downscales, encodes, sends, and streams the answer back.
+4. Restores the windows.
+
+**Nothing is spoken and nothing is typed.** No microphone, no Space, no
+question. The screen is the question. That is what makes it usable while
+somebody is talking to you: to the room, the candidate looked at their screen
+and nothing else happened.
+
+**F8 works whether or not the setting is on.** They are independent: the
+setting decides whether a *spoken* question may be answered from the screen;
+F8 is the candidate deciding to look, on demand, always available.
+
+**F8 is sharper than the setting's capture.** A single window arrives close
+to its real size; the whole monitor is shrunk to fit and small text suffers.
+So for reading a compile error or a dense problem statement, F8 is the better
+of the two — and it is also faster, because one window is fewer pixels than
+one screen.
+
 **What each path is for:**
 
 - **F8 / the button** — the candidate deciding to look. Silent, nothing
