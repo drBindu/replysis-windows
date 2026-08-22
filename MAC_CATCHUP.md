@@ -497,6 +497,30 @@ Unknown short flags are left alone.
 a loopback as well and mix the machine's own output into a feed that already
 contains it.
 
+**The FIFO reader survives a writer that comes and goes.** The first version
+died the moment one closed, which on macOS is a normal event rather than an
+edge case: the CoreAudio tap stops and starts while the engine keeps running,
+and every mode switch restarts it. Measured on Mac at 85,895 lines of "I/O
+operation on closed file" in fourteen seconds, never recovering, with the
+transcript gone for the rest of the session.
+
+Two faults compounded. The reopen closed the handle and then called a blocking
+open() on a FIFO with no writer, which does not return; and the closed handle
+was left in place, so every later read raised on it rather than retrying. The
+object was permanently broken while looking alive.
+
+Opened O_NONBLOCK now, so nothing ever blocks. A read raising BlockingIOError
+means a writer is attached and quiet — silence for the gap, handle kept. A
+read returning empty means every writer has gone — let the handle go and
+reattach on the next read. Those two cases are exactly what needs telling
+apart and the kernel already distinguishes them, so no timers are involved.
+
+Reattaching is attempted on every read that finds no handle, not on a timer: a
+half-second throttle was costing half a second of audio each time the tap
+cycled, and the tap cycles on every mode switch, so that is the interviewer
+speaking rather than idle time. Only the logging is throttled, to once every
+five seconds.
+
 **Three Windows-shaped assumptions removed**, so the engine is genuinely
 platform-neutral rather than portable-if-you-squint. All three were found by
 the Mac session running it, not by reading it.

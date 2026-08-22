@@ -862,37 +862,106 @@ try:
     # mixer, the hot-swap logic, the level probes — needs no knowledge of it.
     if args.sysfifo and args.mode != "mic":
         class _FifoStream:
-            """A PyAudio-shaped reader over a FIFO of 16kHz mono s16le."""
+            """
+            A PyAudio-shaped reader over a FIFO of 16kHz mono s16le.
+
+            The first version of this died the moment a writer closed, which on
+            macOS is a normal event rather than an edge case: the app's CoreAudio
+            tap stops and starts while the engine keeps running, and every mode
+            switch restarts it. Measured failure was 85,895 lines of "I/O
+            operation on closed file" in fourteen seconds — about 6,100 a second,
+            never recovering, and enough to flush every other diagnostic out of a
+            rotating log within seconds. The transcript was gone for the rest of
+            the session.
+
+            Two faults compounded. The reopen closed the handle and then called a
+            blocking open() on a FIFO with no writer, which does not return; and
+            because the closed handle was left in place, every later read raised
+            on it rather than retrying. The object was permanently broken while
+            looking alive.
+
+            So: never block, never leave a dead handle behind, and use what a
+            non-blocking FIFO already tells us. Opened O_NONBLOCK, a read raises
+            BlockingIOError while a writer is attached but quiet, and returns
+            empty only when every writer has gone. Those are exactly the two
+            cases that need telling apart, and they need no timers to
+            distinguish.
+            """
+
+            COMPLAIN_EVERY = 5.0    # seconds between log lines, at most
 
             def __init__(self, path):
                 self.path = path
-                self._f = None
+                self._fd = None
+                self._next_complain = 0.0
                 self._open()
 
             def _open(self):
-                # Blocks until a writer appears, which is correct: the app opens
-                # its end as it starts the engine, and starting to read from a
-                # FIFO nobody has opened for writing would just return EOF.
-                self._f = open(self.path, "rb", buffering=0)
+                """Attach if a writer is there. Never blocks, never raises.
+
+                Attempted on every read that finds no handle, not on a timer.
+                A throttle here was costing up to half a second of audio each
+                time the tap cycled — and the tap cycles on every mode switch,
+                so that is the interviewer's speech, not idle time. Opening a
+                FIFO with O_NONBLOCK returns immediately whether or not a writer
+                is there, so there is nothing to protect against by waiting.
+                Only the complaining is throttled.
+                """
+                try:
+                    flags = os.O_RDONLY
+                    if hasattr(os, "O_NONBLOCK"):
+                        flags |= os.O_NONBLOCK
+                    self._fd = os.open(self.path, flags)
+                except Exception as e:
+                    self._fd = None
+                    self._complain(f"FIFO not ready ({e})")
+
+            def _drop(self):
+                """Let go of the handle, so nothing is ever read from a dead one."""
+                fd, self._fd = self._fd, None
+                if fd is not None:
+                    try:
+                        os.close(fd)
+                    except Exception:
+                        pass
+
+            def _complain(self, message):
+                now = time.time()
+                if now < self._next_complain:
+                    return
+                self._next_complain = now + self.COMPLAIN_EVERY
+                print(f">>> SYS FIFO: {message}", flush=True)
 
             def read(self, frames, exception_on_overflow=False):
                 want = frames * 2                      # s16le mono
+                silence = b"\x00" * want
+
+                if self._fd is None:
+                    self._open()
+                    if self._fd is None:
+                        return silence
+
                 buf = b""
                 while len(buf) < want:
-                    chunk = self._f.read(want - len(buf))
+                    try:
+                        chunk = os.read(self._fd, want - len(buf))
+                    except BlockingIOError:
+                        # A writer is attached and has nothing for us this
+                        # instant. Silence for the gap, handle kept.
+                        return buf + b"\x00" * (want - len(buf))
+                    except Exception as e:
+                        self._drop()
+                        self._complain(f"read failed, will reattach ({e})")
+                        return silence
+
                     if not chunk:
-                        # Writer closed or paused. Reopen rather than treating it
-                        # as the end: the app may restart its tap between turns,
-                        # and silence is the honest answer meanwhile.
-                        try:
-                            self._f.close()
-                        except Exception:
-                            pass
-                        try:
-                            self._open()
-                        except Exception:
-                            return b"\x00" * want
-                        return b"\x00" * want
+                        # Empty from a non-blocking FIFO means every writer has
+                        # gone. Let the handle go and try again shortly; the tap
+                        # comes back and so does the transcript.
+                        self._drop()
+                        self._complain("writer closed, waiting for it to return")
+                        return buf + b"\x00" * (want - len(buf))
+
                     buf += chunk
                 return buf
 
@@ -900,10 +969,7 @@ try:
                 pass
 
             def close(self):
-                try:
-                    self._f.close()
-                except Exception:
-                    pass
+                self._drop()
 
         try:
             sys_stream = _FifoStream(args.sysfifo)
