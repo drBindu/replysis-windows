@@ -49,6 +49,23 @@ namespace InterviewCopilot
         // ── Speechmatics key (fetched from backend; works for guests via X-Device-Id) ──
         public static string SpeechmaticsKey { get; private set; } = "";
 
+        /// <summary>
+        /// How much of a token's life must remain for it to be worth reusing.
+        ///
+        /// Was sixty seconds, which is long enough to start a session and not
+        /// long enough to finish a question in one. A token accepted with
+        /// sixty-one seconds left opens a connection that dies mid-answer, and
+        /// the failure lands in the worst possible place: halfway through
+        /// speaking to an interviewer.
+        ///
+        /// Five minutes costs nothing. Tokens last an hour, so renewing at
+        /// fifty-five minutes instead of fifty-nine is still about one an hour
+        /// against an allowance of twelve. The Mac session picked five minutes
+        /// independently and was right; sixty seconds had no reasoning behind
+        /// it beyond being a round number.
+        /// </summary>
+        private static readonly TimeSpan TokenRenewalMargin = TimeSpan.FromMinutes(5);
+
         private static readonly object _smKeyLock = new();
         private static DateTime _speechmaticsRetryAfterUtc = DateTime.MinValue;
         private static DateTime _speechmaticsExpiresAtUtc = DateTime.MinValue;
@@ -76,7 +93,7 @@ namespace InterviewCopilot
             {
                 lock (_smKeyLock)
                     return !string.IsNullOrWhiteSpace(SpeechmaticsKey)
-                        && DateTime.UtcNow < _speechmaticsExpiresAtUtc.AddSeconds(-60);
+                        && DateTime.UtcNow < _speechmaticsExpiresAtUtc.Subtract(TokenRenewalMargin);
             }
         }
 
@@ -235,7 +252,7 @@ namespace InterviewCopilot
 
                 // The same minute of headroom the in-memory check uses, so a token
                 // is never handed to the engine moments before it dies.
-                if (DateTime.UtcNow >= cached.ExpiresAtUtc.AddSeconds(-60)) return false;
+                if (DateTime.UtcNow >= cached.ExpiresAtUtc.Subtract(TokenRenewalMargin)) return false;
 
                 SpeechmaticsKey = cached.Key;
                 _speechmaticsExpiresAtUtc = cached.ExpiresAtUtc;

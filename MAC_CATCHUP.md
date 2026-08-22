@@ -59,6 +59,15 @@ largest single gap.
 
 ### 1. Do not throw away the speech token on quit
 
+**Renewal margin is five minutes, not one.** Windows shipped sixty seconds and
+that was wrong: a token accepted with sixty-one seconds left opens a session
+that dies mid-answer, in front of an interviewer. Tokens last an hour, so
+renewing at fifty-five minutes rather than fifty-nine is still about one an
+hour against an allowance of twelve. The Mac session reached five minutes
+independently and argued it correctly; sixty seconds had nothing behind it but
+being a round number. Windows now matches.
+
+
 The token is good for about an hour and was kept in memory only, so every
 launch spent a new one against a twelve-per-hour allowance. A dozen restarts
 locked the account out — on both apps at once, because the allowance is per
