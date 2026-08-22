@@ -519,8 +519,14 @@ parser.add_argument("--max-delay",  type=float, default=0.7,
                          "spent an extra 150ms per question for accuracy that max_delay_mode "
                          "'flexible' already protects by extending at word boundaries anyway.")
 parser.add_argument("--mode",       type=str,   default="both",
-                    choices=["both", "system"],
-                    help="'both' = system audio + mic (default). 'system' = system audio only, mic never opened.")
+                    choices=["both", "system", "mic"],
+                    help="'both' = system audio + mic (default). 'system' = system audio only, mic never "
+                         "opened. 'mic' = microphone only, no system audio. "
+                         "'mic' exists for the case where system audio cannot be captured at all: on "
+                         "macOS the app falls back to it when its CoreAudio tap is refused permission, "
+                         "or crashes mid-session. Removing it turned a degraded-but-working fallback "
+                         "into an engine that refuses to start, which is the worst direction for a "
+                         "fallback to fail in.")
 parser.add_argument("--sysfifo",    type=str,   default=None,
                     help="Path to a FIFO carrying system audio as 16kHz mono s16le, used instead of "
                          "opening a loopback device. This is how macOS gets system audio at all: a "
@@ -576,9 +582,13 @@ _USE_SARVAM = args.language in SARVAM_LANG_MAP
 # Read API key from environment variable (avoids exposing it in process arguments).
 # The Speechmatics key is only required for the Speechmatics path — a Sarvam language
 # authenticates with SARVAM_API_KEY instead, so don't hard-fail when it's absent.
-_env_key = os.environ.get("SM_API_KEY", "")
+# Either name. Windows sets SM_API_KEY, macOS sets SPEECHMATICS_API_KEY, and
+# renaming it on one side would break the other for no reason beyond which was
+# typed first.
+_env_key = (os.environ.get("SM_API_KEY", "")
+            or os.environ.get("SPEECHMATICS_API_KEY", "")).strip()
 if not _env_key and not _USE_SARVAM:
-    print(">>> FATAL: SM_API_KEY environment variable not set.", flush=True)
+    print(">>> FATAL: neither SM_API_KEY nor SPEECHMATICS_API_KEY is set.", flush=True)
     sys.exit(1)
 args.key = _env_key
 
@@ -586,7 +596,15 @@ args.key = _env_key
 # ── PATHS ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-APP_DATA = os.path.join(
+# Where the app is watching, not where this platform happens to put things.
+#
+# LOCALAPPDATA is Windows-only, so on macOS this fell through to a temp
+# directory: latest.txt, pause.flag and reset.flag would all be written to
+# /var/folders/... while the app polled Application Support. The engine would
+# run perfectly, the app would show an empty transcript forever, and there
+# would be no error at either end. A failure invisible from both sides is worse
+# than a loud one, so the app is allowed to say where it is listening.
+APP_DATA = os.environ.get("APP_DATA_DIR", "").strip() or os.path.join(
     os.environ.get("LOCALAPPDATA", tempfile.gettempdir()),
     "InterviewCopilot"
 )
@@ -619,8 +637,10 @@ except Exception:
 # launch and only duplicated what the real mic-stream open (below) already does,
 # including the native-rate fallback. Skipping it means speech right after opening
 # the app is captured seconds sooner.
-if args.mode != "both":
+if args.mode == "system":
     print(">>> MODE: system-audio-only -- mic never opened.", flush=True)
+elif args.mode == "mic":
+    print(">>> MODE: microphone-only -- system audio never opened.", flush=True)
 
 
 # ── RECORDING STATE ───────────────────────────────────────────────────────────
@@ -753,7 +773,7 @@ try:
 
     # ── MIC STREAM — only opened in "both" mode ──────────────────────────────
     mic_stream = None
-    if args.mode == "both":
+    if args.mode in ("both", "mic"):
         mic_kwargs = dict(
             format=pyaudio.paInt16,
             channels=1,
@@ -819,6 +839,14 @@ try:
     else:
         print(">>> MIC: skipped (system-audio-only mode)", flush=True)
 
+    # Microphone-only means exactly that. This is the fallback for a machine
+    # where system audio cannot be captured at all, so hunting for a loopback
+    # device here would spend seconds probing hardware that is already known
+    # not to work, and could succeed onto the wrong thing.
+    if args.mode == "mic":
+        sys_stream = None
+        print(">>> SYSTEM AUDIO: skipped (microphone-only mode).", flush=True)
+
     # ── SYSTEM AUDIO FROM A FIFO (macOS) ─────────────────────────────────────────
     #
     # On macOS a helper process cannot capture system audio at all. It does not
@@ -832,7 +860,7 @@ try:
     #
     # Presented as something with a .read() so the rest of the engine — the
     # mixer, the hot-swap logic, the level probes — needs no knowledge of it.
-    if args.sysfifo:
+    if args.sysfifo and args.mode != "mic":
         class _FifoStream:
             """A PyAudio-shaped reader over a FIFO of 16kHz mono s16le."""
 
@@ -891,7 +919,9 @@ try:
     # ── SYSTEM AUDIO STREAM ──────────────────────────────────────────────────────
     # Priority: 1) WASAPI loopback (captures default output device — no VB-Cable needed)
     #           2) Explicit --sysdevice arg  3) VB-Cable
-    if args.sysfifo:
+    if args.mode == "mic":
+        sys_device_index = None
+    elif args.sysfifo:
         # The FIFO above is the system audio. Hunting for a loopback device as
         # well would open a second source and mix the machine's own output into
         # a feed that already has it.
@@ -901,7 +931,7 @@ try:
         sys_device_index = args.sysdevice
 
     # 1. Try WASAPI loopback unless the user pinned an explicit device
-    if not args.sysfifo and sys_device_index is None:
+    if args.mode != "mic" and not args.sysfifo and sys_device_index is None:
         loopback = find_wasapi_loopback_device(p)
         if loopback is not None:
             lb_idx, lb_rate, lb_ch = loopback
@@ -927,7 +957,7 @@ try:
                 sys_stream = None
 
     # 2. Fall back to VB-Cable (or explicit --sysdevice)
-    if sys_stream is None:
+    if sys_stream is None and args.mode != "mic":
         if sys_device_index is None:
             sys_device_index = find_vbcable_device(p)
         if sys_device_index is not None:

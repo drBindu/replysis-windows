@@ -497,6 +497,34 @@ Unknown short flags are left alone.
 a loopback as well and mix the machine's own output into a feed that already
 contains it.
 
+**Three Windows-shaped assumptions removed**, so the engine is genuinely
+platform-neutral rather than portable-if-you-squint. All three were found by
+the Mac session running it, not by reading it.
+
+`APP_DATA_DIR` is honoured when set, falling back to `LOCALAPPDATA`. That
+variable is Windows-only, so on macOS the path fell through to a temp
+directory: latest.txt, pause.flag and reset.flag written to /var/folders while
+the app polled Application Support. The engine would run perfectly and the app
+would show an empty transcript forever, with no error at either end. A failure
+invisible from both sides is worse than a loud one.
+
+`SPEECHMATICS_API_KEY` is accepted as well as `SM_API_KEY`. Two names for one
+thing because of which was typed first, and renaming either would break the
+other side for nothing.
+
+`--mode mic` exists again. macOS falls back to it when its CoreAudio tap is
+refused permission or crashes mid-session. Dropping it turned a
+degraded-but-working fallback into an engine that refuses to start, which is
+the worst direction for a fallback to fail in. In that mode system audio is
+not probed at all, since the whole premise is that it cannot be captured.
+
+**Telugu does not work on Windows either, and the reason is not the engine.**
+The Sarvam path reads `SARVAM_API_KEY` from the environment, the Windows app
+passes it from config, and that config field defaults to empty with no UI to
+set it. So it is empty on every install. The engine exits with "SARVAM_API_KEY
+not set" rather than transcribing. Whoever adds a key needs to add it to both
+apps and to the settings UI; the shared engine is not the missing piece.
+
 **What still needs deciding, and it is not a code question:** this engine has
 no owner and no versioned artifact. The compiled binary lives in neither
 repo, survives only in local build folders, and a clean clone of the Mac repo
