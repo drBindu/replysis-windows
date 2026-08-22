@@ -4072,6 +4072,60 @@ namespace InterviewCopilot
             catch (Exception ex) { DebugWindow.Log("VOCAB", $"write failed: {ex.Message}"); }
         }
 
+        /// <summary>
+        /// Contact details and other fragments that are neither speech nor
+        /// anybody's business.
+        ///
+        /// This list is written to vocab.txt in plain text, because the speech
+        /// engine reads that file directly and cannot decrypt what everything
+        /// else on disk is protected with. It was carrying the candidate's
+        /// email address, their LinkedIn URL and their city, lifted straight
+        /// out of the resume and left unencrypted beside files that are not.
+        ///
+        /// None of it belongs there on its own terms either. Nobody says their
+        /// email address out loud in an interview, so as speech vocabulary it
+        /// is dead weight, and short fragments are worse than useless: a resume
+        /// from Illinois put "IL" in the list, and a vocabulary hint is exactly
+        /// the nudge that turns "I'll" into "IL" in a transcript.
+        /// </summary>
+        private static bool IsPersonalDetail(string word)
+        {
+            if (word.Contains('@')) return true;                       // email
+            if (word.Contains('/')) return true;                       // URL or handle
+
+            // A domain, but only where something precedes the dot. ".NET" is a
+            // framework this candidate may well be asked about, and filtering it
+            // would remove a term the vocabulary exists to protect.
+            if (IndexOfDomain(word) > 0) return true;
+
+            // Mostly digits: a phone number, a postcode, a house number.
+            int digits = word.Count(char.IsDigit);
+            if (digits > 0 && digits * 2 >= word.Length) return true;
+
+            // A long word ending in a run of digits is a username or the local
+            // part of an email — "pavankrishna2528" — rather than a technology.
+            // Four in a row, so "gpt-oss-20b" and "llama3" survive.
+            if (word.Length >= 8 &&
+                System.Text.RegularExpressions.Regex.IsMatch(word, @"\d{4}")) return true;
+
+            // Two capitals is a state code far more often than a term worth
+            // recognising, and the cost of a wrong one is high.
+            if (word.Length == 2 && word.All(char.IsUpper)) return true;
+
+            return false;
+        }
+
+        /// <summary>Where a domain suffix starts, or -1. Position 0 is not a domain.</summary>
+        private static int IndexOfDomain(string word)
+        {
+            foreach (string suffix in new[] { ".com", ".org", ".net", ".io", ".co", ".dev" })
+            {
+                int at = word.IndexOf(suffix, StringComparison.OrdinalIgnoreCase);
+                if (at > 0) return at;
+            }
+            return -1;
+        }
+
         private static List<string> ExtractVocabTerms(string text, string company)
         {
             var found = new List<string>();
@@ -4081,6 +4135,7 @@ namespace InterviewCopilot
                 w = w.Trim().Trim('.', ',', ';', ':', '(', ')', '"', '\'', '!', '?');
                 if (w.Length < 2 || w.Length > 40) return;
                 if (_vocabStop.Contains(w)) return;
+                if (IsPersonalDetail(w)) return;
                 if (seen.Add(w)) found.Add(w);
             }
 
@@ -5398,6 +5453,24 @@ namespace InterviewCopilot
             // it does not land in a second and a half the minute is lost, which
             // is the same as before and no worse.
             FlushListeningMeterOnExit();
+
+            // The live transcript is the one thing left in plain text.
+            //
+            // Everything else the app keeps — the session transcripts, the saved
+            // resumes, the job context, the cached speech token — is encrypted
+            // for this Windows user. latest.txt is not, because the speech
+            // engine writes it and cannot encrypt anything, and it held the last
+            // thing an interviewer said until the next launch overwrote it.
+            //
+            // It has no value once the app is closed: it is a scratch file for
+            // the turn in progress. Deleting it on the way out costs nothing and
+            // leaves nothing behind.
+            try
+            {
+                string livePath = Path.Combine(AppDataFolder, "latest.txt");
+                if (File.Exists(livePath)) File.Delete(livePath);
+            }
+            catch { }
 
             // The job-context save is debounced by 500ms, so an edit typed just
             // before closing is still sitting in that window. Flush it before

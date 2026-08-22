@@ -341,6 +341,31 @@ readable.
 Kept up to date as the Windows app changes, so nothing has to be rediscovered
 by reading diffs. Newest first.
 
+**Security audit, three fixes.** The screenshot stash on the backend could
+exhaust the heap: two hundred images at up to eight megabytes each is 1.5 GB
+against a 1.38 GB heap, and the count was global so one caller filling it
+denied service to everyone else. Now two megabytes per image, four per
+identity, sixty megabytes across everyone measured in bytes. Already live —
+nothing for the Mac app to build, but worth knowing the shape of it.
+
+**Never write personal details into the speech vocabulary file.** That file
+is plain text, because the speech engine reads it directly and cannot decrypt
+what everything else on disk is protected with — and it was carrying the
+candidate's email address, LinkedIn URL and city, lifted out of their resume
+and left unencrypted beside files that are not. Filter emails, URLs, phone
+numbers and anything mostly digits.
+
+It is an accuracy fix as much as a privacy one. A resume from Illinois put
+"IL" in the vocabulary, and a vocabulary hint is exactly the nudge that turns
+"I'll" into "IL" in a transcript. Two-letter capitals go. Be careful with the
+domain test though: ".NET" is a framework the candidate may be asked about,
+so only treat a suffix as a domain when something precedes the dot.
+
+**Delete the live transcript file when the app closes.** Everything else the
+app keeps is encrypted; that one is not, because the engine writes it, and it
+held the last thing an interviewer said until the next launch overwrote it.
+It is a scratch file for the turn in progress and has no value afterwards.
+
 **The screen is used when the question is about the screen — not whenever the
 screen is being watched.** This was written the wrong way round: everything
 except a short list of personal questions went down the screen path. So "tell
