@@ -236,7 +236,48 @@ And the one nobody asks for: **if the screen shows a compile error or a
 failed test, lead with it.** Nobody in an interview says "can you solve that
 error" — they wait to see whether you notice.
 
-### 11. Code belongs in its own panel
+### 11. The screen workflow, and where the controls live
+
+This is the shape the whole feature settled into. Build this, not the earlier
+version described in the changelog below.
+
+**Answering from the screen is a setting, on by default.** Settings →
+"Answer from the shared screen", remembered between launches.
+
+It used to be a toolbar switch that started off every time, which meant the
+feature most likely to matter in a coding round was the one a candidate had
+to remember to arm — with an interviewer already talking. Nobody reads a
+toolbar under that pressure, and a feature that must be armed is one most
+people never see work.
+
+**The toolbar holds the action, not the arming.** A button reading READ
+SCREEN with F8 beside it. Pressing it reads the screen there and then, which
+is the same thing F8 has always done silently. Its label does not change when
+pressed: a control whose text changes is read as a switch, and this one is
+not. Only its colour says whether screen answers are armed.
+
+**What each path is for:**
+
+- **F8 / the button** — the candidate deciding to look. Silent, nothing
+  spoken, reads the window they are in, sharper because a single window
+  arrives near its real size. This is the one to use after running code.
+- **The setting** — the interviewer asking about something on screen, with
+  no keypress. Reads the whole monitor, so it does not depend on which window
+  was clicked last.
+
+**The workflow it produces:**
+
+    Coding round starts    -> nothing to switch on
+    Problem appears        -> scroll through it once while reading
+    They ask about it      -> answered from the screen
+    They ask about you     -> answered normally, no screenshot
+    Code was run           -> F8, and it names the error
+
+The point is that nothing has to be remembered. Every earlier version of this
+required the candidate to do something at the exact moment they were least
+able to.
+
+### 12. Code belongs in its own panel
 
 Prose and code were sharing one wrapped, proportional-font box. Indentation
 collapsed, long lines folded mid-expression, and the part that has to be read
