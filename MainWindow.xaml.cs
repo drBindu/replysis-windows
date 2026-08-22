@@ -2544,6 +2544,9 @@ namespace InterviewCopilot
         // Whether this machine can hide the app from a capture. Null until asked.
         private bool? _canHideFromCapture;
 
+        // True while the conversation is still about what is on screen.
+        private bool _lastAnswerUsedScreen;
+
         private void StartPreparedShots()
         {
             if (_preparedShotTimer == null)
@@ -3043,8 +3046,32 @@ namespace InterviewCopilot
             // behavioural question sent down this path comes back as an answer
             // about a code editor, in the wrong shape, having paid to read a
             // picture nobody asked about.
-            bool aboutTheScreen = PromptBuilder.RefersToScreen(question)
-                || (_watchScreenMode && !PromptBuilder.IsPersonalQuestion(question));
+            // The screen is used when the question is about the screen, not
+            // whenever the screen happens to be being watched.
+            //
+            // This was the wrong way round: everything except a short list of
+            // personal questions went down the screen path. So "tell me what is
+            // Java?" was answered by sending a photograph of the desktop — three
+            // times the tokens, a worse answer, and it exhausted the minute's
+            // allowance on a question that never needed a picture. Watching
+            // became a tax on every question rather than a feature for some.
+            //
+            // A question is about the screen when it says so — "solve this",
+            // "this error", "can you see" — or when the last answer came from
+            // the screen and this one continues it, which is how "and what is
+            // the time complexity?" keeps working after "solve this".
+            bool aboutTheScreen =
+                PromptBuilder.RefersToScreen(question)
+                || (_watchScreenMode
+                    && _lastAnswerUsedScreen
+                    && !PromptBuilder.IsPersonalQuestion(question));
+
+            // Whether the previous answer came from the screen, so a follow-up
+            // like "and what is the time complexity?" keeps looking at the same
+            // thing. Tracked here rather than guessed from the question text:
+            // the helper for that only matched questions containing the word
+            // "screen", which "can you solve this?" does not.
+            _lastAnswerUsedScreen = aboutTheScreen;
 
             if (aboutTheScreen)
             {

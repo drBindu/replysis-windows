@@ -266,6 +266,21 @@ readable.
 Kept up to date as the Windows app changes, so nothing has to be rediscovered
 by reading diffs. Newest first.
 
+**The screen is used when the question is about the screen — not whenever the
+screen is being watched.** This was written the wrong way round: everything
+except a short list of personal questions went down the screen path. So "tell
+me what is Java?" was answered by sending a photograph of the desktop: three
+times the tokens, a worse answer, and the minute's allowance exhausted on a
+question that never needed a picture. Watching became a tax on every question
+rather than a feature for some.
+
+Use the screen when the question says so — "solve this", "this error", "can
+you see" — or when the previous answer came from the screen and this one
+continues it, which is how "and what is the time complexity?" keeps working
+after "solve this". Track that continuity with a flag set when the screen path
+runs, not by looking for the word "screen" in the question: "can you solve
+this?" does not contain it.
+
 **Preparing screenshots only happens during an actual interview.** Making
 screen answers the default quietly turned the two-second capture into a
 screenshot every two seconds for as long as the app was open, uploaded
