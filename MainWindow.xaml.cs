@@ -1512,6 +1512,8 @@ namespace InterviewCopilot
 
             var now = DateTime.UtcNow;
 
+            WarnIfHearingButNotTranscribing(now);
+
             TimeSpan patience = _heardAnythingThisSession
                 ? IdleListeningTimeout
                 : SilentSessionTimeout;
@@ -1537,6 +1539,70 @@ namespace InterviewCopilot
                 _unreportedListeningSeconds -= minutes * 60.0;
                 _ = ReportListeningMinutesAsync(minutes);
             }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // HEARING, BUT NOT TRANSCRIBING
+        //
+        // The speech engine can fail in a way that looks exactly like success.
+        // It stays connected, it reports itself online, the microphone level
+        // moves — and no words ever come back. Three separate bugs in the audio
+        // reader produced precisely that shape, and every one of them was found
+        // by a person noticing an empty transcript rather than by the app
+        // noticing anything at all.
+        //
+        // A user cannot diagnose this and cannot work around it. The app looks
+        // healthy, so they assume they are doing something wrong, and the
+        // interview is over before anybody works out otherwise.
+        //
+        // The engine already says enough to catch it: it prints when the
+        // microphone hears speech, and it prints how many characters came back.
+        // Speech arriving with nothing returned, for long enough that no normal
+        // pause explains it, is the signature. Either line alone is worthless —
+        // silence is normal, and so is a lull — but the pair is decisive.
+        // ══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// How long speech may arrive with nothing coming back before this is a
+        /// fault rather than a pause. Speechmatics runs about 0.7s behind live
+        /// speech, so anything under a few seconds is ordinary; twelve seconds
+        /// of continuous speech returning nothing is not.
+        /// </summary>
+        private static readonly TimeSpan DeafnessThreshold = TimeSpan.FromSeconds(12);
+
+        private DateTime _lastSpeechDetectedUtc = DateTime.MinValue;
+        private DateTime _lastWordsReceivedUtc = DateTime.MinValue;
+        private DateTime _lastDeafnessWarningUtc = DateTime.MinValue;
+
+        private void WarnIfHearingButNotTranscribing(DateTime now)
+        {
+            if (!_engineOnline) return;   // an offline engine already says so
+
+            // Speech has to be arriving right now. Without this, a quiet room
+            // would look identical to a broken transcriber.
+            if (_lastSpeechDetectedUtc == DateTime.MinValue) return;
+            if (now - _lastSpeechDetectedUtc > TimeSpan.FromSeconds(3)) return;
+
+            // Words at any point recently mean it is working.
+            if (_lastWordsReceivedUtc != DateTime.MinValue &&
+                now - _lastWordsReceivedUtc < DeafnessThreshold) return;
+
+            // And it must have been going on a while. A session that has only
+            // just started has not had time to return anything yet.
+            DateTime since = _lastWordsReceivedUtc == DateTime.MinValue
+                ? _listeningSinceUtc
+                : _lastWordsReceivedUtc;
+            if (since == DateTime.MinValue || now - since < DeafnessThreshold) return;
+
+            // Said once a minute at most. Repeating it every tick would bury the
+            // answer under the warning about the answer.
+            if (now - _lastDeafnessWarningUtc < TimeSpan.FromSeconds(60)) return;
+            _lastDeafnessWarningUtc = now;
+
+            DebugWindow.Log("ENGINE",
+                $"Hearing speech but no words for {(int)(now - since).TotalSeconds}s — "
+                + "transcription appears to have stopped while the engine still reports online.");
+            ShowListeningModeNotice("HEARING YOU BUT NOT TRANSCRIBING — RESTART THE APP");
         }
 
         /// <summary>
@@ -3975,6 +4041,18 @@ namespace InterviewCopilot
                                 _engineOnline = false;
                                 DebugWindow.Log("ENGINE", "Speech connection lost; reconnecting.");
                                 _ = Dispatcher.BeginInvoke(new Action(UpdateMicUi));
+                            }
+
+                            // The engine says when it hears speech and when words
+                            // come back. Either alone means nothing; the pair is
+                            // the only thing that can tell a quiet room from a
+                            // transcriber that has stopped working.
+                            if (line.Contains("MIC SIGNAL DETECTED"))
+                                _lastSpeechDetectedUtc = DateTime.UtcNow;
+                            else if (line.Contains("PARTIAL received") || line.Contains("FINAL received"))
+                            {
+                                if (!line.Contains("(0 chars)"))
+                                    _lastWordsReceivedUtc = DateTime.UtcNow;
                             }
 
                             if (!_engineOnline && line.Contains("STATUS: ONLINE"))

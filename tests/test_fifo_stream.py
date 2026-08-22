@@ -143,6 +143,16 @@ def main():
         # ── Rate while a writer is attached and merely quiet ──────────────
         # This is the case that produced 470x realtime: EAGAIN answered with
         # instant silence, and the caller looping as fast as it could.
+        #
+        # This one runs FASTER than realtime on purpose — measured at about
+        # 1.9x on macOS — and that is correct. It is draining audio the writer
+        # had already buffered, and real data must never be held back. Pacing
+        # exists to bound synthesised silence, not delivery.
+        #
+        # Do not "fix" this toward 1.0x. Throttling real reads would add
+        # latency to every burst, which is the interviewer's speech arriving
+        # late, and it would trade a bug nobody has for one everybody gets.
+        # The bound below is deliberately loose enough to allow it.
         wall, audio = consumed_seconds(stream, 20)
         check("attached writer: paced to realtime",
               0.5 <= audio / max(wall, 1e-9) <= 2.0,

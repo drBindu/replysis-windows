@@ -497,6 +497,24 @@ Unknown short flags are left alone.
 a loopback as well and mix the machine's own output into a feed that already
 contains it.
 
+**The app must be able to notice the engine going deaf.** The speech engine
+can fail in a way that looks exactly like success: connected, reporting
+online, microphone level moving, and no words ever coming back. Three separate
+bugs in the audio reader produced precisely that shape, and every one was
+found by a person noticing an empty transcript rather than by the app noticing
+anything.
+
+That is the failure a user can neither diagnose nor work around. The app looks
+healthy, so they assume they are doing something wrong, and the interview is
+over before anybody works out otherwise.
+
+The engine already says enough to catch it: it prints when the microphone
+hears speech, and it prints how many characters came back. Speech arriving
+with nothing returned for twelve seconds is the signature. Either line alone
+is worthless — silence is normal and so is a lull — but the pair is decisive.
+Warn at most once a minute, or the warning buries the answer it is warning
+about.
+
 **Session refusals fail closed now, and there are tests beside the engine.**
 `quota_exceeded` — reachable simply by having both apps open, since the
 account has a concurrent session limit — matched nothing, so it retried
