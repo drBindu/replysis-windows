@@ -1164,7 +1164,11 @@ namespace InterviewCopilot
                     string data = line["data: ".Length..];
                     if (data == "[DONE]") break;
 
-                    // ParseSseToken never throws — returns "" on any malformed line
+                    // Throws on an error payload, deliberately: the backend
+                    // answers a rate limit with HTTP 200 and the message in the
+                    // stream, so the status code alone says nothing. The throw
+                    // is what carries the server's own wording to the user.
+                    // Malformed lines still return "" and are skipped.
                     string token = ParseSseToken(data);
                     if (!string.IsNullOrEmpty(token))
                     {
@@ -1238,7 +1242,17 @@ namespace InterviewCopilot
             _ => "Screen AI is temporarily unavailable. Please try again."
         };
 
-        /// <summary>Parses one SSE data line; returns "" on any error (never throws).</summary>
+        /// <summary>
+        /// Parses one SSE data line. Returns "" for anything unparseable, and
+        /// throws when the payload carries an "error" field.
+        ///
+        /// That throw is not an oversight. The backend cannot answer a rate
+        /// limit with 429: SSE headers go out before the provider is called, so
+        /// the status is already committed to 200 by the time the limit is
+        /// known. Every client therefore has to read the payload, and the Mac
+        /// app checked only the status code and treated a rate limit as an
+        /// empty response.
+        /// </summary>
         private static string ParseSseToken(string data)
         {
             try

@@ -450,6 +450,52 @@ signature tells scrolling from a ticking counter.
 
 ---
 
+---
+
+## The speech engine is one file, shared, and it had forked
+
+`speechmatics_engine.py` lives in the Windows repo and the Mac app depends on
+it. They had drifted apart without either side being able to tell.
+
+The Mac was running a compiled build of 1,074 lines against a source of
+1,982 — from before `SARVAM_LANG_MAP`, before `--language`, before
+`additional_vocab`, before the melia-1 rejection handling. Telugu arriving as
+confident English nonsense on the Mac was a bug already fixed here months of
+commits ago; the Mac simply could not reach the fix.
+
+Three changes so one engine now serves both:
+
+**`--sysfifo` exists.** It never did on this side — checked the full history,
+not just HEAD, so it was not lost in a refactor. It was a Mac-only addition
+living in a build nobody could rebuild. macOS cannot capture system audio in
+a helper process at all: the helper does not inherit the app's
+screen-recording grant, so the OS hands it silence rather than an error, which
+is why it looks like a quiet room. The Mac therefore runs a CoreAudio tap
+in-process and writes 16kHz mono s16le to a FIFO. The engine now reads that
+FIFO as its system-audio source, presented as something with a `.read()` so
+the mixer, the hot-swap logic and the level probes need no knowledge of it. A
+writer that closes is reopened rather than treated as the end, because the app
+may restart its tap between turns. Windows never sets it and opens a WASAPI
+loopback as before.
+
+**Single-dash long options are accepted.** The Mac passes `-mode both`,
+Windows declares `--mode`, and argparse rejects the former outright — a shared
+build would refuse to start on the Mac and look broken rather than
+misconfigured. Normalised before parsing, so neither app has to change.
+Unknown short flags are left alone.
+
+**The device hunt is skipped when a FIFO is given**, or the engine would open
+a loopback as well and mix the machine's own output into a feed that already
+contains it.
+
+**What still needs deciding, and it is not a code question:** this engine has
+no owner and no versioned artifact. The compiled binary lives in neither
+repo, survives only in local build folders, and a clean clone of the Mac repo
+cannot produce a working app — it has the `.spec` but not the `.py`. Both
+sides can silently run different engines and neither can tell. A tagged
+release built for both platforms would fix that; copying a binary between
+machines will not.
+
 ## Where the reasoning lives
 
 The Windows commit messages, `git log` on `windowsNative`, one commit per

@@ -521,11 +521,36 @@ parser.add_argument("--max-delay",  type=float, default=0.7,
 parser.add_argument("--mode",       type=str,   default="both",
                     choices=["both", "system"],
                     help="'both' = system audio + mic (default). 'system' = system audio only, mic never opened.")
+parser.add_argument("--sysfifo",    type=str,   default=None,
+                    help="Path to a FIFO carrying system audio as 16kHz mono s16le, used instead of "
+                         "opening a loopback device. This is how macOS gets system audio at all: a "
+                         "helper process is fed silence there, because it does not inherit the app's "
+                         "screen-recording grant, so the app runs its own CoreAudio tap in-process "
+                         "and writes the PCM here. Windows opens a WASAPI loopback directly and does "
+                         "not need this. Ignored when not given.")
 parser.add_argument("--language",   type=str,   default="en",
                     help="Speechmatics transcription language code (en, hi, te, ta, es, fr, de, ...). "
                          "The engine is forced to hear ONLY this language; audio in any other language is "
                          "mapped onto the closest words in it, so this must match the interview's language.")
-args = parser.parse_args()
+# Accept "-mode both" as well as "--mode both".
+#
+# The two apps grew apart on this. The Mac passes single-dash long options and
+# argparse rejects them outright, so a shared engine would refuse to start
+# there and the failure would look like the engine being broken rather than
+# called differently. Normalising here costs nothing, breaks nothing that
+# already worked, and means neither app has to change to use the same build.
+def _accept_single_dash(argv):
+    longs = {"device", "sysdevice", "max-delay", "mode", "language", "sysfifo", "key"}
+    fixed = []
+    for arg in argv:
+        name = arg[1:].split("=", 1)[0]
+        if arg.startswith("-") and not arg.startswith("--") and name in longs:
+            fixed.append("-" + arg)
+        else:
+            fixed.append(arg)
+    return fixed
+
+args = parser.parse_args(_accept_single_dash(sys.argv[1:]))
 
 # Hard floor: the Speechmatics RT API rejects max_delay < 0.7 with a protocol_error
 # and refuses the connection entirely. Clamp so no caller can ever break transcription
@@ -794,14 +819,89 @@ try:
     else:
         print(">>> MIC: skipped (system-audio-only mode)", flush=True)
 
+    # ── SYSTEM AUDIO FROM A FIFO (macOS) ─────────────────────────────────────────
+    #
+    # On macOS a helper process cannot capture system audio at all. It does not
+    # inherit the app's screen-recording grant, so the OS hands it silence
+    # rather than an error — measured at peak 0.000, which looks exactly like a
+    # quiet room and is why this was hard to diagnose.
+    #
+    # So the Mac app runs its own CoreAudio tap inside the app process, writes
+    # 16kHz mono s16le to a FIFO, and passes the path here. Windows opens a
+    # WASAPI loopback directly and never sets this.
+    #
+    # Presented as something with a .read() so the rest of the engine — the
+    # mixer, the hot-swap logic, the level probes — needs no knowledge of it.
+    if args.sysfifo:
+        class _FifoStream:
+            """A PyAudio-shaped reader over a FIFO of 16kHz mono s16le."""
+
+            def __init__(self, path):
+                self.path = path
+                self._f = None
+                self._open()
+
+            def _open(self):
+                # Blocks until a writer appears, which is correct: the app opens
+                # its end as it starts the engine, and starting to read from a
+                # FIFO nobody has opened for writing would just return EOF.
+                self._f = open(self.path, "rb", buffering=0)
+
+            def read(self, frames, exception_on_overflow=False):
+                want = frames * 2                      # s16le mono
+                buf = b""
+                while len(buf) < want:
+                    chunk = self._f.read(want - len(buf))
+                    if not chunk:
+                        # Writer closed or paused. Reopen rather than treating it
+                        # as the end: the app may restart its tap between turns,
+                        # and silence is the honest answer meanwhile.
+                        try:
+                            self._f.close()
+                        except Exception:
+                            pass
+                        try:
+                            self._open()
+                        except Exception:
+                            return b"\x00" * want
+                        return b"\x00" * want
+                    buf += chunk
+                return buf
+
+            def stop_stream(self):
+                pass
+
+            def close(self):
+                try:
+                    self._f.close()
+                except Exception:
+                    pass
+
+        try:
+            sys_stream = _FifoStream(args.sysfifo)
+            _sys_native_rate     = SAMPLE_RATE
+            _sys_native_channels = 1
+            _sys_chunk_frames    = CHUNK_FRAMES
+            _sys_use_loopback    = False
+            print(f">>> SYSTEM AUDIO (FIFO): {args.sysfifo} 16000Hz 1ch", flush=True)
+        except Exception as fifo_error:
+            print(f">>> FIFO open failed ({fifo_error}) — no system audio this session.", flush=True)
+            sys_stream = None
+
     # ── SYSTEM AUDIO STREAM ──────────────────────────────────────────────────────
     # Priority: 1) WASAPI loopback (captures default output device — no VB-Cable needed)
     #           2) Explicit --sysdevice arg  3) VB-Cable
-    sys_stream = None
-    sys_device_index = args.sysdevice
+    if args.sysfifo:
+        # The FIFO above is the system audio. Hunting for a loopback device as
+        # well would open a second source and mix the machine's own output into
+        # a feed that already has it.
+        sys_device_index = None
+    else:
+        sys_stream = None
+        sys_device_index = args.sysdevice
 
     # 1. Try WASAPI loopback unless the user pinned an explicit device
-    if sys_device_index is None:
+    if not args.sysfifo and sys_device_index is None:
         loopback = find_wasapi_loopback_device(p)
         if loopback is not None:
             lb_idx, lb_rate, lb_ch = loopback
