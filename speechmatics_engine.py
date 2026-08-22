@@ -2190,6 +2190,45 @@ async def main():
                     print(">>> Run: pip install --upgrade speechmatics", flush=True)
                     continue
 
+                # Anything the server refuses us on is terminal unless it is
+                # named as transient. Fail closed, not open.
+                #
+                # This defaulted the other way and it has cost twice now. A
+                # blocked contract fell through to "trying next endpoint" and
+                # retried on a doubling backoff forever while the UI said
+                # "connecting"; that was fixed by adding the string. Then
+                # 'quota_exceeded' — hit simply by having the Mac and Windows
+                # apps open at once, since the account has a concurrent session
+                # limit — arrived through a different string and did exactly the
+                # same thing.
+                #
+                # Adding strings one at a time loses that race by construction:
+                # every condition nobody has met yet becomes an infinite retry
+                # behind a UI that says "connecting". So the default is now
+                # terminal, and the transient cases are the enumerated ones.
+                #
+                # Exit code 2 is deliberate for all of them. It makes the app
+                # throw its cached token away and fetch a new one, which is
+                # right whether the account was blocked, over quota, or the key
+                # replaced — and it recovers by itself the moment the condition
+                # clears, without anybody restarting anything.
+                refused = ("not_allowed" in err.lower()
+                           or "not allowed" in err.lower()
+                           or "quota" in err.lower()
+                           or "forbidden" in err.lower()
+                           or "403" in err)
+                if refused:
+                    reason = err.strip()[:160]
+                    print(f">>> FATAL: SPEECHMATICS REFUSED THE SESSION — {reason}", flush=True)
+                    if "quota" in err.lower():
+                        print(">>> The account is at its limit of sessions running at once. "
+                              "Close the other app, or any window still holding a session, "
+                              "and start again.", flush=True)
+                    else:
+                        print(">>> This is a limit or permission on the account, not a network "
+                              "problem. Retrying will not clear it.", flush=True)
+                    raise SystemExit(2)
+
                 print(">>> Trying next endpoint...", flush=True)
 
         if not connected:

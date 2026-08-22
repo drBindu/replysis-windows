@@ -497,6 +497,32 @@ Unknown short flags are left alone.
 a loopback as well and mix the machine's own output into a feed that already
 contains it.
 
+**Session refusals fail closed now, and there are tests beside the engine.**
+`quota_exceeded` — reachable simply by having both apps open, since the
+account has a concurrent session limit — matched nothing, so it retried
+forever behind a UI saying "connecting". Exactly the blocked-contract failure
+we had already fixed once, arriving through a different string.
+
+Adding strings one at a time loses that race by construction: every server
+refusal nobody has met yet becomes an infinite retry. So the default is
+terminal and the transient cases are enumerated instead. `not_allowed`,
+`quota`, `forbidden` and 403 all exit as auth failures, which makes the app
+drop its cached token and refetch — right whether the account was blocked,
+over quota, or the key replaced, and it recovers by itself when the condition
+clears.
+
+`tests/test_engine_contract.py` runs anywhere and checks the promises both
+apps are built against: single-dash normalisation, the three modes, sysfifo,
+both key variable names, APP_DATA_DIR, fail-closed refusals, Sarvam routing,
+the melia downgrade, the max-delay floor. `tests/test_fifo_stream.py` needs a
+kernel FIFO and skips on Windows with a message saying so — run it on macOS or
+Linux before merging any change to the reader.
+
+The rate assertion is the one that matters and generalises past this file:
+anywhere data is synthesised to fill a gap, assert the rate and not only the
+content. "Produces silence when quiet" is true at 1x and at 470x alike, which
+is why two rounds of correctness testing missed it.
+
 **The FIFO reader has to be paced like an audio device, not read like a file.**
 This is the bug that replaced the one below, and it was worse. A read on a
 quiet FIFO raises EAGAIN, and answering that by manufacturing a chunk of
