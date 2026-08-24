@@ -36,9 +36,37 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.1
 
-      - name: Restore NuGet packages
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+
+      # The speech engine, built exactly as the direct download builds it.
+      #
+      # This step did not exist, and its absence was silent: the app project
+      # pulls the engine in with a wildcard, and a wildcard matching nothing is
+      # not an error. The Store package therefore built cleanly and shipped
+      # without the engine - an app that launches, looks correct, and cannot
+      # transcribe a word, which is the entire product.
+      - name: Build the speech engine
         shell: powershell
         run: |
+          python -m venv build\engine-venv
+          powershell -ExecutionPolicy Bypass -File tools\build-engine.ps1
+          if (-not (Test-Path "engine-dist\speechmatics_engine\speechmatics_engine.exe")) {
+            throw "The speech engine was not produced. Refusing to package an app that cannot transcribe."
+          }
+
+      # Two restores, because they do different things.
+      #
+      # nuget restore alone left the app project without obj/project.assets.json
+      # and msbuild stopped with NETSDK1004. That file is written by an SDK-style
+      # restore, which nuget restore on the packaging project does not perform
+      # for the project it references.
+      - name: Restore packages
+        shell: powershell
+        run: |
+          dotnet restore InterviewCopilot.csproj
           nuget restore InterviewCopilotPackager\InterviewCopilotPackager.wapproj
 
       # ── Certificate ────────────────────────────────────────────────────────
@@ -146,6 +174,17 @@ jobs:
         run: |
           $bundle = Get-ChildItem -Path "AppxPackages" -Filter "*.msixbundle" -Recurse | Select-Object -First 1
           if (-not $bundle) { throw "No .msixbundle found in AppxPackages" }
+
+          # Built beside the app is not the same as inside the package. Checked
+          # here because the failure is invisible: a package missing the engine
+          # installs and launches normally and simply never transcribes.
+          $staged = Get-ChildItem -Path "InterviewCopilotPackager\bin" -Recurse `
+                      -Filter "speechmatics_engine.exe" -ErrorAction SilentlyContinue |
+                    Select-Object -First 1
+          if (-not $staged) {
+            throw "The bundle does not contain the speech engine. Not shipping an app that cannot transcribe."
+          }
+          Write-Host "Speech engine present: $($staged.FullName)"
           Copy-Item $bundle.FullName "InterviewCopilot.msixbundle"
           echo "Bundle: $($bundle.Name) ($([math]::Round($bundle.Length / 1MB, 1)) MB)"
 
