@@ -42,12 +42,36 @@ jobs:
           nuget restore InterviewCopilotPackager\InterviewCopilotPackager.wapproj
 
       # ── Certificate ────────────────────────────────────────────────────────
-      - name: Import OV Certificate
+      # A certificate is not needed to submit to the Store, and this step used to
+      # require one.
+      #
+      # Microsoft re-signs Store packages with its own certificate once the app
+      # passes certification, which is why this app was published to the Store
+      # in the first place without anyone owning a certificate. Signing it here
+      # is not merely unnecessary: a signature whose publisher does not match
+      # the Partner Center identity is a documented cause of submission being
+      # rejected.
+      #
+      # So the certificate is optional and only used for the sideload path - the
+      # .appinstaller feed below, which is installed directly rather than through
+      # the Store and does need a trusted signature. Without one, the build still
+      # produces the bundle to upload to Partner Center, which is the thing this
+      # workflow exists for.
+      - name: Import certificate for the sideload feed (optional)
+        id: cert
         shell: powershell
         env:
           WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PFX)) {
+            Write-Host "No certificate configured. Building an unsigned bundle,"
+            Write-Host "which is exactly what Partner Center wants - Microsoft signs it"
+            Write-Host "after certification."
+            echo "signed=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
           $pfxBytes = [Convert]::FromBase64String($env:WINDOWS_CERT_PFX)
           $pfxPath  = "$env:RUNNER_TEMP\cert.pfx"
           [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
@@ -55,6 +79,7 @@ jobs:
           $securePass = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
           $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePass
 
+          echo "signed=true"                         >> $env:GITHUB_OUTPUT
           echo "CERT_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
           echo "PFX_PATH=$pfxPath"                   >> $env:GITHUB_ENV
           echo "Imported cert: $($cert.Subject)"
@@ -91,20 +116,29 @@ jobs:
           Set-Content $path $content -Encoding UTF8
 
       # ── Build ──────────────────────────────────────────────────────────────
-      - name: Build and sign MSIX
+      - name: Build the MSIX bundle
         shell: powershell
         run: |
-          msbuild InterviewCopilotPackager\InterviewCopilotPackager.wapproj `
-            /p:Configuration=Release `
-            /p:Platform=x64 `
-            /p:AppxBundle=Always `
-            /p:AppxBundlePlatforms=x64 `
-            /p:AppxPackageSigningEnabled=true `
-            /p:PackageCertificateThumbprint="${{ env.CERT_THUMBPRINT }}" `
-            /p:PackageCertificateKeyFile="${{ env.PFX_PATH }}" `
-            /p:PackageCertificatePassword="${{ secrets.WINDOWS_CERT_PASSWORD }}" `
-            /p:GenerateTestArtifacts=false `
-            /p:AppxPackageDir=".\AppxPackages\"
+          $args = @(
+            "InterviewCopilotPackager\InterviewCopilotPackager.wapproj",
+            "/p:Configuration=Release",
+            "/p:Platform=x64",
+            "/p:AppxBundle=Always",
+            "/p:AppxBundlePlatforms=x64",
+            "/p:GenerateTestArtifacts=false",
+            "/p:AppxPackageDir=.\AppxPackages\"
+          )
+          if ("${{ steps.cert.outputs.signed }}" -eq "true") {
+            $args += @(
+              "/p:AppxPackageSigningEnabled=true",
+              "/p:PackageCertificateThumbprint=${{ env.CERT_THUMBPRINT }}",
+              "/p:PackageCertificateKeyFile=${{ env.PFX_PATH }}",
+              "/p:PackageCertificatePassword=${{ secrets.WINDOWS_CERT_PASSWORD }}"
+            )
+          } else {
+            $args += "/p:AppxPackageSigningEnabled=false"
+          }
+          msbuild @args
 
       # ── Package ────────────────────────────────────────────────────────────
       - name: Rename bundle to clean name
