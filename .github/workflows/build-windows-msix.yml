@@ -12,6 +12,10 @@ name: Build Windows MSIX
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Store version, higher than the last submitted one (e.g. 1.0.14)'
+        required: true
 
 permissions:
   contents: write
@@ -59,7 +63,22 @@ jobs:
       - name: Set version
         shell: powershell
         run: |
-          $version = "1.0.${{ github.run_number }}.0"
+          # The version is given, not counted.
+          #
+          # This used to be "1.0.<run_number>.0", and the run counter belongs to
+          # this workflow alone - it had never run, so the first build would have
+          # produced 1.0.1.0 and the Store refuses anything not higher than what
+          # is already listed. The number also drifts away from the direct
+          # download's version, so the two channels would report different
+          # versions of the same build.
+          #
+          # Rejected at the door rather than at submission, which is the slow
+          # place to find out.
+          $v = "${{ inputs.version }}"
+          if ($v -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version must look like 1.0.14, got '$v'"
+          }
+          $version = "$v.0"
           echo "APP_VERSION=$version" >> $env:GITHUB_ENV
           echo "Version: $version"
 
