@@ -89,24 +89,62 @@ jobs:
       # working installer, it just shows the unrecognised-publisher prompt on a
       # customer's first launch. Add the certificate secrets and every later
       # release is signed with no other change.
-      - name: Import the signing certificate
+      # Two ways to sign, and building unsigned if neither is configured.
+      #
+      # Azure Trusted Signing is the one to use: since 2024 an EV certificate no
+      # longer grants SmartScreen reputation on sight, so the expensive options
+      # buy nothing SmartScreen cares about and every certificate now earns
+      # trust the same way - by accumulating clean downloads. It also issues no
+      # PFX at all, which is why the older PFX-only path below could not have
+      # accepted it.
+      #
+      # What signing actually buys: an unsigned build warns forever, because
+      # reputation attaches to a certificate and there is none to attach to. A
+      # signed build warns until reputation accrues, and then stops. Use one
+      # certificate for every release - switching or letting one lapse resets
+      # reputation to zero.
+      - name: Set up signing
         id: signing
         shell: powershell
         env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGN_ENDPOINT: ${{ secrets.AZURE_SIGN_ENDPOINT }}
+          AZURE_SIGN_ACCOUNT: ${{ secrets.AZURE_SIGN_ACCOUNT }}
+          AZURE_SIGN_PROFILE: ${{ secrets.AZURE_SIGN_PROFILE }}
           WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PFX)) {
-            Write-Host "No certificate configured. Building unsigned."
-            echo "available=false" >> $env:GITHUB_OUTPUT
+          if (-not [string]::IsNullOrWhiteSpace($env:AZURE_SIGN_ACCOUNT)) {
+            $meta = @{
+              Endpoint               = $env:AZURE_SIGN_ENDPOINT
+              CodeSigningAccountName = $env:AZURE_SIGN_ACCOUNT
+              CertificateProfileName = $env:AZURE_SIGN_PROFILE
+            } | ConvertTo-Json
+            $metaPath = "$env:RUNNER_TEMP\trusted-signing.json"
+            [IO.File]::WriteAllText($metaPath, $meta)
+            Write-Host "Signing with Azure Trusted Signing ($env:AZURE_SIGN_ACCOUNT)."
+            echo "mode=azure"           >> $env:GITHUB_OUTPUT
+            echo "metadata=$metaPath"   >> $env:GITHUB_OUTPUT
             exit 0
           }
-          $pfxPath = "$env:RUNNER_TEMP\cert.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
-          $securePass = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
-          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePass
-          echo "available=true"                       >> $env:GITHUB_OUTPUT
-          echo "thumbprint=$($cert.Thumbprint)"       >> $env:GITHUB_OUTPUT
+
+          if (-not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PFX)) {
+            $pfxPath = "$env:RUNNER_TEMP\cert.pfx"
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
+            $securePass = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
+            $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePass
+            Write-Host "Signing with the imported PFX certificate."
+            echo "mode=pfx"                       >> $env:GITHUB_OUTPUT
+            echo "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          Write-Host "No signing configured. Building UNSIGNED - installers will show"
+          Write-Host "the unrecognised-publisher prompt, and will keep showing it, because"
+          Write-Host "reputation has no certificate to accumulate against."
+          echo "mode=none" >> $env:GITHUB_OUTPUT
 
       # ── Package ────────────────────────────────────────────────────────────
       - name: Install Velopack
@@ -148,8 +186,10 @@ jobs:
             "--releaseNotes","release-notes.md",
             "-o",            "Releases"
           )
-          if ("${{ steps.signing.outputs.available }}" -eq "true") {
-            $packArgs += @("--signParams", "/fd SHA256 /sha1 ${{ steps.signing.outputs.thumbprint }} /tr http://timestamp.digicert.com /td SHA256")
+          switch ("${{ steps.signing.outputs.mode }}") {
+            "azure" { $packArgs += @("--azureTrustedSignFile", "${{ steps.signing.outputs.metadata }}") }
+            "pfx"   { $packArgs += @("--signParams", "/fd SHA256 /sha1 ${{ steps.signing.outputs.thumbprint }} /tr http://timestamp.digicert.com /td SHA256") }
+            default { Write-Host "Packing unsigned." }
           }
           vpk pack @packArgs
 
@@ -169,5 +209,16 @@ jobs:
         shell: powershell
         run: |
           Get-ChildItem Releases | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}} | Format-Table
+          $setup = Get-ChildItem Releases -Filter "*Setup.exe" | Select-Object -First 1
+          if ($setup) {
+            $sig = Get-AuthenticodeSignature $setup.FullName
+            Write-Host "Installer signature: $($sig.Status)"
+            if ($sig.Status -ne "Valid") {
+              Write-Host "This build is UNSIGNED. Customers will see the unrecognised-publisher"
+              Write-Host "prompt on first launch, and it will not go away on its own."
+            } else {
+              Write-Host "Signed by: $($sig.SignerCertificate.Subject)"
+            }
+          }
           Write-Host "Download link for the website:"
           Write-Host "${{ env.REPO_URL }}/releases/latest/download/${{ env.APP_ID }}-win-Setup.exe"
