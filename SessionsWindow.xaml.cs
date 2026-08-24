@@ -394,7 +394,7 @@ namespace InterviewCopilot
             QuestionKind.Behavioural  => "#E8C07F",
             QuestionKind.SystemDesign => "#C79FE8",
             QuestionKind.Coding       => "#7FE8B4",
-            _                         => "#9A9AA0"
+            _                         => "#7E90A8"
         };
 
         private static bool SessionsMatch(SessionInfo first, SessionInfo second)
@@ -443,16 +443,16 @@ namespace InterviewCopilot
             if (pairs.Count == 0) return;
 
             if (info.DurationSeconds > 0)
-                SessionStats.Items.Add(BuildStatChip("Lasted " + FormatDuration(info.DurationSeconds), "#9A9AA0"));
+                SessionStats.Items.Add(BuildStatChip("Lasted " + FormatDuration(info.DurationSeconds), "#7E90A8"));
 
             SessionStats.Items.Add(BuildStatChip(
-                pairs.Count + (pairs.Count != 1 ? " questions" : " question"), "#9A9AA0"));
+                pairs.Count + (pairs.Count != 1 ? " questions" : " question"), "#7E90A8"));
 
             // Longest answer is a better signal of a heavy question than an average,
             // which a couple of one-line replies would flatten.
             int longest = pairs.Max(p => WordCount(p.A));
             if (longest > 0)
-                SessionStats.Items.Add(BuildStatChip("Longest answer " + longest + " words", "#9A9AA0"));
+                SessionStats.Items.Add(BuildStatChip("Longest answer " + longest + " words", "#7E90A8"));
 
             foreach (var group in pairs
                         .GroupBy(p => ClassifyQuestion(p.Q))
@@ -509,7 +509,7 @@ namespace InterviewCopilot
 
             if (pairs.Count == 0)
             {
-                AddTextBlock("No Q&A recorded in this session.", "#90AABC", 13, false);
+                AddTextBlock("No Q&A recorded in this session.", "#7E90A8", 13, false);
                 return;
             }
 
@@ -571,7 +571,7 @@ namespace InterviewCopilot
                 qStack.Children.Add(new TextBlock
                 {
                     Text = "INTERVIEWER",
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#90AABC")),
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7E90A8")),
                     FontSize = 9,
                     FontWeight = FontWeights.Bold,
                     FontFamily = new FontFamily("Segoe UI"),
@@ -580,7 +580,7 @@ namespace InterviewCopilot
                 qStack.Children.Add(new TextBlock
                 {
                     Text = q,
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E2EEF8")),
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#C6D4E8")),
                     FontSize = 13,
                     FontWeight = FontWeights.SemiBold,
                     FontFamily = new FontFamily("Segoe UI"),
@@ -615,7 +615,7 @@ namespace InterviewCopilot
                     aStack.Children.Add(new TextBlock
                     {
                         Text = a,
-                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F0F5FF")),
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#EAF1F8")),
                         FontSize = 13,
                         FontWeight = FontWeights.SemiBold,
                         FontFamily = new FontFamily("Segoe UI"),

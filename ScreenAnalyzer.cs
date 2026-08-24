@@ -819,6 +819,16 @@ namespace InterviewCopilot
                 - Use only what you can actually see. If the part that matters is too
                   small, cut off, or blurred, say which part you cannot read and stop.
                   A confident wrong answer can cost them the job.
+                - Say when the problem itself is cut off, and stop rather than guess
+                  the rest. A coding problem statement runs past the bottom of the
+                  screen more often than it fits — a scrollbar showing more below,
+                  text ending mid-sentence, a constraints or examples section that
+                  looks started but not finished. When that is what you see, do not
+                  write a final SOLUTION or FIX from a partial statement: say what
+                  is missing —
+                  NEED: the constraints and the second example.
+                  — and nothing else. Guessing at unseen constraints is how a
+                  solution that looks right fails on a case nobody could see.
                 - Never invent their experience. No employers, projects, metrics, or
                   numbers about them that are not on the screen. Where their own detail
                   belongs, write [your example] and let them fill it in.
@@ -926,23 +936,103 @@ namespace InterviewCopilot
         /// Normalises the AI response so section headers are consistently spaced,
         /// stray markdown is removed, and no more than one blank line appears anywhere.
         /// </summary>
+        /// <summary>
+        /// Everything between a pair of fences, so it can be lifted out and put
+        /// back untouched around the markdown cleanup below.
+        /// </summary>
+        private static readonly Regex FencedBlock =
+            new(@"```[^\n]*\n.*?(?:```|$)", RegexOptions.Singleline | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Runs a text transform over the prose of an answer and never over its
+        /// code.
+        ///
+        /// Markdown cleanup and code cannot share a pass. The characters that
+        /// mark emphasis in prose — <c>*</c> and <c>_</c> — are ordinary syntax
+        /// in most languages, so a rule written for one silently rewrites the
+        /// other. Two separate cleanup routines in this app both did exactly
+        /// that: an italic rule matched from one asterisk to the next and
+        /// deleted both, turning
+        /// <code>ListNode* insertionSortList(ListNode* head)</code> into
+        /// <code>ListNode insertionSortList(ListNode head)</code>, which does
+        /// not compile. The underscore rule had the same reach over snake_case
+        /// identifiers.
+        ///
+        /// Both routines call this now, so the protection cannot be present in
+        /// one path and missing in the other — which is how it went unnoticed:
+        /// the fix belonged in one place and was written in none.
+        /// </summary>
+        public static string TransformProseOnly(string text, Func<string, string> transform)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+
+            var stashed = new List<string>();
+            string masked = FencedBlock.Replace(text, m =>
+            {
+                stashed.Add(m.Value);
+                // Private Use Area characters. A readable placeholder such as
+                // "CODE0" is text an answer could itself contain, and the
+                // transform being wrapped is free to rewrite it; these cannot
+                // appear in a model's output, so the round trip is exact.
+                return "\uE000" + (stashed.Count - 1) + "\uE001";
+            });
+
+            string transformed = transform(masked);
+
+            for (int i = 0; i < stashed.Count; i++)
+                transformed = transformed.Replace("\uE000" + i + "\uE001", stashed[i]);
+
+            return transformed;
+        }
+
         public static string PostProcess(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw)) return raw;
 
-            // 1. Strip any residual markdown that leaked through despite the prompt
-            raw = Regex.Replace(raw, @"\*{2}([^*\n]+)\*{2}", "$1");   // **bold**
-            raw = Regex.Replace(raw, @"\*([^*\n]+)\*",       "$1");   // *italic*
-            raw = Regex.Replace(raw, @"_{1,2}([^_\n]+)_{1,2}", "$1"); // _italic_
-            raw = Regex.Replace(raw, @"(?m)^#{1,6}\s+", "");          // ## headers
-            // Fences are kept on purpose. The code panel uses them to find where
-            // the code starts and ends; stripping them here put the code straight
-            // back into the paragraph it was meant to be lifted out of.
+            // ── Code is taken out of the way before anything is rewritten ──────
+            //
+            // The markdown cleanup below cannot run over code, and this is not a
+            // theoretical worry: the italic rule, \*([^*\n]+)\*, matched from the
+            // first asterisk on a line to the next one and deleted both. On
+            //
+            //     ListNode* insertionSortList(ListNode* head) {
+            //
+            // it read "* insertionSortList(ListNode*" as italicised text and
+            // produced
+            //
+            //     ListNode insertionSortList(ListNode head) {
+            //
+            // which does not compile — the exact error a user hit over and over,
+            // pasting it into LeetCode and getting "invalid argument type
+            // 'ListNode' to unary expression" every time. The same rule stripped
+            // "ListNode *next;" to "ListNode next;" inside the comment block.
+            //
+            // The server was sending correct code the whole time. It was correct
+            // when it left the model, correct in the server log, and broken by
+            // the time it reached the screen, so every fix attempted on the
+            // server side changed nothing that could be seen. Underscores had
+            // the same exposure through the _italic_ rule: snake_case
+            // identifiers in the same line would have lost their underscores.
+            //
+            // So fenced blocks come out first and go back last, byte for byte.
+            // So the rewrites run through the one shared helper, which lifts the
+            // fenced blocks out and puts them back byte for byte. Both cleaners
+            // in this app call it, so the protection cannot be present in one and
+            // missing from the other - which is exactly how this was missed.
+            raw = TransformProseOnly(raw, prose =>
+            {
+                // 1. Strip any residual markdown that leaked through despite the prompt
+                prose = Regex.Replace(prose, @"\*{2}([^*\n]+)\*{2}", "$1");   // **bold**
+                prose = Regex.Replace(prose, @"\*([^*\n]+)\*",       "$1");   // *italic*
+                prose = Regex.Replace(prose, @"_{1,2}([^_\n]+)_{1,2}", "$1"); // _italic_
+                prose = Regex.Replace(prose, @"(?m)^#{1,6}\s+", "");          // ## headers
 
-            // Rewrite AI-tell long dashes into plain human punctuation. The ━ (U+2501)
-            // used for section headers is a different character and is left untouched.
-            raw = Regex.Replace(raw, @"(\S)[ \t]*[—–][ \t]+", "$1, "); // mid-sentence break -> comma
-            raw = raw.Replace("—", "-").Replace("–", "-");             // any remaining -> hyphen
+                // Rewrite AI-tell long dashes into plain human punctuation. The heavy
+                // rule character used for section headers is different and untouched.
+                prose = Regex.Replace(prose, @"(\S)[ \t]*[—–][ \t]+", "$1, ");
+                prose = prose.Replace("—", "-").Replace("–", "-");
+                return prose;
+            });
 
             raw = raw.Replace("\r\n", "\n").Replace("\r", "\n");
 
@@ -997,7 +1087,9 @@ namespace InterviewCopilot
             while (result.Count > 0 && result[0]  == "") result.RemoveAt(0);
             while (result.Count > 0 && result[^1] == "") result.RemoveAt(result.Count - 1);
 
-            return string.Join("\n", result);
+            string text = string.Join("\n", result);
+
+            return text.Trim();
         }
 
         /// <summary>

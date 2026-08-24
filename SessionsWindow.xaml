@@ -2,25 +2,57 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="My Interview Sessions"
-        Height="540" Width="840"
+        Height="640" Width="1040"
+        MinHeight="520" MinWidth="880"
         WindowStartupLocation="CenterOwner"
         Background="Transparent"
         WindowStyle="None"
         AllowsTransparency="True"
-        ResizeMode="NoResize"
+        ResizeMode="CanResize"
         ShowInTaskbar="False"
-        UseLayoutRounding="True" SnapsToDevicePixels="True">
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType">
+
+    <!--
+        Styled against the same palette as the main window rather than a
+        neutral grey of its own.
+
+        This window used to be built from #14141C/#9A9AA0 greys while the app
+        around it is blue-tinted (#0B1220 panels, #C6D4E8 text, #34E08A accent),
+        so opening it felt like leaving the product. Emoji stood in for icons —
+        a mailbox, a wastebasket, a left arrow — beside the Segoe MDL2 glyphs
+        the rest of the app uses, and emoji render in colour at a different
+        weight, which is what made this screen read as unfinished next to
+        everything else.
+
+        It also could not be resized, which mattered more here than anywhere
+        else: this is the one window whose whole purpose is reading a long
+        transcript.
+    -->
 
     <Window.Resources>
+        <!-- ═══ palette, shared with MainWindow ═══ -->
+        <SolidColorBrush x:Key="Surface"      Color="#0B1220"/>
+        <SolidColorBrush x:Key="SurfaceRaise" Color="#101B2D"/>
+        <SolidColorBrush x:Key="SurfaceSunk"  Color="#080E19"/>
+        <SolidColorBrush x:Key="Line"         Color="#22344F"/>
+        <SolidColorBrush x:Key="LineStrong"   Color="#2C3A54"/>
+        <SolidColorBrush x:Key="TextHi"       Color="#EAF1F8"/>
+        <SolidColorBrush x:Key="TextMid"      Color="#C6D4E8"/>
+        <SolidColorBrush x:Key="TextLow"      Color="#7E90A8"/>
+        <SolidColorBrush x:Key="Accent"       Color="#34E08A"/>
+        <SolidColorBrush x:Key="AccentSoft"   Color="#5EA9F5"/>
+
         <Style x:Key="GhostBtn" TargetType="Button">
-            <Setter Property="Background" Value="#14141C"/>
-            <Setter Property="Foreground" Value="#E0E0E4"/>
+            <Setter Property="Background" Value="#172942"/>
+            <Setter Property="Foreground" Value="#CFE2FA"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#28FFFFFF"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -28,13 +60,16 @@
                         <Border x:Name="Bd" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                CornerRadius="7" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#20202A"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#50FFFFFF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#223A5C"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#3A5A82"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#14263E"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -43,13 +78,14 @@
         </Style>
 
         <Style x:Key="DangerBtn" TargetType="Button">
-            <Setter Property="Background" Value="#35171D"/>
-            <Setter Property="Foreground" Value="#FF858C"/>
+            <Setter Property="Background" Value="#2A1620"/>
+            <Setter Property="Foreground" Value="#F8A3AC"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#91424B"/>
+            <Setter Property="BorderBrush" Value="#5E2733"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -57,12 +93,13 @@
                         <Border x:Name="Bd" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                CornerRadius="7" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#52212A"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#3D1E2B"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#8A3A48"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -70,27 +107,43 @@
             </Setter>
         </Style>
 
+        <!-- A session row. The accent rail on the left is the brand green when
+             selected and a quiet line otherwise, so the selected row is
+             identifiable at a glance without the harsh white bar this used
+             to draw on every row equally. -->
         <Style x:Key="SessionItemStyle" TargetType="ListBoxItem">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Margin" Value="0,0,0,7"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="ItemBd" Background="#14141C"
-                                BorderBrush="#28FFFFFF" BorderThickness="1"
-                                CornerRadius="10" Padding="14,12">
-                            <ContentPresenter/>
+                        <Border x:Name="ItemBd" Background="{StaticResource SurfaceRaise}"
+                                BorderBrush="{StaticResource Line}" BorderThickness="1"
+                                CornerRadius="10" Padding="13,11">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="3"/>
+                                    <ColumnDefinition Width="11"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="Rail" Grid.Column="0" Background="#24405F"
+                                        CornerRadius="2" VerticalAlignment="Stretch"/>
+                                <ContentPresenter Grid.Column="2"/>
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ItemBd" Property="Background" Value="#20202A"/>
-                                <Setter TargetName="ItemBd" Property="BorderBrush" Value="#50FFFFFF"/>
+                                <Setter TargetName="ItemBd" Property="Background" Value="#16263D"/>
+                                <Setter TargetName="ItemBd" Property="BorderBrush" Value="{StaticResource LineStrong}"/>
+                                <Setter TargetName="Rail" Property="Background" Value="#3E6892"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBd" Property="Background" Value="#20202A"/>
-                                <Setter TargetName="ItemBd" Property="BorderBrush" Value="#70FFFFFF"/>
+                                <Setter TargetName="ItemBd" Property="Background" Value="#16324A"/>
+                                <Setter TargetName="ItemBd" Property="BorderBrush" Value="#2F6E58"/>
+                                <Setter TargetName="Rail" Property="Background" Value="{StaticResource Accent}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -99,173 +152,194 @@
         </Style>
     </Window.Resources>
 
-    <Border Background="#0E1016" CornerRadius="18"
-            BorderBrush="#40FFFFFF" BorderThickness="1">
+    <Border Background="{StaticResource Surface}" CornerRadius="16"
+            BorderBrush="{StaticResource LineStrong}" BorderThickness="1">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="40" ShadowDepth="0" Color="#000000" Opacity="0.7"/>
+            <DropShadowEffect BlurRadius="44" ShadowDepth="0" Color="#000000" Opacity="0.72"/>
         </Border.Effect>
 
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="70"/>
+                <RowDefinition Height="64"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
             <!-- ── HEADER ── -->
-            <Border Grid.Row="0" Background="#A0060810" CornerRadius="18,18,0,0"
-                    BorderBrush="#28FFFFFF" BorderThickness="0,0,0,1"
+            <Border Grid.Row="0" Background="#0C1727" CornerRadius="16,16,0,0"
+                    BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-                <Grid Margin="20,0">
+                <Grid Margin="20,0,14,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Left: icon + title -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="#28FFFFFF" CornerRadius="8" Width="32" Height="32" Margin="0,0,12,0">
-                            <TextBlock Text="&#xE8BD;" FontFamily="Segoe MDL2 Assets" FontSize="15"
-                                       Foreground="White"
+                        <Border Background="#16324A" CornerRadius="8" Width="30" Height="30"
+                                Margin="0,0,12,0" BorderBrush="#2F6E58" BorderThickness="1">
+                            <TextBlock Text="&#xE81C;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       Foreground="{StaticResource Accent}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="Interview Sessions" Foreground="White"
-                                       FontSize="14" FontWeight="Bold" FontFamily="Segoe UI"/>
+                            <TextBlock Text="Interview Sessions" Foreground="{StaticResource TextHi}"
+                                       FontSize="13.5" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                             <TextBlock x:Name="SubtitleLabel" Text="Loading..."
-                                       Foreground="#9A9AA0" FontSize="10" FontFamily="Segoe UI"/>
+                                       Foreground="{StaticResource TextLow}" FontSize="10.5"
+                                       FontFamily="Segoe UI" Margin="0,1,0,0"/>
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Right: close button -->
                     <Button Grid.Column="2" Click="CloseBtn_Click" ToolTip="Close"
                             Background="Transparent" BorderThickness="0"
-                            Foreground="#C4C4C8" Cursor="Hand" Padding="8,4">
-                        <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                            Foreground="{StaticResource TextLow}" Cursor="Hand" Width="32" Height="32"
+                            FocusVisualStyle="{StaticResource KeyboardFocus}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="CBd" Background="Transparent" CornerRadius="7">
+                                    <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                               Foreground="{TemplateBinding Foreground}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="CBd" Property="Background" Value="#7A2833"/>
+                                        <Setter Property="Foreground" Value="#FFE8EA"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
                     </Button>
                 </Grid>
             </Border>
 
             <!-- ── BODY ── -->
-            <Grid Grid.Row="1" Margin="16">
+            <Grid Grid.Row="1" Margin="16,14,16,16">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="300"/>
-                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="316"/>
+                    <ColumnDefinition Width="14"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- LEFT: Sessions list -->
+                <!-- LEFT: sessions list -->
                 <Grid Grid.Column="0">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Sessions list -->
-                    <Border Grid.Row="0" Background="#101017" CornerRadius="12"
-                            BorderBrush="#28FFFFFF" BorderThickness="1">
+                    <TextBlock Grid.Row="0" Text="SESSIONS" Foreground="{StaticResource TextLow}"
+                               FontSize="9.5" FontWeight="Bold" FontFamily="Segoe UI"
+                               Margin="4,0,0,8"/>
+
+                    <Border Grid.Row="1" Background="{StaticResource SurfaceSunk}" CornerRadius="12"
+                            BorderBrush="{StaticResource Line}" BorderThickness="1">
                         <Grid>
-                            <!-- Empty state -->
                             <StackPanel x:Name="EmptyState" VerticalAlignment="Center"
                                         HorizontalAlignment="Center" Visibility="Collapsed">
-                                <TextBlock Text="📭" FontSize="36" HorizontalAlignment="Center" Margin="0,0,0,12"/>
-                                <TextBlock Text="No sessions yet" Foreground="#9A9AA0"
-                                           FontSize="13" FontFamily="Segoe UI"
+                                <Border Background="#101B2D" CornerRadius="14" Width="52" Height="52"
+                                        BorderBrush="{StaticResource Line}" BorderThickness="1"
+                                        HorizontalAlignment="Center" Margin="0,0,0,14">
+                                    <TextBlock Text="&#xE7B3;" FontFamily="Segoe MDL2 Assets"
+                                               FontSize="20" Foreground="{StaticResource TextLow}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Text="No sessions yet" Foreground="{StaticResource TextMid}"
+                                           FontSize="12.5" FontWeight="SemiBold" FontFamily="Segoe UI"
                                            HorizontalAlignment="Center"/>
-                                <TextBlock Text="Sessions are saved automatically" Foreground="#8A8A90"
-                                           FontSize="11" FontFamily="Segoe UI"
-                                           HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                <TextBlock Text="Sessions are saved automatically" Foreground="{StaticResource TextLow}"
+                                           FontSize="10.5" FontFamily="Segoe UI"
+                                           HorizontalAlignment="Center" Margin="0,5,0,0"/>
                             </StackPanel>
 
-                            <!-- List -->
                             <ListBox x:Name="SessionsList"
                                      Background="Transparent"
                                      BorderThickness="0"
                                      ItemContainerStyle="{StaticResource SessionItemStyle}"
                                      SelectionChanged="SessionsList_SelectionChanged"
-                                     Padding="10">
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     Padding="9">
                                 <ListBox.Template>
                                     <ControlTemplate TargetType="ListBox">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled"
+                                                      Padding="{TemplateBinding Padding}">
                                             <ItemsPresenter/>
                                         </ScrollViewer>
                                     </ControlTemplate>
                                 </ListBox.Template>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="3"/>
-                                                <ColumnDefinition Width="10"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <!-- Accent bar -->
-                                            <Border Grid.Column="0" Background="#FFFFFF" CornerRadius="2" VerticalAlignment="Stretch"/>
-                                            <!-- Content -->
-                                            <StackPanel Grid.Column="2" Margin="0,2,0,2">
-                                                <TextBlock Text="{Binding DisplayTitle}"
-                                                           Foreground="White" FontSize="13"
-                                                           FontWeight="Bold" FontFamily="Segoe UI"
-                                                           Margin="0,0,0,4"/>
-                                                <TextBlock Text="{Binding DisplayDate}"
-                                                           Foreground="#9A9AA0" FontSize="11"
-                                                           FontFamily="Segoe UI" Margin="0,0,0,3"/>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Border Background="#18FFFFFF" CornerRadius="4" Padding="6,2" Margin="0,0,6,0">
-                                                        <TextBlock Text="{Binding DisplayStats}"
-                                                                   Foreground="#FFFFFF" FontSize="10"
-                                                                   FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                                    </Border>
-                                                    <TextBlock Text="{Binding DisplayModel}"
-                                                               Foreground="#8A8A90" FontSize="10"
-                                                               FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                                </StackPanel>
+                                        <StackPanel Margin="0,1,0,1">
+                                            <TextBlock Text="{Binding DisplayTitle}"
+                                                       Foreground="{StaticResource TextHi}" FontSize="12.5"
+                                                       FontWeight="SemiBold" FontFamily="Segoe UI"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Margin="0,0,0,4"/>
+                                            <TextBlock Text="{Binding DisplayDate}"
+                                                       Foreground="{StaticResource TextLow}" FontSize="10.5"
+                                                       FontFamily="Segoe UI" Margin="0,0,0,6"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Background="#16324A" CornerRadius="5" Padding="7,2"
+                                                        BorderBrush="#24405F" BorderThickness="1"
+                                                        Margin="0,0,6,0">
+                                                    <TextBlock Text="{Binding DisplayStats}"
+                                                               Foreground="#9BD9FF" FontSize="9.5"
+                                                               FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding DisplayModel}"
+                                                           Foreground="{StaticResource TextLow}" FontSize="9.5"
+                                                           FontFamily="Segoe UI" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
-                                        </Grid>
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
                         </Grid>
                     </Border>
 
-                    <!-- Delete button -->
-                    <Button x:Name="DeleteBtn" Grid.Row="1"
-                            Content="🗑  Delete Session"
+                    <Button x:Name="DeleteBtn" Grid.Row="2"
                             Style="{StaticResource DangerBtn}"
                             Click="DeleteBtn_Click"
-                            Padding="14,8" Margin="0,10,0,0"
+                            Padding="14,9" Margin="0,10,0,0"
                             HorizontalAlignment="Stretch"
-                            Visibility="Collapsed"/>
+                            Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                       Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Delete session" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </Grid>
 
-                <!-- Splitter -->
-                <Border Grid.Column="1" Width="1" Background="#18FFFFFF" VerticalAlignment="Stretch" Margin="0,4"/>
-
-                <!-- RIGHT: Transcript viewer -->
+                <!-- RIGHT: transcript -->
                 <Grid Grid.Column="2">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Session detail header -->
                     <Border Grid.Row="0" x:Name="DetailHeader"
-                            Background="#14141C" CornerRadius="12"
-                            BorderBrush="#28FFFFFF" BorderThickness="1"
-                            Padding="16,10" Margin="0,0,0,10"
+                            Background="{StaticResource SurfaceRaise}" CornerRadius="12"
+                            BorderBrush="{StaticResource Line}" BorderThickness="1"
+                            Padding="16,12" Margin="0,0,0,10"
                             Visibility="Collapsed">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock x:Name="DetailTitle" Text="" Foreground="White"
-                                           FontSize="14" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock x:Name="DetailMeta" Text="" Foreground="#9A9AA0"
-                                           FontSize="11" FontFamily="Segoe UI" Margin="0,3,0,0"/>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock x:Name="DetailTitle" Text="" Foreground="{StaticResource TextHi}"
+                                           FontSize="14" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="DetailMeta" Text="" Foreground="{StaticResource TextLow}"
+                                           FontSize="10.5" FontFamily="Segoe UI" Margin="0,3,0,0"/>
                                 <!-- What was actually asked, at a glance. The report used to be
-                                     a bare Q&A list with no way to see the shape of the session. -->
+                                     a bare Q&amp;A list with no way to see the shape of the session. -->
                                 <ItemsControl x:Name="SessionStats" Margin="0,9,0,0">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
@@ -274,40 +348,57 @@
                                     </ItemsControl.ItemsPanel>
                                 </ItemsControl>
                             </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
                                 <Button x:Name="CopyTranscriptBtn"
-                                        Content="Copy Text"
                                         Style="{StaticResource GhostBtn}"
                                         Click="CopyTranscriptBtn_Click"
-                                        Padding="12,6" Margin="0,0,8,0"/>
+                                        Padding="12,7" Margin="0,0,8,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Copy text" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                                 <Button x:Name="ExportBtn"
-                                        Content="Export .txt"
                                         Style="{StaticResource GhostBtn}"
                                         Click="ExportBtn_Click"
-                                        Padding="12,6"/>
+                                        Padding="12,7">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xEDE1;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Export .txt" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </Grid>
                     </Border>
 
-                    <!-- Transcript -->
-                    <Border Grid.Row="1" Background="#101017" CornerRadius="12"
-                            BorderBrush="#18FFFFFF" BorderThickness="1">
-                        <!-- Grid wrapper — Border can only hold one child -->
+                    <Border Grid.Row="1" Background="{StaticResource SurfaceSunk}" CornerRadius="12"
+                            BorderBrush="{StaticResource Line}" BorderThickness="1">
                         <Grid>
-                            <!-- Placeholder when nothing selected -->
                             <StackPanel x:Name="NoSelectionState"
                                         VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <TextBlock Text="←" Foreground="#9A9AA0" FontSize="32"
-                                           HorizontalAlignment="Center" Margin="0,0,0,12"/>
-                                <TextBlock Text="Select a session to view its transcript"
-                                           Foreground="#9A9AA0" FontSize="13"
-                                           FontFamily="Segoe UI" HorizontalAlignment="Center"/>
+                                <Border Background="#101B2D" CornerRadius="16" Width="58" Height="58"
+                                        BorderBrush="{StaticResource Line}" BorderThickness="1"
+                                        HorizontalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets"
+                                               FontSize="22" Foreground="{StaticResource TextLow}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Text="Select a session"
+                                           Foreground="{StaticResource TextMid}" FontSize="13"
+                                           FontWeight="SemiBold" FontFamily="Segoe UI"
+                                           HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                                <TextBlock Text="Its full transcript will appear here"
+                                           Foreground="{StaticResource TextLow}" FontSize="11"
+                                           FontFamily="Segoe UI" HorizontalAlignment="Center"
+                                           Margin="0,5,0,0"/>
                             </StackPanel>
 
-                            <!-- Transcript scroll view -->
                             <ScrollViewer x:Name="TranscriptScroll"
                                           VerticalScrollBarVisibility="Auto"
-                                          Padding="20,16"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          Padding="22,18"
                                           Visibility="Collapsed">
                                 <StackPanel x:Name="TranscriptPanel"/>
                             </ScrollViewer>

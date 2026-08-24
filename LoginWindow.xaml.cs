@@ -317,9 +317,18 @@ namespace InterviewCopilot
                 string html = ok
                     ? "<html><body style='background:#0d1117;color:#4ade80;font-family:sans-serif;text-align:center;padding:60px'><h2>&#10003; Signed in! You can close this tab.</h2></body></html>"
                     : "<html><body style='background:#0d1117;color:#ef4444;font-family:sans-serif;text-align:center;padding:60px'><h2>Sign-in failed. Please close this tab and try again.</h2></body></html>";
-                byte[] respBytes = Encoding.UTF8.GetBytes(
-                    $"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {html.Length}\r\nConnection: close\r\n\r\n{html}");
-                await stream.WriteAsync(respBytes, 0, respBytes.Length);
+                // Content-Length counts bytes, not characters. Both bodies above
+                // are ASCII today — the tick is written as an entity — so the two
+                // agree by luck rather than by construction, and the first
+                // non-ASCII character anyone adds would understate the length and
+                // truncate the page in the browser. Measuring the encoded bytes
+                // costs nothing and cannot drift.
+                byte[] bodyBytes = Encoding.UTF8.GetBytes(html);
+                byte[] headerBytes = Encoding.ASCII.GetBytes(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
+                    + $"Content-Length: {bodyBytes.Length}\r\nConnection: close\r\n\r\n");
+                await stream.WriteAsync(headerBytes, 0, headerBytes.Length);
+                await stream.WriteAsync(bodyBytes, 0, bodyBytes.Length);
 
                 if (!ok)
                 {

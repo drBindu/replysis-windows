@@ -233,6 +233,15 @@ namespace InterviewCopilot
             "this code", "this error", "this problem", "this question",
             "this diagram", "this snippet", "this function", "this output",
             "what is this", "what's this", "read this", "walk me through this",
+            // "What website is open now?" answered "I'm not able to see which
+            // website is open" — a text model honestly saying it was never
+            // shown a picture, because none of the phrases above cover asking
+            // what is currently open or visible rather than pointing at it.
+            "website is open", "website open", "what website", "which website",
+            "what tab", "which tab", "what app", "which app", "what application",
+            "what program", "what's open", "what is open", "currently open",
+            "currently on your screen", "in your browser", "in your editor",
+            "in your ide", "what ide", "which ide",
         };
 
         /// <summary>

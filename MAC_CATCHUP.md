@@ -350,6 +350,234 @@ readable.
 Kept up to date as the Windows app changes, so nothing has to be rediscovered
 by reading diffs. Newest first.
 
+**The worked-example fix below also failed in front of the real user, one
+request after four clean isolated trials said it was solid. Third attempt at
+the same bug, and it moved from "ask the model to fix it" to "fix it in code
+before the model sees it" — a regex, not a prompt, and it is unit-tested
+separately from the app. Also added: the Analyze hotkey never had permission
+to say a problem statement was cut off, on either side, so it never asked to
+scroll.**
+
+Three attempts at one bug, in order, each looking solved until the next real
+request: an abstract rule ("match pointers and objects") — satisfied in
+prose, skipped in code. A worked example ("this happened, was sent to a real
+user, and did not compile") — passed four isolated trials in a row, then
+failed on the very next real one, same shape, the model again stating the
+fix out loud and not applying it. Both were still asking an LLM to reliably
+do the same small thing every time, and an LLM does not do anything reliably
+every time.
+
+The fix that actually held: stop asking. `fixPointerSignatureIfNeeded()`
+runs on stage one's own extraction, before stage two — the code-writing
+model — ever reads it. A regex finds a self-referential type used as both
+return and parameter type with no pointer (`ListNode insertionSortList(ListNode
+head)`), confirms the parameter is actually dereferenced with `->` somewhere
+in the text — the only case a value type is used this way, so this can never
+misfire on code that was already correct — and rewrites just that line. Stage
+two then starts from an already-correct signature and never has anything to
+get wrong here, whether or not the model would have caught it unprompted.
+
+Unit-tested standalone before touching the running app: the real bug, code
+already correct (must stay untouched, not double-starred), a value parameter
+never used with `->` (must stay untouched — the false-positive guard), a
+second self-referential type (`TreeNode`), two defects in one text, and the
+full structured shape stage one actually produces. All seven passed before
+this went near production. Then five full end-to-end trials through the real
+vision pipeline, on an isolated test container, before the production
+container was touched at all — the same discipline the worked-example fix
+used and still was not enough, so this time correctness was proven at the
+mechanical layer first and only then re-proven live.
+
+If the Mac client ever hits the same shape of bug — a model that states a
+correct diagnosis and does not reliably apply it, no matter how the
+instruction is worded — this is the pattern worth reaching for before a
+fourth prompt attempt: find what about the broken input is mechanically,
+unambiguously wrong (not "usually wrong," not "wrong unless it's a judgement
+call" — actually always wrong, the way a value type used with `->` always is)
+and fix that input directly, rather than trusting instructions to fix the
+output every time.
+
+Deployed the "signature is part of the code" rule below, told the user it
+was fixed, and it was not: a real live request answered SAY THIS — "I'll
+change the signature to take ListNode* head" — and then DETAIL opened with
+the identical `ListNode insertionSortList(ListNode head)`, untouched, same
+as every attempt before it. The abstract instruction described the shape of
+the fix without forcing the action; the model could satisfy it in prose and
+skip it in code.
+
+Replaced the paragraph with a concrete worked example — the literal wrong
+line and the literal right line, side by side, framed as "this happened,
+was sent to a real user, and did not compile." Ran it four times against an
+isolated test container before touching the production one this time,
+specifically because the first fix looked solved after one good answer and
+was not: all four produced `ListNode* insertionSortList(ListNode* head)`,
+correctly, in both the parameter and the return. A concrete before/after
+pair moved this model where an abstract rule did not — worth remembering if
+the Mac client ever needs the same kind of correction.
+
+**Separately:** the Analyze hotkey (F8) had a rule for illegible text — too
+small, blurred, cut off mid-character — but nothing for a problem statement
+that is legible and simply continues below the visible screen, which is the
+ordinary case for a LeetCode-shaped question, not the exception. It could
+write a final SOLUTION or FIX from a partial statement without ever saying
+so. Added the same "say what's missing and stop" rule the voice path
+already had, adapted to this template's own shape: a scrollbar showing more,
+a constraints section that looks started but not finished, is now grounds to
+answer `NEED: the constraints and the second example.` and nothing else,
+rather than guess. Client-side, `ScreenAnalyzer.cs`, needs the Windows build
+rebuilt to take effect — already done there; check whether the same gap
+exists in whatever the Mac client sends for its own screenshot-only capture
+path, since this only fixes Windows' copy of that template.
+
+**Third fix the same day, same root cause as the one below it, worse in
+practice: the user hit a real interview problem, asked for help 25 times, and
+every single answer diagnosed the bug correctly in prose and then handed back
+the exact same broken code. Fixed server-side, verified against the real
+transcript's own code. Nothing for Mac to build, but the failure mode — a
+model that states a diagnosis and does not apply it — is worth watching for
+anywhere a description and the artifact built from it come from two different
+calls.**
+
+The problem was Insertion Sort List. The screen showed `ListNode
+insertionSortList(ListNode head)` — a value-typed parameter dereferenced with
+`->` throughout the body, which does not compile: "invalid argument type
+'ListNode' to unary expression" on `!head`. Every one of 22 consecutive
+retries answered CAUSE: "the signature uses ListNode instead of ListNode*",
+then FIX: the identical `ListNode insertionSortList(ListNode head)`, never
+once actually adding the pointer. Correct diagnosis, unchanged code, 22 times.
+
+Two compounding causes, both closed:
+
+**The Analyze hotkey (F8, no spoken question) has its own instructional
+template, separate from the voice path fixed just below — CAUSE/FIX/SOLUTION
+worked examples, no `"THE QUESTION:"` marker.** The fix below this one only
+narrows the voice path; this template has no marker to narrow on, so
+`actuallyAsked()` was falling back to returning the whole thing, same as
+before that fix existed. Stage two then answered in CAUSE/FIX headings copied
+from the example instead of its own SAY THIS/DETAIL format — visible proof
+the injection was still live even after the first fix, just through the
+other client template. Changed the fallback from returning the full prompt to
+a short fixed instruction ("Analyze what is on the screen.") — there is no
+real question on this path to extract, so stop pretending there might be one
+to find.
+
+**Even with that closed, the underlying instruction was too easy to satisfy
+without actually applying it.** "Keep the exact class and method names the
+problem gives" reads naturally as license to preserve the whole signature,
+types included, and "match pointers and objects" describes the symptom
+without saying which direction to fix it in. Rewrote both: names now means
+identifiers, never types; a value-typed parameter dereferenced with `->` is
+now named directly as the defect to fix, in both the parameter and the
+return; and a closing instruction requires the code to actually differ at
+the spot a defect was named, not restate the line under a different null
+check. Verified against the transcript's own code, rendered back onto a
+screen and sent through the real endpoint: this time the fix produces
+`ListNode* insertionSortList(ListNode* head)`, correct in both places, on
+the first attempt.
+
+If a two-stage description-then-generation split exists on the Mac side
+anywhere, the general shape to check for is the same: a model can be fully
+capable of stating what's wrong and still fail to act on its own statement
+when the instruction only describes the target shape rather than requiring
+the before/after to visibly differ.
+
+Asked "so which website is open in Chrome browser" while looking at an
+ordinary pricing page, the app answered "I can see that Chrome is open to the
+LeetCode Two Sum problem page" — a page that was not open anywhere. Not a
+vague guess: a specific, wrong, confident fact.
+
+Cause: `codingMessages` (stage two, `gpt-oss-120b`, which never sees the
+image) was being handed the client's *entire* instructional prompt as "what
+they asked" — hundreds of lines of formatting rules built by
+`BuildScreenPrompt`, not the question. One of those lines is a worked example
+teaching the model to name things specifically: `"the LeetCode Two Sum
+page"`. A text model with no image and no way to tell an instruction from a
+fact took the example as the fact.
+
+This only became reachable because the dead-pipeline fix above brought stage
+two to life for the first time. It was always contaminated this way; it had
+just never run before today.
+
+Two fixes, both server-side:
+
+1. `actuallyAsked()` extracts just the words after the client's `"THE
+   QUESTION:"` marker before forwarding anything to stage two. Falls back to
+   the full prompt if the marker is missing, so older or other client
+   payloads keep working exactly as before.
+2. Stage one's extraction template can now say `"none: not a coding screen"`
+   instead of being forced to fill in five headings when there is nothing
+   coding-shaped to report. The call site treats that as equivalent to no
+   result and falls through to the single-stage path, which already knows
+   how to answer an ordinary question about an ordinary screen.
+
+Verified against both shapes of the original failure, not just re-read: the
+same full boilerplate prompt against a real IDE screen with a genuine
+compile error no longer leaks the LeetCode example, and against a synthetic
+non-coding dashboard page it now answers "I have the AIHubMix website open
+in Chrome" and routes through the single-stage model, not the coding one.
+
+If the Mac client ever forwards its own full prompt text as the "asked"
+field into a second-stage call — check for it, because this exact shape (a
+few-shot example indistinguishable from ground truth to a blind model) is
+not specific to Windows' prompt, it is specific to handing a whole
+instructional document to a model that cannot tell instruction from fact.
+
+**Screen reading switched to Gemini, and a bug that made the coding pipeline
+never actually run got fixed. Both live in the shared backend — nothing for
+the Mac app to build, but the reasoning matters because it changes what a
+screen answer is made of.**
+
+Vision primary is now `gemini-3.1-flash-lite` via Google's OpenAI-compatibility
+endpoint (`/v1beta/openai/chat/completions`), not the native `generateContent`
+API — verified directly that it accepts the exact `{model, messages, stream}`
+shape this file already builds for Groq, including image_url data URIs and the
+`detail:"high"` field (Gemini ignores it rather than rejecting it, same as
+Groq), and streams the same `data: {"choices":[{"delta":{"content":...}}]}`
+shape `contentToken` already parses. Zero format translation needed.
+
+Why switch: built a hard synthetic screen — file tree, an open editor, two
+real compiler errors at named line numbers, a failing test with exact
+expected/actual values, a build-output panel — and scored eight independent
+facts a model would have to actually read, not infer. `qwen/qwen3.6-27b`
+(the previous primary) recognised the problem shape and answered from memory,
+missing the compile error sitting in red on the screen — the same failure
+mode that produced the invented-career answers this file describes elsewhere.
+`gemini-3.1-flash-lite` read all eight facts correctly in 1.46s. Also ~37%
+fewer prompt tokens than Qwen and no per-minute ceiling, unlike Groq's free
+tier. Fallback is still Groq's qwen model if the Gemini key is missing or its
+call fails.
+
+OpenAI dropped out of the automatic chain the same day: every model on that
+key returns `"account is not active, please check your billing"`, confirmed
+by calling it directly rather than inferred from a log line. The code path is
+gone, not just unreachable — cuts a wasted round trip on every double-failure.
+Restore it as a third tier if that account is ever reactivated.
+
+**Separately, and worth knowing even though it's a pre-existing bug rather
+than something this change introduced:** the two-stage "read the screen as
+text, then have a coding-specialist model write the answer" pipeline
+(`readScreenForCoding` → `codingMessages` on `gpt-oss-120b`) had been
+returning empty text on every single call, for every provider, since it was
+written. `contentToken()` strips the `"data: "` SSE prefix itself — its other
+caller (`streamUnlessRefused`) passes the raw line and that's correct — but
+`readScreenForCoding` was *also* stripping the prefix before calling it, so
+the JSON got double-stripped and every parse threw and was swallowed. Every
+screen-analyze request silently skipped the two-stage path and fell through
+to the weaker single-stage one, where the vision model both reads the screen
+and writes the code itself — which this same file's comments already
+describe as unreliable ("asked to fix an LRU Cache, three attempts, three
+different broken implementations"). Fixed by passing `line` straight through,
+matching the one call site that was already doing it correctly. Verified live
+against production: a real `/analyze-screen` request now streams from
+`openai/gpt-oss-120b` (the coding-stage model) instead of the vision model,
+and the fix it produced compiles and is correct — `import
+java.util.concurrent.Callable`, `Exception` → `RuntimeException`, retry logic
+untouched.
+
+Both changes are deployed and live on the production backend as of
+2026-08-22, tested end-to-end against the real `/analyze-screen` endpoint —
+not just in isolation.
+
 **Security audit, three fixes.** The screenshot stash on the backend could
 exhaust the heap: two hundred images at up to eight megabytes each is 1.5 GB
 against a 1.38 GB heap, and the count was global so one caller filling it

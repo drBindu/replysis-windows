@@ -33,3 +33,4 @@ __pycache__/
 # PyInstaller engine build output (built by tools/build-engine.ps1)
 engine-dist/
 build/
+publish_test/

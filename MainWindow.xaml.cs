@@ -238,6 +238,7 @@ namespace InterviewCopilot
                     _debugWindow = new DebugWindow();
 
                     SecurePendingAudioRecordings();
+                    SweepStaleRecordingFlags();
                     _ = NotifyIfUpdateAvailableAsync();
                     UpdateMicUi();
                     SavePathLabel.Text = AppDataFolder;
@@ -3462,9 +3463,26 @@ namespace InterviewCopilot
             // and removing them first put the code straight back into the
             // paragraph it was meant to be lifted out of.
             ans = ans.Trim();
-            ans = Regex.Replace(ans, @"\*{1,3}([^*\n]+)\*{1,3}", "$1");   // strip **bold**
-            ans = Regex.Replace(ans, @"_{1,3}([^_\n]+)_{1,3}", "$1");      // strip _italic_
-            ans = Regex.Replace(ans, @"(?m)^#{1,6}\s+", "");               // strip # headers (line-start only, preserves C#)
+
+            // Markdown cleanup runs over the prose and never over the code.
+            //
+            // These three rules used to run across the whole answer, fences and
+            // all, and the emphasis characters they strip are ordinary syntax in
+            // most languages. The italic rule matched from one asterisk to the
+            // next and removed both, so a spoken answer that included
+            // "ListNode* next = curr->next;" arrived with the pointer gone and
+            // would not compile; the underscore rule had the same reach over
+            // snake_case names sharing a line. The screen path had this exact
+            // defect and it cost a long evening to find, because the server was
+            // sending correct code and the damage happened after it arrived.
+            // Both paths now share one implementation so neither can drift.
+            ans = ScreenAnalyzer.TransformProseOnly(ans, prose =>
+            {
+                prose = Regex.Replace(prose, @"\*{1,3}([^*\n]+)\*{1,3}", "$1");   // strip **bold**
+                prose = Regex.Replace(prose, @"_{1,3}([^_\n]+)_{1,3}", "$1");      // strip _italic_
+                prose = Regex.Replace(prose, @"(?m)^#{1,6}\s+", "");               // strip # headers (line-start only, preserves C#)
+                return prose;
+            });
 
             // Rewrite the punctuation that most makes text read as AI-generated into
             // plain human writing. A long dash used mid-sentence as a break (word,
@@ -3472,9 +3490,13 @@ namespace InterviewCopilot
             // Only horizontal whitespace is matched so line breaks and bullets are
             // never merged; anything left (e.g. a tight number range like 2020–2023)
             // falls through to a plain hyphen.
-            ans = Regex.Replace(ans, @"(\S)[ \t]*[—–―][ \t]+", "$1, ");   // mid-sentence break -> comma
-            ans = ans.Replace("—", "-").Replace("–", "-").Replace("―", "-");  // any remaining -> hyphen
-            ans = Regex.Replace(ans, @",\s*,", ",");           // collapse accidental double commas
+            ans = ScreenAnalyzer.TransformProseOnly(ans, prose =>
+            {
+                prose = Regex.Replace(prose, @"(\S)[ \t]*[—–―][ \t]+", "$1, ");   // mid-sentence break -> comma
+                prose = prose.Replace("—", "-").Replace("–", "-").Replace("―", "-");  // any remaining -> hyphen
+                prose = Regex.Replace(prose, @",\s*,", ",");           // collapse accidental double commas
+                return prose;
+            });
 
             // Drop an opening callback to something that was never said.
             //
@@ -3503,14 +3525,28 @@ namespace InterviewCopilot
             // "robust" because one instruction out of forty got less attention.
             // Every replacement is the plain word a person would have said, so
             // the sentence still reads correctly after the swap.
-            foreach (var (tell, plain) in AiTellReplacements)
-                ans = Regex.Replace(ans, $@"\b{Regex.Escape(tell)}\b", plain, RegexOptions.IgnoreCase);
+            // Word swaps and whitespace tidying are prose work, so they run on the
+            // prose only.
+            //
+            // Collapsing runs of whitespace is the dangerous one: applied to a
+            // whole answer it rewrites every indented line of code to a single
+            // leading space, so a class arrives flattened against the left margin
+            // and is unreadable in the panel the candidate is about to paste
+            // from. The word swaps are the same kind of reach - a variable
+            // legitimately named "robust" or "leverage" would be renamed inside
+            // working code by a rule written for spoken English.
+            ans = ScreenAnalyzer.TransformProseOnly(ans, prose =>
+            {
+                foreach (var (tell, plain) in AiTellReplacements)
+                    prose = Regex.Replace(prose, $@"\b{Regex.Escape(tell)}\b", plain, RegexOptions.IgnoreCase);
+
+                prose = Regex.Replace(prose, @"[ \t]{2,}", " ");   // collapse doubled spaces
+                return prose;
+            });
 
             // Re-capitalise whatever now starts the answer.
             if (ans.Length > 0 && char.IsLower(ans[0]))
                 ans = char.ToUpper(ans[0]) + ans[1..];
-
-            ans = Regex.Replace(ans, @"[ \t]{2,}", " ");       // collapse doubled spaces
 
             ans = ans.Replace("\r\n", "\n").Replace("\r", "\n");
 
@@ -3525,7 +3561,11 @@ namespace InterviewCopilot
             if (moreAt >= 0)
             {
                 string head = ans[..moreAt];
-                string tail = Regex.Replace(ans[moreAt..], @"(?m)^[ \t]*[-*–—]\s+", "• ");
+                // Prose only. A code line that begins with - or * is not a bullet,
+                // and rewriting it to one silently edits code the candidate is
+                // about to paste — a pointer declaration, a decrement, a comment.
+                string tail = ScreenAnalyzer.TransformProseOnly(ans[moreAt..], prose =>
+                    Regex.Replace(prose, @"(?m)^[ \t]*[-*–—]\s+", "• "));
                 ans = head + tail;
             }
             ans = Regex.Replace(ans, @"\n{3,}", "\n\n");
@@ -4263,6 +4303,43 @@ namespace InterviewCopilot
             AppDataFolder, $"recording_saved_{recordingId}.flag");
 
         /// <summary>
+        /// Removes recording-saved markers that no longer refer to anything.
+        ///
+        /// One of these is written per recording so a crash mid-save can be
+        /// recovered on the next launch, and nothing ever removed them again:
+        /// measured on a working install, 97 of them going back five weeks,
+        /// one byte each and one more every session forever. Harmless
+        /// individually and untidy at any scale — a support engineer opening
+        /// the data folder should see the handful of files that mean something,
+        /// not a wall of them.
+        ///
+        /// A week is far longer than the window they are useful for: they are
+        /// read once, on the launch immediately after the recording, and never
+        /// again. Deleting on a timer rather than on read keeps the crash-
+        /// recovery path exactly as it was.
+        /// </summary>
+        private void SweepStaleRecordingFlags()
+        {
+            try
+            {
+                DateTime cutoff = DateTime.UtcNow.AddDays(-7);
+                foreach (string path in Directory.EnumerateFiles(
+                             AppDataFolder, "recording_saved_*.flag"))
+                {
+                    try
+                    {
+                        if (File.GetLastWriteTimeUtc(path) < cutoff) File.Delete(path);
+                    }
+                    catch { /* one stuck file must not stop the sweep */ }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("FILE", $"Stale recording-flag sweep failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Kills orphaned speechmatics_engine processes from a previous crash.
         /// Uses a saved PID file rather than sweeping all Python processes — the
         /// old approach would blindly kill the user's Jupyter notebooks, other scripts, etc.
@@ -4685,15 +4762,14 @@ namespace InterviewCopilot
             // the prose as well would show the same code twice, once badly.
             prose = FencedCode.Replace(prose, "").Trim();
 
-            AiAnswerBox.Text = prose;
-            if (scrollToEnd) AiAnswerBox.ScrollToEnd();
-
             string codeText = code.ToString().Trim();
             if (codeText.Length == 0)
             {
                 _currentAnswerCode = "";
                 CodePanel.Visibility = Visibility.Collapsed;
                 ComplexityBar.Visibility = Visibility.Collapsed;
+                AiAnswerBox.Text = StripScaffolding(prose);
+                if (scrollToEnd) AiAnswerBox.ScrollToEnd();
                 return;
             }
 
@@ -4702,7 +4778,56 @@ namespace InterviewCopilot
             CodeLanguageLabel.Text = language.Length > 0 ? language.ToLowerInvariant() : "";
             CodePanel.Visibility = Visibility.Visible;
 
+            // Read the complexity out of the prose before the prose is trimmed,
+            // because trimming removes that very line.
             ShowComplexity(prose);
+
+            AiAnswerBox.Text = StripScaffolding(prose);
+            if (scrollToEnd) AiAnswerBox.ScrollToEnd();
+        }
+
+        /// <summary>
+        /// Section headings the model is told to write, which the layout has
+        /// already replaced. "SAY THIS" labels the spoken line — but that box IS
+        /// the spoken line, so the label says nothing the position does not.
+        /// "DETAIL" labels the code, which now lives in its own panel titled
+        /// SOLUTION, so after the fence is lifted out the word is left pointing
+        /// at nothing.
+        /// </summary>
+        private static readonly Regex ScaffoldHeading =
+            new(@"^[ \t]*(SAY THIS|DETAIL|NEED|CAUSE|FIX|APPROACH|SOLUTION|COMPLEXITY)[ \t]*:?[ \t]*\r?$",
+                RegexOptions.Multiline | RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// What is left of the answer once every part of it that has its own
+        /// place on screen has been moved there.
+        ///
+        /// The model is asked for headed sections because that is what makes its
+        /// output parseable; the person reading it mid-interview should never see
+        /// the headings. They were being shown "SAY THIS", then the sentence,
+        /// then "DETAIL" pointing at a code block that had been lifted into a
+        /// separate panel, then a complexity line repeated underneath the copy of
+        /// it already in the complexity bar. Four labels and a duplicate around
+        /// one sentence, read while somebody is waiting for an answer.
+        ///
+        /// The complexity line goes for the same reason as the headings: it is
+        /// not being deleted, it is being shown once instead of twice, in the bar
+        /// directly beneath the code it describes.
+        /// </summary>
+        private string StripScaffolding(string prose)
+        {
+            if (string.IsNullOrWhiteSpace(prose)) return "";
+
+            string cleaned = ScaffoldHeading.Replace(prose, "");
+
+            // Only when the bar is actually showing it — otherwise removing it
+            // here would lose it altogether.
+            if (ComplexityBar != null && ComplexityBar.Visibility == Visibility.Visible)
+                cleaned = ComplexityLine.Replace(cleaned, "");
+
+            // Collapse the blank lines those removals leave behind.
+            cleaned = Regex.Replace(cleaned, @"(\r?\n){3,}", "\n\n");
+            return cleaned.Trim();
         }
 
         /// <summary>
@@ -5411,10 +5536,28 @@ namespace InterviewCopilot
                     return;
                 }
 
+                // The code goes to the SOLUTION panel, the same as it does for a
+                // spoken answer.
+                //
+                // This path wrote straight to the text box instead, so the panel
+                // and its Copy code button never appeared for a screen answer —
+                // the one place they matter most, because a screen answer is
+                // usually the code the candidate is about to paste. They were
+                // left copying it out of a paragraph by hand, fence markers and
+                // all, guessing where the code started and stopped. The panel
+                // has existed the whole time; F8 simply never reached it.
+                //
+                // ShowAnswer fills the panel and leaves the prose behind, so the
+                // header and the earlier answers are put back around that prose
+                // afterwards rather than being fed through it — passing the whole
+                // composed string in would pull code out of previous answers too.
+                ShowAnswer(finalResult, scrollToEnd: false);
+
+                string prose = AiAnswerBox.Text;
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(previousAnswers)
-                    ? $"{header}{finalResult}"
-                    : $"{header}{finalResult}\n{sep}{previousAnswers}";
-                AiAnswerBox.ScrollToEnd();
+                    ? $"{header}{prose}"
+                    : $"{header}{prose}\n{sep}{previousAnswers}";
+                AiAnswerBox.ScrollToHome();
 
                 if (_isCameraMode && answerWindow != null)
                 {

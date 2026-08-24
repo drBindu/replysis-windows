@@ -636,7 +636,7 @@
                                         </Grid>
                                     </Border>
                                     <TextBlock x:Name="ProfileNameLabel" Text=""
-                                               Foreground="#E0E0E4" FontSize="11" FontWeight="Medium"
+                                               Foreground="#EAF1F8" FontSize="11" FontWeight="Medium"
                                                FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                     <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets"
                                                Foreground="#59FFFFFF" FontSize="8"
@@ -730,7 +730,7 @@
 
                             <!-- Resume label -->
                             <Grid Grid.Row="1" Margin="0,0,0,7">
-                                <TextBlock Text="RESUME" Foreground="#B4B4BA" FontSize="10.5"
+                                <TextBlock Text="RESUME" Foreground="#93A9C4" FontSize="10.5"
                                            FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                             </Grid>
 
@@ -840,7 +840,7 @@
                             <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,0,0,7">
                                 <TextBlock Text="&#xE821;" FontFamily="Segoe MDL2 Assets" FontSize="10"
                                            Foreground="#66FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="TARGET ROLE" Foreground="#B4B4BA" FontSize="10.5"
+                                <TextBlock Text="TARGET ROLE" Foreground="#93A9C4" FontSize="10.5"
                                            FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                 <TextBlock Text="  tailors every answer" Foreground="#40FFFFFF"
                                            FontSize="9.5" FontFamily="Segoe UI" VerticalAlignment="Center"/>
@@ -886,7 +886,7 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
                                     <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets" FontSize="10"
                                                Foreground="#66FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="WHAT YOU WANT" Foreground="#B4B4BA" FontSize="10.5"
+                                    <TextBlock Text="WHAT YOU WANT" Foreground="#93A9C4" FontSize="10.5"
                                                FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                     <TextBlock Text="  the screening questions" Foreground="#40FFFFFF"
                                                FontSize="9.5" FontFamily="Segoe UI" VerticalAlignment="Center"/>
@@ -1020,7 +1020,7 @@
                                             </Border>
                                             <Border x:Name="StarBadge" Visibility="Collapsed"
                                                     Background="#14FFFFFF" CornerRadius="6" Padding="7,3">
-                                                <TextBlock Text="STAR METHOD" Foreground="#C4C4C8" FontSize="9"
+                                                <TextBlock Text="STAR METHOD" Foreground="#A9B6C8" FontSize="9"
                                                            FontWeight="Bold" FontFamily="Segoe UI"/>
                                             </Border>
                                         </StackPanel>
@@ -1074,7 +1074,7 @@
                                             </Ellipse.Triggers>
                                         </Ellipse>
                                         <TextBlock x:Name="ThinkingLabel" Text="Thinking..."
-                                                   Foreground="#C4C4C8" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="#A9B6C8" FontSize="11" FontWeight="SemiBold"
                                                    VerticalAlignment="Center" FontFamily="Segoe UI"/>
                                     </StackPanel>
                                     <TextBlock x:Name="ThinkingHintLabel"

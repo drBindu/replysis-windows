@@ -17,7 +17,7 @@
             </Setter>
         </Style>
         <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#B4B4BA"/>
+            <Setter Property="Foreground" Value="#93A9C4"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -70,7 +70,7 @@
         </Style>
     </Window.Resources>
 
-    <Border Background="#0E1016" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="18">
+    <Border Background="#0B1220" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="18">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -125,7 +125,7 @@
                                            Foreground="White" FontSize="13"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
                                 <TextBlock Text="Answers start appearing soonest  &#183;  5 credits per question"
-                                           Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
                                            FontFamily="Segoe UI" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Grid>
@@ -156,7 +156,7 @@
                                            Foreground="White" FontSize="13"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
                                 <TextBlock Text="Stronger on hard technical questions  &#183;  5 credits per question"
-                                           Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
                                            FontFamily="Segoe UI" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Grid>
@@ -179,7 +179,7 @@
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Stealth mode" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Applies Windows capture exclusion and removes the app from the taskbar and Alt-Tab. Verify it in your meeting app before every real call."
-                                       Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                       Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="2" x:Name="StealthCheckBox"
@@ -199,7 +199,7 @@
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Answer from the shared screen" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="When the interviewer asks about something on screen, the answer comes from what is there. Questions about you are answered normally, and the screen is only read when a question is actually about it. Press F8 any time to read the screen yourself."
-                                       Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                       Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="2" x:Name="WatchScreenCheckBox"
@@ -219,7 +219,7 @@
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Back up session history" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Sends interview questions, answers, and a short resume snippet securely so they appear on your other signed-in devices."
-                                       Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                       Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="2" x:Name="CloudSyncCheckBox"
@@ -275,7 +275,7 @@
                                            Foreground="White" FontSize="13"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
                                 <TextBlock Text="Uses system audio only. Your microphone is not accessed in this mode."
-                                           Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
                                            FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Grid>
@@ -306,19 +306,19 @@
                                            Foreground="White" FontSize="13"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
                                 <TextBlock Text="Includes your microphone only while you are actively listening."
-                                           Foreground="#9A9AA0" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
                                            FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,3,0,0"/>
                             </StackPanel>
                         </Grid>
                     </Border>
                 </RadioButton>
 
-                <TextBlock Text="Microphone" Foreground="#9A9AA0"
+                <TextBlock Text="Microphone" Foreground="#7E90A8"
                            FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,6"/>
                 <ComboBox x:Name="AudioDeviceCombo" Style="{StaticResource DarkComboBox}"
                           Margin="0,0,0,16"/>
 
-                <TextBlock Text="Interview language" Foreground="#9A9AA0"
+                <TextBlock Text="Interview language" Foreground="#7E90A8"
                            FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,6"/>
                 <ComboBox x:Name="LanguageCombo" Style="{StaticResource DarkComboBox}"
                           Margin="0,0,0,4"/>
@@ -332,19 +332,19 @@
                 <TextBlock Text="ABOUT" Style="{StaticResource SectionLabel}"/>
                 <StackPanel Margin="2,0,0,0">
                     <Grid Margin="0,0,0,7">
-                        <TextBlock Text="Version"  Foreground="#9A9AA0" FontSize="12" FontFamily="Segoe UI"/>
-                        <TextBlock x:Name="VersionLabel" Foreground="#E0E0E4" FontSize="12" FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
+                        <TextBlock Text="Version"  Foreground="#7E90A8" FontSize="12" FontFamily="Segoe UI"/>
+                        <TextBlock x:Name="VersionLabel" Foreground="#EAF1F8" FontSize="12" FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
                     </Grid>
                     <Grid Margin="0,0,0,7">
-                        <TextBlock Text="Backend"  Foreground="#9A9AA0" FontSize="12" FontFamily="Segoe UI"/>
-                        <TextBlock Text="Replysis AI Cloud" Foreground="#E0E0E4" FontSize="12" FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
+                        <TextBlock Text="Backend"  Foreground="#7E90A8" FontSize="12" FontFamily="Segoe UI"/>
+                        <TextBlock Text="Replysis AI Cloud" Foreground="#EAF1F8" FontSize="12" FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
                     </Grid>
                     <Grid Margin="0,0,0,7">
-                        <TextBlock Text="Account"  Foreground="#9A9AA0" FontSize="12" FontFamily="Segoe UI"/>
-                        <TextBlock x:Name="AccountLabel" Foreground="#E0E0E4" FontSize="12" FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
+                        <TextBlock Text="Account"  Foreground="#7E90A8" FontSize="12" FontFamily="Segoe UI"/>
+                        <TextBlock x:Name="AccountLabel" Foreground="#EAF1F8" FontSize="12" FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
                     </Grid>
                     <Grid Margin="0,0,0,14">
-                        <TextBlock Text="Credits"  Foreground="#9A9AA0" FontSize="12" FontFamily="Segoe UI"/>
+                        <TextBlock Text="Credits"  Foreground="#7E90A8" FontSize="12" FontFamily="Segoe UI"/>
                         <TextBlock x:Name="CreditsAboutLabel" Foreground="#FFFFFF" FontSize="12" FontFamily="Segoe UI" FontWeight="SemiBold" HorizontalAlignment="Right"/>
                     </Grid>
                     <Button x:Name="SignInSettingsBtn" Content="Sign in for more credits"
@@ -367,7 +367,7 @@
             <StackPanel Grid.Row="3">
                 <Border Height="1" Background="#18FFFFFF"/>
             <TextBlock Text="Config saved locally · Replysis AI"
-                       Foreground="#9A9AA0" FontSize="10" FontFamily="Segoe UI"
+                       Foreground="#7E90A8" FontSize="10" FontFamily="Segoe UI"
                        Margin="22,10,22,14"/>
 
             <!-- Hidden fields — preserve config round-trip -->
