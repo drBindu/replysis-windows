@@ -180,16 +180,41 @@ jobs:
           $bundle = Get-ChildItem -Path "AppxPackages" -Filter "*.msixbundle" -Recurse | Select-Object -First 1
           if (-not $bundle) { throw "No .msixbundle found in AppxPackages" }
 
-          # Built beside the app is not the same as inside the package. Checked
-          # here because the failure is invisible: a package missing the engine
-          # installs and launches normally and simply never transcribes.
-          $staged = Get-ChildItem -Path "InterviewCopilotPackager\bin" -Recurse `
-                      -Filter "speechmatics_engine.exe" -ErrorAction SilentlyContinue |
-                    Select-Object -First 1
-          if (-not $staged) {
+          # Look inside the package itself, not next to it.
+          #
+          # The first version of this check searched a build folder and failed
+          # while the engine was sitting happily in the bundle - the check was
+          # wrong, not the build. Guessing at output paths is what made it
+          # wrong, so it now opens the bundle: a .msixbundle is a zip holding
+          # .msix files, which are zips holding the app. If the engine is in
+          # there, it ships; if it is not, nothing else is evidence.
+          #
+          # Worth the trouble because the failure it guards against is silent -
+          # a package missing the engine installs, launches, looks entirely
+          # correct, and never transcribes a word.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $found = $false
+          $outer = [IO.Compression.ZipFile]::OpenRead($bundle.FullName)
+          try {
+            foreach ($entry in $outer.Entries) {
+              if ($entry.FullName -notmatch '\.msix$') { continue }
+              $tmp = Join-Path $env:RUNNER_TEMP $entry.Name
+              [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $tmp, $true)
+              $inner = [IO.Compression.ZipFile]::OpenRead($tmp)
+              try {
+                if ($inner.Entries | Where-Object { $_.FullName -like "*speechmatics_engine.exe" }) {
+                  $found = $true
+                }
+              } finally { $inner.Dispose() }
+              Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+              if ($found) { break }
+            }
+          } finally { $outer.Dispose() }
+
+          if (-not $found) {
             throw "The bundle does not contain the speech engine. Not shipping an app that cannot transcribe."
           }
-          Write-Host "Speech engine present: $($staged.FullName)"
+          Write-Host "Speech engine confirmed inside the bundle."
           Copy-Item $bundle.FullName "InterviewCopilot.msixbundle"
           echo "Bundle: $($bundle.Name) ($([math]::Round($bundle.Length / 1MB, 1)) MB)"
 
