@@ -66,7 +66,12 @@ jobs:
       - name: Restore packages
         shell: powershell
         run: |
-          dotnet restore InterviewCopilot.csproj
+          # With the runtime named. The packaging project builds the app for
+          # win-x64, and the app project declares no RuntimeIdentifiers, so a
+          # plain restore produces an assets file with no win-x64 target and
+          # msbuild stops with NETSDK1047. The release workflow avoids this by
+          # accident: dotnet publish -r win-x64 restores for that runtime itself.
+          dotnet restore InterviewCopilot.csproj -r win-x64
           nuget restore InterviewCopilotPackager\InterviewCopilotPackager.wapproj
 
       # ── Certificate ────────────────────────────────────────────────────────
