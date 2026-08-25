@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -1004,21 +1004,44 @@ namespace InterviewCopilot
         /// Order matters: the double-underscore rule runs before the single, or
         /// "__strong__" comes out as "strong_".
         ///
-        /// Known limit, accepted deliberately: in prose with no surrounding code
-        /// section, "__init__" is indistinguishable from "__strong__" and will
-        /// be stripped. Inside a fence or a SOLUTION section it survives, which
-        /// is where a dunder actually appears.
+        /// The dunder list exists because no shape test can separate "__init__"
+        /// from "__strong__" — they are the same shape. A list can, and it
+        /// cannot misfire, because "__strong__" is not on it. It does not cover
+        /// somebody's own "__custom__" written in prose outside a code section,
+        /// which is rare enough to accept.
         /// </summary>
         public static string StripEmphasis(string prose)
         {
             if (string.IsNullOrEmpty(prose)) return prose;
+
+            var dunders = new List<string>();
+            prose = PythonDunder.Replace(prose, m =>
+            {
+                dunders.Add(m.Value);
+                return "\uE010" + (dunders.Count - 1) + "\uE011";
+            });
+
             prose = RxBoldStrict.Replace(prose, "$1");
             prose = RxItalicStrict.Replace(prose, "$1");
             prose = RxUnderDouble.Replace(prose, "$1");
             prose = RxUnderSingle.Replace(prose, "$1");
             prose = RxAtxHeading.Replace(prose, "");
+
+            for (int i = 0; i < dunders.Count; i++)
+                prose = prose.Replace("\uE010" + i + "\uE011", dunders[i]);
+
             return prose;
         }
+
+        /// <summary>
+        /// The dunders that actually turn up when someone is talking about
+        /// Python in an interview. An exact list, not a pattern: the pattern
+        /// that matches __init__ also matches __strong__.
+        /// </summary>
+        private static readonly Regex PythonDunder =
+            new(@"__(?:init|repr|str|len|main|name|doc|dict|file|all|enter|exit|" +
+                @"new|call|iter|next|eq|hash|getitem|setitem|contains|slots)__",
+                RegexOptions.Compiled);
 
         /// <summary>
         /// Runs a text transform over the prose of an answer and never over its

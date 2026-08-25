@@ -34,3 +34,6 @@ __pycache__/
 engine-dist/
 build/
 publish_test/
+
+# Written by tools/build-engine.ps1 at build time; never committed.
+engine_build_info.py

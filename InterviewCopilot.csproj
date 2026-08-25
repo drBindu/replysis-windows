@@ -28,6 +28,19 @@
     <None Remove="speechmatics_engine.py" />
   </ItemGroup>
 
+  <!--
+    The test projects live under tests/ and build against this one. Without
+    this they are also swallowed BY it: the default glob picks up their .cs
+    files and their obj/ folders, and the generated assembly attributes then
+    collide with this project's own. The app must not compile its own tests.
+  -->
+  <ItemGroup>
+    <Compile Remove="tests/**" />
+    <Page Remove="tests/**" />
+    <None Remove="tests/**" />
+    <EmbeddedResource Remove="tests/**" />
+  </ItemGroup>
+
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
     <Page Include="App.xaml" SubType="Designer" Generator="MSBuild:Compile" />

@@ -49,7 +49,7 @@ def load_patterns(path):
 P = load_patterns(SRC)
 
 REQUIRED = ["FencedBlock", "BareCodeSection", "RxBoldStrict", "RxItalicStrict",
-            "RxUnderDouble", "RxUnderSingle", "RxAtxHeading"]
+            "RxUnderDouble", "RxUnderSingle", "RxAtxHeading", "PythonDunder"]
 missing = [r for r in REQUIRED if r not in P]
 if missing:
     print("FAIL  could not find these regexes in ScreenAnalyzer.cs: %s" % ", ".join(missing))
@@ -62,10 +62,23 @@ EMPHASIS = [re.compile(P[n]) for n in
 ATX = re.compile(P["RxAtxHeading"], re.M)
 
 
+DUNDER = re.compile(P["PythonDunder"])
+
+
 def strip_emphasis(s):
+    keep = []
+
+    def hold(m):
+        keep.append(m.group(0))
+        return "%d" % (len(keep) - 1)
+
+    s = DUNDER.sub(hold, s)
     for rx in EMPHASIS:
         s = rx.sub(r"\1", s)
-    return ATX.sub("", s)
+    s = ATX.sub("", s)
+    for i, v in enumerate(keep):
+        s = s.replace("%d" % i, v)
+    return s
 
 
 def clean(text):
@@ -101,7 +114,16 @@ CODE = [
     "a *= 2; b **= 3;",
     "x = y_1 * z_2;",
     "p = *q++;",
-    "__init__ and __repr__",            # only survives inside a code region
+    "__init__ and __repr__",
+]
+
+# Dunders in ordinary prose, with no code section anywhere near them. Held by
+# an exact list, because no shape test separates __init__ from __strong__.
+PROSE_DUNDERS = [
+    "You override __init__ to set that up.",
+    "Define __enter__ and __exit__ for the context manager.",
+    "The __name__ == __main__ guard stops it running on import.",
+    "__len__ makes len() work on your own type.",
 ]
 
 MARKDOWN = [
@@ -138,7 +160,12 @@ for src_line, want in MARKDOWN:
     g = clean(src_line)
     report(g == want, src_line, "" if g == want else "\n         got %r want %r" % (g, want))
 
-print("\n4. A whole answer survives a round trip")
+print("\n4. Dunders in plain prose, no code section")
+for line in PROSE_DUNDERS:
+    g = clean(line)
+    report(g == line, line, "" if g == line else "\n         got %r" % g)
+
+print("\n5. A whole answer survives a round trip")
 answer = (
     "SAY THIS\n"
     "I'd sort it with **merge sort** to keep it stable.\n"

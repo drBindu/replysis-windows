@@ -423,6 +423,81 @@ was green throughout the period the cleaner was corrupting every unfenced
 line it saw. It now reads the patterns out of `ScreenAnalyzer.cs` and runs
 real code through them, fenced and unfenced, comparing bytes.
 
+**Dunders are held by an exact list**, `PythonDunder`, masked before the
+underscore rules run. The Mac session proposed this and it is right: no
+shape test can separate `__init__` from `__strong__`, because they are the
+same shape. A list can, and it cannot misfire, since `__strong__` is not on
+it. Covers `__init__ __repr__ __str__ __len__ __main__ __name__ __doc__
+__dict__ __file__ __all__ __enter__ __exit__ __new__ __call__ __iter__
+__next__ __eq__ __hash__ __getitem__ __setitem__ __contains__ __slots__`.
+Someone's own `__custom__` in prose outside a code section is still stripped;
+that is accepted.
+
+## Screen routing: two corrections, both from the Mac review
+
+**The trigger now checks the setting.** The rule was
+
+    RefersToScreen(question) || (_watchScreenMode && ...)
+
+so the first clause ignored `_watchScreenMode` entirely. A user who had
+turned screen answers **off** and then said "can you solve this?" still had
+their screen captured and uploaded — and on macOS that also raises a Screen
+Recording prompt for a feature they had just disabled. That was not a
+decision, it was the order the clauses were written in. Both clauses check
+the setting now. Pressing F8 still reads the screen whatever the setting
+says, because that is someone deliberately asking rather than a phrase
+caught in passing.
+
+**The sticky bool is now a turn budget.** `_lastAnswerUsedScreen` had no
+bound: once one answer came from the screen, every later question that was
+not on the personal list came from the screen too, however far the
+conversation had moved. It is now `_screenFollowUpsLeft`, budget 3, refilled
+by an explicit screen question, drawn down by each follow-up, zeroed by
+anything else.
+
+A count rather than a stopwatch, and the Mac session's reasoning for that is
+the one to keep: what ends the topic is drift, not elapsed time. "What is the
+complexity?" three minutes later is still about the screen; "so tell me about
+yourself" ten seconds later is not, and the personal list already catches
+that. A time bound would cut the legitimate slow case while still allowing
+the illegitimate fast one.
+
+## The engine says where it came from
+
+The Mac session put this first on the ready list and was right to: it is the
+origin of everything the last two days went into. Mac shipped a 1,074-line
+fork of the engine for months, every build succeeding, and nothing anywhere
+would have caught it — not the build, not a test, not a support log. Nothing
+would have caught it recurring either.
+
+`tools/build-engine.ps1` now stamps `engine_build_info.py` into the bundle at
+build time and the engine prints it before anything can fail:
+
+    >>> ENGINE BUILD: b75b845+dirty src:0fb49e3a9eb6 built:2026-08-25T01:38:18Z
+
+Three parts, and the middle one is the point. The commit says which revision
+was checked out. The source hash says whether what was compiled is actually
+that revision — a commit id alone cannot tell you that, which is precisely
+the gap the fork lived in. `+dirty` appears when the working tree has
+uncommitted changes to the engine source.
+
+Running from source prints `source (unstamped)`, which is a true and useful
+answer rather than a failure.
+
+`MainWindow` captures the line into `_engineBuildId` and logs it, so a support
+log answers "which engine was this user running?" instead of inviting a guess.
+Verified end to end in the frozen binary, not just from source.
+
+## The live transcript is swept at startup too
+
+`latest.txt` was deleted on the way out, but only on a *clean* way out. Task
+Manager, or a crash, skips the closing handler and strands the last thing an
+interviewer said in plain text — the one file the app keeps that is not
+encrypted for this user. The Mac session verified the same hole with
+`kill -9` against `applicationWillTerminate`. Both platforms now delete on
+exit **and** sweep at startup. It costs nothing: the engine rewrites the file
+from scratch as soon as it starts listening.
+
 Unit-tested standalone before touching the running app: the real bug, code
 already correct (must stay untouched, not double-starred), a value parameter
 never used with `->` (must stay untouched — the false-positive guard), a

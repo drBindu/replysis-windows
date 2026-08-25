@@ -2639,8 +2639,17 @@ namespace InterviewCopilot
         // Whether this machine can hide the app from a capture. Null until asked.
         private bool? _canHideFromCapture;
 
-        // True while the conversation is still about what is on screen.
-        private bool _lastAnswerUsedScreen;
+        // How many more questions may be treated as follow-ups about the screen
+        // without saying so. Three covers the run that actually happens after
+        // "solve this" — the complexity, the edge case, the alternative — and
+        // stops a conversation that has moved on from still being answered with
+        // a photograph of a code editor.
+        private const int ScreenFollowUpBudget = 3;
+        private int _screenFollowUpsLeft;
+
+        // The commit and source hash the running engine was built from, as it
+        // reported them on startup. "unknown" means it has not spoken yet.
+        private string _engineBuildId = "unknown";
 
         private void StartPreparedShots()
         {
@@ -3155,18 +3164,41 @@ namespace InterviewCopilot
             // "this error", "can you see" — or when the last answer came from
             // the screen and this one continues it, which is how "and what is
             // the time complexity?" keeps working after "solve this".
-            bool aboutTheScreen =
-                PromptBuilder.RefersToScreen(question)
-                || (_watchScreenMode
-                    && _lastAnswerUsedScreen
-                    && !PromptBuilder.IsPersonalQuestion(question));
+            // Both clauses check the setting. The first one did not, which meant
+            // a user who had turned screen answers off and then said "can you
+            // solve this?" still had their screen captured and uploaded — the
+            // opposite of what they had just asked for. It was not a decision,
+            // it was the order the clauses happened to be written in. Pressing
+            // F8 still reads the screen whatever the setting says, because that
+            // is someone deliberately asking for it rather than a phrase caught
+            // in passing.
+            bool askedAboutScreen =
+                _watchScreenMode && PromptBuilder.RefersToScreen(question);
 
-            // Whether the previous answer came from the screen, so a follow-up
-            // like "and what is the time complexity?" keeps looking at the same
-            // thing. Tracked here rather than guessed from the question text:
+            // A follow-up keeps looking at the same thing, but not forever.
+            //
+            // This used to be a sticky bool with no bound: once an answer came
+            // from the screen, every later question that was not on the personal
+            // list came from the screen too, however much the conversation had
+            // moved on. The limit is a turn count rather than a stopwatch
+            // because what ends the topic is drift, not elapsed time — "what is
+            // the complexity?" three minutes later is still about the screen,
+            // and "so tell me about yourself" ten seconds later is not.
+            bool continuesScreen =
+                _watchScreenMode
+                && _screenFollowUpsLeft > 0
+                && !PromptBuilder.IsPersonalQuestion(question);
+
+            bool aboutTheScreen = askedAboutScreen || continuesScreen;
+
+            // Asking about the screen refills the follow-up budget; spending a
+            // follow-up draws it down; anything else ends the topic. Tracked as
+            // a count here rather than guessed from the question text, because
             // the helper for that only matched questions containing the word
             // "screen", which "can you solve this?" does not.
-            _lastAnswerUsedScreen = aboutTheScreen;
+            if (askedAboutScreen)     _screenFollowUpsLeft = ScreenFollowUpBudget;
+            else if (continuesScreen) _screenFollowUpsLeft--;
+            else                      _screenFollowUpsLeft = 0;
 
             if (aboutTheScreen)
             {
@@ -4137,6 +4169,18 @@ namespace InterviewCopilot
                             // still worked: the user spoke, nothing was recorded,
                             // and the question arrived empty with nothing on
                             // screen to explain why.
+                            // Which engine this actually is. Logged rather than
+                            // merely passed through, so a support log answers
+                            // "what was running?" instead of inviting a guess.
+                            // The Mac app shipped a fork of the engine for
+                            // months without anything noticing, and nothing in
+                            // either app would have caught it recurring.
+                            if (line.StartsWith(">>> ENGINE BUILD:", StringComparison.Ordinal))
+                            {
+                                _engineBuildId = line[">>> ENGINE BUILD:".Length..].Trim();
+                                DebugWindow.Log("ENGINE", $"Build {_engineBuildId}");
+                            }
+
                             if (_engineOnline && line.Contains("STATUS: OFFLINE"))
                             {
                                 _engineOnline = false;
@@ -4393,6 +4437,23 @@ namespace InterviewCopilot
                     }
                     catch { /* one stuck file must not stop the sweep */ }
                 }
+
+                // The live transcript is deleted on the way out, but only on a
+                // clean way out. Ending the app from Task Manager, or a crash,
+                // skips the closing handler entirely and strands the last thing
+                // an interviewer said in plain text until the next launch — the
+                // one file the app keeps that is not encrypted for this user.
+                //
+                // Swept here as well as deleted on exit, because a leak that
+                // only happens when something already went wrong is still a
+                // leak. It costs nothing: the engine rewrites this file from
+                // scratch as soon as it starts listening.
+                try
+                {
+                    string livePath = Path.Combine(AppDataFolder, "latest.txt");
+                    if (File.Exists(livePath)) File.Delete(livePath);
+                }
+                catch { }
             }
             catch (Exception ex)
             {

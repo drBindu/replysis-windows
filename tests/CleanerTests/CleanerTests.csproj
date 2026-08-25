@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Calls the shipping cleaner, not a copy of it.
+
+    The Python test beside this one reads the regex literals out of
+    ScreenAnalyzer.cs and re-runs them under Python's engine. That is one step
+    better than carrying its own copy, and still two approximations away from
+    the truth: a re-parsed pattern, run by a different regex implementation.
+    The Mac session pointed out they compile the real PromptBuilder.swift into
+    their test binary and call the shipping function, which is strictly
+    stronger, and C# can do the same by referencing the project.
+
+    So this one calls ScreenAnalyzer.PostProcess directly. If someone changes
+    the cleaner, this test exercises the change or stops compiling.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>CleanerTests</AssemblyName>
+    <RootNamespace>CleanerTests</RootNamespace>
+    <!-- The app defines its own entry point; this project defines ours. -->
+    <StartupObject>CleanerTests.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\InterviewCopilot.csproj" />
+  </ItemGroup>
+
+</Project>

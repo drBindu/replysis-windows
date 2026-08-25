@@ -483,6 +483,29 @@ def mint_realtime_jwt(raw_key: str, ttl: int = 60) -> str:
     return key_value
 
 
+# ── WHERE THIS BINARY CAME FROM ───────────────────────────────────────────────
+#
+# Printed first, before anything can fail, because the question it answers is
+# "which engine is this user actually running?" and that question is usually
+# asked while something is already going wrong.
+#
+# It went unanswerable for months. The Mac app shipped a 1,074-line fork of
+# this file the whole time, every build succeeding, and nothing - not the
+# build, not a test, not a support log - would have shown it. A binary that
+# cannot say where it came from is one nobody can check.
+#
+# engine_build_info is written by tools/build-engine.ps1 and is absent when
+# running from source, which is itself worth printing: "source" is a true and
+# useful answer.
+try:
+    import engine_build_info as _bi
+    ENGINE_BUILD = f"{_bi.COMMIT} src:{_bi.SOURCE_SHA} built:{_bi.BUILT_AT}"
+except Exception:
+    ENGINE_BUILD = "source (unstamped)"
+
+print(f">>> ENGINE BUILD: {ENGINE_BUILD}", flush=True)
+
+
 # ── SPEECHMATICS IMPORT ───────────────────────────────────────────────────────
 try:
     from speechmatics.models import ConnectionSettings, TranscriptionConfig, AudioSettings
