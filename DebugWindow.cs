@@ -35,6 +35,22 @@ namespace InterviewCopilot
             ShowInTaskbar = false;
             WindowStyle = WindowStyle.ToolWindow;
 
+            // Hidden from screen capture like every other window in the app.
+            //
+            // This was the only one without it, and it is the worst one to miss:
+            // F12 opens it during a live interview, it sits on top of everything
+            // by design, and what it shows is the transcript as it arrives —
+            // the interviewer's words, the questions, the answers. On a shared
+            // screen that is the whole product on display.
+            //
+            // Applied after the handle exists rather than in the constructor,
+            // because the capture-exclusion flag is set on a window handle and
+            // there is none until the source is initialised.
+            SourceInitialized += (_, _) =>
+            {
+                try { WindowStealth.SetStealthMode(this, SettingsWindow.GetStealthMode()); } catch { }
+            };
+
             var grid = new System.Windows.Controls.Grid();
 
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });

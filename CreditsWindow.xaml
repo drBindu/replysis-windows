@@ -2,11 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Replysis AI Credits"
-        Width="420" SizeToContent="Height" MaxHeight="620"
+        Width="420" SizeToContent="Height" MaxHeight="560"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False">
-    <Border Background="#0B1320" BorderBrush="#26354A" BorderThickness="1"
+    <Border x:Name="RootGlass" Background="#0B1320" BorderBrush="#26354A" BorderThickness="1"
             CornerRadius="18" Padding="22">
         <Border.Effect>
             <DropShadowEffect BlurRadius="34" ShadowDepth="8" Opacity="0.62" Color="#000000"/>

@@ -253,7 +253,11 @@ namespace InterviewCopilot
                     AnalyzeBtn.Template?.FindName("AnalyzeBtnIcon",  AnalyzeBtn) is not System.Windows.Controls.TextBlock icon)
                     return;
 
-                label.Text = watching ? "Watching" : "Watch";
+                // The button reads the screen once; it is not a switch, so the
+                // label stays put. Only the colour moves, to show whether the
+                // app is also watching on its own - which is a Settings
+                // preference and not something this button changes.
+                label.Text = "Read screen";
 
                 var brush = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
@@ -268,7 +272,7 @@ namespace InterviewCopilot
             }
         }
 
-        // ── Watch switch ──────────────────────────────────────────────────────
+        // ── Read the screen once (same as F8) ──────────────────────────────────────────────────────
         private void AnalyzeBtn_Click(object sender, RoutedEventArgs e)
         {
             AnalyzeRequested?.Invoke();

@@ -838,6 +838,9 @@ namespace InterviewCopilot
                   usually means is not an answer, and it is usually the wrong one.
                 - Code must be complete and runnable. Never write "..." or "rest of the
                   code unchanged".
+                - Put every piece of code in a fenced block, opening with three
+                  backticks and the language and closing with three backticks.
+                  Including a single line.
                 - Everything that is not code stays short. They are reading this while
                   another person is talking to them.
 
@@ -944,6 +947,80 @@ namespace InterviewCopilot
             new(@"```[^\n]*\n.*?(?:```|$)", RegexOptions.Singleline | RegexOptions.Compiled);
 
         /// <summary>
+        /// Code that arrived without a fence, which is most of it.
+        ///
+        /// Masking fences was never enough, and this is the hole it left. The
+        /// prompt asks for a SOLUTION section containing "complete code, in
+        /// whatever language is on screen" and never once asks for a fence, so
+        /// whether the code is protected has been decided by the model's habit
+        /// rather than by anything written here. When it fences, the answer is
+        /// clean. When it does not, every rule below runs straight over the
+        /// code, and it was verified doing exactly that: eight of eight real
+        /// lines corrupted, including "def f(*args, **kwargs)" losing an
+        /// asterisk, "area = w * h * depth" losing both, and
+        /// "user_name = get_user_name(user_id)" coming out as
+        /// "username = getusername(userid)".
+        ///
+        /// So the sections the prompt itself defines as code are treated as
+        /// code, fence or no fence: everything under a SOLUTION, FIX or CODE
+        /// heading up to the next heading.
+        /// </summary>
+        private static readonly Regex BareCodeSection =
+            new(@"^[ \t]*(?:SOLUTION|FIX|CODE)[ \t]*:?[ \t]*\r?\n" +
+                @"(?:(?![ \t]*(?:APPROACH|SOLUTION|COMPLEXITY|SAY THIS|CAUSE|FIX|CODE|" +
+                @"ANSWER|DETAIL|NEED|SCREEN NOTES)[ \t]*:?[ \t]*\r?$).*\n?)*",
+                RegexOptions.Multiline | RegexOptions.Compiled);
+
+        // ── Emphasis, and why these look the way they do ──────────────────────
+        //
+        // Every one of these has to hug non-space on the inside, which is what
+        // markdown itself requires: "** bold **" is not bold, and "w * h" is
+        // multiplication. The terminal classes exclude the delimiter as well as
+        // whitespace, because \S matches '*' — that single detail is why an
+        // earlier attempt at this still turned "**kwargs" into "*kwargs".
+        // Underscores additionally need a word boundary, or snake_case loses
+        // its underscores.
+        private static readonly Regex RxBoldStrict =
+            new(@"\*\*([^*\s](?:[^*\n]*[^*\s])?)\*\*", RegexOptions.Compiled);
+        private static readonly Regex RxItalicStrict =
+            new(@"(?<![*\w])\*([^*\s](?:[^*\n]*[^*\s])?)\*(?![*\w])", RegexOptions.Compiled);
+        private static readonly Regex RxUnderDouble =
+            new(@"(?<![A-Za-z0-9_])__([^_\s](?:[^_\n]*[^_\s])?)__(?![A-Za-z0-9_])", RegexOptions.Compiled);
+        private static readonly Regex RxUnderSingle =
+            new(@"(?<![A-Za-z0-9_])_([^_\s](?:[^_\n]*[^_\s])?)_(?![A-Za-z0-9_])", RegexOptions.Compiled);
+        private static readonly Regex RxAtxHeading =
+            new(@"^#{1,6}\s+", RegexOptions.Multiline | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Removes markdown emphasis and leaves code alone.
+        ///
+        /// One implementation, called from both cleaners. They previously each
+        /// carried their own copy, and the copies were not the same: the screen
+        /// path stripped one to three asterisks, the spoken path one to three of
+        /// either character. Two spellings of the same rule is how a fix lands
+        /// in one path and not the other, which is the shape of the original
+        /// bug.
+        ///
+        /// Order matters: the double-underscore rule runs before the single, or
+        /// "__strong__" comes out as "strong_".
+        ///
+        /// Known limit, accepted deliberately: in prose with no surrounding code
+        /// section, "__init__" is indistinguishable from "__strong__" and will
+        /// be stripped. Inside a fence or a SOLUTION section it survives, which
+        /// is where a dunder actually appears.
+        /// </summary>
+        public static string StripEmphasis(string prose)
+        {
+            if (string.IsNullOrEmpty(prose)) return prose;
+            prose = RxBoldStrict.Replace(prose, "$1");
+            prose = RxItalicStrict.Replace(prose, "$1");
+            prose = RxUnderDouble.Replace(prose, "$1");
+            prose = RxUnderSingle.Replace(prose, "$1");
+            prose = RxAtxHeading.Replace(prose, "");
+            return prose;
+        }
+
+        /// <summary>
         /// Runs a text transform over the prose of an answer and never over its
         /// code.
         ///
@@ -967,15 +1044,22 @@ namespace InterviewCopilot
             if (string.IsNullOrEmpty(text)) return text;
 
             var stashed = new List<string>();
-            string masked = FencedBlock.Replace(text, m =>
+
+            // Private Use Area characters. A readable placeholder such as
+            // "CODE0" is text an answer could itself contain, and the transform
+            // being wrapped is free to rewrite it; these cannot appear in a
+            // model's output, so the round trip is exact.
+            string Stash(Match m)
             {
                 stashed.Add(m.Value);
-                // Private Use Area characters. A readable placeholder such as
-                // "CODE0" is text an answer could itself contain, and the
-                // transform being wrapped is free to rewrite it; these cannot
-                // appear in a model's output, so the round trip is exact.
                 return "\uE000" + (stashed.Count - 1) + "\uE001";
-            });
+            }
+
+            // Fences first, then the unfenced sections the prompt defines as
+            // code. Both, because relying on the fence alone left the common
+            // case unprotected \u2014 see BareCodeSection.
+            string masked = FencedBlock.Replace(text, Stash);
+            masked = BareCodeSection.Replace(masked, Stash);
 
             string transformed = transform(masked);
 
@@ -1022,10 +1106,7 @@ namespace InterviewCopilot
             raw = TransformProseOnly(raw, prose =>
             {
                 // 1. Strip any residual markdown that leaked through despite the prompt
-                prose = Regex.Replace(prose, @"\*{2}([^*\n]+)\*{2}", "$1");   // **bold**
-                prose = Regex.Replace(prose, @"\*([^*\n]+)\*",       "$1");   // *italic*
-                prose = Regex.Replace(prose, @"_{1,2}([^_\n]+)_{1,2}", "$1"); // _italic_
-                prose = Regex.Replace(prose, @"(?m)^#{1,6}\s+", "");          // ## headers
+                prose = StripEmphasis(prose);
 
                 // Rewrite AI-tell long dashes into plain human punctuation. The heavy
                 // rule character used for section headers is different and untouched.

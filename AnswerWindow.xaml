@@ -99,6 +99,7 @@
                     <Button Grid.Column="4"
                             x:Name="AnalyzeBtn"
                             Click="AnalyzeBtn_Click"
+                            ToolTip="Read the screen now and answer from it  &#183;  same as F8"
                              Margin="0,0,10,0"
                             Cursor="Hand"
                             Focusable="False"
@@ -121,7 +122,7 @@
                                                    Margin="0,0,5,0"
                                                    VerticalAlignment="Center"/>
                                         <TextBlock x:Name="AnalyzeBtnLabel"
-                                                   Text="Watch"
+                                                   Text="Read screen"
                                                    Foreground="#AEEFCF"
                                                    FontSize="10"
                                                    FontWeight="SemiBold"

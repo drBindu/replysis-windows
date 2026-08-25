@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Windows;
 
@@ -9,6 +9,10 @@ namespace InterviewCopilot
         public CreditsWindow()
         {
             InitializeComponent();
+            // Same glass as the main window, from the same stored setting.
+            // Every window painted its own solid near-black before this, so
+            // opening one dropped an opaque slab on top of a translucent app.
+            Glass.Apply(this, RootGlass);
             try { WindowStealth.SetStealthMode(this, SettingsWindow.GetStealthMode()); } catch { }
             RefreshFromSession();
         }

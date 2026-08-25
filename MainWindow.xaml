@@ -1,6 +1,7 @@
 ﻿<Window x:Class="InterviewCopilot.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:InterviewCopilot"
         Title="Replysis AI"
         Icon="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
         Height="600" Width="980"
@@ -690,7 +691,7 @@
                 </Border>
 
                 <!-- ================= BODY ================= -->
-                <Grid Grid.Row="1" Margin="14,12,14,14">
+                <Grid x:Name="InterviewContent" Grid.Row="1" Margin="14,12,14,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition x:Name="ResumeColumn" Width="260"/>
                         <ColumnDefinition Width="Auto"/>
@@ -1227,6 +1228,14 @@
                         </Border>
                     </Grid>
                 </Grid>
+
+                <!-- Sessions replaces the interview content in the same row, with
+                     the toolbar above left where it is, so opening it reads as
+                     changing view rather than opening another window.
+                     Collapsed costs nothing: WPF does not lay out or render a
+                     collapsed element, so this is inert until it is opened. -->
+                <local:SessionsPanel x:Name="SessionsPanelHost" Grid.Row="1"
+                                     Visibility="Collapsed"/>
             </Grid>
 
             <!-- ================= CAMERA / OVERLAY ================= -->
@@ -1410,15 +1419,23 @@
                    AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="7">
                 <!-- Outer margin leaves room for the drop shadow so it isn't clipped -->
                 <Border Padding="0,0,0,14">
-                    <Border Background="#0B131F" BorderBrush="#2A3A4F" BorderThickness="1"
-                            CornerRadius="13" MinWidth="252" Padding="6">
+                    <Border Background="#F00A1220" BorderBrush="#33FFFFFF" BorderThickness="1"
+                            CornerRadius="14" MinWidth="268" Padding="6">
+                        <!-- A menu floats above the app, so unlike the panels inside
+                             it this one stays nearly opaque: text over a moving
+                             desktop is hard to read, and a menu is only on screen
+                             for a moment. The lift comes from the shadow instead. -->
                         <Border.Effect>
-                            <DropShadowEffect BlurRadius="30" ShadowDepth="7" Opacity="0.55" Color="#000000"/>
+                            <DropShadowEffect BlurRadius="40" ShadowDepth="10" Opacity="0.72" Color="#000000"/>
                         </Border.Effect>
                         <StackPanel>
                             <!-- Header -->
-                            <TextBlock Text="SAVED RESUMES" Foreground="#5E7288" FontSize="9.5"
-                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="11,8,10,7"/>
+                            <!-- Letter-spaced and dimmer than the content it labels. A
+                                 heading that competes with the list under it is the
+                                 commonest way a small menu starts to feel cluttered. -->
+                            <TextBlock Text="S A V E D   R E S U M E S" Foreground="#63758C"
+                                       FontSize="8.5" FontWeight="Bold" FontFamily="Segoe UI"
+                                       Margin="12,9,10,9"/>
 
                             <!-- Save current resume -->
                             <Border x:Name="SaveResumePopupItem" Padding="11,10" Cursor="Hand"
@@ -1428,16 +1445,19 @@
                                         <Setter Property="Background" Value="Transparent"/>
                                         <Style.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#17293E"/>
+                                                <Setter Property="Background" Value="#1AFFFFFF"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
+                                <!-- The one thing in this menu that creates something,
+                                     carrying the accent so it is not mistaken for one
+                                     more row of history. -->
                                 <StackPanel Orientation="Horizontal">
-                                    <Border Width="26" Height="26" CornerRadius="7" Background="#2C3A54"
-                                            Margin="0,0,11,0">
-                                        <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
-                                                   Foreground="#C6D4E8" HorizontalAlignment="Center"
+                                    <Border Width="24" Height="24" CornerRadius="7" Background="#2634E08A"
+                                            BorderBrush="#4D34E08A" BorderThickness="1" Margin="0,0,11,0">
+                                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="10.5"
+                                                   Foreground="#34E08A" HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Text="Save current resume" Foreground="#EAF1F8"
@@ -1446,11 +1466,14 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Height="1" Background="#1B2A3C" Margin="9,7"/>
+                            <Border Height="1" Background="#1B2A3C" Margin="10,6,10,8"/>
 
                             <StackPanel x:Name="SavedResumesListPanel"/>
 
-                            <Border Height="1" Background="#1B2A3C" Margin="9,7"
+                            <!-- Kept named and in place: the code shows and hides this
+                                 with the Clear row. Spacing alone separates the
+                                 destructive action now, so the rule stays invisible. -->
+                            <Border Height="1" Background="Transparent" Margin="0,6,0,0"
                                     x:Name="ClearSeparator" Visibility="Collapsed"/>
 
                             <!-- Clear saved resumes -->

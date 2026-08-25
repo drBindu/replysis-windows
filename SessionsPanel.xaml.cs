@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,7 +15,7 @@ using Microsoft.Win32;
 
 namespace InterviewCopilot
 {
-    public partial class SessionsWindow : Window
+    public partial class SessionsPanel : UserControl
     {
         // ── Path to where sessions are saved ──────────────────────────────────
         private string AppDataFolder => Path.Combine(
@@ -26,14 +26,32 @@ namespace InterviewCopilot
         private SessionInfo? _selectedSession;
         private readonly System.Threading.CancellationTokenSource _cts = new();
 
-        public SessionsWindow()
+        /// <summary>Raised when the user closes the panel.</summary>
+        public event Action? CloseRequested;
+
+        public SessionsPanel()
         {
             InitializeComponent();
-            try { WindowStealth.SetStealthMode(this, SettingsWindow.GetStealthMode()); } catch { }
-            Loaded += (s, e) => { LoadSessions(); _ = FetchCloudSessionsAsync(); };
+            // No glass and no stealth call here: both belong to the window this
+            // is drawn inside, and applying them again would double the tint.
         }
 
-        protected override void OnClosed(EventArgs e) { _cts.Cancel(); _cts.Dispose(); base.OnClosed(e); }
+        /// <summary>
+        /// Loads the list. Called each time the panel is opened rather than once
+        /// at construction, because the panel outlives a single viewing - a
+        /// session recorded after it was first opened has to appear.
+        /// </summary>
+        public void Open()
+        {
+            LoadSessions();
+            _ = FetchCloudSessionsAsync();
+        }
+
+        /// <summary>Cancels in-flight cloud requests on app shutdown.</summary>
+        public void Shutdown()
+        {
+            try { _cts.Cancel(); _cts.Dispose(); } catch { }
+        }
 
         // ══════════════════════════════════════════════════════════════════════
         // LOAD & DISPLAY SESSION LIST
@@ -653,7 +671,7 @@ namespace InterviewCopilot
         {
             if (_selectedSession == null || _selectedSession.IsCloud) return;
 
-            var result = MessageBox.Show(this,
+            var result = MessageBox.Show(Window.GetWindow(this),
                 $"Delete \"{_selectedSession.DisplayTitle}\" ({_selectedSession.DisplayDate})?\n\nThis cannot be undone.",
                 "Delete Session", MessageBoxButton.YesNo, MessageBoxImage.Warning);
 
@@ -684,7 +702,7 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"Could not delete session: {ex.Message}", "Error",
+                MessageBox.Show(Window.GetWindow(this), $"Could not delete session: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -746,7 +764,7 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"Copy failed: {ex.Message}", "Error",
+                MessageBox.Show(Window.GetWindow(this), $"Copy failed: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -774,12 +792,12 @@ namespace InterviewCopilot
                 // Was dumping the raw internal lines, so the exported file still
                 // carried the "SESSION n | model | date" header and Q:/A: prefixes.
                 File.WriteAllText(dlg.FileName, BuildTranscriptDocument(_selectedSession), Encoding.UTF8);
-                MessageBox.Show(this, "Session exported successfully.", "Export Complete",
+                MessageBox.Show(Window.GetWindow(this), "Session exported successfully.", "Export Complete",
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"Export failed: {ex.Message}", "Error",
+                MessageBox.Show(Window.GetWindow(this), $"Export failed: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -788,12 +806,7 @@ namespace InterviewCopilot
         // WINDOW CHROME
         // ══════════════════════════════════════════════════════════════════════
 
-        private void TitleBar_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            try { DragMove(); } catch { }
-        }
-
-        private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
+        private void CloseBtn_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
     }
 
     // ══════════════════════════════════════════════════════════════════════════

@@ -132,7 +132,6 @@ namespace InterviewCopilot
         private readonly SemaphoreSlim _creditsFetchGate = new(1, 1);
         private DateTime _lastCreditsFetchUtc = DateTime.MinValue;
         private CreditsWindow? _creditsWindow;
-        private SessionsWindow? _sessionsWindow;
         private int _sessionSeconds = 0;
         private int thinkingStep = 0;
 
@@ -233,7 +232,29 @@ namespace InterviewCopilot
                     // Store the delegate so we can -= it in OnClosed (prevents memory leak)
                     _cameraModeClosedHandler = () => Dispatcher.Invoke(() => ExitCameraMode());
                     answerWindow.CameraModeClosedByUser += _cameraModeClosedHandler;
-                    answerWindow.AnalyzeRequested += () => Dispatcher.Invoke(ToggleWatchScreen);
+                    // Reads the screen once, the same as F8 and the same as the
+                    // READ SCREEN pill in the main toolbar.
+                    //
+                    // This used to toggle Watch Screen, which is the setting that
+                    // moved into Settings precisely because it is not something
+                    // anyone changes mid-interview. Compact was left carrying the
+                    // old control, so the slim bar — the thing on screen during an
+                    // in-person interview, where there is no main window to fall
+                    // back on — had no way to actually read the screen. Pressing
+                    // it silently changed a preference instead.
+                    answerWindow.AnalyzeRequested += () => Dispatcher.Invoke(() =>
+                    {
+                        _ = HandleScreenAnalysisAsync().ContinueWith(t =>
+                        {
+                            if (t.IsFaulted)
+                                Dispatcher.Invoke(() =>
+                                {
+                                    DebugWindow.Log("SCREEN_ERR",
+                                        t.Exception?.GetBaseException().Message ?? "unknown");
+                                    StopThinkingUi();
+                                });
+                        }, TaskScheduler.Default);
+                    });
 
                     _debugWindow = new DebugWindow();
 
@@ -613,6 +634,13 @@ namespace InterviewCopilot
             cfg.MainWindowOpacity = Math.Round(opacity, 2);
             cfg.OverlayOpacity    = cfg.MainWindowOpacity;
             SettingsWindow.SaveConfig(cfg);
+
+            // Every other window that happens to be open follows the slider too.
+            // They each read this setting when they open, so without this a
+            // window already on screen keeps the old glass while the main window
+            // changes underneath it — the two sitting side by side at different
+            // transparencies is more obviously wrong than either value alone.
+            Glass.ApplyToOpenWindows(opacity);
         }
 
         private void PopupSettings_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -3478,10 +3506,12 @@ namespace InterviewCopilot
             // Both paths now share one implementation so neither can drift.
             ans = ScreenAnalyzer.TransformProseOnly(ans, prose =>
             {
-                prose = Regex.Replace(prose, @"\*{1,3}([^*\n]+)\*{1,3}", "$1");   // strip **bold**
-                prose = Regex.Replace(prose, @"_{1,3}([^_\n]+)_{1,3}", "$1");      // strip _italic_
-                prose = Regex.Replace(prose, @"(?m)^#{1,6}\s+", "");               // strip # headers (line-start only, preserves C#)
-                return prose;
+                // One shared implementation, not a second copy of the rule. The
+                // copy that used to live here was not even the same rule - it
+                // stripped one to three asterisks where the screen path stripped
+                // two - and rules that are nearly the same in two places are how
+                // a fix lands in one path and misses the other.
+                return ScreenAnalyzer.StripEmphasis(prose);
             });
 
             // Rewrite the punctuation that most makes text read as AI-generated into
@@ -3639,7 +3669,7 @@ namespace InterviewCopilot
         }
 
         // Trailing marker in a session log holding the elapsed seconds.
-        // SessionsWindow reads it; kept in one place so both sides agree.
+        // The sessions panel reads it; kept in one place so both sides agree.
         internal const string SessionDurationTag = "DURATION_SECONDS:";
 
         /// <summary>
@@ -3718,18 +3748,49 @@ namespace InterviewCopilot
         // UI
         // ══════════════════════════════════════════════════════════════════════
 
-        /// <summary>Opens the My Sessions recordings window.</summary>
+        /// <summary>
+        /// Shows past sessions over the interview screen.
+        ///
+        /// This used to open a second window. One window means one taskbar
+        /// entry, nothing to lose behind another app, and - the reason that
+        /// decided it - one fewer surface to keep hidden from a screen capture
+        /// while a screen is being shared.
+        /// </summary>
         private void SessionsBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (_sessionsWindow?.IsVisible == true)
+            if (SessionsPanelHost == null) return;
+
+            if (SessionsPanelHost.Visibility == Visibility.Visible)
             {
-                _sessionsWindow.Activate();
+                CloseSessionsPanel();
                 return;
             }
 
-            _sessionsWindow = new SessionsWindow { Owner = this };
-            _sessionsWindow.Closed += (_, _) => _sessionsWindow = null;
-            _sessionsWindow.Show();
+            if (!_sessionsPanelWired)
+            {
+                SessionsPanelHost.CloseRequested += CloseSessionsPanel;
+                _sessionsPanelWired = true;
+            }
+
+            // A real view switch: the interview screen is hidden, not covered.
+            //
+            // Layering the panel on top and relying on its background to hide
+            // what was underneath left both visible at once - the panel is
+            // translucent by design, so the interview screen showed straight
+            // through it and clicking Past Sessions looked like it did nothing.
+            if (InterviewContent != null) InterviewContent.Visibility = Visibility.Collapsed;
+            SessionsPanelHost.Visibility = Visibility.Visible;
+            SessionsPanelHost.Open();
+        }
+
+        private bool _sessionsPanelWired;
+
+        private void CloseSessionsPanel()
+        {
+            if (SessionsPanelHost != null)
+                SessionsPanelHost.Visibility = Visibility.Collapsed;
+            if (InterviewContent != null)
+                InterviewContent.Visibility = Visibility.Visible;
         }
 
         private void UpdateMicUi()
@@ -4578,6 +4639,19 @@ namespace InterviewCopilot
         {
             if (e.IsRepeat) return; // Ignore auto-repeat key down events from holding space down
             if (e.Key == System.Windows.Input.Key.F12) { e.Handled = true; ToggleDebugWindow(); return; }
+
+            // Esc leaves the sessions view. Handled only while that view is up,
+            // so Esc keeps whatever meaning it already had everywhere else -
+            // and the button's tooltip promises this, which is reason enough
+            // for it to actually work.
+            if (e.Key == System.Windows.Input.Key.Escape
+                && SessionsPanelHost != null
+                && SessionsPanelHost.Visibility == Visibility.Visible)
+            {
+                e.Handled = true;
+                CloseSessionsPanel();
+                return;
+            }
             if (e.Key == System.Windows.Input.Key.F8)
             {
                 e.Handled = true;
@@ -5010,7 +5084,7 @@ namespace InterviewCopilot
                 string ext = Path.GetExtension(filePath).ToLowerInvariant();
                 string text = ext switch
                 {
-                    ".txt"  => File.ReadAllText(filePath),
+                    ".txt"  => System.Text.Encoding.UTF8.GetString(ReadFileShared(filePath)),
                     ".docx" => ExtractDocxText(filePath),
                     ".pdf"  => ExtractPdfText(filePath),
                     _       => null!
@@ -5086,9 +5160,33 @@ namespace InterviewCopilot
         /// anywhere the document did not already have a gap, so a word split
         /// across two runs for formatting stays one word.
         /// </summary>
+        /// <summary>
+        /// Reads a file that another program may currently have open.
+        ///
+        /// Word, LibreOffice and Acrobat all hold a lock on the document while it
+        /// is open, and every reader here used to open the path directly - which
+        /// Windows refuses with "the process cannot access the file because it is
+        /// being used by another process". Someone reading their own resume and
+        /// then uploading it, which is the obvious order to do those two things
+        /// in, hit that every time and the app simply said no.
+        ///
+        /// FileShare.ReadWrite says "I do not mind who else has this open". The
+        /// content is copied into memory immediately, so nothing downstream holds
+        /// the handle either.
+        /// </summary>
+        private static byte[] ReadFileShared(string filePath)
+        {
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read,
+                                          FileShare.ReadWrite | FileShare.Delete);
+            using var ms = new MemoryStream();
+            fs.CopyTo(ms);
+            return ms.ToArray();
+        }
+
         private static string ExtractDocxText(string filePath)
         {
-            using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(filePath, false);
+            using var stream = new MemoryStream(ReadFileShared(filePath));
+            using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(stream, false);
             var body = doc.MainDocumentPart?.Document?.Body;
             if (body == null) return "";
 
@@ -5127,7 +5225,7 @@ namespace InterviewCopilot
 
         private static string ExtractPdfText(string filePath)
         {
-            using var doc = UglyToad.PdfPig.PdfDocument.Open(filePath);
+            using var doc = UglyToad.PdfPig.PdfDocument.Open(ReadFileShared(filePath));
             var sb = new System.Text.StringBuilder();
             int pageCount = 0;
             foreach (var page in doc.GetPages())
@@ -5225,15 +5323,19 @@ namespace InterviewCopilot
             ToggleWatchScreen();
         }
 
-        /// <summary>
-        /// Flips the switch and tells both windows. The compact bar carries the
-        /// same control, and a switch that reads ON in one window and OFF in the
-        /// other is worse than having no indicator at all.
-        /// </summary>
-        /// <summary>The toolbar button now does what F8 does.</summary>
+        /// <summary>Reads the screen once, the same as F8 and the compact bar.</summary>
         private void ReadScreenPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
             => _ = HandleScreenAnalysisAsync();
 
+        /// <summary>
+        /// Flips the watch preference and tells the compact bar, which shows it
+        /// as a colour on its Read screen button.
+        ///
+        /// Reached from Settings only. Both toolbars used to carry it as a
+        /// switch, and it is not a thing anyone changes with an interviewer
+        /// waiting — the button in each toolbar is now the one-shot read, which
+        /// is what someone actually presses mid-interview.
+        /// </summary>
         private void ToggleWatchScreen()
         {
             _watchScreenMode = !_watchScreenMode;
@@ -5705,9 +5807,10 @@ namespace InterviewCopilot
             try { answerWindow?.Close(); } catch { }
             answerWindow = null;
             try { _creditsWindow?.Close(); } catch { }
-            try { _sessionsWindow?.Close(); } catch { }
             _creditsWindow = null;
-            _sessionsWindow = null;
+            // Sessions is a panel inside this window now, so there is nothing to
+            // close - only its in-flight cloud requests to cancel.
+            try { SessionsPanelHost?.Shutdown(); } catch { }
 
             _globalHotkey?.Dispose();
             _debugWindow?.ForceClose();
@@ -6024,52 +6127,104 @@ namespace InterviewCopilot
             SavedResumesListPanel.Children.Clear();
             bool hasSaved = _savedResumes.Count > 0;
 
+            // Two lines, not one, and no icon chip.
+            //
+            // Every row here used to be built the same way as the Save and Clear
+            // actions above and below it: a 26px icon chip and one line of text,
+            // same size, same weight. Seven identical rows where one is a primary
+            // action, five are data and one is destructive - so the list read as
+            // filler rather than as a considered menu, and the name and the time
+            // it was saved were crushed into a single string.
+            //
+            // A saved resume has two facts worth showing, and they are not equally
+            // important: which resume it is, and when it was kept. Splitting them
+            // gives the row a shape - a strong first line, a quiet second - which
+            // is what makes a list look designed rather than generated. The chip
+            // goes because six identical icons carry no information; a thin rail
+            // marks the row instead, and turns accent green on the one currently
+            // loaded, which is the one thing the list could never tell you before.
             foreach (var (name, content) in _savedResumes)
             {
                 string cnt = content;
+                bool isCurrent = !string.IsNullOrEmpty(_loadedResumeName)
+                                 && string.Equals(name, _loadedResumeName, StringComparison.OrdinalIgnoreCase);
+
+                // A real file name is the title, whole and unaltered - it is what
+                // the person recognises. Only the older entries saved before the
+                // name was carried through look like "Resume - Aug 18, 1:07 PM",
+                // and for those the date is all there is, so it becomes the title
+                // rather than being hidden as a subtitle under the word "Resume".
+                string title = name, when = "";
+                int sep = name.IndexOf('\u00b7');
+                bool legacyDatedEntry = sep > 0
+                    && name[..sep].Trim().Equals("Resume", StringComparison.OrdinalIgnoreCase);
+                if (legacyDatedEntry)
+                {
+                    title = name[(sep + 1)..].Trim();   // the date, shown plainly
+                    when  = "Saved before file names were kept";
+                }
+
                 var row = new System.Windows.Controls.Border
                 {
-                    Padding      = new Thickness(11, 8, 11, 8),
-                    Margin       = new Thickness(1, 0, 1, 0),
+                    Padding      = new Thickness(10, 7, 11, 7),
+                    Margin       = new Thickness(1, 1, 1, 1),
                     CornerRadius = new CornerRadius(8),
                     Cursor       = System.Windows.Input.Cursors.Hand,
                     Background   = System.Windows.Media.Brushes.Transparent,
                 };
-                var sp = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-                // Icon in a rounded chip to match the Save/Clear rows and read as premium.
-                sp.Children.Add(new System.Windows.Controls.Border
+
+                var layout = new System.Windows.Controls.Grid();
+                layout.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+                    { Width = new GridLength(2) });
+                layout.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+                    { Width = new GridLength(11) });
+                layout.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition());
+
+                var rail = new System.Windows.Controls.Border
                 {
-                    Width = 26, Height = 26,
-                    CornerRadius = new CornerRadius(7),
-                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1B2A3C")),
-                    Margin = new Thickness(0, 0, 11, 0),
-                    Child = new System.Windows.Controls.TextBlock
-                    {
-                        Text       = "",
-                        FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                        FontSize   = 12,
-                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#8FA6BE")),
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment   = VerticalAlignment.Center,
-                    },
-                });
-                sp.Children.Add(new System.Windows.Controls.TextBlock
+                    CornerRadius = new CornerRadius(1),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
+                        isCurrent ? "#34E08A" : "#24405F")),
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                };
+                System.Windows.Controls.Grid.SetColumn(rail, 0);
+                layout.Children.Add(rail);
+
+                var text = new System.Windows.Controls.StackPanel();
+                text.Children.Add(new System.Windows.Controls.TextBlock
                 {
-                    Text       = name,
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DCE6F0")),
+                    Text       = title,
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
+                        isCurrent ? "#EAF1F8" : "#DCE6F0")),
                     FontSize   = 12.5,
                     FontWeight = FontWeights.SemiBold,
                     FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
-                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
                 });
-                row.Child = sp;
-                row.MouseEnter += (s, _) => ((System.Windows.Controls.Border)s).Background =
-                    new SolidColorBrush((Color)ColorConverter.ConvertFromString("#17293E"));
-                row.MouseLeave += (s, _) => ((System.Windows.Controls.Border)s).Background =
+                if (when.Length > 0)
+                {
+                    text.Children.Add(new System.Windows.Controls.TextBlock
+                    {
+                        Text       = isCurrent ? when + "   ·   in use" : when,
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
+                            isCurrent ? "#7FD8AC" : "#7E90A8")),
+                        FontSize   = 10.5,
+                        FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
+                        Margin     = new Thickness(0, 2, 0, 0),
+                    });
+                }
+                System.Windows.Controls.Grid.SetColumn(text, 2);
+                layout.Children.Add(text);
+
+                row.Child = layout;
+                row.MouseEnter += (s2, _) => ((System.Windows.Controls.Border)s2).Background =
+                    new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1AFFFFFF"));
+                row.MouseLeave += (s2, _) => ((System.Windows.Controls.Border)s2).Background =
                     System.Windows.Media.Brushes.Transparent;
+                string rowName = name;
                 row.MouseLeftButtonDown += (_, _2) =>
                 {
-                    LoadSavedResume(cnt);
+                    LoadSavedResume(cnt, rowName);
                     SavedResumesPopup.IsOpen = false;
                 };
                 SavedResumesListPanel.Children.Add(row);
@@ -6110,7 +6265,21 @@ namespace InterviewCopilot
             UpdateSavedResumesButton();
         }
 
-        private void LoadSavedResume(string content) => ResumeTextBox.Text = content;
+        /// <summary>
+        /// Puts a saved resume back in the box, and remembers what it is called.
+        ///
+        /// The name used to be dropped here: only the text was restored, so
+        /// _loadedResumeName went empty and the next Save fell back to naming the
+        /// entry "Resume - <date>". That is why a list of saved resumes filled up
+        /// with timestamps instead of file names - the real name was known when
+        /// the file was first uploaded and thrown away on the first reload.
+        /// </summary>
+        private void LoadSavedResume(string content, string name = "")
+        {
+            ResumeTextBox.Text = content;
+            if (!string.IsNullOrWhiteSpace(name)) _loadedResumeName = name;
+            PopulateSavedResumesPopup();
+        }
 
         /// <summary>
         /// Puts the most recently saved resume back in the box on startup.

@@ -367,15 +367,61 @@ fix out loud and not applying it. Both were still asking an LLM to reliably
 do the same small thing every time, and an LLM does not do anything reliably
 every time.
 
-The fix that actually held: stop asking. `fixPointerSignatureIfNeeded()`
-runs on stage one's own extraction, before stage two — the code-writing
-model — ever reads it. A regex finds a self-referential type used as both
-return and parameter type with no pointer (`ListNode insertionSortList(ListNode
-head)`), confirms the parameter is actually dereferenced with `->` somewhere
-in the text — the only case a value type is used this way, so this can never
-misfire on code that was already correct — and rewrites just that line. Stage
-two then starts from an already-correct signature and never has anything to
-get wrong here, whether or not the model would have caught it unprompted.
+A fourth attempt, `fixPointerSignatureIfNeeded()`, repairs a mangled
+signature server-side before stage two reads it. **This paragraph used to
+say that was the fix that held. That was wrong, and the Mac session was
+misled by it** — it read this and concluded the Windows fix was
+signature-shaped and narrow. It could not have been the fix: the damage
+happened on the client, after the server had already sent correct code.
+The server repair is harmless and still runs, but it was never what
+stopped the corruption.
+
+**The fix that actually held is on the client**, in
+`ScreenAnalyzer.TransformProseOnly` — and the first version of it was
+still only half a fix. It lifted fenced blocks out before the markdown
+rules ran and put them back byte for byte, which works only while the
+model fences. Nothing asked it to. The prompt said "complete code, in
+whatever language is on screen" and never mentioned a fence, so whether
+code survived was decided by the model's habit. Measured against the real
+regexes, unfenced: **eight of eight lines corrupted**, and only one of
+them was about pointers —
+
+    def f(*args, **kwargs):        ->  def f(args, *kwargs):
+    area = w * h * depth;          ->  area = w  h  depth;
+    user_name = get_user_name(x)   ->  username = getusername(x)
+
+It was never a C or C++ bug. `\*([^*\n]+)\*` matches any paired asterisk,
+and code is full of them.
+
+The fix now has two layers, because either alone leaves a hole:
+
+1. **Regions come out before any rewrite** — fenced blocks *and* the
+   unfenced sections the prompt itself defines as code (`SOLUTION`, `FIX`,
+   `CODE`, up to the next heading). See `BareCodeSection`.
+2. **Emphasis requires real markdown context** — delimiters must hug
+   non-space on the inside, and the terminal character classes exclude the
+   delimiter itself, not just whitespace. `\S` matches `*`, which is why an
+   earlier attempt still ate `**kwargs`. Underscores additionally need a
+   word boundary or snake_case loses its underscores.
+
+Both cleaners now call one `StripEmphasis()`. They previously each carried
+their own copy and the copies were not even the same rule — one stripped
+one-to-three asterisks, the other two — which is how a fix lands in one
+path and misses the other.
+
+Accepted limit: in prose with no surrounding code section, `__init__` is
+indistinguishable from `__strong__` and is stripped. Inside a fence or a
+`SOLUTION` section it survives, which is where a dunder actually appears.
+
+The prompt now also asks for fences. That is belt and braces, not the fix —
+three earlier attempts at this were all requests to the model, and the
+lesson each time was that a rule the model can quietly ignore is not a fix.
+
+`tests/verify_output_pipeline.py` used to be a string-presence check: it
+grepped for `TransformProseOnly(` and confirmed both cleaners called it. It
+was green throughout the period the cleaner was corrupting every unfenced
+line it saw. It now reads the patterns out of `ScreenAnalyzer.cs` and runs
+real code through them, fenced and unfenced, comparing bytes.
 
 Unit-tested standalone before touching the running app: the real bug, code
 already correct (must stay untouched, not double-starred), a value parameter
