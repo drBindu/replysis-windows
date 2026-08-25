@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -1564,8 +1564,8 @@ namespace InterviewCopilot
 
             if (_unreportedListeningSeconds >= ListeningReportInterval.TotalSeconds)
             {
-                int minutes = (int)(_unreportedListeningSeconds / 60);
-                _unreportedListeningSeconds -= minutes * 60.0;
+                int minutes = ListeningBilling.MinutesOnTick(
+                    _unreportedListeningSeconds, out _unreportedListeningSeconds);
                 _ = ReportListeningMinutesAsync(minutes);
             }
         }

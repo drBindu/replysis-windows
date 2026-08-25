@@ -551,15 +551,60 @@ interval"*. Asserted in `SpeechHealthTests` against `SpeechHealth.PollInterval`,
 so changing either number breaks a test rather than quietly moving a figure the
 two platforms compare against each other.
 
-**Coverage differs, and Windows is broader.** On Mac the detector cannot fire
-in Manual mode at all: the check lives in the listening meter and Manual never
-arms it. On Windows `HandleSpaceDown` calls `StartListeningMeter()` for every
-source including Manual, so the detector does run there — bounded by turn
-length, since a manual turn shorter than 15s ends before the second tick.
+**Coverage is the same on both, and an earlier note here said otherwise.**
+A Mac run appeared to show the detector unable to fire in Manual mode; reading
+the path afterwards showed the meter has no mode check on either platform and
+starts whenever listening starts, from any source. What the run actually
+showed was an app sitting in Manual that had never been armed. "Not listening
+is not covered" is true, and is not a finding.
 
-So "we have a detector" and "the detector covers the mode the user is in" are
-different claims, and the answer is not the same on both platforms. Windows:
-all modes, subject to turn length. Mac: automatic modes only.
+Both: all modes, bounded by turn length — a turn shorter than 15s ends before
+the second tick.
+
+Worth keeping the retraction rather than deleting the claim, because the
+failure is the mirror of the one this whole exchange has been avoiding: a real
+observation, then reasoning from it instead of reading the code it
+implicated. Running it is necessary and it is not sufficient.
+
+## Item 9: what a listening session costs
+
+**Windows does not double-count on reconnect.** The Mac hypothesis was an
+unpaired `startListeningMeter()` restarting the clock while the pre-drop
+segment was already banked. That cannot happen here: `StartListeningMeter()`
+is called from exactly one place, the tick re-stamps `_listeningSinceUtc` as
+it accumulates, and both `StopListeningMeter` and `FlushListeningMeterOnExit`
+clear it to `MinValue` before returning. An engine reconnect does not touch
+the meter at all.
+
+**What it does instead is bill the same wall time twice at the edges.** The
+two roundings run in opposite directions and compound:
+
+- the tick **floors** whole minutes and carries the remainder forward
+- the stop path **rounds that remainder up** to a whole minute at 30s or more
+
+Every turn therefore pays for its final partial minute as a full one, on top
+of the whole minutes already reported. And a turn is not a sitting: Manual and
+Auto both call `StopListeningMeter()` at the end of every exchange, so the
+round-up happens once per turn.
+
+    one 90s turn        1.5 min listened   ->   2 min billed
+    ten 40s turns       6.7 min listened   ->  10 min billed   (50% over)
+    one 600s turn        10 min listened   ->  10 min billed   (honest)
+
+The damage scales with the number of turns, not their length. A long single
+turn is charged accurately; a normal interview of short exchanges is not.
+
+**The 30-second floor itself is deliberate** and the comment defending it is
+right on its own terms — rounding every short turn down to nothing would make
+an interview of brief exchanges free. What was never decided is what should
+happen when that floor is applied per turn to a remainder that has already had
+its whole minutes taken out.
+
+**Not changed.** The arithmetic moved to `ListeningBilling` unaltered so it can
+be read and tested, and `tests/CleanerTests/BillingTests.cs` records the
+current figures. What a customer is charged is the owner's decision, not
+something to alter quietly while tidying. If the rounding changes, those tests
+fail and the new numbers go in.
 
 ## The live transcript is swept at startup too
 
