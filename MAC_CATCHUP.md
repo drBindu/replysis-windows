@@ -590,15 +590,37 @@ round-up happens once per turn.
     one 90s turn        1.5 min listened   ->   2 min billed
     ten 40s turns       6.7 min listened   ->  10 min billed   (50% over)
     one 600s turn        10 min listened   ->  10 min billed   (honest)
+    thirty 25s turns   12.5 min listened   ->   0 min billed   (free)
 
-The damage scales with the number of turns, not their length. A long single
-turn is charged accurately; a normal interview of short exchanges is not.
+**The error is bidirectional, and which way it goes depends on how the user
+talks.** The last row is the Mac session's finding and this file previously
+missed it, describing the fault as a consistent overcharge. It is not. Short
+exchanges overcharge by half; very short ones charge nothing at all; one long
+answer is honest. The boundary is sharp: **29.9s bills 0 minutes, 30.0s bills
+1.**
+
+That is harder to explain to a customer than a flat 50% over, and harder to
+defend, because two people doing the same interview differently are charged
+differently for the same minutes.
 
 **The 30-second floor itself is deliberate** and the comment defending it is
 right on its own terms — rounding every short turn down to nothing would make
-an interview of brief exchanges free. What was never decided is what should
-happen when that floor is applied per turn to a remainder that has already had
-its whole minutes taken out.
+an interview of brief exchanges free. But it only prevents that at 30s and
+above. **Below 30s it produces exactly the outcome it was named after.** The
+guard causes the thing it was written to stop.
+
+What was never decided is what should happen when that floor is applied per
+turn to a remainder that has already had its whole minutes taken out.
+
+**There is no neutral correction.** Round down and short interviews go free.
+Round to the nearest second and the floor's purpose disappears. Bill per
+session rather than per turn and the model changes. Every direction is a
+business decision wearing engineering clothes, which is why none of them was
+taken here.
+
+**Release condition, not an intention:** whatever is decided must land on both
+platforms in the same release. A Mac user and a Windows user billed differently
+for the same interview is a support problem neither session can answer.
 
 **Not changed.** The arithmetic moved to `ListeningBilling` unaltered so it can
 be read and tested, and `tests/CleanerTests/BillingTests.cs` records the

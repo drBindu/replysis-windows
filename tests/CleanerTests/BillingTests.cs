@@ -45,6 +45,22 @@ internal static class BillingTests
         // the number of turns, not the duration.
         Case("one 600s turn (10 min of listening)", ListeningBilling.MinutesForSession(600), 10);
 
+        // And the error runs the other way below the floor. Thirty rapid
+        // exchanges - an entirely normal screen - are free.
+        //
+        // This inverts the comment defending the floor, which exists because
+        // "rounding every short turn down to nothing would make an interview of
+        // brief exchanges free". It prevents that at 30s and above. Below 30s
+        // it produces exactly the outcome it was written to prevent.
+        double[] thirtyShort = Enumerable.Repeat(25.0, 30).ToArray();
+        Case("thirty 25s turns (12.5 min of listening)",
+             ListeningBilling.MinutesForSession(thirtyShort), 0);
+
+        // A tenth of a second either side of the floor is the difference
+        // between free and a whole minute.
+        Case("one 29.9s turn", ListeningBilling.MinutesForSession(29.9), 0);
+        Case("one 30.0s turn", ListeningBilling.MinutesForSession(30.0), 1);
+
         double actual = tenTurns.Sum() / 60.0;
         int billed = ListeningBilling.MinutesForSession(tenTurns);
         Console.WriteLine($"        ten short turns: {actual:0.0} min listened, {billed} min billed "
