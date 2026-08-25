@@ -43,8 +43,53 @@ if (-not $commit) { $commit = "nogit" }
 $dirty = (git status --porcelain -- speechmatics_engine.py 2>$null)
 if ($dirty) { $commit = "$commit+dirty" }
 
+# The hash is of the CONTENT, not of the file on disk.
+#
+# It used to be Get-FileHash over the working-tree file, which cannot match
+# across platforms and never could have. core.autocrlf is true here, so Windows
+# checks the shared engine out with CRLF while macOS gets LF - same blob, same
+# commit, different bytes, by git's deliberate design. The check would have
+# reported a fork on every honest cross-platform build, forever.
+#
+# That is the worst way for a check to be wrong. A dirty tree at least has a
+# visible cause; this looked exactly like real drift, had no explanation on the
+# surface, and was guaranteed to recur - so the first person to hit it explains
+# it away and nobody trusts the tool afterwards. Found by the Mac session
+# testing the obvious alternative before reporting drift, which is the only
+# reason it was not recorded as one.
+#
+# git's blob id is content-addressed and line-ending normalised, so it is the
+# same on both platforms. It is also the id git itself stores, so a match
+# additionally proves the working tree is the committed content - something the
+# old method could not tell you at all.
 $srcPath = Join-Path $root "speechmatics_engine.py"
-$srcHash = (Get-FileHash $srcPath -Algorithm SHA256).Hash.Substring(0, 12).ToLower()
+$srcHash = (git hash-object $srcPath 2>$null)
+
+if ($srcHash) {
+    $srcHash = $srcHash.Trim().Substring(0, 12).ToLower()
+} else {
+    # No git on the build machine. Reproduce the same value rather than a
+    # different-but-stable one: a fallback that stamps an incomparable hash
+    # silently reintroduces the bug this replaces.
+    #
+    # A git blob id is sha1("blob <length>\0" + content) over LF content.
+    $raw = [IO.File]::ReadAllBytes($srcPath)
+    $lf  = New-Object System.Collections.Generic.List[byte]
+    for ($i = 0; $i -lt $raw.Length; $i++) {
+        if ($raw[$i] -eq 13 -and ($i + 1) -lt $raw.Length -and $raw[$i + 1] -eq 10) { continue }
+        $lf.Add($raw[$i])
+    }
+    $body   = $lf.ToArray()
+    $header = [Text.Encoding]::ASCII.GetBytes("blob $($body.Length)" + [char]0)
+    $all    = New-Object byte[] ($header.Length + $body.Length)
+    [Array]::Copy($header, 0, $all, 0, $header.Length)
+    [Array]::Copy($body, 0, $all, $header.Length, $body.Length)
+
+    $sha1 = [Security.Cryptography.SHA1]::Create()
+    $srcHash = ([BitConverter]::ToString($sha1.ComputeHash($all)) -replace '-', '').Substring(0, 12).ToLower()
+    $sha1.Dispose()
+    Write-Host "git not found; blob id computed directly."
+}
 $builtAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
 # Stamped through a PyInstaller runtime hook rather than by editing the engine

@@ -500,6 +500,37 @@ answer rather than a failure.
 log answers "which engine was this user running?" instead of inviting a guess.
 Verified end to end in the frozen binary, not just from source.
 
+## Hash the content, never the file on disk
+
+The first real cross-platform comparison mismatched: `6f9746fe6237` on Mac
+against `f283565ab5bd` on Windows, at the same clean commit. Not drift. The Mac
+session tested the obvious alternative before reporting it, which is the only
+reason it was not recorded as a fork.
+
+`core.autocrlf` is true on Windows, so the shared engine is checked out with
+CRLF here and LF there. Same blob, same commit, different bytes on disk — by
+git's deliberate design. The old stamp used `Get-FileHash` over the working
+tree, so **it could never have matched across platforms, and would have
+reported a fork on every honest build, forever.**
+
+That is the worst way for a check to be wrong. A dirty tree at least has a
+visible cause; this looked exactly like real drift, had no explanation on the
+surface, and was guaranteed to recur — so the first person to hit it explains
+it away, and after that nobody trusts the instrument at all.
+
+**Use git's blob id.** It is content-addressed and line-ending normalised, so
+it is identical on both platforms, and it is the id git itself stores — which
+means a match additionally proves the working tree is the committed content,
+something the old method could not tell you.
+
+    git hash-object speechmatics_engine.py   ->  9d74598b48be  (both platforms)
+
+**The no-git fallback must produce the same value, not merely a stable one.**
+A fallback that stamps something different-but-consistent silently reintroduces
+the bug. `build-engine.ps1` computes the blob id directly —
+`sha1("blob <length>\0" + LF-normalised content)` — and this was verified to
+reproduce `git hash-object` byte for byte, not assumed to.
+
 ## Comparing engine hashes: only at a shared commit
 
 From the Mac session, and it is a rule rather than a note. A cross-platform
