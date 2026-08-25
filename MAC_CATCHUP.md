@@ -593,9 +593,39 @@ glyph edge stays sharp — and only scale down as a last resort, logging when it
 happens, because shrinking is what drops body text below what the model reads,
 which is the failure the larger capture existed to fix.
 
-**Open, and the owner's call:** whether to raise `client_max_body_size` to match
-the documented 2 MB policy, or to correct the document down to 1 MB. Until one
-of those happens both clients are budgeting against a number nobody chose.
+### RESOLVED 2026-08-25: `client_max_body_size 3m`
+
+Set in the `http` block of `/etc/nginx/nginx.conf`, validated, reloaded with no
+downtime. Backup at `nginx.conf.bak-bodysize`.
+
+**3m rather than 2m on purpose.** A 2 MB base64 image plus its JSON wrapper is
+about 2.1 MB on the wire, so 2m would have re-created the same
+unreachable-limit problem one layer up — the documented figure again just
+barely unmeetable.
+
+Measured against production afterwards, rather than assumed from a successful
+reload:
+
+    900 KB  ->  401   reached the application
+    1.5 MB  ->  401   reached the application (was 413 before)
+    2.5 MB  ->  400   the app's own 2M-char rule, now the limit that fires
+    3.5 MB  ->  413   nginx, as designed
+
+The 2.5 MB row is the one that matters: `MAX_STASHED_IMAGE_CHARS` is finally
+the effective ceiling, so the documented policy describes what actually
+happens.
+
+**Both clients keep their 700 KB budgets.** The headroom is for large monitors
+and awkward screens, not an invitation to send more — a picture still costs
+upload time on the user's connection, which is most of the wait.
+
+*Worth recording how nearly this went wrong: the first attempt inserted the
+directive with `sed`, which collapsed the comment block and the directive onto
+one line, leaving `client_max_body_size` inside a comment. `nginx -t` passed —
+because a comment is valid syntax. A successful config test would have been
+taken as proof, and the setting was inert. It is the probe again: a check whose
+output was independent of the thing it was meant to confirm. Only the
+end-to-end request sizes prove this.*
 
 ## The engine reports end of utterance
 
