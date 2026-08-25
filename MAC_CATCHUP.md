@@ -536,8 +536,30 @@ not, the detector is watching for lines the engine does not print, and no unit
 test will ever tell you that.
 
 Still outstanding on this side: nobody has yet run the stub against the real
-app. The Mac session is doing the equivalent. Until one of us has, item 8 is
-half-done here in the same sense item 7 was half-done there.
+app. Mac has — it fired, at exactly 15.000s.
+
+**The threshold is the contract; the poll interval is not.** Both platforms
+use a 12s threshold and consult it from a 5s meter tick, and both start the
+session clock at listening start, so the ticks land at 5, 10, 15. Twelve is
+never one of them. Both therefore warn at **15s**, and 12 is a number nobody
+observes directly.
+
+Stated as a rule because two platforms reporting different latencies for
+identical logic would otherwise look like a bug in one of them. The honest
+statement is *"warns between the threshold and the threshold plus one poll
+interval"*. Asserted in `SpeechHealthTests` against `SpeechHealth.PollInterval`,
+so changing either number breaks a test rather than quietly moving a figure the
+two platforms compare against each other.
+
+**Coverage differs, and Windows is broader.** On Mac the detector cannot fire
+in Manual mode at all: the check lives in the listening meter and Manual never
+arms it. On Windows `HandleSpaceDown` calls `StartListeningMeter()` for every
+source including Manual, so the detector does run there — bounded by turn
+length, since a manual turn shorter than 15s ends before the second tick.
+
+So "we have a detector" and "the detector covers the mode the user is in" are
+different claims, and the answer is not the same on both platforms. Windows:
+all modes, subject to turn length. Mac: automatic modes only.
 
 ## The live transcript is swept at startup too
 

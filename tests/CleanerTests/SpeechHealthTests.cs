@@ -54,6 +54,25 @@ internal static class SpeechHealthTests
             Warn(T0.AddSeconds(12), T0.AddSeconds(11), Never, T0, Never, out _),
             true, "12s is the threshold, not 12s+1");
 
+        // The threshold is the contract; the poll interval is not. This is
+        // consulted every 5s from the listening meter, so the ticks land at
+        // 5, 10, 15 and a user observes 15s, never 12. Asserted so that
+        // changing either number breaks a test rather than quietly moving a
+        // figure the two platforms compare against each other.
+        Case("quiet at the 10s tick, fires at the 15s tick",
+            Warn(T0.AddSeconds(10), T0.AddSeconds(9), Never, T0, Never, out _),
+            false, "10s < 12s threshold - the tick before is still silent");
+        Case("observed latency is one poll past the threshold",
+            Warn(T0.AddSeconds(15), T0.AddSeconds(14), Never, T0, Never, out int s15),
+            true, "15s is the first tick past 12s");
+        if (SpeechHealth.PollInterval != TimeSpan.FromSeconds(5))
+        {
+            failed++;
+            Console.WriteLine("FAIL  poll interval changed; the observed-latency note is now wrong");
+        }
+        Console.WriteLine($"        threshold {SpeechHealth.DeafnessThreshold.TotalSeconds}s, "
+                        + $"poll {SpeechHealth.PollInterval.TotalSeconds}s, observed {s15}s");
+
         // ── It stays quiet ────────────────────────────────────────────────────
         Case("quiet: engine offline",
             SpeechHealth.ShouldWarn(false, T0.AddSeconds(20), T0.AddSeconds(19), Never, T0, Never, out _),

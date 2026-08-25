@@ -32,8 +32,32 @@ namespace InterviewCopilot
         /// fault rather than a pause. Speechmatics runs about 0.7s behind live
         /// speech, so anything under a few seconds is ordinary; twelve seconds
         /// of continuous speech returning nothing is not.
+        ///
+        /// THE THRESHOLD IS THE CONTRACT; THE POLL INTERVAL IS NOT.
+        ///
+        /// This is consulted from ListeningMeterTick, which runs every 5
+        /// seconds, and the session clock starts when listening starts — so the
+        /// ticks land at 5, 10, 15. Twelve is not one of them. The warning
+        /// therefore appears at 15s, quantised upward, and 12 is a threshold
+        /// nobody will ever observe directly.
+        ///
+        /// Stated because the Mac session measured exactly 15.000s against its
+        /// own 12s threshold and a 5s meter, and two platforms reporting
+        /// different numbers for identical logic would otherwise look like a
+        /// bug in one of them. The honest statement of the behaviour is
+        /// "warns between the threshold and the threshold plus one poll
+        /// interval". If either platform changes its poll, the observed number
+        /// moves, and that should read as a documented consequence rather than
+        /// a mystery.
         /// </summary>
         internal static readonly TimeSpan DeafnessThreshold = TimeSpan.FromSeconds(12);
+
+        /// <summary>
+        /// How often <see cref="ShouldWarn"/> is actually consulted. Not used
+        /// by the decision — recorded here so the observed latency above can be
+        /// derived from the source rather than from a comment that drifts.
+        /// </summary>
+        internal static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
 
         /// <summary>How recently speech must have arrived to count as "now".</summary>
         internal static readonly TimeSpan SpeechIsCurrent = TimeSpan.FromSeconds(3);
