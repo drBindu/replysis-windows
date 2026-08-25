@@ -3,7 +3,7 @@ bin/
 obj/
 
 # MSIX packaging output. The directory Visual Studio actually writes is
-# AppPackages/ — the old AppxPackages/ rule never matched anything.
+# AppPackages/ â€” the old AppxPackages/ rule never matched anything.
 AppPackages/
 AppxPackages/
 BundleArtifacts/
@@ -17,7 +17,7 @@ __pycache__/
 .vs/
 *.user
 
-# Temp key — never commit real certs
+# Temp key â€” never commit real certs
 *.pfx
 
 # Large binaries
@@ -35,5 +35,3 @@ engine-dist/
 build/
 publish_test/
 
-# Written by tools/build-engine.ps1 at build time; never committed.
-engine_build_info.py

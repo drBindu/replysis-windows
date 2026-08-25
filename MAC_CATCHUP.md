@@ -470,8 +470,20 @@ fork of the engine for months, every build succeeding, and nothing anywhere
 would have caught it — not the build, not a test, not a support log. Nothing
 would have caught it recurring either.
 
-`tools/build-engine.ps1` now stamps `engine_build_info.py` into the bundle at
-build time and the engine prints it before anything can fail:
+**Stamped through a PyInstaller runtime hook, not by editing the engine.**
+The first version of this here did edit `speechmatics_engine.py` to add the
+banner. That file is shared with the Mac app byte for byte, and the hash is
+only worth something if both platforms compute it over the same bytes — so
+that edit would have made the two hashes differ for identical logic, the
+provenance check reporting a divergence it had caused itself. Worse than not
+having it. The Mac session had already used a runtime hook for exactly this
+reason and pointed out the trap; this side now matches. A runtime hook runs
+before the main script, so the line still prints before anything can fail.
+
+**If you change how the stamp is applied, do not change the shared source to
+do it.** The two hashes being comparable is the whole mechanism.
+
+`tools/build-engine.ps1` writes the hook at build time and the engine prints:
 
     >>> ENGINE BUILD: b75b845+dirty src:0fb49e3a9eb6 built:2026-08-25T01:38:18Z
 
