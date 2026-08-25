@@ -500,7 +500,52 @@ answer rather than a failure.
 log answers "which engine was this user running?" instead of inviting a guess.
 Verified end to end in the frozen binary, not just from source.
 
-## Hash the content, never the file on disk
+## The engine reports end of utterance
+
+**Mac auto mode decides a turn is over from `>>> UTTERANCE END` and nothing
+else.** The fork emitted it from a Speechmatics `EndOfUtterance` handler with
+`end_of_utterance_silence_trigger` set in the config. The shared engine had
+neither, so the event was never requested and the line never came.
+
+The failure had no visible cause. The app listened, transcribed accurately,
+grew a transcript for minutes and never answered once — a perfectly healthy app
+waiting for a signal nobody had asked the server to send.
+
+Added, and **emitted for both clients rather than only the one that needs it**:
+
+    --utterance-silence <seconds>   default 0.8, 0 disables
+    >>> UTTERANCE END               printed when the recogniser reports one
+
+Windows classifies turn-end from the transcript text and currently ignores the
+line. That is not a reason to make this Mac-only: the recogniser holds the
+waveform and the text classifier does not, so this is strictly better
+information than what Windows uses today. Making it conditional would be
+deciding by omission that Windows must never have it.
+
+The config parameter is **probed, not assumed**. `TranscriptionConfig` is a
+dataclass, so an unknown keyword is a `TypeError` at construction — passing it
+blind would take *both* clients down on any speechmatics build predating the
+parameter, a worse failure than the one being fixed. If unsupported, the engine
+says so on stdout and continues without it.
+
+### The pattern this is the third instance of
+
+`--sysfifo`, then the single-dash argument convention, now the turn-end signal.
+Each was a Mac requirement the shared engine lacked; each was found by running
+it, never by review; none was visible from the Windows side, because Windows
+has no FIFO, no single-dash convention and no acoustic turn detection.
+
+The Mac session named it exactly right: *"one engine for both apps" keeps
+resolving to "the Windows engine, plus whatever Mac discovers it is missing."*
+That is not anyone's fault — it is what happens when one platform's client is
+the reference and the other's requirements only become visible when they break.
+
+**The durable fix is a contract, not more care.** Before the shared engine is
+called shared again, it needs a list of the outputs each client depends on,
+checkable without a human noticing an absence: Windows needs `STATUS: ONLINE`,
+`MIC SIGNAL DETECTED`, `PARTIAL received`/`FINAL received`; Mac needs
+`UTTERANCE END` and `--sysfifo`. A missing line should fail a check, not a
+silent interview. Until that exists, expect a fourth.
 
 The first real cross-platform comparison mismatched: `6f9746fe6237` on Mac
 against `f283565ab5bd` on Windows, at the same clean commit. Not drift. The Mac

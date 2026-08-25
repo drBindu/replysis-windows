@@ -289,6 +289,27 @@ namespace InterviewCopilot
         /// candidate. When it is, the screenshot is the question, and answering
         /// from the transcript alone cannot work however good the model is.
         /// </summary>
+        /// <summary>
+        /// Anyone naming the screen with a determiner in front of it.
+        ///
+        /// The phrase list below could not do this. It carried "on my screen"
+        /// and not "in my screen", so "what is there in my screen now, you tell
+        /// me" was answered by a text model explaining it has no access to the
+        /// user's computer — the single worst answer the product can give,
+        /// because it says out loud that something was expected to be looking.
+        /// A list of exact phrases will always be one preposition short of what
+        /// somebody actually said.
+        ///
+        /// The determiner is what keeps this safe. Bare "screen" is interview
+        /// vocabulary — a phone screen, a technical screen, a recruiter screen
+        /// are all conversations, not displays — and matching it would send a
+        /// screenshot every time somebody described the hiring process. "My
+        /// screen", "the screen", "this screen" are not ambiguous in the same
+        /// way.
+        /// </summary>
+        private static readonly Regex NamesTheScreen =
+            new(@"\b(?:my|your|the|this|that)\s+screens?\b", RegexOptions.Compiled);
+
         public static bool RefersToScreen(string question)
         {
             if (string.IsNullOrWhiteSpace(question)) return false;
@@ -297,7 +318,7 @@ namespace InterviewCopilot
             foreach (string phrase in ScreenReferencePhrases)
                 if (q.Contains(phrase, StringComparison.Ordinal)) return true;
 
-            return false;
+            return NamesTheScreen.IsMatch(q);
         }
 
         public static bool IsGreeting(string q)

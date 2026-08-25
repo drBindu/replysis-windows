@@ -534,6 +534,11 @@ parser.add_argument("--sysfifo",    type=str,   default=None,
                          "screen-recording grant, so the app runs its own CoreAudio tap in-process "
                          "and writes the PCM here. Windows opens a WASAPI loopback directly and does "
                          "not need this. Ignored when not given.")
+parser.add_argument("--utterance-silence", type=float, default=0.8,
+    help="Seconds of silence after which the recogniser reports the end of an "
+         "utterance, printed as '>>> UTTERANCE END'. Set to 0 to disable. The "
+         "Mac client uses this to decide a turn is over; Windows currently "
+         "classifies turn-end from the transcript text and ignores the line.")
 parser.add_argument("--language",   type=str,   default="en",
                     help="Speechmatics transcription language code (en, hi, te, ta, es, fr, de, ...). "
                          "The engine is forced to hear ONLY this language; audio in any other language is "
@@ -1704,13 +1709,60 @@ async def main():
                 ws.add_event_handler("Error",
                                      lambda e: print(f">>> WS ERROR: {e}", flush=True))
 
+                # The recogniser saying a turn is over.
+                #
+                # The Mac client decides a turn has ended from this line and
+                # nothing else. Its absence did not look like a missing feature:
+                # the app listened, transcribed accurately, grew a transcript
+                # for minutes and never answered once - a perfectly healthy app
+                # waiting for a signal that was never going to arrive.
+                #
+                # It is emitted for both clients rather than for the one that
+                # needs it today. Windows classifies turn-end from the
+                # transcript text and ignores this line, but the recogniser
+                # holds the waveform and the classifier does not, so this is
+                # strictly better information than what Windows currently uses.
+                # Making it Mac-only would be deciding Windows must never have
+                # it, which is not a decision worth taking by omission.
+                ws.add_event_handler(
+                    "EndOfUtterance",
+                    lambda m: print(">>> UTTERANCE END", flush=True))
+
                 # output_locale only applies to English (en-US / en-GB / ...). For any
                 # other language Speechmatics rejects an English locale, so set it only
                 # for en and let the chosen language pass straight through otherwise.
                 _lang_extra = {"output_locale": "en-US"} if args.language == "en" else {}
+
+                # Asking Speechmatics to send EndOfUtterance at all. Without
+                # this the handler above is registered against an event the
+                # server never emits, which is exactly how the Mac client came
+                # to be waiting forever on a signal nobody had requested.
+                # Probed rather than assumed. TranscriptionConfig is a
+                # dataclass, so an unknown keyword is a TypeError at
+                # construction - and passing it blind would take BOTH clients
+                # down on any speechmatics build that predates the parameter,
+                # which is a worse failure than the one being fixed. If it is
+                # not supported, say so on stdout and carry on without it:
+                # Windows is unaffected, and Mac gets a visible reason instead
+                # of a silent wait.
+                _utt_extra = {}
+                if args.utterance_silence > 0:
+                    try:
+                        TranscriptionConfig(
+                            language="en",
+                            end_of_utterance_silence_trigger=args.utterance_silence)
+                        _utt_extra = {
+                            "end_of_utterance_silence_trigger": args.utterance_silence}
+                    except TypeError:
+                        print(">>> WARNING: this speechmatics build has no "
+                              "end_of_utterance_silence_trigger; UTTERANCE END "
+                              "will never be sent. Mac auto mode depends on it.",
+                              flush=True)
+
                 conf = TranscriptionConfig(
                     language        = args.language,
                     **_lang_extra,
+                    **_utt_extra,
                     operating_point = _speech_model,
                     max_delay       = args.max_delay,
                     max_delay_mode  = "flexible",
