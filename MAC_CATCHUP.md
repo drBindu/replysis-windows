@@ -529,7 +529,36 @@ something the old method could not tell you.
 A fallback that stamps something different-but-consistent silently reintroduces
 the bug. `build-engine.ps1` computes the blob id directly —
 `sha1("blob <length>\0" + LF-normalised content)` — and this was verified to
-reproduce `git hash-object` byte for byte, not assumed to.
+reproduce `git hash-object` byte for byte, not assumed to. Both platforms use
+this exact form.
+
+### VERIFIED 2026-08-25: both platforms read `9d74598b48be`
+
+    Windows  git hash-object      9d74598b48be
+    Mac      git hash-object      9d74598b48be
+    Mac      no-git fallback      9d74598b48be
+    frozen binary stamp           dd54215 src:9d74598b48be
+    app's recorded provenance     dd54215 src:9d74598b48be
+
+The first time this check has ever produced a meaningful answer. Item 7 is
+closed on evidence rather than on both sides asserting it separately.
+
+Note that Mac built at `dd54215` and Windows published from `028baa7`. The
+comparison still holds because the blob is identical at both commits
+(`git rev-parse <commit>:speechmatics_engine.py`) — and being able to show that
+without a second manual check is the new property already earning its place.
+
+**What actually changed here is worth stating plainly, in the Mac session's
+words: we replaced a rule people follow with a property that holds.** The old
+stamp could not distinguish a clean checkout from a half-saved file, so the
+"compare only at a shared commit, never a dirty tree" rule had to be remembered
+and applied by whoever was looking. Now a dirty tree produces a blob id that
+matches no commit, and the mismatch *is* the signal. Nobody has to think to
+check.
+
+That is the shape to aim for whenever one of these rules gets written down. A
+rule that depends on a future session remembering it is weaker than a mechanism
+that fails visibly on its own.
 
 ## Comparing engine hashes: only at a shared commit
 
