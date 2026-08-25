@@ -5,11 +5,15 @@ namespace CleanerTests;
 /// <summary>
 /// What a listening session actually costs.
 ///
-/// These do not assert that the current arithmetic is correct. They record
-/// what it is, in numbers a customer could check for themselves, because the
-/// gap between wall time and billed time turned out to be large and nobody
-/// had written it down. If the owner decides to change the rounding, these
-/// fail and the new figures go in - which is the point.
+/// Every figure here is now within one minute of the wall time, whichever way
+/// the user talks. That is the property worth protecting: the same interview
+/// costs the same whether it arrived as one long answer or thirty short ones.
+///
+/// It did not hold before. The turn was the billing unit and every turn's
+/// remainder was rounded up on top of the minutes already reported, so ten
+/// 40-second turns billed 50% over while thirty 25-second turns billed nothing
+/// at all. Both numbers are kept below as the "was" column, because a test
+/// that only records the right answer cannot show what it is guarding against.
 /// </summary>
 internal static class BillingTests
 {
@@ -24,8 +28,18 @@ internal static class BillingTests
             if (!ok) { failed++; Console.WriteLine($"        expected {want}"); }
         }
 
-        // A turn under the floor is free.
+        // A whole sitting under the floor is free. Under the old rule this was
+        // true of every turn under the floor, separately, forever.
         Case("one 20s turn", ListeningBilling.MinutesForSession(20), 0);
+
+        // The property that matters: the same wall time costs the same
+        // regardless of how it was broken up. One long answer, or twelve short
+        // ones, or a mixture - all six minutes, all billed six.
+        Case("6 min as one turn", ListeningBilling.MinutesForSession(360), 6);
+        Case("6 min as twelve 30s turns",
+             ListeningBilling.MinutesForSession(Enumerable.Repeat(30.0, 12).ToArray()), 6);
+        Case("6 min as a ragged mixture",
+             ListeningBilling.MinutesForSession(12, 95, 8, 140, 45, 27, 33), 6);
 
         // At the floor it becomes a whole minute. Deliberate: an interview of
         // brief exchanges should not be free.
@@ -38,8 +52,8 @@ internal static class BillingTests
         // And it compounds per turn, not per sitting. Both Manual and Auto stop
         // the meter at the end of every exchange.
         double[] tenTurns = { 40, 40, 40, 40, 40, 40, 40, 40, 40, 40 };
-        Case("ten 40s turns (6m 40s of listening)",
-             ListeningBilling.MinutesForSession(tenTurns), 10);
+        Case("ten 40s turns (6m 40s listened) - was 10, a 50% overcharge",
+             ListeningBilling.MinutesForSession(tenTurns), 7);
 
         // A long single turn is charged close to honestly - the damage is in
         // the number of turns, not the duration.
@@ -53,8 +67,8 @@ internal static class BillingTests
         // brief exchanges free". It prevents that at 30s and above. Below 30s
         // it produces exactly the outcome it was written to prevent.
         double[] thirtyShort = Enumerable.Repeat(25.0, 30).ToArray();
-        Case("thirty 25s turns (12.5 min of listening)",
-             ListeningBilling.MinutesForSession(thirtyShort), 0);
+        Case("thirty 25s turns (12.5 min listened) - was 0, entirely free",
+             ListeningBilling.MinutesForSession(thirtyShort), 13);
 
         // A tenth of a second either side of the floor is the difference
         // between free and a whole minute.

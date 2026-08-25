@@ -616,7 +616,40 @@ turn to a remainder that has already had its whole minutes taken out.
 Round to the nearest second and the floor's purpose disappears. Bill per
 session rather than per turn and the model changes. Every direction is a
 business decision wearing engineering clothes, which is why none of them was
-taken here.
+taken by either session.
+
+## DECIDED, 2026-08-25: the session is the billing unit
+
+The owner chose per-session billing. **Mac must match this exactly.**
+
+Turns bank their seconds and report only whole minutes, carrying the remainder
+forward into the next turn. Nothing is rounded up until the sitting ends. The
+30-second floor survives — a genuinely brief interview is still not free — but
+it is applied **once, at session end**, instead of once per turn.
+
+    MinutesOnTick(seconds, out carry)   floor, remainder carried  (turn end AND meter tick)
+    MinutesAtSessionEnd(seconds)        < 30s -> 0, else max(1, round)  (exit flush ONLY)
+
+Windows call sites: `StopListeningMeter` now uses `MinutesOnTick`;
+`FlushListeningMeterOnExit` is the only place `MinutesAtSessionEnd` is called.
+
+What changes for a customer:
+
+    ten 40s turns      6.7 min listened   was 10 min   now  7 min
+    thirty 25s turns  12.5 min listened   was  0 min   now 13 min
+    one 600s turn      10 min listened    was 10 min   now 10 min
+
+The property to protect, and the one worth porting a test for: **the same wall
+time costs the same however it was broken up.** Six minutes billed as six,
+whether it arrived as one answer, twelve 30-second turns, or a ragged mixture.
+That is asserted three ways in `BillingTests`.
+
+**Mac has a fourth gap to close first.** There is no exit flush on that side —
+the final partial turn before the app closes is never reported at all. Under
+per-turn billing that lost a fraction of a minute; under per-session billing
+the exit flush is the *only* place the remainder is billed, so without it every
+Mac session silently discards up to 59 seconds. Build the flush before porting
+the rounding, not after.
 
 **Release condition, not an intention:** whatever is decided must land on both
 platforms in the same release. A Mac user and a Windows user billed differently

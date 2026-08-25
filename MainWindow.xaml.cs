@@ -1524,15 +1524,23 @@ namespace InterviewCopilot
                 _unreportedListeningSeconds += (DateTime.UtcNow - _listeningSinceUtc).TotalSeconds;
                 _listeningSinceUtc = DateTime.MinValue;
             }
-            // Anything past half a minute still counts. Rounding every short
-            // turn down to nothing would make an interview of brief exchanges
-            // free, which is the opposite of what the meter is for.
-            if (_unreportedListeningSeconds >= 30)
-            {
-                int minutes = Math.Max(1, (int)Math.Round(_unreportedListeningSeconds / 60.0));
-                _unreportedListeningSeconds = 0;
-                _ = ReportListeningMinutesAsync(minutes);
-            }
+            // Whole minutes only, and the remainder carries into the next turn.
+            //
+            // This used to round the remainder up to a whole minute here, at
+            // the end of every turn, on top of the whole minutes the tick had
+            // already reported. Since both Manual and Auto stop the meter after
+            // every exchange, that landed once per turn rather than once per
+            // sitting, and what a user paid depended on how they happened to
+            // talk: ten 40-second turns billed 50% over, while thirty
+            // 25-second turns fell under the floor every time and billed
+            // nothing at all for twelve and a half minutes of listening.
+            //
+            // The session is the billing unit now. The floor still exists — a
+            // brief interview is not free — but it is applied once, on the way
+            // out, in FlushListeningMeterOnExit.
+            int minutes = ListeningBilling.MinutesOnTick(
+                _unreportedListeningSeconds, out _unreportedListeningSeconds);
+            if (minutes > 0) _ = ReportListeningMinutesAsync(minutes);
         }
 
         private void ListeningMeterTick()
@@ -1710,9 +1718,10 @@ namespace InterviewCopilot
                     _unreportedListeningSeconds += (DateTime.UtcNow - _listeningSinceUtc).TotalSeconds;
                     _listeningSinceUtc = DateTime.MinValue;
                 }
-                if (_unreportedListeningSeconds < 30) return;
+                // The one place the remainder is rounded up, once per sitting.
+                int minutes = ListeningBilling.MinutesAtSessionEnd(_unreportedListeningSeconds);
+                if (minutes <= 0) return;
 
-                int minutes = Math.Max(1, (int)Math.Round(_unreportedListeningSeconds / 60.0));
                 _unreportedListeningSeconds = 0;
                 ReportListeningMinutesAsync(minutes).Wait(TimeSpan.FromMilliseconds(1_500));
             }

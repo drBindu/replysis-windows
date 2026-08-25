@@ -45,9 +45,14 @@ namespace InterviewCopilot
         /// <summary>How long a remainder must be to be billed at all.</summary>
         internal const double ShortTurnFloorSeconds = 30;
 
-        /// <summary>Minutes reported when a turn ends. Anything at or above the
-        /// floor becomes at least one minute.</summary>
-        internal static int MinutesOnStop(double unreportedSeconds)
+        /// <summary>
+        /// Minutes billed once, when the whole sitting ends.
+        ///
+        /// The floor still applies, so a genuinely brief interview is not free.
+        /// It now applies ONCE to the session instead of once to every turn,
+        /// which is the whole of the fix.
+        /// </summary>
+        internal static int MinutesAtSessionEnd(double unreportedSeconds)
         {
             if (unreportedSeconds < ShortTurnFloorSeconds) return 0;
             return Math.Max(1, (int)Math.Round(unreportedSeconds / 60.0));
@@ -55,19 +60,30 @@ namespace InterviewCopilot
 
         /// <summary>
         /// What a whole sitting costs, given the length of each turn in it.
-        /// Exists so the compounding is a number rather than an argument.
+        ///
+        /// Turns bank their seconds and report only whole minutes, carrying the
+        /// remainder into the next turn. Nothing is rounded up until the
+        /// sitting is over, so the same wall time costs the same whether it
+        /// arrived as one long answer or thirty short ones.
+        ///
+        /// That was not true before. The turn was the billing unit, and the
+        /// remainder of every turn was rounded up to a whole minute on top of
+        /// the minutes already reported - so ten 40-second turns billed 50%
+        /// over, while thirty 25-second turns fell under the floor every time
+        /// and billed nothing at all for twelve and a half minutes.
         /// </summary>
         internal static int MinutesForSession(params double[] turnSeconds)
         {
             int total = 0;
+            double carry = 0;
+
             foreach (double turn in turnSeconds)
             {
-                double unreported = turn;
-                // The tick fires every minute of an ongoing turn.
-                total += MinutesOnTick(unreported, out double carry);
-                total += MinutesOnStop(carry);
+                carry += turn;
+                total += MinutesOnTick(carry, out carry);
             }
-            return total;
+
+            return total + MinutesAtSessionEnd(carry);
         }
     }
 }
