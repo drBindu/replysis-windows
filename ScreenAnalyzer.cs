@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -19,7 +19,7 @@ namespace InterviewCopilot
     /// <summary>
     /// Captures the screen and streams the AI vision analysis token-by-token.
     /// F8 = the monitor the user is working on. F9 = the primary monitor.
-    /// No extra NuGet packages — pure Win32 P/Invoke + WPF imaging.
+    /// No extra NuGet packages â€” pure Win32 P/Invoke + WPF imaging.
     /// </summary>
     public static class ScreenAnalyzer
     {
@@ -32,7 +32,7 @@ namespace InterviewCopilot
         private const int MaxResponseChars = 30_000;
         private const int MaxResumeContextChars = 6_000;
 
-        #region ── Win32 GDI (no System.Drawing required) ───────────────────────
+        #region â”€â”€ Win32 GDI (no System.Drawing required) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
         [DllImport("user32.dll")] private static extern int GetSystemMetrics(int nIndex);
@@ -109,7 +109,7 @@ namespace InterviewCopilot
         /// Two Sum, described the right approach, and never mentioned the words
         /// "Compile Error" printed in large red type across the right-hand half
         /// of the same screen. Two Sum is the most memorised problem there is, so
-        /// a recalled answer and a read one look the same — until the question is
+        /// a recalled answer and a read one look the same â€” until the question is
         /// about something the model has not seen before.
         ///
         /// The 768 cap was there to keep the upload short. The upload now happens
@@ -120,7 +120,7 @@ namespace InterviewCopilot
         private const int MaxShortEdgeFullScreen = 1_100;
         private const int MaxLongEdgeFullScreen  = 2_560;
 
-        // ── Last captured context (injected into follow-up voice questions) ───
+        // â”€â”€ Last captured context (injected into follow-up voice questions) â”€â”€â”€
         public static string LastScreenContext { get; private set; } = "";
 
         /// <summary>
@@ -146,7 +146,7 @@ namespace InterviewCopilot
         // room than a single window to stay readable.
         private static bool _capturingWholeScreen;
 
-        // ── The window the user was last actually working in ──────────────────
+        // â”€â”€ The window the user was last actually working in â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         //
         // Pressing the F8 hotkey leaves the other application in front, so the
         // window to read is simply whatever is in front. Clicking the Analyze
@@ -177,9 +177,9 @@ namespace InterviewCopilot
             }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(500));
         }
 
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         // CAPTURE
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         /// <summary>
         /// Captures the monitor the user is actually working on, meaning the one
@@ -205,7 +205,7 @@ namespace InterviewCopilot
         /// Targeting the window in front is right for a deliberate F8: the user
         /// is pointing at something. It is wrong for a mode left running, where
         /// the target then depends on which window happened to be clicked last
-        /// — and during a screen share that is very often the wrong one. Asked
+        /// â€” and during a screen share that is very often the wrong one. Asked
         /// about a coding problem after clicking back into a chat window, the
         /// app read the chat window and answered about that, and nothing on
         /// screen explained why.
@@ -493,13 +493,105 @@ namespace InterviewCopilot
             // it can even come out larger. So both are measured and the smaller
             // one is sent, which also means a failure here costs nothing.
             byte[] indexed = TryEncodeIndexedPng(bmp);
+            byte[] best = full;
             if (indexed != null && indexed.Length > 0 && indexed.Length < full.Length)
             {
                 DebugWindow.Log("SCREEN",
                     $"Capture {full.Length / 1024} KB -> {indexed.Length / 1024} KB after palette reduction");
-                return indexed;
+                best = indexed;
             }
-            return full;
+
+            return WithinUploadBudget(bmp, best);
+        }
+
+        /// <summary>
+        /// The most this may weigh before the request is refused.
+        ///
+        /// Everything above caps the picture's DIMENSIONS and nothing caps its
+        /// SIZE, so what is actually sent depends on how compressible the screen
+        /// happens to be. An editor is a few flat colours and comes out around
+        /// 240 KB; a photograph, a gradient, or a video call defeats the palette
+        /// reduction entirely and can be several times that.
+        ///
+        /// That matters because base64 adds a third, and the server refuses a
+        /// request body over 1 MB. Windows has never hit it â€” not by design, but
+        /// because ordinary screens compress well. The Mac client did hit it, and
+        /// spent a day on a 413 that names a size limit rather than the capture
+        /// decision that met it.
+        ///
+        /// 700 KB raw is about 930 KB encoded, which clears 1 MB with room for
+        /// the rest of the JSON. Same figure the Mac client uses, deliberately.
+        /// </summary>
+        private const int MaxUploadBytes = 700 * 1024;
+
+        /// <summary>
+        /// Brings an oversized capture under the budget, giving up resolution
+        /// only when there is nothing else left to give.
+        ///
+        /// Resolution goes last because Â§8 is the reason the capture is large in
+        /// the first place: shrink a screenshot and body text drops below what a
+        /// vision model can read, which is the exact failure the bigger capture
+        /// was added to fix. A smaller picture that arrives and cannot be read is
+        /// no better than a larger one that is rejected.
+        ///
+        /// So the palette is squeezed first â€” 128 colours, then 64 â€” which costs
+        /// shades that a code editor does not have, and leaves every glyph edge
+        /// exactly as sharp. Only if that is still too big does it scale down.
+        /// </summary>
+        private static byte[] WithinUploadBudget(BitmapSource bmp, byte[] encoded)
+        {
+            if (encoded.Length <= MaxUploadBytes) return encoded;
+
+            DebugWindow.Log("SCREEN",
+                $"Capture {encoded.Length / 1024} KB exceeds the {MaxUploadBytes / 1024} KB "
+                + "upload budget; reducing before the server refuses it.");
+
+            foreach (int colours in new[] { 128, 64 })
+            {
+                byte[]? fewer = TryEncodeIndexedPng(bmp, colours);
+                if (fewer != null && fewer.Length > 0 && fewer.Length <= MaxUploadBytes)
+                {
+                    DebugWindow.Log("SCREEN", $"  {colours} colours -> {fewer.Length / 1024} KB");
+                    return fewer;
+                }
+            }
+
+            // Nothing compressible left. Scale down until it fits, and say so â€”
+            // this is the point at which the answer may get worse, and a line in
+            // the log is the only warning anybody will ever get.
+            BitmapSource current = bmp;
+            for (int attempt = 0; attempt < 4; attempt++)
+            {
+                int w = Math.Max(1, (int)(current.PixelWidth * 0.8));
+                int h = Math.Max(1, (int)(current.PixelHeight * 0.8));
+
+                var visual = new DrawingVisual();
+                RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);
+                using (DrawingContext dc = visual.RenderOpen())
+                    dc.DrawImage(current, new Rect(0, 0, w, h));
+
+                var target = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+                target.Render(visual);
+                current = target;
+
+                byte[] smaller = EncodePng(current);
+                byte[]? paletted = TryEncodeIndexedPng(current);
+                if (paletted != null && paletted.Length > 0 && paletted.Length < smaller.Length)
+                    smaller = paletted;
+
+                if (smaller.Length <= MaxUploadBytes)
+                {
+                    DebugWindow.Log("SCREEN",
+                        $"  scaled to {w}x{h} -> {smaller.Length / 1024} KB. Text may be "
+                        + "harder for the model to read at this size.");
+                    return smaller;
+                }
+            }
+
+            DebugWindow.Log("SCREEN",
+                "  still over budget after four reductions; sending anyway. "
+                + "The server may refuse this request.");
+            return encoded;
         }
 
         /// <summary>
@@ -510,7 +602,7 @@ namespace InterviewCopilot
         /// that: a LeetCode page has a "2,332 Online" counter and a caret that
         /// change every second, so every capture differed, every one was kept
         /// as a new view, and every question went out carrying two pictures of
-        /// the same screen — twice the tokens for nothing, on an allowance of
+        /// the same screen â€” twice the tokens for nothing, on an allowance of
         /// eight thousand a minute.
         ///
         /// Sixteen by sixteen, sixteen levels of grey. A scroll moves whole
@@ -556,18 +648,18 @@ namespace InterviewCopilot
         /// pixels. Returns null if anything about it fails, so the caller simply
         /// keeps the full-colour version.
         /// </summary>
-        private static byte[]? TryEncodeIndexedPng(BitmapSource bmp)
+        private static byte[]? TryEncodeIndexedPng(BitmapSource bmp, int colours = 256)
         {
             try
             {
                 // The source has to be frozen first. A FormatConvertedBitmap
                 // built on a live RenderTargetBitmap cannot itself be frozen,
-                // and freezing it threw "This Freezable cannot be frozen" —
+                // and freezing it threw "This Freezable cannot be frozen" â€”
                 // which the catch below swallowed, so every capture quietly
                 // went out at full colour and the saving never happened once.
                 if (bmp.CanFreeze && !bmp.IsFrozen) bmp.Freeze();
 
-                var palette = new BitmapPalette(bmp, 256);
+                var palette = new BitmapPalette(bmp, colours);
                 var converted = new FormatConvertedBitmap(bmp, PixelFormats.Indexed8, palette, 0);
 
                 // Freeze when it will, carry on when it will not. This runs on a
@@ -585,15 +677,15 @@ namespace InterviewCopilot
             }
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // VISION PROVIDER — server picks the actual model; client only says which
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // VISION PROVIDER â€” server picks the actual model; client only says which
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         private static string GetProvider() => SettingsWindow.IsGroq() ? "groq" : "openai";
 
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         // PROMPT
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         /// <summary>
         /// The instructions sent with every screenshot.
@@ -726,14 +818,14 @@ namespace InterviewCopilot
                 sb.AppendLine("and it is the second one. Answer it.");
                 sb.AppendLine();
                 sb.AppendLine("This happened. Asked \"so you see my screen, right? Can you solve the");
-                sb.AppendLine("problem?\", the reply was a description of the screen — the panels,");
-                sb.AppendLine("the compile error, the editor — and no solution at all. Everything in");
+                sb.AppendLine("problem?\", the reply was a description of the screen â€” the panels,");
+                sb.AppendLine("the compile error, the editor â€” and no solution at all. Everything in");
                 sb.AppendLine("it was accurate and it answered nothing, in front of somebody waiting");
                 sb.AppendLine("to hear how the candidate would solve it.");
                 sb.AppendLine();
                 sb.AppendLine("An unclear question is asked about, not answered around. When the");
-                sb.AppendLine("question arrives half-transcribed — \"do you know coding or coding");
-                sb.AppendLine("language? You\" — ask for it again in one short line and stop:");
+                sb.AppendLine("question arrives half-transcribed â€” \"do you know coding or coding");
+                sb.AppendLine("language? You\" â€” ask for it again in one short line and stop:");
                 sb.AppendLine("\"Sorry, could you say that again?\" Do not fill the gap with an");
                 sb.AppendLine("inventory of the screen. Listing the problem number, the language");
                 sb.AppendLine("selected and which panel it is in reads as stalling, and it tells");
@@ -777,9 +869,9 @@ namespace InterviewCopilot
                 sb.AppendLine("  what it does rather than calling it \"an application\".");
                 sb.AppendLine("- Say when the question is cut off, and ask for the rest.");
                 sb.AppendLine("  A coding problem often runs past the bottom of the screen. If the");
-                sb.AppendLine("  statement, the examples or the constraints are clearly incomplete —");
+                sb.AppendLine("  statement, the examples or the constraints are clearly incomplete â€”");
                 sb.AppendLine("  text ends mid-sentence, a section is missing, a scrollbar shows more");
-                sb.AppendLine("  below — do not answer from half of it. Say so in the user's own");
+                sb.AppendLine("  below â€” do not answer from half of it. Say so in the user's own");
                 sb.AppendLine("  voice, as a line they can speak out loud while they scroll:");
                 sb.AppendLine("    \"Let me scroll down and read the constraints before I answer.\"");
                 sb.AppendLine("    \"Give me a second, I want to see the rest of the examples.\"");
@@ -821,13 +913,13 @@ namespace InterviewCopilot
                   A confident wrong answer can cost them the job.
                 - Say when the problem itself is cut off, and stop rather than guess
                   the rest. A coding problem statement runs past the bottom of the
-                  screen more often than it fits — a scrollbar showing more below,
+                  screen more often than it fits â€” a scrollbar showing more below,
                   text ending mid-sentence, a constraints or examples section that
                   looks started but not finished. When that is what you see, do not
                   write a final SOLUTION or FIX from a partial statement: say what
-                  is missing —
+                  is missing â€”
                   NEED: the constraints and the second example.
-                  — and nothing else. Guessing at unseen constraints is how a
+                  â€” and nothing else. Guessing at unseen constraints is how a
                   solution that looks right fails on a case nobody could see.
                 - Never invent their experience. No employers, projects, metrics, or
                   numbers about them that are not on the screen. Where their own detail
@@ -912,7 +1004,7 @@ namespace InterviewCopilot
                 on its own line before it, ``` on its own line after, so the app can
                 show it in a monospace panel instead of flattening it into prose.
                 Bullets, where you need them, use the
-                • character.
+                â€¢ character.
 
                 Keep the whole thing as short as it can be and still answer. Three
                 clean lines beat three decorated sections.
@@ -931,9 +1023,9 @@ namespace InterviewCopilot
             return sb.ToString();
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // POST-PROCESSOR  — runs once on the completed response before display
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // POST-PROCESSOR  â€” runs once on the completed response before display
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         /// <summary>
         /// Normalises the AI response so section headers are consistently spaced,
@@ -971,12 +1063,12 @@ namespace InterviewCopilot
                 @"ANSWER|DETAIL|NEED|SCREEN NOTES)[ \t]*:?[ \t]*\r?$).*\n?)*",
                 RegexOptions.Multiline | RegexOptions.Compiled);
 
-        // ── Emphasis, and why these look the way they do ──────────────────────
+        // â”€â”€ Emphasis, and why these look the way they do â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         //
         // Every one of these has to hug non-space on the inside, which is what
         // markdown itself requires: "** bold **" is not bold, and "w * h" is
         // multiplication. The terminal classes exclude the delimiter as well as
-        // whitespace, because \S matches '*' — that single detail is why an
+        // whitespace, because \S matches '*' â€” that single detail is why an
         // earlier attempt at this still turned "**kwargs" into "*kwargs".
         // Underscores additionally need a word boundary, or snake_case loses
         // its underscores.
@@ -1005,7 +1097,7 @@ namespace InterviewCopilot
         /// "__strong__" comes out as "strong_".
         ///
         /// The dunder list exists because no shape test can separate "__init__"
-        /// from "__strong__" — they are the same shape. A list can, and it
+        /// from "__strong__" â€” they are the same shape. A list can, and it
         /// cannot misfire, because "__strong__" is not on it. It does not cover
         /// somebody's own "__custom__" written in prose outside a code section,
         /// which is rare enough to accept.
@@ -1048,7 +1140,7 @@ namespace InterviewCopilot
         /// code.
         ///
         /// Markdown cleanup and code cannot share a pass. The characters that
-        /// mark emphasis in prose — <c>*</c> and <c>_</c> — are ordinary syntax
+        /// mark emphasis in prose â€” <c>*</c> and <c>_</c> â€” are ordinary syntax
         /// in most languages, so a rule written for one silently rewrites the
         /// other. Two separate cleanup routines in this app both did exactly
         /// that: an italic rule matched from one asterisk to the next and
@@ -1059,7 +1151,7 @@ namespace InterviewCopilot
         /// identifiers.
         ///
         /// Both routines call this now, so the protection cannot be present in
-        /// one path and missing in the other — which is how it went unnoticed:
+        /// one path and missing in the other â€” which is how it went unnoticed:
         /// the fix belonged in one place and was written in none.
         /// </summary>
         public static string TransformProseOnly(string text, Func<string, string> transform)
@@ -1096,7 +1188,7 @@ namespace InterviewCopilot
         {
             if (string.IsNullOrWhiteSpace(raw)) return raw;
 
-            // ── Code is taken out of the way before anything is rewritten ──────
+            // â”€â”€ Code is taken out of the way before anything is rewritten â”€â”€â”€â”€â”€â”€
             //
             // The markdown cleanup below cannot run over code, and this is not a
             // theoretical worry: the italic rule, \*([^*\n]+)\*, matched from the
@@ -1109,7 +1201,7 @@ namespace InterviewCopilot
             //
             //     ListNode insertionSortList(ListNode head) {
             //
-            // which does not compile — the exact error a user hit over and over,
+            // which does not compile â€” the exact error a user hit over and over,
             // pasting it into LeetCode and getting "invalid argument type
             // 'ListNode' to unary expression" every time. The same rule stripped
             // "ListNode *next;" to "ListNode next;" inside the comment block.
@@ -1133,8 +1225,8 @@ namespace InterviewCopilot
 
                 // Rewrite AI-tell long dashes into plain human punctuation. The heavy
                 // rule character used for section headers is different and untouched.
-                prose = Regex.Replace(prose, @"(\S)[ \t]*[—–][ \t]+", "$1, ");
-                prose = prose.Replace("—", "-").Replace("–", "-");
+                prose = Regex.Replace(prose, @"(\S)[ \t]*[â€”â€“][ \t]+", "$1, ");
+                prose = prose.Replace("â€”", "-").Replace("â€“", "-");
                 return prose;
             });
 
@@ -1154,11 +1246,11 @@ namespace InterviewCopilot
             if (notesAt >= 0) raw = raw[..notesAt];
 
             // Section titles are bare words now. They used to be wrapped in heavy
-            // rules, ━━━ CAUSE ━━━, which looked like decoration around an answer
+            // rules, â”â”â” CAUSE â”â”â”, which looked like decoration around an answer
             // rather than an answer, and turned a three line reply into something
             // that had to be visually decoded before it could be read. Anything
             // still arriving in the old shape is unwrapped here.
-            raw = Regex.Replace(raw, @"(?m)^[ \t]*[━─—=-]{2,}[ \t]*(.*?)[ \t]*[━─—=-]{2,}[ \t]*$", "$1");
+            raw = Regex.Replace(raw, @"(?m)^[ \t]*[â”â”€â€”=-]{2,}[ \t]*(.*?)[ \t]*[â”â”€â€”=-]{2,}[ \t]*$", "$1");
 
             // 2. A title sits directly on top of what it describes, with a blank
             //    line separating it from the section before. Nothing between a
@@ -1224,9 +1316,9 @@ namespace InterviewCopilot
             return hasLetter;
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // STREAMING ANALYSIS — primary API (tokens yielded as they arrive)
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // STREAMING ANALYSIS â€” primary API (tokens yielded as they arrive)
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         /// <summary>
         /// Sends the screenshot to the vision AI and streams tokens as they arrive.
@@ -1329,14 +1421,14 @@ namespace InterviewCopilot
                       provider
                   });
 
-            // ── Send request via helper (never throws) ────────────────────────
+            // â”€â”€ Send request via helper (never throws) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             var (res, sendError) = await SendVisionRequestSafeAsync(payloadJson, ct);
             if (res == null)
             {
                 throw new InvalidOperationException(sendError);
             }
 
-            // ── Handle non-200 via helper (never throws) ──────────────────────
+            // â”€â”€ Handle non-200 via helper (never throws) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if (!res.IsSuccessStatusCode)
             {
                 string errMsg = DescribeVisionError(res.StatusCode);
@@ -1344,7 +1436,7 @@ namespace InterviewCopilot
                 throw new InvalidOperationException(errMsg);
             }
 
-            // ── Stream SSE tokens ─────────────────────────────────────────────
+            // â”€â”€ Stream SSE tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             // yield inside try-finally is legal; only try-catch is forbidden.
             var accumulated = new StringBuilder();
             int responseLength = 0;
@@ -1397,9 +1489,9 @@ namespace InterviewCopilot
 
         /// <summary>
         /// Sends the screenshot and prompt to the secured backend (server-side Groq/OpenAI
-        /// keys, credits deducted server-side) — mirrors the /ask flow, no personal API key
+        /// keys, credits deducted server-side) â€” mirrors the /ask flow, no personal API key
         /// ever required or accepted from the user. Catches all exceptions and returns null
-        /// on failure. Returns a (response, errorMessage) tuple — error is "" on success.
+        /// on failure. Returns a (response, errorMessage) tuple â€” error is "" on success.
         /// </summary>
         private static async Task<(HttpResponseMessage? Response, string Error)>
             SendVisionRequestSafeAsync(string payloadJson, CancellationToken ct)
@@ -1467,9 +1559,9 @@ namespace InterviewCopilot
             catch (JsonException) { return ""; }
         }
 
-        // ═════════════════════════════════════════════════════════════════════
-        // NON-STREAMING WRAPPER (backward compat — collects all tokens)
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // NON-STREAMING WRAPPER (backward compat â€” collects all tokens)
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         public static async Task<string> AnalyzeAsync(byte[] imageBytes, string? resumeContext = null)
         {
@@ -1479,9 +1571,9 @@ namespace InterviewCopilot
             return sb.ToString();
         }
 
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         // HELPERS
-        // ═════════════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         private static string CleanContent(string content)
         {

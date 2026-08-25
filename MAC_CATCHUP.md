@@ -558,6 +558,45 @@ session has had no opportunity to say whether it applies, already exists, or is
 irrelevant on that platform. Treat it as a list to triage rather than a list of
 gaps.
 
+## The screen upload limit is nginx's default, not our policy
+
+Mac's screen answers were returning 413. The cap that fires is **not** the
+2 MB per-image rule this document described, and not anything in the
+application:
+
+    application.properties  multipart 10MB      not this (not multipart)
+    JacksonSecurityConfig   maxStringLength 2M  not this (chars, and 2M)
+    MAX_STASHED_IMAGE_CHARS 2_000_000           never consulted
+    nginx client_max_body_size    UNSET  ->  DEFAULT 1 MB   <- this one
+
+`client_max_body_size` appears nowhere under `/etc/nginx/`, so nginx applies
+its 1 MB default and refuses the request before any application limit is
+reached. **The 2 MB figure describes a limit that cannot be met.** A 820 KB
+PNG becomes ~1.09 MB as base64 and is rejected at the proxy.
+
+**Windows is PNG too, not JPEG** — `PngBitmapEncoder`, deliberately, because
+JPEG rings around glyph edges and that is the difference between a model
+reading `l` and reading `1`. So the guess that Windows was safe by encoding
+format is wrong. Windows is safe because ordinary screens compress well: a real
+capture measures 239 KB, about 319 KB encoded.
+
+**But nothing capped the size.** The caps were on dimensions
+(`MaxShortEdgeFullScreen` 1100, `MaxLongEdgeFullScreen` 2560) and the palette
+reduction is best-effort. A photograph, a gradient, or a video call defeats the
+palette entirely, and at that resolution could clear 1 MB encoded. Windows had
+never hit it by luck of typical content, exactly as the Mac session suspected.
+
+`WithinUploadBudget` now enforces **700 KB raw / ~930 KB encoded**, the same
+figure Mac chose. Order matters and follows §8: squeeze the palette first
+(128 colours, then 64), because a code editor has no shades to lose and every
+glyph edge stays sharp — and only scale down as a last resort, logging when it
+happens, because shrinking is what drops body text below what the model reads,
+which is the failure the larger capture existed to fix.
+
+**Open, and the owner's call:** whether to raise `client_max_body_size` to match
+the documented 2 MB policy, or to correct the document down to 1 MB. Until one
+of those happens both clients are budgeting against a number nobody chose.
+
 ## The engine reports end of utterance
 
 **Mac auto mode decides a turn is over from `>>> UTTERANCE END` and nothing
