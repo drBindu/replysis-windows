@@ -1737,27 +1737,46 @@ async def main():
                 # this the handler above is registered against an event the
                 # server never emits, which is exactly how the Mac client came
                 # to be waiting forever on a signal nobody had requested.
-                # Probed rather than assumed. TranscriptionConfig is a
-                # dataclass, so an unknown keyword is a TypeError at
-                # construction - and passing it blind would take BOTH clients
-                # down on any speechmatics build that predates the parameter,
-                # which is a worse failure than the one being fixed. If it is
-                # not supported, say so on stdout and carry on without it:
-                # Windows is unaffected, and Mac gets a visible reason instead
-                # of a silent wait.
+                # The trigger is NESTED, and the probe checks the wire.
+                #
+                # end_of_utterance_silence_trigger is not a field on
+                # TranscriptionConfig. Only conversation_config is. Passed flat
+                # the dataclass accepts the keyword without complaint and then
+                # drops it before serialisation, so the setting never reaches
+                # Speechmatics, the server never sends EndOfUtterance, and the
+                # handler above waits on an event nobody requested.
+                #
+                # The previous attempt here guarded that with a try/except
+                # around the constructor, which was worse than no guard at all.
+                # It tested "does the constructor accept this keyword" - and the
+                # constructor accepts anything. A loud TypeError on an old SDK
+                # would at least have been visible; a silent no-op on a current
+                # one produced an app that transcribed perfectly and never
+                # answered, with nothing anywhere saying why.
+                #
+                # So the probe asks the only question that matters: does the
+                # value survive into the serialised config that goes on the
+                # wire? Anything short of that is a guess about a library.
                 _utt_extra = {}
                 if args.utterance_silence > 0:
+                    _candidate = {"conversation_config": {
+                        "end_of_utterance_silence_trigger": args.utterance_silence}}
                     try:
-                        TranscriptionConfig(
-                            language="en",
-                            end_of_utterance_silence_trigger=args.utterance_silence)
-                        _utt_extra = {
-                            "end_of_utterance_silence_trigger": args.utterance_silence}
-                    except TypeError:
-                        print(">>> WARNING: this speechmatics build has no "
-                              "end_of_utterance_silence_trigger; UTTERANCE END "
-                              "will never be sent. Mac auto mode depends on it.",
-                              flush=True)
+                        _probe = TranscriptionConfig(language="en", **_candidate)
+                        _wire = json.dumps(_probe.asdict()
+                                           if hasattr(_probe, "asdict")
+                                           else _probe.__dict__, default=str)
+                        if "end_of_utterance_silence_trigger" in _wire:
+                            _utt_extra = _candidate
+                        else:
+                            print(">>> WARNING: end_of_utterance_silence_trigger did "
+                                  "not survive into the transcription config. "
+                                  "UTTERANCE END will never be sent, and any client "
+                                  "waiting on it will transcribe without ever "
+                                  "answering.", flush=True)
+                    except Exception as e:
+                        print(f">>> WARNING: could not set the utterance-end trigger "
+                              f"({e}). UTTERANCE END will never be sent.", flush=True)
 
                 conf = TranscriptionConfig(
                     language        = args.language,
