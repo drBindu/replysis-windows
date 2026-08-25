@@ -664,11 +664,39 @@ the response — there is no window left to show it in. The async version is
 unchanged and still resumes on the UI thread on purpose, because it updates
 the remaining-minutes display.
 
-**Residual gap, unfixed on both platforms and named rather than papered over:**
+### DECIDED, 2026-08-25: a force-quit loses the banked minute. Leave it.
+
 Task Manager on Windows and `kill -9` on macOS skip the handler entirely, so a
-force-quit or crash still loses the banked remainder. Persisting the bank to
-disk would close it, but at-least-once delivery risks double billing, which is
-the worse direction for a paid product. Not doing it without a decision.
+force-quit or crash loses the remainder banked since the last whole minute — up
+to 59 seconds.
+
+**Do not "fix" this.** It was considered and declined, and the argument is the
+point of this entry.
+
+Closing it means persisting the bank to disk and sending it at next launch,
+which buys at-least-once delivery. At-least-once means that when the app dies
+between a successful send and the record of that success, the customer is
+**billed twice for the same minute**.
+
+The two failures are not symmetric:
+
+- A lost minute is invisible, costs pennies, and is the company absorbing it.
+- A double charge is visible to the customer, provable with a stopwatch, and
+  in a contract with an audit or accuracy clause it is a finding rather than a
+  rounding error.
+
+Metered billing systems resolve this the same way everywhere: when uncertain,
+under-bill. Dropping an event is a cost you absorb; duplicating one is a
+dispute.
+
+There is also a timing argument specific to this week. Billing was just made
+accurate in both directions; adding a new mechanism that can overcharge, days
+after removing the old one, is a bad trade.
+
+**Revisit only if** crash rates ever get high enough that the lost minutes are
+material — at which point the fix is the crash rate, not the billing.
+
+Both platforms carry this gap deliberately and identically.
 
 **Mac has a fourth gap to close first.** There is no exit flush on that side —
 the final partial turn before the app closes is never reported at all. Under
