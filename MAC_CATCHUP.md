@@ -644,6 +644,32 @@ time costs the same however it was broken up.** Six minutes billed as six,
 whether it arrived as one answer, twelve 30-second turns, or a ragged mixture.
 That is asserted three ways in `BillingTests`.
 
+### The exit report cannot be a blocked async call
+
+The Mac session found its flush computing the right number and sending
+nothing: an async task started in `applicationWillTerminate` is killed with
+the process before it reaches the wire. Windows had the same hole by a
+different mechanism, and it was there to be found by checking rather than by
+assuming the platforms differ.
+
+`FlushListeningMeterOnExit` ran `ReportListeningMinutesAsync(...).Wait(1500)`
+on the closing UI thread. That method awaits without `ConfigureAwait(false)`,
+so its continuation needs the UI thread to resume — and the `.Wait()` was
+holding it. Textbook WPF deadlock: the continuation could never run, the wait
+always burned its full timeout, and nothing was ever confirmed.
+
+Now `ReportListeningMinutesOnExit` does a genuinely synchronous
+`HttpClient.Send` bounded at 3 seconds, touches no UI, and reads nothing from
+the response — there is no window left to show it in. The async version is
+unchanged and still resumes on the UI thread on purpose, because it updates
+the remaining-minutes display.
+
+**Residual gap, unfixed on both platforms and named rather than papered over:**
+Task Manager on Windows and `kill -9` on macOS skip the handler entirely, so a
+force-quit or crash still loses the banked remainder. Persisting the bank to
+disk would close it, but at-least-once delivery risks double billing, which is
+the worse direction for a paid product. Not doing it without a decision.
+
 **Mac has a fourth gap to close first.** There is no exit flush on that side —
 the final partial turn before the app closes is never reported at all. Under
 per-turn billing that lost a fraction of a minute; under per-session billing

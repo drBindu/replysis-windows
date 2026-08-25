@@ -1723,9 +1723,56 @@ namespace InterviewCopilot
                 if (minutes <= 0) return;
 
                 _unreportedListeningSeconds = 0;
-                ReportListeningMinutesAsync(minutes).Wait(TimeSpan.FromMilliseconds(1_500));
+
+                // Sent synchronously, and NOT by blocking on the async version.
+                //
+                // This runs on the closing UI thread. ReportListeningMinutesAsync
+                // awaits without ConfigureAwait(false), so its continuation needs
+                // the UI thread to resume - and .Wait() here is holding it. The
+                // continuation could never run, the wait always burned its full
+                // timeout, and the result was never read. The Mac session found
+                // the same shape on its side: a flush that existed, ran,
+                // computed the right number, and sent nothing.
+                //
+                // Bounded, because a lost minute is better than an app that will
+                // not close.
+                ReportListeningMinutesOnExit(minutes, TimeSpan.FromSeconds(3));
             }
             catch { }
+        }
+
+        /// <summary>
+        /// The last report, sent on the way out, on the thread that is closing.
+        ///
+        /// Separate from the async version rather than sharing it, because the
+        /// two have opposite requirements. The async one resumes on the UI
+        /// thread on purpose: it updates the remaining-minutes display and the
+        /// low-allowance warning. This one must never touch the UI and must
+        /// never await back onto a thread it is itself blocking - it exists to
+        /// get one number onto the wire before the process goes away.
+        ///
+        /// Nothing is read from the response. There is no longer a window to
+        /// show it in.
+        /// </summary>
+        private void ReportListeningMinutesOnExit(int minutes, TimeSpan timeout)
+        {
+            if (minutes <= 0) return;
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Post,
+                    $"{BackendUrl}/api/v1/usage/listening");
+                if (!string.IsNullOrEmpty(UserSession.IdToken))
+                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
+                req.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
+                req.Content = new StringContent("{\"minutes\":" + minutes + "}",
+                    System.Text.Encoding.UTF8, "application/json");
+
+                using var cts = new System.Threading.CancellationTokenSource(timeout);
+                using var res = _creditsClient.Send(req, cts.Token);
+                DebugWindow.Log("METER",
+                    $"Final report on exit: {minutes} min, HTTP {(int)res.StatusCode}");
+            }
+            catch (Exception ex) { DebugWindow.Log("METER", $"Final report failed: {ex.Message}"); }
         }
 
         private async Task ReportListeningMinutesAsync(int minutes)
