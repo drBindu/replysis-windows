@@ -500,6 +500,64 @@ answer rather than a failure.
 log answers "which engine was this user running?" instead of inviting a guess.
 Verified end to end in the frozen binary, not just from source.
 
+## The window work, which this file should have carried and did not
+
+Written late, and the omission is the point. Every entry above is about the
+answer pipeline, the engine, or billing, because those are what the two
+sessions were talking about. A fortnight of interface work landed on Windows
+and never reached this document at all — no mention of Past Sessions, the
+resume filename, the debug window, or the compact bar. The owner noticed, not
+either session.
+
+The rule in this repo is that a Windows change goes in here in the same commit.
+It held for everything that came up in conversation and failed for everything
+that did not, which is the more dangerous half: nobody asks about the part
+nobody is discussing.
+
+**Past Sessions is a panel, not a window.** `SessionsWindow` is deleted.
+`SessionsPanel` is a `UserControl` hosted at `Grid.Row="1"` inside
+`NormalModeGrid` (`MainWindow.xaml:1237`), and the interview content collapses
+behind it. It opened as a separate 1040×640 window — larger than the 980×600
+main window, with no opacity of its own, so it broke the illusion of one
+surface and was plainly a second application. Esc closes it, handled in
+`Window_PreviewKeyDown` only while the panel is visible. The close control says
+**"Back to interview"** rather than ✕, because ✕ on a panel inside a window
+reads as "quit", and someone mid-interview should not have to wonder.
+
+**One opacity for every window.** `Glass.cs` is the single source:
+`Glass.BackdropFor(storedOpacity)` derives a backdrop brush, `Glass.Apply` sets
+it on a window's root `Border`, and `Glass.ApplyToOpenWindows` re-applies to
+everything open when the setting changes. Each window used to decide its own,
+so changing the main window's opacity left the others opaque and obviously
+separate. **No window may be larger than the main window** — that was a
+specific instruction and it is not merely aesthetic: a dialog larger than the
+app it belongs to is the clearest possible tell that something extra is
+running.
+
+**The resume shows its own filename.** `LoadSavedResume(content, name)` carries
+the name through rather than reconstructing a label; the list previously showed
+"Resume · <date>" for every entry, so three resumes were indistinguishable.
+Files are read with `FileShare.ReadWrite | FileShare.Delete`, because uploading
+a resume that was open in Word failed with a file-lock error the user could do
+nothing about.
+
+**The debug window was a stealth leak.** It showed live transcripts, was
+`Topmost`, and was not excluded from capture — so on a shared screen it was the
+one window that gave everything away. It now calls
+`WindowStealth.SetStealthMode(this, SettingsWindow.GetStealthMode())` on load
+(`DebugWindow.cs:51`) and follows the same rule as everything else. **Stealth
+means every window, with no exceptions** — a single visible window is the same
+failure as none of them being hidden.
+
+**The compact bar reads the screen.** Its button was still the old "Watching"
+toggle after that moved to Settings. It now calls `HandleScreenAnalysisAsync()`
+— the same path as F8 — so the compact bar can do the thing the full bar can.
+
+Mac parity here is **unassessed**. None of this was ever reported, so the Mac
+session has had no opportunity to say whether it applies, already exists, or is
+irrelevant on that platform. Treat it as a list to triage rather than a list of
+gaps.
+
 ## The engine reports end of utterance
 
 **Mac auto mode decides a turn is over from `>>> UTTERANCE END` and nothing
