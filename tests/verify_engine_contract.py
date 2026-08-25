@@ -102,7 +102,37 @@ for m in re.finditer(r'line\.(?:Contains|StartsWith)\(\s*"([^"]{4,})"', client):
 NOT_OURS = {"ModuleNotFoundError", "ImportError"}
 listened -= NOT_OURS
 
-print("1. Lines the app matches on must exist in the engine")
+# ── 0. The check must refuse to pass while checking nothing ──────────────────
+#
+# The Mac session's contract script printed ALL PASS after a comment pushed a
+# statement out of reach of its extraction regex - the count fell from 2 to 0
+# and the result stayed green. That is the same shape as the utterance-end
+# probe: a mechanism whose output is independent of what it is supposed to be
+# examining, reporting success for having examined nothing.
+#
+# This file extracts by regex too, so it has the same exposure. If either
+# pattern stops matching - the file is renamed, the C# is reformatted, the call
+# is wrapped in a helper - the sets go empty and the sections below iterate
+# over nothing while sections 2 and 4 still pass.
+#
+# So the floors are asserted first. They are deliberately loose: the point is
+# not to pin the exact count, it is that "found nothing" can never be reported
+# as "nothing wrong".
+MIN_LISTENED, MIN_ARGS = 6, 3
+
+print("0. This check can actually see the code it is checking")
+check(len(listened) >= MIN_LISTENED,
+      "found %d matched lines (expected at least %d)" % (len(listened), MIN_LISTENED),
+      "extraction is broken; everything below would pass while testing nothing")
+check(len(passed_args_probe := set(re.findall(r'"\s*--([a-z-]+)\s', client))) >= MIN_ARGS,
+      "found %d passed arguments (expected at least %d)" % (len(passed_args_probe), MIN_ARGS),
+      "extraction is broken; the argument checks below are vacuous")
+
+if failures:
+    print("\nRefusing to continue: this script cannot see what it is checking.")
+    sys.exit(1)
+
+print("\n1. Lines the app matches on must exist in the engine")
 print("   (%d found in MainWindow.xaml.cs)\n" % len(listened))
 
 for phrase in sorted(listened):
@@ -131,6 +161,38 @@ CONTRACTED = {
 print("\n2. Contracted lines, including ones this platform does not read")
 for phrase, why in CONTRACTED.items():
     check(engine_says(phrase), "%-22s %s" % (phrase, why))
+
+# ── 2b. Formats the app parses, as opposed to strings it matches ─────────────
+#
+# The app used to match the literal "(0 chars)". Replacing that with a parse of
+# the number is more robust at runtime - and it quietly removed the coupling
+# from this file's view, because extraction only sees line.Contains(...). The
+# check would have kept passing while the thing it was guarding stopped being
+# guarded.
+#
+# That is the third variation of the same mistake in two days, so the format is
+# asserted explicitly: the regex is lifted out of the C# and matched against a
+# line built the way the engine builds it.
+print("\n2b. Formats the app parses out of engine lines")
+
+m = re.search(r'EngineCharCount\s*=\s*\n?\s*new\(@"([^"]+)"', client)
+check(bool(m), "the app's char-count pattern is findable",
+      "renamed or reformatted - this check can no longer see it")
+
+if m:
+    pattern = re.compile(m.group(1))
+    # Exactly what print(f">>> FINAL received ({len(display)} chars)") emits.
+    for sample, want in ((">>> FINAL received (0 chars)", "0"),
+                         (">>> PARTIAL received (37 chars)", "37"),
+                         (">>> FINAL received (1 chars)", "1")):
+        got = pattern.search(sample)
+        check(bool(got) and got.group(1) == want, "parses %r" % sample,
+              "the engine emits this and the app cannot read the count")
+
+    # And the engine must still build lines of that shape.
+    check("received (" in engine and "chars)" in engine,
+          "the engine still emits 'received (N chars)'",
+          "the format moved; the deafness detector stops telling empty from real")
 
 # ── 3. Every argument the client passes must be accepted ─────────────────────
 

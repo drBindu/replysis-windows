@@ -1605,6 +1605,14 @@ namespace InterviewCopilot
         /// speech, so anything under a few seconds is ordinary; twelve seconds
         /// of continuous speech returning nothing is not.
         /// </summary>
+        /// <summary>
+        /// The character count in "PARTIAL received (12 chars)". Only
+        /// "received (", the digits, and " char" are load-bearing; the rest of
+        /// the sentence can be reworded without breaking the detector.
+        /// </summary>
+        private static readonly Regex EngineCharCount =
+            new(@"received \((\d+) chars?\)", RegexOptions.Compiled);
+
         private DateTime _lastSpeechDetectedUtc = DateTime.MinValue;
         private DateTime _lastWordsReceivedUtc = DateTime.MinValue;
         private DateTime _lastDeafnessWarningUtc = DateTime.MinValue;
@@ -4241,8 +4249,23 @@ namespace InterviewCopilot
                                 _lastSpeechDetectedUtc = DateTime.UtcNow;
                             else if (line.Contains("PARTIAL received") || line.Contains("FINAL received"))
                             {
-                                if (!line.Contains("(0 chars)"))
-                                    _lastWordsReceivedUtc = DateTime.UtcNow;
+                                // Read the count out of the line rather than
+                                // matching the phrasing of the empty case.
+                                //
+                                // This tested line.Contains("(0 chars)"), a
+                                // literal that appears nowhere in the engine -
+                                // it is built by
+                                // print(f">>> FINAL received ({len(display)} chars)").
+                                // So half the deafness detector was coupled to
+                                // the wording of a log line: reword it and the
+                                // app silently stops telling an empty result
+                                // from a real one, with nothing in C# changing.
+                                // The Mac session had the identical coupling.
+                                var count = EngineCharCount.Match(line);
+                                bool empty = count.Success
+                                             && int.TryParse(count.Groups[1].Value, out int n)
+                                             && n == 0;
+                                if (!empty) _lastWordsReceivedUtc = DateTime.UtcNow;
                             }
 
                             if (!_engineOnline && line.Contains("STATUS: ONLINE"))
