@@ -40,6 +40,20 @@ internal static class BillingTests
              ListeningBilling.MinutesForSession(Enumerable.Repeat(30.0, 12).ToArray()), 6);
         Case("6 min as a ragged mixture",
              ListeningBilling.MinutesForSession(12, 95, 8, 140, 45, 27, 33), 6);
+        Case("6 min as six 60s turns",
+             ListeningBilling.MinutesForSession(Enumerable.Repeat(60.0, 6).ToArray()), 6);
+
+        // From the Mac session, and a harder case than anything written here:
+        // ninety turns of four seconds. Every single one is far below the
+        // floor, so under the old per-turn rule the whole six minutes billed
+        // nothing at all.
+        Case("6 min as ninety 4s turns",
+             ListeningBilling.MinutesForSession(Enumerable.Repeat(4.0, 90).ToArray()), 6);
+
+        // Mac's floor boundaries, checked against the same arithmetic.
+        Case("25s session", ListeningBilling.MinutesForSession(25), 0);
+        Case("35s session", ListeningBilling.MinutesForSession(35), 1);
+        Case("59s session", ListeningBilling.MinutesForSession(59), 1);
 
         // At the floor it becomes a whole minute. Deliberate: an interview of
         // brief exchanges should not be free.
