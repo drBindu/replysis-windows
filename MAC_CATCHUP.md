@@ -500,6 +500,45 @@ answer rather than a failure.
 log answers "which engine was this user running?" instead of inviting a guess.
 Verified end to end in the frozen binary, not just from source.
 
+## Comparing engine hashes: only at a shared commit
+
+From the Mac session, and it is a rule rather than a note. A cross-platform
+source-hash comparison means something **only when both sides are on the same
+pushed commit**. Against a dirty working tree it can never match, and a
+mismatch is then ambiguous between "we have drifted" — the thing the check
+exists to detect — and "you have not pushed yet", which is not a problem at
+all. An ambiguous alarm is worse than no alarm, because it trains you to
+explain it away.
+
+So: compare at a shared commit, never against a working tree. The first
+attempt at comparing produced `6f9746fe6237` (Mac, `d36a7cc`) against
+`f283565ab5bd` (Windows, `6684b29+dirty`) — not drift, just a Windows tree
+that is ahead and unpushed.
+
+## The deafness detector is testable, and has been watched
+
+The decision moved out of `MainWindow` into `SpeechHealth.ShouldWarn` — pure,
+static, no instance state. It was a private method reading five fields, which
+meant the only way to see it work was to run a real interview and hope the
+engine broke, so nobody ever had. A safety net nobody has watched catch
+anything is a belief, not a net.
+
+Eleven cases in `tests/CleanerTests/SpeechHealthTests.cs`, calling the
+shipping decision rather than a copy. Three firing, eight staying quiet. The
+one that matters most is "a silent room" — a false positive there would tell
+someone their transcription is broken when they simply were not talking.
+
+**That proves the rule, not the wiring.** `tools/deaf-engine-stub.py` is for
+the other half: an engine that reports online, prints `MIC SIGNAL DETECTED`
+forever and never once prints `PARTIAL received` or `FINAL received`. Point
+the app at it and the warning must appear within twelve seconds. If it does
+not, the detector is watching for lines the engine does not print, and no unit
+test will ever tell you that.
+
+Still outstanding on this side: nobody has yet run the stub against the real
+app. The Mac session is doing the equivalent. Until one of us has, item 8 is
+half-done here in the same sense item 7 was half-done there.
+
 ## The live transcript is swept at startup too
 
 `latest.txt` was deleted on the way out, but only on a *clean* way out. Task

@@ -1597,39 +1597,28 @@ namespace InterviewCopilot
         /// speech, so anything under a few seconds is ordinary; twelve seconds
         /// of continuous speech returning nothing is not.
         /// </summary>
-        private static readonly TimeSpan DeafnessThreshold = TimeSpan.FromSeconds(12);
-
         private DateTime _lastSpeechDetectedUtc = DateTime.MinValue;
         private DateTime _lastWordsReceivedUtc = DateTime.MinValue;
         private DateTime _lastDeafnessWarningUtc = DateTime.MinValue;
 
+        // The decision itself is in SpeechHealth, apart from the acting on it,
+        // so a test can call the shipping rule instead of a copy written to
+        // match it. It sat here as a private method over five instance fields,
+        // which meant the only way to see it work was to run a real interview
+        // and hope the engine broke - so nobody ever had.
         private void WarnIfHearingButNotTranscribing(DateTime now)
         {
-            if (!_engineOnline) return;   // an offline engine already says so
+            if (!SpeechHealth.ShouldWarn(
+                    _engineOnline, now,
+                    _lastSpeechDetectedUtc, _lastWordsReceivedUtc,
+                    _listeningSinceUtc, _lastDeafnessWarningUtc,
+                    out int silentSeconds))
+                return;
 
-            // Speech has to be arriving right now. Without this, a quiet room
-            // would look identical to a broken transcriber.
-            if (_lastSpeechDetectedUtc == DateTime.MinValue) return;
-            if (now - _lastSpeechDetectedUtc > TimeSpan.FromSeconds(3)) return;
-
-            // Words at any point recently mean it is working.
-            if (_lastWordsReceivedUtc != DateTime.MinValue &&
-                now - _lastWordsReceivedUtc < DeafnessThreshold) return;
-
-            // And it must have been going on a while. A session that has only
-            // just started has not had time to return anything yet.
-            DateTime since = _lastWordsReceivedUtc == DateTime.MinValue
-                ? _listeningSinceUtc
-                : _lastWordsReceivedUtc;
-            if (since == DateTime.MinValue || now - since < DeafnessThreshold) return;
-
-            // Said once a minute at most. Repeating it every tick would bury the
-            // answer under the warning about the answer.
-            if (now - _lastDeafnessWarningUtc < TimeSpan.FromSeconds(60)) return;
             _lastDeafnessWarningUtc = now;
 
             DebugWindow.Log("ENGINE",
-                $"Hearing speech but no words for {(int)(now - since).TotalSeconds}s — "
+                $"Hearing speech but no words for {silentSeconds}s — "
                 + "transcription appears to have stopped while the engine still reports online.");
             ShowListeningModeNotice("HEARING YOU BUT NOT TRANSCRIBING — RESTART THE APP");
         }

@@ -115,6 +115,9 @@ internal static class Program
         Check(outp.Contains("merge sort") && !outp.Contains("**merge sort**"), "prose bold stripped");
         Check(outp.Contains("in place") && !outp.Contains("*in place*"), "prose italic stripped");
 
+        Console.WriteLine("\n6. The deafness detector fires, and stays quiet");
+        _failed += SpeechHealthTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;
