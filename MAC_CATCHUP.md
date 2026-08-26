@@ -627,6 +627,55 @@ taken as proof, and the setting was inert. It is the probe again: a check whose
 output was independent of the thing it was meant to confirm. Only the
 end-to-end request sizes prove this.*
 
+## Which prompt wins: it depends on the path, and the two differ
+
+The Mac session marked this unverified because it cannot see the server. It is
+answerable from the backend, and the answer is that **there is no single
+winner — the spoken path and the screen path are governed by different
+prompts.**
+
+**Spoken questions (`/ask`) — the client wins outright.**
+`InterviewController.java:196`:
+
+```java
+aiMessages = clientMessages;   // full context from the C# PromptBuilder
+```
+
+`buildSystemPrompt` is a **fallback**, used only when the client sends no
+messages at all. Both apps always send messages, so the backend's spoken system
+prompt never reaches the model in practice. Whatever the client says, goes.
+
+**Screen questions — the server wins.** Stage two is `codingMessages()`
+(`:1717`), called at `:767`, and its system prompt is built server-side. The
+client's `payload["prompt"]` (`:597`) is the *vision* stage's instruction and is
+passed in only as context via `actuallyAsked()`. The fence requirement at
+`:1732` lives in that server-built prompt.
+
+### What follows, and it is not what either session assumed
+
+| | spoken answer | screen answer |
+|---|---|---|
+| prompt owner | client | **server** |
+| fences requested | whatever the client says | **always** |
+
+- **Mac's screen answers have been receiving fences all along.** The server
+  demands them and the client cannot opt out. `NetworkClient.swift:645` was
+  stripping fences that were arriving correctly — this is now confirmed rather
+  than suspected.
+- **Mac's "no backtick fences" rule 4 applies only to spoken answers**, where
+  the client prompt does win. Header-driven rendering is correct *there*.
+- **So the contradiction is not a contradiction.** The two rules govern
+  different paths and neither is being ignored. The Mac renderer accepting both
+  is not a hedge against uncertainty — it is the correct design, because the
+  two paths genuinely produce different output.
+- **Windows has the mirror exposure.** Its fence-driven renderer is safe on the
+  screen path because the server guarantees fences, and depends on
+  `PromptBuilder`'s own instruction on the spoken path. Those are two different
+  guarantees of two different strengths, and the code treats them as one.
+
+**Before either side changes fence handling, note which path is being changed.**
+A rule that is safe on one is unenforced on the other.
+
 ## The engine reports end of utterance
 
 **Mac auto mode decides a turn is over from `>>> UTTERANCE END` and nothing
