@@ -1613,6 +1613,9 @@ namespace InterviewCopilot
         private static readonly Regex EngineCharCount =
             new(@"received \((\d+) chars?\)", RegexOptions.Compiled);
 
+        // When the engine process last started. MinValue until it has.
+        private DateTime _engineStartedUtc = DateTime.MinValue;
+
         private DateTime _lastSpeechDetectedUtc = DateTime.MinValue;
         private DateTime _lastWordsReceivedUtc = DateTime.MinValue;
         private DateTime _lastDeafnessWarningUtc = DateTime.MinValue;
@@ -3925,6 +3928,22 @@ namespace InterviewCopilot
                 c = Color.FromRgb(245, 178, 60);
                 label = "RETRYING";
             }
+            // Connecting, but only for as long as that is still plausible.
+            //
+            // This was a bare "CONNECTING" with no time limit, so an engine that
+            // started and never reached the speech service looked identical at
+            // four seconds and at four minutes. On a shop-floor machine whose
+            // network blocked the websocket it simply said connecting, forever,
+            // and there was no way to find out that it never would.
+            else if (SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, _engineStartedUtc))
+            {
+                c = Color.FromRgb(239, 68, 68);
+                label = "NO SPEECH SERVICE";
+                MicBtn.ToolTip =
+                    "The app cannot reach the speech service. This is usually a network "
+                    + "that blocks it - a work, school, or shop network, or a VPN. "
+                    + "Try a phone hotspot. Press F12 for details.";
+            }
             else if (!_engineOnline) { c = Color.FromRgb(245, 178, 60); label = "CONNECTING"; }
             else if (isMuted) { c = Color.FromRgb(239, 68, 68); label = "MUTED"; }
             else { c = Color.FromRgb(239, 68, 68); label = isRecording ? "RECORDING" : "READY"; }
@@ -4193,6 +4212,9 @@ namespace InterviewCopilot
                 speechmaticsProcess.StartInfo.StandardOutputEncoding = Encoding.UTF8;
                 speechmaticsProcess.StartInfo.StandardErrorEncoding = Encoding.UTF8;
                 speechmaticsProcess.Start();
+                // When the wait began, so "CONNECTING" can stop being shown once
+                // it has stopped being true.
+                _engineStartedUtc = DateTime.UtcNow;
                 DebugWindow.Log("ENGINE", $"STARTED | PID: {speechmaticsProcess.Id}");
 
                 // Save PID so NuclearKillOldProcesses can target only this process on next startup

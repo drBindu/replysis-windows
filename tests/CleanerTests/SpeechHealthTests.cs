@@ -106,6 +106,36 @@ internal static class SpeechHealthTests
             Warn(T0.AddSeconds(20), T0.AddSeconds(19), Never, Never, Never, out _),
             false, "nothing to measure against");
 
+        // ── Connecting has to stop meaning connecting ─────────────────────────
+        // The mic pill said CONNECTING from a bare !engineOnline with no time
+        // limit, so a blocked network looked the same at four seconds and four
+        // minutes. Someone watched it on a shop machine and had no way to learn
+        // it never would connect.
+        Console.WriteLine();
+        Case("connecting: 5s in, still plausible",
+            SpeechHealth.ConnectionStalled(false, T0.AddSeconds(5), T0),
+            false, "a normal connection takes a few seconds");
+
+        Case("connecting: 24s in, still within patience",
+            SpeechHealth.ConnectionStalled(false, T0.AddSeconds(24), T0),
+            false, "slow networks exist");
+
+        Case("stalled: 26s in, say so",
+            SpeechHealth.ConnectionStalled(false, T0.AddSeconds(26), T0),
+            true, "this is the shop-floor case - it is never going to connect");
+
+        Case("stalled: 4 minutes in",
+            SpeechHealth.ConnectionStalled(false, T0.AddMinutes(4), T0),
+            true, "the state that used to be indistinguishable from 4 seconds");
+
+        Case("quiet: engine is online",
+            SpeechHealth.ConnectionStalled(true, T0.AddMinutes(4), T0),
+            false, "connected, however long it took");
+
+        Case("quiet: engine never started",
+            SpeechHealth.ConnectionStalled(false, T0.AddMinutes(4), Never),
+            false, "nothing to measure against - a different fault, said elsewhere");
+
         return failed;
     }
 }

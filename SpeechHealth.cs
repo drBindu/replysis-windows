@@ -65,6 +65,40 @@ namespace InterviewCopilot
         /// <summary>How often the warning may be repeated.</summary>
         internal static readonly TimeSpan WarningInterval = TimeSpan.FromSeconds(60);
 
+        /// <summary>
+        /// How long the engine may sit connecting before that stops being
+        /// progress and starts being a fault.
+        ///
+        /// A healthy connection completes in a few seconds. Twenty-five is
+        /// generous for a slow network and still short enough that somebody
+        /// standing in front of the machine gets an answer rather than a
+        /// spinner.
+        /// </summary>
+        internal static readonly TimeSpan ConnectPatience = TimeSpan.FromSeconds(25);
+
+        /// <summary>
+        /// Whether "CONNECTING" has stopped meaning anything.
+        ///
+        /// The mic pill said CONNECTING from a bare <c>else if (!engineOnline)</c>
+        /// with no timeout, so an engine that started but never reached the
+        /// speech service showed the same thing at four seconds and at four
+        /// minutes. Someone tried the app on a shop-floor machine whose network
+        /// blocked the websocket, stood watching a pill that said it was
+        /// connecting, and had no way to learn it never would.
+        ///
+        /// This is the third state in this file that looked like health and was
+        /// not: an engine hearing and returning nothing, a flush that sent
+        /// nothing, and now a connection that is not being attempted any more
+        /// than it was a minute ago. The pattern is a state whose display is
+        /// indistinguishable from its own failure.
+        /// </summary>
+        internal static bool ConnectionStalled(bool engineOnline, DateTime now, DateTime engineStartedUtc)
+        {
+            if (engineOnline) return false;
+            if (engineStartedUtc == DateTime.MinValue) return false;
+            return now - engineStartedUtc > ConnectPatience;
+        }
+
         /// <param name="engineOnline">An offline engine already says so itself.</param>
         /// <param name="lastSpeechUtc">When the microphone last heard speech.</param>
         /// <param name="lastWordsUtc">When words last came back. MinValue if never.</param>
