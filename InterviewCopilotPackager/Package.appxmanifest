@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -9,7 +9,7 @@
   <Identity
     Name="Varoxel.Replysis"
     Publisher="CN=F243CD72-CA0D-445C-A7DA-A6B7A2BDF0F9"
-    Version="1.0.14.0" />
+    Version="1.0.15.0" />
 
   <Properties>
     <DisplayName>Replysis</DisplayName>
