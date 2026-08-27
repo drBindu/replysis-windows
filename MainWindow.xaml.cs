@@ -2875,9 +2875,27 @@ namespace InterviewCopilot
                 // hand still points at an identical picture, so nothing is lost
                 // by staying quiet, and the traffic drops to what actually
                 // happens rather than what the timer does.
-                string fingerprint = Convert.ToBase64String(
-                    System.Security.Cryptography.SHA256.HashData(shot));
-                if (fingerprint == _uploadedShotFingerprint && !string.IsNullOrEmpty(_preparedShotId))
+                // Compared on what the picture SHOWS, not on its bytes.
+                //
+                // This hashed the PNG, and a hash of the exact bytes almost never
+                // matches on a real screen: a caret blinks, a clock ticks, an
+                // online counter changes, and a handful of pixels makes a
+                // completely different hash. So the check that was meant to stop
+                // repeat uploads never once stopped one. Measured from a real
+                // session, every two seconds without pause: 528 KB, 529 KB,
+                // 542 KB, 547 KB, 546 KB - a screen that was not being used,
+                // uploaded over and over, about fifteen megabytes a minute of
+                // somebody's connection.
+                //
+                // LastCaptureSignature is 16x16 in sixteen greys and already
+                // exists for exactly this distinction - it is what tells
+                // scrolling from a ticking counter a few lines below. Using it
+                // here means an upload happens when the screen actually changes,
+                // which is what the code above always said it did.
+                string fingerprint = ScreenAnalyzer.LastCaptureSignature;
+                if (!string.IsNullOrEmpty(fingerprint)
+                    && SignatureDistance(fingerprint, _uploadedShotFingerprint) < MinSignatureChange
+                    && !string.IsNullOrEmpty(_preparedShotId))
                 {
                     // Keep the existing id alive against its own clock.
                     _preparedShotIdUtc = DateTime.UtcNow;
