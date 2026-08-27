@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -14,6 +14,9 @@ namespace InterviewCopilot
         private const string DefaultBackendUrl = "https://replysis.com";
         public bool SettingsChanged { get; set; } = false;
         public int SelectedDeviceIndex { get; set; } = -1;
+        // What the user actually picked. The index is a position in a list
+        // Windows reorders; the name is the thing they chose.
+        public string SelectedDeviceName { get; set; } = "";
         private List<int> deviceIndices = new List<int>();
 
         // ── Config file — persists in AppData ──
@@ -443,6 +446,7 @@ namespace InterviewCopilot
         {
             if (AudioDeviceCombo.SelectedIndex > -1 && deviceIndices.Count > AudioDeviceCombo.SelectedIndex)
                 SelectedDeviceIndex = deviceIndices[AudioDeviceCombo.SelectedIndex];
+                SelectedDeviceName  = AudioDeviceCombo.SelectedItem?.ToString() ?? "";
 
             int modelIdx = ModelGroqRadio.IsChecked == true ? IdxGroq : IdxOpenAi;
 
@@ -458,6 +462,7 @@ namespace InterviewCopilot
                     ? _savedMicCaptureEnabled
                     : MicBothRadio.IsChecked == true,
                 AudioDeviceIndex  = SelectedDeviceIndex,   // persist the chosen mic across restarts
+                AudioDeviceName   = SelectedDeviceName,     // and the name, which outlives the number
                 CloudSyncEnabled  = CloudSyncCheckBox.IsChecked == true,
                 StealthMode       = StealthCheckBox.IsChecked == true,
                 WatchScreenEnabled = WatchScreenCheckBox.IsChecked == true,
@@ -562,6 +567,11 @@ namespace InterviewCopilot
             // Persisted so the user's mic choice survives app restarts instead of silently
             // reverting to whatever Windows currently calls the default device.
             public int    AudioDeviceIndex   { get; set; } = -1;
+            // Stored beside the index because the index does not survive.
+            // Windows renumbers audio endpoints when devices come and go, so a
+            // saved number can point at a different microphone after a reboot
+            // or a headset unplug. The name is what the user actually chose.
+            public string AudioDeviceName    { get; set; } = "";
             // Cloud backups contain interview transcript content. Keep them off
             // until the signed-in user explicitly opts in from Settings.
             public bool   CloudSyncEnabled   { get; set; } = false;
@@ -700,6 +710,7 @@ namespace InterviewCopilot
             SaveConfig(config);
         }
         public static int    GetAudioDeviceIndex()  => LoadConfig().AudioDeviceIndex;
+        public static string GetAudioDeviceName()   => LoadConfig().AudioDeviceName ?? "";
         public static string GetTranscriptLanguage()
         {
             var lang = LoadConfig().TranscriptLanguage;

@@ -4205,6 +4205,13 @@ namespace InterviewCopilot
                 speechmaticsProcess.StartInfo.FileName = engineExe;
                 WriteVocabFile();   // interview-specific terms → better STT accuracy
                 string deviceArg = _audioDeviceId >= 0 ? $" --device {_audioDeviceId}" : "";
+                // The name goes too, and the engine prefers it. Windows renumbers
+                // audio endpoints between runs, so the stored index can point at
+                // a device the user never chose - they then get silence having
+                // done everything right.
+                string savedName = SettingsWindow.GetAudioDeviceName();
+                if (!string.IsNullOrWhiteSpace(savedName))
+                    deviceArg += $" --device-name \"{savedName.Replace("\"", "")}\"";
                 string modeArg = $" --mode {CaptureModeFor(_listeningMode)}";
                 string langArg   = $" --language {SettingsWindow.GetTranscriptLanguage()}";
                 speechmaticsProcess.StartInfo.Arguments = $"{scriptArg}{deviceArg}{modeArg}{langArg}";

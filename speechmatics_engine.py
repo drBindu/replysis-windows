@@ -535,6 +535,10 @@ parser.add_argument("--sysfifo",    type=str,   default=None,
                          "screen-recording grant, so the app runs its own CoreAudio tap in-process "
                          "and writes the PCM here. Windows opens a WASAPI loopback directly and does "
                          "not need this. Ignored when not given.")
+parser.add_argument("--device-name", type=str,  default=None,
+    help="Name of the microphone to use. Authoritative when present, because "
+         "Windows renumbers device indices between runs and a stored number "
+         "stops meaning the device the user chose.")
 parser.add_argument("--relay",      type=str,   default=None,
     help="Websocket URL to reach Speechmatics through, on a host the user's "
          "network already allows. Tried first; the direct regional endpoints "
@@ -769,6 +773,7 @@ _loopback_candidates   = []
 _active_loopback_index = 0
 _hang_swaps = 0   # loopbacks abandoned this session for hanging
 _mic_device_name       = ""   # set once the mic device is resolved below
+_mic_device_index      = None # which device index that name refers to
 _silent_chunk_count    = 0
 SILENCE_HOTSWAP_LIMIT  = 35
 LIVE_THRESHOLD         = 400
@@ -776,6 +781,95 @@ _last_pause_state      = True   # engine starts muted; log the first observed tr
 _sys_hang_count        = 0      # consecutive system-audio read hangs/errors (both mode)
 SYS_HANG_DISABLE_LIMIT = 1      # a stuck loopback must never delay microphone transcription
 SYS_READ_TIMEOUT_SECS  = 0.20   # system audio must never hold up the microphone
+
+# ── A MICROPHONE THAT HEARS NOTHING ──────────────────────────────────────────
+#
+# The selected input can be open, healthy, and completely silent. Virtual
+# devices are the usual cause and they are everywhere: SteelSeries Sonar,
+# NVIDIA Broadcast, VB-Cable, Krisp, Discord. Each installs itself in front of
+# the real microphone, and when its software is not running - or its input is
+# muted, or it was set up for a headset that is unplugged - it hands out
+# silence. Windows still lists it, still calls it default, still opens it
+# without error.
+#
+# Measured on a real machine: the selected device peaked at 1 against a 400
+# threshold while the laptop's own array peaked at 10,117. Both open. One deaf.
+#
+# The app could not tell that from a quiet room, so it sat there transcribing
+# nothing. A user does not investigate that. They speak, get nothing, and
+# uninstall - and they are right to, because from where they sit the product
+# does not work.
+#
+# The one moment this is solvable is while they are talking: a dead device and
+# a quiet room look identical at rest and completely different when there is a
+# voice in the room. So after a few seconds of listening to absolute silence,
+# ask every other input the only question that matters - can you hear this? -
+# and move to whichever one can.
+#
+# Nobody is asked to open Settings. They speak, and a few seconds later words
+# appear.
+_mic_ever_heard        = False  # has this device produced real signal, ever
+_mic_quiet_reads       = 0      # consecutive reads at effectively zero
+_mic_autoswitch_tried  = False  # only ever done once per session
+MIC_QUIET_READS_BEFORE_SWITCH = 40    # ~4s at 0.1s per read
+MIC_SIGNAL_THRESHOLD          = 400   # same figure the rest of the file uses
+
+
+def _real_input_devices(audio, exclude_index=None):
+    """Input devices that could plausibly be a microphone.
+
+    Loopbacks are system audio, not a voice. The Sound Mapper and the Primary
+    Sound Capture Driver forward to the default device, which is the thing
+    already suspected, so testing them re-asks a question that has failed.
+    """
+    out = []
+    for i in range(audio.get_device_count()):
+        try:
+            info = audio.get_device_info_by_index(i)
+        except Exception:
+            continue
+        if i == exclude_index:
+            continue
+        if int(info.get("maxInputChannels", 0)) <= 0:
+            continue
+        name = str(info.get("name", ""))
+        low = name.lower()
+        if "[loopback]" in low or "sound mapper" in low or "primary sound capture" in low:
+            continue
+        out.append((i, name))
+    return out
+
+
+def _find_a_microphone_that_hears(audio, exclude_index, sample_secs=0.4):
+    """The loudest input device that is picking up sound right now.
+
+    Called only while the user is known to be speaking, which is what makes
+    the answer meaningful. Each device is opened briefly on its own stream;
+    the current one stays open throughout, so a probe that fails everywhere
+    leaves the engine exactly as it was.
+    """
+    best = None
+    for index, name in _real_input_devices(audio, exclude_index):
+        try:
+            probe = audio.open(format=pyaudio.paInt16, channels=1, rate=SAMPLE_RATE,
+                               input=True, input_device_index=index,
+                               frames_per_buffer=CHUNK_FRAMES)
+        except Exception:
+            continue
+        try:
+            peak = 0
+            deadline = time.time() + sample_secs
+            while time.time() < deadline:
+                peak = max(peak, _signal_level(probe.read(CHUNK_FRAMES,
+                                                          exception_on_overflow=False)))
+            if peak > MIC_SIGNAL_THRESHOLD and (best is None or peak > best[2]):
+                best = (index, name, peak)
+        except Exception:
+            pass
+        finally:
+            try: probe.close()
+            except Exception: pass
+    return best
 
 try:
     p = pyaudio.PyAudio()
@@ -798,6 +892,50 @@ try:
         # fall back to the real default input.
         _LEGACY_MME = ("microsoft sound mapper", "primary sound capture")
         chosen_device = args.device
+
+        # A device NUMBER does not identify a device for long.
+        #
+        # Windows renumbers audio endpoints whenever one appears, disappears, or
+        # a driver reinitialises. Measured on one machine fifteen minutes apart,
+        # with nothing done deliberately in between:
+        #
+        #     first:   [4] Microphone Array (Intel)   [17] SteelSeries Sonar
+        #     second:  [4] SteelSeries Sonar          [17] Microphone Array
+        #
+        # They swapped. The app stores the index, so a user who picks their
+        # microphone from the list is storing a number that may point at
+        # something else after a reboot, a headset unplug, or a driver update.
+        # They then get silence from a device they never chose, having done
+        # everything right - which is worse than never having chosen at all.
+        #
+        # So the NAME is authoritative when it is given, and the index is only
+        # a hint used when no name matches. Exact match first, then a prefix
+        # match, since Windows appends and trims decorations like "(2- ...)".
+        if args.device_name:
+            wanted = args.device_name.strip().lower()
+            match = None
+            for i in range(p.get_device_count()):
+                try:
+                    info = p.get_device_info_by_index(i)
+                except Exception:
+                    continue
+                if int(info.get('maxInputChannels', 0)) <= 0:
+                    continue
+                nm = str(info.get('name', '')).strip().lower()
+                if nm == wanted:
+                    match = i
+                    break
+                if match is None and (nm.startswith(wanted[:24]) or wanted.startswith(nm[:24])):
+                    match = i
+            if match is not None:
+                if match != chosen_device:
+                    print(f">>> MIC resolved by name to [{match}] "
+                          f"{args.device_name} (index said {chosen_device})", flush=True)
+                chosen_device = match
+            else:
+                print(f">>> MIC named '{args.device_name}' is not present; "
+                      f"falling back to the stored index.", flush=True)
+
         if chosen_device is not None:
             try:
                 nm = p.get_device_info_by_index(chosen_device).get('name', '').lower()
@@ -812,6 +950,7 @@ try:
             mic_kwargs["input_device_index"] = chosen_device
             dev_name = p.get_device_info_by_index(chosen_device)['name']
             _mic_device_name = dev_name
+            _mic_device_index = chosen_device
             print(f">>> MIC device [{chosen_device}]: {dev_name}", flush=True)
         else:
             # No default input device is not the same as no input device.
@@ -833,6 +972,7 @@ try:
                 info = p.get_default_input_device_info()
                 default_index = info['index']
                 _mic_device_name = info.get('name', '')
+                _mic_device_index = default_index
                 print(f">>> MIC: using default input device ({_mic_device_name})", flush=True)
             except Exception:
                 # Real hardware before the virtual passthroughs.
@@ -867,6 +1007,7 @@ try:
                 for i, info in (real + candidates):
                     default_index = i
                     _mic_device_name = info.get('name', '')
+                    _mic_device_index = i
                     mic_kwargs["input_device_index"] = i
                     print(f">>> MIC: no default input device; using [{i}] "
                           f"{_mic_device_name}", flush=True)
@@ -2039,6 +2180,9 @@ async def main():
                         global _last_pause_state
                         global _silent_chunk_count
                         global _sys_hang_count, sys_stream
+                        global _mic_ever_heard, _mic_quiet_reads, _mic_autoswitch_tried
+                        global mic_stream, _mic_device_index, _mic_device_name
+                        global _mic_native_rate, _mic_native_channels, _mic_chunk_frames
 
                         _read_started = time.time()
                         shutdown_requested = os.path.exists(SHUTDOWN_FLAG)
@@ -2152,7 +2296,54 @@ async def main():
                                         mic_amp = _signal_level(mic_data)
                                     if mic_amp > 400:
                                         print(f">>> MIC SIGNAL DETECTED: amp={mic_amp}", flush=True)
-                                    elif MixedStream._call_count % 3 == 0:
+                                        _mic_ever_heard = True
+                                        _mic_quiet_reads = 0
+                                    else:
+                                        _mic_quiet_reads += 1
+
+                                    # Four seconds of listening to a device that
+                                    # has never once produced signal. The user is
+                                    # talking - that is what listening means here
+                                    # - so this is the device, not the room.
+                                    if (not _mic_ever_heard
+                                            and not _mic_autoswitch_tried
+                                            and _mic_quiet_reads >= MIC_QUIET_READS_BEFORE_SWITCH):
+                                        _mic_autoswitch_tried = True
+                                        print(">>> MIC is silent; asking the other inputs "
+                                              "whether they can hear you.", flush=True)
+                                        found = _find_a_microphone_that_hears(p, _mic_device_index)
+                                        if found:
+                                            new_index, new_name, peak = found
+                                            try:
+                                                old = mic_stream
+                                                mic_stream = p.open(
+                                                    format=pyaudio.paInt16, channels=1,
+                                                    rate=SAMPLE_RATE, input=True,
+                                                    input_device_index=new_index,
+                                                    frames_per_buffer=CHUNK_FRAMES)
+                                                _mic_native_rate     = SAMPLE_RATE
+                                                _mic_native_channels = 1
+                                                _mic_chunk_frames    = CHUNK_FRAMES
+                                                _mic_device_index    = new_index
+                                                _mic_device_name     = new_name
+                                                try: old.close()
+                                                except Exception: pass
+                                                # Named on stdout so the app can
+                                                # remember it and skip this next time.
+                                                print(f">>> MIC SWITCHED [{new_index}] {new_name} "
+                                                      f"(peak {peak})", flush=True)
+                                            except Exception as se:
+                                                print(f">>> MIC switch failed: {se}", flush=True)
+                                        else:
+                                            # Every input is silent, so it is not
+                                            # the choice of device. Said plainly
+                                            # because only the user can fix it.
+                                            print(">>> MIC NO_AUDIO: every microphone on this "
+                                                  "machine is silent. It is muted, unplugged, "
+                                                  "or blocked by Windows privacy settings.",
+                                                  flush=True)
+
+                                    if mic_amp <= 400 and MixedStream._call_count % 3 == 0:
                                         # Below the 400 threshold — still show it so we can tell
                                         # "quiet/no signal at all" (amp near 0) apart from
                                         # "signal present but too quiet to count" (amp in the
