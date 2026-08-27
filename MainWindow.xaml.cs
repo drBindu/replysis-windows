@@ -4698,6 +4698,27 @@ namespace InterviewCopilot
         }
         private void MonitorEngine()
         {
+            // Repaint the pill while the engine is not online, before any of
+            // the early returns below.
+            //
+            // Everything that shows engine state is event-driven - a key press,
+            // a process exiting, a status line arriving. Nothing repaints on a
+            // clock. So a state that becomes true purely through the passage of
+            // time could never be displayed: SpeechHealth.ConnectionStalled
+            // turns true twenty-five seconds after the engine starts, and the
+            // pill went on saying CONNECTING because nothing asked it again.
+            //
+            // That is exactly what happened in 1.0.15. The engine could not
+            // connect, retried its endpoints internally without ever exiting,
+            // and the process therefore never triggered a repaint. The logic
+            // added to explain the failure was correct and unreachable - which
+            // is the same fault as the check that could not fail, wearing
+            // different clothes.
+            //
+            // This timer runs every three seconds regardless, so the state
+            // appears within one tick of becoming true.
+            if (!_engineOnline) Dispatcher.Invoke(UpdateMicUi);
+
             if (_engineUsageLimitReached) return;
             if (_engineRecoveryInProgress) return;
             if (DateTime.UtcNow < _nextEngineRestartUtc) return;
