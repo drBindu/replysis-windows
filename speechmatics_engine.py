@@ -814,8 +814,48 @@ try:
             _mic_device_name = dev_name
             print(f">>> MIC device [{chosen_device}]: {dev_name}", flush=True)
         else:
-            _mic_device_name = p.get_default_input_device_info().get('name', '')
-            print(f">>> MIC: using default input device ({_mic_device_name})", flush=True)
+            # No default input device is not the same as no input device.
+            #
+            # get_default_input_device_info() raises when Windows has no input
+            # marked as default, which happens on a machine where nothing has
+            # ever been recorded - a fresh install, a desktop whose only
+            # microphone is in a monitor or a webcam, a laptop where the driver
+            # installed without claiming the default. The exception surfaced as
+            # "FATAL: Cannot open audio stream - No Default Input Device
+            # Available", the engine died, the app restarted it with backoff,
+            # and it failed again for exactly the same reason, forever.
+            #
+            # A real user hit this on a laptop that reported two devices. There
+            # were microphones. None of them was the default, and nothing looked
+            # past the default to find one.
+            default_index = None
+            try:
+                info = p.get_default_input_device_info()
+                default_index = info['index']
+                _mic_device_name = info.get('name', '')
+                print(f">>> MIC: using default input device ({_mic_device_name})", flush=True)
+            except Exception:
+                for i in range(p.get_device_count()):
+                    try:
+                        info = p.get_device_info_by_index(i)
+                    except Exception:
+                        continue
+                    if int(info.get('maxInputChannels', 0)) > 0:
+                        default_index = i
+                        _mic_device_name = info.get('name', '')
+                        mic_kwargs["input_device_index"] = i
+                        print(f">>> MIC: no default input device; using [{i}] "
+                              f"{_mic_device_name}", flush=True)
+                        break
+
+                if default_index is None:
+                    # Genuinely no microphone. Distinct from the case above and
+                    # said differently, because one is the app's problem to work
+                    # around and the other is a fact about the machine that only
+                    # the user can change.
+                    print(">>> FATAL: NO_INPUT_DEVICE - this machine has no "
+                          "microphone the app can use.", flush=True)
+                    sys.exit(3)
 
         _mic_native_rate     = SAMPLE_RATE
         _mic_native_channels = 1
@@ -827,7 +867,14 @@ try:
         except Exception as ex_mic1:
             print(f">>> MIC 16kHz open failed ({ex_mic1}) — attempting native device rate fallback...", flush=True)
             try:
-                target_dev_idx = chosen_device if chosen_device is not None else p.get_default_input_device_info()['index']
+                # Same reasoning as above: fall back to whatever input device
+                # exists rather than insisting on a default that may not be set.
+                if chosen_device is not None:
+                    target_dev_idx = chosen_device
+                elif mic_kwargs.get("input_device_index") is not None:
+                    target_dev_idx = mic_kwargs["input_device_index"]
+                else:
+                    target_dev_idx = p.get_default_input_device_info()['index']
                 dev_info = p.get_device_info_by_index(target_dev_idx)
                 n_rate = int(dev_info.get('defaultSampleRate', 44100))
                 n_ch   = max(1, min(int(dev_info.get('maxInputChannels', 1)), 2))

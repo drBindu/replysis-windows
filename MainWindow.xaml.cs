@@ -3928,6 +3928,16 @@ namespace InterviewCopilot
                 c = Color.FromRgb(245, 178, 60);
                 label = "RETRYING";
             }
+            // The engine gave up and said why. Shown before the connecting and
+            // stalled branches, because a machine with no microphone is not
+            // connecting to anything and never was.
+            else if (_engineAuthFailed
+                     && _engineFatalReason.StartsWith("No microphone", StringComparison.Ordinal))
+            {
+                c = Color.FromRgb(239, 68, 68);
+                label = "NO MICROPHONE";
+                MicBtn.ToolTip = _engineFatalReason;
+            }
             // Connecting, but only for as long as that is still plausible.
             //
             // This was a bare "CONNECTING" with no time limit, so an engine that
@@ -4250,6 +4260,40 @@ namespace InterviewCopilot
                             // The Mac app shipped a fork of the engine for
                             // months without anything noticing, and nothing in
                             // either app would have caught it recurring.
+                            // The engine saying it cannot start, and why.
+                            //
+                            // Nothing read these. The engine printed
+                            // "FATAL: Cannot open audio stream - No Default
+                            // Input Device Available", the app discarded it,
+                            // showed CONNECTING, and restarted the engine with
+                            // backoff - which failed for the same reason, and
+                            // again, and again. A user watched that for a
+                            // minute and a half on a machine with no default
+                            // microphone. The one component that knew the
+                            // answer was saying it out loud the whole time.
+                            //
+                            // Retrying is right for a dropped connection and
+                            // wrong for a missing microphone. Nothing about
+                            // waiting thirty seconds makes a device appear.
+                            if (line.Contains("FATAL", StringComparison.Ordinal))
+                            {
+                                string reason =
+                                    line.Contains("NO_INPUT_DEVICE", StringComparison.Ordinal)
+                                    || line.Contains("Input Device", StringComparison.OrdinalIgnoreCase)
+                                        ? "No microphone found. Plug one in, or pick one in "
+                                          + "Settings, then restart the audio service."
+                                        : "The speech engine could not start. Press F12 for details.";
+
+                                _engineFatalReason = reason;
+                                _engineAuthFailed = true;   // stops the restart loop
+                                DebugWindow.Log("ENGINE", $"Engine gave up: {line}");
+                                _ = Dispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    ShowListeningModeNotice(reason.ToUpperInvariant());
+                                    UpdateMicUi();
+                                }));
+                            }
+
                             if (line.StartsWith(">>> ENGINE BUILD:", StringComparison.Ordinal))
                             {
                                 _engineBuildId = line[">>> ENGINE BUILD:".Length..].Trim();
