@@ -10,6 +10,7 @@ import threading
 import tempfile
 import struct
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from collections import deque
@@ -534,6 +535,10 @@ parser.add_argument("--sysfifo",    type=str,   default=None,
                          "screen-recording grant, so the app runs its own CoreAudio tap in-process "
                          "and writes the PCM here. Windows opens a WASAPI loopback directly and does "
                          "not need this. Ignored when not given.")
+parser.add_argument("--relay",      type=str,   default=None,
+    help="Websocket URL to reach Speechmatics through, on a host the user's "
+         "network already allows. Tried first; the direct regional endpoints "
+         "remain as fallback, so a relay outage is no worse than no relay.")
 parser.add_argument("--utterance-silence", type=float, default=0.8,
     help="Seconds of silence after which the recogniser reports the end of an "
          "utterance, printed as '>>> UTTERANCE END'. Set to 0 to disable. The "
@@ -1585,6 +1590,26 @@ async def main():
         "wss://us.rt.speechmatics.com/v2",
     ]
 
+    # Our own domain first, when one is offered.
+    #
+    # Both addresses above are speechmatics.com, so a network that has never
+    # heard of that host blocks the pair of them and the region fallback buys
+    # nothing. That is not a rare configuration: it is a work laptop, campus
+    # wifi, a hotel, a shop-floor machine - anywhere that permits ordinary
+    # browsing and refuses hosts it does not recognise. Tried on one, the app
+    # signed in, fetched credits, opened its window, and never connected a
+    # microphone, with nothing on screen able to say why.
+    #
+    # The relay is the same protocol on a host those networks already allow,
+    # since the app reached the backend on that machine perfectly well.
+    #
+    # The direct endpoints stay, and stay after it. If the relay is down or
+    # misconfigured this falls through to exactly the behaviour it had before,
+    # so adding it cannot make a working setup worse - which matters, because
+    # the case it fixes is one that cannot be reproduced from a desk.
+    if args.relay:
+        endpoints.insert(0, args.relay)
+
     reconnect_delay = 3
     attempt         = 0
 
@@ -1620,8 +1645,19 @@ async def main():
 
                 print(f">>>[Attempt {attempt}] Connecting to {endpoint}...", flush=True)
 
+                # The relay reads the token from the query string, not the
+                # Authorization header the SDK sets. Not a preference: a
+                # websocket handshake is the one request where a client cannot
+                # always add a header, and an endpoint that only works for
+                # clients which can is an endpoint that will be awkward exactly
+                # once and then permanently.
+                url = endpoint
+                if args.relay and endpoint == args.relay:
+                    sep = "&" if "?" in url else "?"
+                    url = f"{url}{sep}jwt={urllib.parse.quote(rt_token, safe='')}"
+
                 settings = ConnectionSettings(
-                    url        = endpoint,
+                    url        = url,
                     auth_token = rt_token,
                 )
 
