@@ -19,9 +19,9 @@
          InterviewCopilotPackager\Package.appxmanifest. The in-app update check
          compares this against the latest windows-v* release tag, so if the two
          drift the app reports the wrong installed version. -->
-    <Version>1.0.15.0</Version>
-    <AssemblyVersion>1.0.15.0</AssemblyVersion>
-    <FileVersion>1.0.15.0</FileVersion>
+    <Version>1.0.16.0</Version>
+    <AssemblyVersion>1.0.16.0</AssemblyVersion>
+    <FileVersion>1.0.16.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
