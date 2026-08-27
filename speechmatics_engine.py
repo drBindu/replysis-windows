@@ -835,18 +835,42 @@ try:
                 _mic_device_name = info.get('name', '')
                 print(f">>> MIC: using default input device ({_mic_device_name})", flush=True)
             except Exception:
-                for i in range(p.get_device_count()):
-                    try:
-                        info = p.get_device_info_by_index(i)
-                    except Exception:
-                        continue
-                    if int(info.get('maxInputChannels', 0)) > 0:
-                        default_index = i
-                        _mic_device_name = info.get('name', '')
-                        mic_kwargs["input_device_index"] = i
-                        print(f">>> MIC: no default input device; using [{i}] "
-                              f"{_mic_device_name}", flush=True)
-                        break
+                # Real hardware before the virtual passthroughs.
+                #
+                # "Microsoft Sound Mapper - Input" is index 0 on most machines
+                # and is not a microphone: it forwards to whatever the system
+                # default is. On a machine with no default - which is precisely
+                # the case being handled here - it is the one device most
+                # likely to fail for the same reason again. The first version
+                # of this fallback picked it, which a test that forced the path
+                # caught immediately.
+                #
+                # "Primary Sound Capture Driver" is the DirectSound equivalent
+                # and has the same problem.
+                VIRTUAL = ("sound mapper", "primary sound capture")
+
+                def input_devices():
+                    for i in range(p.get_device_count()):
+                        try:
+                            info = p.get_device_info_by_index(i)
+                        except Exception:
+                            continue
+                        if int(info.get('maxInputChannels', 0)) > 0:
+                            yield i, info
+
+                candidates = list(input_devices())
+                real = [(i, info) for i, info in candidates
+                        if not any(v in str(info.get('name', '')).lower() for v in VIRTUAL)]
+
+                # The mapper is still better than nothing, so it stays as a last
+                # resort rather than being excluded outright.
+                for i, info in (real + candidates):
+                    default_index = i
+                    _mic_device_name = info.get('name', '')
+                    mic_kwargs["input_device_index"] = i
+                    print(f">>> MIC: no default input device; using [{i}] "
+                          f"{_mic_device_name}", flush=True)
+                    break
 
                 if default_index is None:
                     # Genuinely no microphone. Distinct from the case above and
