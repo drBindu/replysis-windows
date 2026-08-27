@@ -147,9 +147,52 @@ foreach ($pattern in @("*.c", "*.h", "*.pyx", "*.pyi")) {
     Get-ChildItem $dist -Recurse -Filter $pattern -File -ErrorAction SilentlyContinue |
         ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue; $stripped++ }
 }
-Get-ChildItem $dist -Recurse -Directory -Filter "*.dist-info" -ErrorAction SilentlyContinue |
-    ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue; $stripped++ }
-Write-Host "Stripped $stripped build-only files from the bundle."
+Write-Host "Stripped $stripped build-only source files from the bundle."
+
+# .dist-info IS NOT BUILD-ONLY. DO NOT DELETE IT.
+#
+# A previous version of this script did, on the reasoning that wheel metadata
+# is not read at runtime and that identically named METADATA and RECORD files
+# across packages are a duplicate-name hazard inside a signed payload. The
+# second half is true. The first half is false, and it shipped an engine that
+# could not connect at all.
+#
+# speechmatics/helpers.py: get_version() calls
+# importlib.metadata.version("speechmatics-python"), which reads .dist-info.
+# Without it that raises PackageNotFoundError and the fallback reads a VERSION
+# file that a pip install does not create - so every connection attempt died
+# with "No such file or directory: ...\speechmatics\..\VERSION", on both
+# regional endpoints, for ever.
+#
+# The failure had nothing to do with the version number. get_version() is
+# called while building the connection, so an exception there takes the whole
+# connection with it.
+#
+# The duplicate-name concern came from the Mac session and is real on macOS,
+# where Xcode flattens directories. MSIX keeps paths, and 1.0.13 and 1.0.14
+# both packaged and shipped with .dist-info present. It was a fix for
+# somebody else's platform applied here, where the problem did not exist.
+#
+# If a packaging tool ever does object to duplicate names, exclude the
+# offending FILES by path, never the directory - and test that the engine can
+# still open a connection afterwards, which is the check that was missing.
+
+# The engine cannot connect without this, and nothing else notices.
+#
+# speechmatics/helpers.py calls importlib.metadata.version("speechmatics-python")
+# while building the connection. Without the .dist-info that lookup raises and
+# takes the connection with it - every endpoint, every retry, for ever. The
+# engine still starts, still opens the microphone, still prints READY, and
+# never transcribes.
+#
+# A build that produces that is worse than one that fails, so this fails.
+$distInfo = Get-ChildItem (Split-Path $exe) -Recurse -Directory `
+              -Filter "speechmatics_python-*.dist-info" -ErrorAction SilentlyContinue
+if (-not $distInfo) {
+    throw "The bundle has no speechmatics .dist-info. get_version() will raise " +
+          "and the engine will never connect. Do not ship this."
+}
+Write-Host "Speechmatics metadata present: $($distInfo[0].Name)"
 
 $size = (Get-ChildItem (Split-Path $exe) -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
 Write-Host ("Engine built: {0} ({1:N1} MB)" -f $exe, $size)
