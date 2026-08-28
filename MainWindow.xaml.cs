@@ -4648,6 +4648,44 @@ namespace InterviewCopilot
                     catch { /* one stuck file must not stop the sweep */ }
                 }
 
+                // Old interview audio goes too.
+                //
+                // Every session records itself. Nothing asked for it, nothing
+                // plays it back — the Sessions panel only ever deletes these —
+                // and nothing removed them, so they accumulated: 77 files and
+                // 457 MB in one month on one machine, individual recordings up
+                // to 64 MB. A heavy user reaches gigabytes in a season.
+                //
+                // Two reasons that matters, and the second is the larger one.
+                // It is somebody's disk. And it is a month of their interviews
+                // sitting there — encrypted for this Windows user, so not
+                // readable by others, but kept indefinitely by a product whose
+                // entire value is discretion, without anyone choosing that.
+                //
+                // Seven days, matching the flag sweep above, so there is one
+                // retention rule in the app rather than two. Whether to record
+                // at all is a product decision and is not made here.
+                try
+                {
+                    long freed = 0; int removed = 0;
+                    foreach (string rec in Directory.EnumerateFiles(AppDataFolder, "interview_*.wav*"))
+                    {
+                        try
+                        {
+                            if (File.GetLastWriteTimeUtc(rec) >= cutoff) continue;
+                            freed += new FileInfo(rec).Length;
+                            File.Delete(rec);
+                            removed++;
+                        }
+                        catch { /* one locked file must not stop the sweep */ }
+                    }
+                    if (removed > 0)
+                        DebugWindow.Log("SESSION",
+                            $"Removed {removed} interview recording(s) older than 7 days, "
+                            + $"freeing {freed / 1024 / 1024} MB. Transcripts are kept.");
+                }
+                catch (Exception ex) { DebugWindow.Log("SESSION", $"Recording sweep failed: {ex.Message}"); }
+
                 // The live transcript is deleted on the way out, but only on a
                 // clean way out. Ending the app from Task Manager, or a crash,
                 // skips the closing handler entirely and strands the last thing
