@@ -121,6 +121,9 @@ internal static class Program
         Console.WriteLine("\n7. What a listening session costs");
         _failed += BillingTests.Run();
 
+        Console.WriteLine("\n8. Background chatter is not a continuation");
+        _failed += ContinuationTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

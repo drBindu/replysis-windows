@@ -154,3 +154,58 @@ Neither reclaims a leaked slot; both only stop creating them. At a quota of two
 a single leak is half the capacity and two is a total outage across both
 platforms. Passed to the owner as a prerequisite for testing with anyone else
 present, not merely for customers.
+---
+
+## 2026-08-28 — the continuation loop, and the shape it shares
+
+**Windows had it identically.** `_lastAutoSubmitUtc = now` ran on every
+submission including merges (`MainWindow.xaml.cs`), and the window was
+measured from that value. Each merge pushed the deadline forward; the chain
+could only end if the speaker went quiet.
+
+**Fixed with four independent bounds**, so no single one has to be right:
+
+    _continuationChainStartedUtc   anchored to chain START, a merge never moves it
+    MaxContinuations = 2           hard cap, no clock involved
+    MaxContinuationWords = 60      a question is not a paragraph
+    IsFragmentedNoise(merged)      ported from AutoTurnDetector.swift:98
+
+### Where it can actually bite on Windows — narrower than expected
+
+The owner pointed this out and the code agrees:
+
+    InterviewAuto  -> "system"   system audio only, no microphone
+    PracticeAuto   -> "both"     mic + system
+
+**Interview Auto cannot hear the room at all** — the microphone is not in the
+path. The room-noise case is Practice Auto, and the default mode when mic
+capture is enabled.
+
+**But the guard still earns its place in Interview Auto**, for a different
+source: a call with three people talking over each other arrives through system
+audio looking exactly like a room. Worth checking which sources each Mac mode
+mixes before assuming the exposure is the same there.
+
+### On the floor in IsFragmentedNoise
+
+Twelve words and five stops before it will judge. My first two test cases were
+eleven words and the detector correctly refused them — the floor is doing its
+job, and a real "Okay. Sure." is safe by construction. Real background speech
+over a twenty-second window is far longer, so the samples were resized rather
+than the threshold lowered.
+
+### The family, now four
+
+A bound that resets itself joins the list:
+
+1. **A guard that cannot fail** — the utterance-end probe tested whether the
+   constructor threw, and the constructor accepts anything.
+2. **A check that answers a narrower question** — `nginx -t` validates syntax;
+   the directive sat inside a comment and passed.
+3. **Recovery behind an unreachable branch** — `NO SPEECH SERVICE` was correct
+   and never repainted, because nothing ran on a clock.
+4. **A bound that resets itself** — this one.
+
+All four look correct when read and do nothing when run. The question that
+catches them is not *is this right* but **what makes this run, and what makes
+it stop**.

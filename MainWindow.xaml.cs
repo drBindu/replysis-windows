@@ -1312,6 +1312,11 @@ namespace InterviewCopilot
             _lastAutoSubmittedQuestion = "";
             _lastAutoRejectedTranscript = "";
             _lastAutoSubmitUtc = DateTime.MinValue;
+            // A mode change ends any chain in progress along with everything
+            // else, or the caps would carry into a session that never started
+            // one.
+            _continuationChainStartedUtc = DateTime.MinValue;
+            _continuationCount = 0;
             ResetAutoTurnDetection();
             UpdateListeningModeUi();
 
@@ -1902,10 +1907,74 @@ namespace InterviewCopilot
             "uh huh", "hmm", "sorry", "hello", "hi",
         };
 
+        /// <summary>
+        /// When the current run of merges began. A merge does not move it.
+        ///
+        /// The window was measured from the last submission, and a merge IS a
+        /// submission, so every merge pushed the deadline forward and the chain
+        /// could never close. A bound that resets itself is not a bound: the
+        /// only thing that could stop it was the speaker going quiet, and a
+        /// television in the next room never does.
+        ///
+        /// The Mac session hit this first - roughly two hundred credits in five
+        /// minutes, one API call per fragment of background speech, with the
+        /// answer on screen being replaced mid-read and the "question" growing
+        /// into a paragraph of noise. Nothing errored. Nothing looked broken
+        /// except the product.
+        /// </summary>
+        private DateTime _continuationChainStartedUtc = DateTime.MinValue;
+        private int _continuationCount;
+
+        /// <summary>At most two merges onto one question, however well they score.</summary>
+        private const int MaxContinuations = 2;
+
+        /// <summary>A question is not a paragraph.</summary>
+        private const int MaxContinuationWords = 60;
+
+        /// <summary>
+        /// Whether this reads like a room with people in it rather than one
+        /// person asking something.
+        ///
+        /// Background speech arrives as confetti: many short fragments, many
+        /// full stops, few words between them. A real question - even a long,
+        /// rambling one - has far more words per sentence than a podcast
+        /// bleeding into a microphone.
+        ///
+        /// Deliberately refuses to judge below twelve words and five stops, so
+        /// a genuine "Okay. Sure." is never caught by it. Ported from the Mac
+        /// session's AutoTurnDetector, and the part worth having even if every
+        /// other guard here were removed: no rule about length or timing can
+        /// tell one person from a room, and this can.
+        /// </summary>
+        private static bool IsFragmentedNoise(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+
+            int stops = text.Count(c => c is '.' or '?' or '!');
+            int words = Regex.Matches(text, @"[\p{L}\p{N}']+").Count;
+
+            // Too little to judge. Silence is the right answer here.
+            if (words < 12 || stops < 5) return false;
+
+            return (double)words / stops < 3.0;
+        }
+
         private bool LooksLikeContinuation(string candidate, DateTime now)
         {
             if (string.IsNullOrWhiteSpace(_lastAutoSubmittedQuestion)) return false;
             if (now - _lastAutoSubmitUtc > ContinuationWindow) return false;
+
+            // Anchored to the START of the chain, which a merge never moves.
+            // This is the whole fix; everything below is a second opinion.
+            if (_continuationChainStartedUtc != DateTime.MinValue &&
+                now - _continuationChainStartedUtc > ContinuationWindow) return false;
+
+            // Hard caps, independent of any clock. Timing alone is what failed.
+            if (_continuationCount >= MaxContinuations) return false;
+
+            string merged = MergeContinuation(_lastAutoSubmittedQuestion, candidate);
+            if (Regex.Matches(merged, @"[\p{L}\p{N}']+").Count > MaxContinuationWords) return false;
+            if (IsFragmentedNoise(merged)) return false;
 
             string[] words = Regex.Matches(candidate, @"[\p{L}\p{N}']+")
                                   .Cast<Match>()
@@ -2035,8 +2104,23 @@ namespace InterviewCopilot
                 ? MergeContinuation(_lastAutoSubmittedQuestion, candidateQuestion)
                 : candidateQuestion;
             _lastAutoSubmitUtc = now;
+
+            // The chain's start moves only when a chain begins. A merge does
+            // not touch it, which is what stops the window extending itself.
             if (isContinuation)
-                DebugWindow.Log("AUTO", $"Continuation heard; re-answering the whole question: {_lastAutoSubmittedQuestion}");
+            {
+                _continuationCount++;
+            }
+            else
+            {
+                _continuationChainStartedUtc = now;
+                _continuationCount = 0;
+            }
+
+            if (isContinuation)
+                DebugWindow.Log("AUTO",
+                    $"Continuation {_continuationCount}/{MaxContinuations} heard; re-answering "
+                    + $"the whole question: {_lastAutoSubmittedQuestion}");
             DebugWindow.Log("AUTO", $"{ending} ending, stable for {requiredSilenceMs}ms; submitting {candidateQuestion.Length} normalized characters.");
             HandleSpaceUp("AUTO");
         }
