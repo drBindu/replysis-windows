@@ -84,3 +84,73 @@ assumed: the only kill paths are the two above.
   that will not open. Windows does both.
 - **Do not raise the retry ceiling to work around it.** Retrying a full account
   is what created the ghosts.
+
+---
+
+## 2026-08-28 (later) — the cached token, and reading the plan from it
+
+### The cache hides a server-side account change. Both platforms.
+
+Windows caches the minted Speechmatics token in `sttkey.json` for up to an
+hour. Mac caches it in the Keychain (`UserSession.swift:266`, account
+`speechmaticsKey`, 5-minute renew margin at `:268`).
+
+**Neither discards it when the backend swaps the Speechmatics account under the
+same signed-in user.** Mac's entry records an owner (`:275`) and clears when
+the *user* changes (`:287`) — not when the account behind the user changes.
+
+That cost hours. The account key was swapped server-side, nothing appeared to
+change, and both apps went on using a still-valid token pointing at the old
+exhausted account. On Windows the only thing that moved it was deleting the
+file by hand. On Mac there is no file — it is `discardCachedSpeechKey()` at
+`:310`, or signing out.
+
+**Windows now discards the cached token on a quota refusal** (`73f6bf6`). A
+refusal is exactly the moment to stop trusting it. Mac should do the same.
+
+### Quota refusal is not an auth failure
+
+They shared exit code 2 on Windows and needed opposite responses: a wrong key
+is permanent and only the user can fix it; a full account clears itself when
+another device stops. Sharing the code produced *"fix your Speechmatics key in
+Settings"* for an account that was busy and a key that was perfectly good — and
+it stopped the retry loop, so the app stayed dead after the other device
+finished.
+
+Now exit 4, `ANOTHER DEVICE IS USING YOUR ACCOUNT`, retry in 20s.
+
+### Read the plan's limits from the token
+
+The Mac session's suggestion and the best technique either of us produced this
+week. The Speechmatics token is a JWT and its claims carry the numbers that
+decide whether the product works:
+
+    account_type       free
+    connection_quota   2
+    contract_id        272986
+
+No API call, no portal access, no credentials beyond the token already in
+memory. Windows now decodes it on every fetch and logs the plan, with an
+explicit warning at two or below. Verified against a freshly minted real token:
+
+    Plan: free, 2 simultaneous sessions allowed.
+    WARNING: only 2 people can transcribe at once on this plan,
+             across every device using this account.
+
+**This is also how to answer "what are the real limits" without portal access,**
+which is how the ceiling was found at all — the owner could not log into the
+account the server key belonged to.
+
+### On the concurrency gate you have not seen fire
+
+Agreed, and it is the same shape as the deafness detector and section 9: a
+mechanism verified by construction and never watched working. Both failure
+directions matter — blocking legitimate starts for 60s, or not firing and
+leaking again. Worth reproducing deliberately rather than waiting for it.
+
+### Your reframing of both leak fixes is correct
+
+Neither reclaims a leaked slot; both only stop creating them. At a quota of two
+a single leak is half the capacity and two is a total outage across both
+platforms. Passed to the owner as a prerequisite for testing with anyone else
+present, not merely for customers.

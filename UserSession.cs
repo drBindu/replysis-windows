@@ -198,6 +198,7 @@ namespace InterviewCopilot
                 }
                 SaveCachedSpeechmaticsKey();
                 DebugWindow.Log("STT_KEY", $"Temporary key fetched; valid for {expiresIn} seconds");
+                ReadPlanLimitsFromToken(key);
                 return true;
             }
             catch (Exception ex)
@@ -284,6 +285,77 @@ namespace InterviewCopilot
         {
             try { if (File.Exists(SpeechmaticsKeyPath)) File.Delete(SpeechmaticsKeyPath); }
             catch { }
+        }
+
+        /// <summary>How many sessions this plan allows at once. 0 until known.</summary>
+        public static int SpeechConcurrencyLimit { get; private set; }
+
+        /// <summary>"free", "pro", and so on. Empty until known.</summary>
+        public static string SpeechAccountType { get; private set; } = "";
+
+        /// <summary>
+        /// Reads the plan's real limits out of the token we were just handed.
+        ///
+        /// The Speechmatics token is a JWT, and its claims carry the numbers
+        /// that decide whether the product works: connection_quota is how many
+        /// people may transcribe at once, across the whole account, and
+        /// account_type says which plan that is.
+        ///
+        /// Nobody knew this number. It was two — meaning two customers, ever,
+        /// simultaneously — and it was discovered only after a day of chasing
+        /// symptoms: a second machine that would not transcribe, ghost sessions
+        /// filling a ceiling nobody could see, and a swapped account key that
+        /// appeared to change nothing. The number was sitting in every token
+        /// the app had ever received.
+        ///
+        /// The Mac session's suggestion, and the best one of the week: read it
+        /// here rather than leaving a customer to discover it mid-interview.
+        /// Costs one base64 decode of a string already in memory, needs no API
+        /// call and no portal access.
+        ///
+        /// Never throws. A token whose shape changes must not stop the app
+        /// transcribing — this is information, not a gate.
+        /// </summary>
+        private static void ReadPlanLimitsFromToken(string jwt)
+        {
+            try
+            {
+                string[] parts = jwt.Split('.');
+                if (parts.Length < 2) return;
+
+                string payload = parts[1].Replace('-', '+').Replace('_', '/');
+                payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+
+                using var doc = JsonDocument.Parse(Convert.FromBase64String(payload));
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("account_type", out var t))
+                    SpeechAccountType = t.GetString() ?? "";
+
+                // Speechmatics sends it as a string; tolerate a number too.
+                if (root.TryGetProperty("connection_quota", out var q))
+                {
+                    SpeechConcurrencyLimit =
+                        q.ValueKind == JsonValueKind.Number ? q.GetInt32()
+                        : int.TryParse(q.GetString(), out int n) ? n : 0;
+                }
+
+                if (SpeechConcurrencyLimit > 0)
+                {
+                    DebugWindow.Log("STT_KEY",
+                        $"Plan: {SpeechAccountType}, {SpeechConcurrencyLimit} simultaneous "
+                        + "session" + (SpeechConcurrencyLimit == 1 ? "" : "s") + " allowed.");
+
+                    // Two is one interview plus one other person anywhere in the
+                    // world. Said plainly at startup rather than found out
+                    // during an interview, which is how it was found out.
+                    if (SpeechConcurrencyLimit <= 2)
+                        DebugWindow.Log("STT_KEY",
+                            $"WARNING: only {SpeechConcurrencyLimit} people can transcribe at "
+                            + "once on this plan, across every device using this account.");
+                }
+            }
+            catch { /* information, not a gate */ }
         }
 
         public static void InvalidateSpeechmaticsKey()
