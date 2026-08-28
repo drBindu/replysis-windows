@@ -1946,6 +1946,42 @@ namespace InterviewCopilot
         /// other guard here were removed: no rule about length or timing can
         /// tell one person from a room, and this can.
         /// </summary>
+        /// <summary>
+        /// Whether a question depends on something already said or shown.
+        ///
+        /// Used to decide whether a question may ride the screen path after an
+        /// earlier screen question. That path costs two models and about seven
+        /// seconds against half a second, so anything that does not need it
+        /// must not take it.
+        ///
+        /// Two ways to depend on what came before: join onto it explicitly, or
+        /// point back at it. "And the complexity?" does the first. "Why that
+        /// approach" does the second. "What is Java" does neither - it names
+        /// its own subject and is a new question, however short.
+        ///
+        /// "Why" and "how" are deliberately not openers on their own: "why is
+        /// Java slow" is a new question that happens to start with one.
+        /// </summary>
+        private static bool LeansOnWhatCameBefore(string question)
+        {
+            if (string.IsNullOrWhiteSpace(question)) return false;
+            string q = " " + question.Trim().ToLowerInvariant() + " ";
+
+            foreach (string opener in new[]
+                     { "and ", "so ", "then ", "also ", "plus ", "but ",
+                       "what about", "how about", "ok so", "okay so" })
+                if (q.TrimStart().StartsWith(opener, StringComparison.Ordinal)) return true;
+
+            // Pointing back. Spaced so "that" does not match inside "thatch"
+            // and "it" does not match inside "with".
+            foreach (string backRef in new[]
+                     { " that ", " this ", " it ", " them ", " those ", " these ",
+                       " one ", " ones ", " above ", " here " })
+                if (q.Contains(backRef, StringComparison.Ordinal)) return true;
+
+            return false;
+        }
+
         private static bool IsFragmentedNoise(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return false;
@@ -3342,9 +3378,40 @@ namespace InterviewCopilot
             // because what ends the topic is drift, not elapsed time — "what is
             // the complexity?" three minutes later is still about the screen,
             // and "so tell me about yourself" ten seconds later is not.
+            // A follow-up has to look like one, not merely fail to be personal.
+            //
+            // The screen path costs two models. Measured against production:
+            //
+            //     spoken answer    gpt-oss-20b        0.64s
+            //     screen stage 1   gemini flash-lite  3.89s   (text only)
+            //     screen stage 2   gpt-oss-120b       2.87s
+            //
+            // Seven seconds against half a second, and an image on stage one
+            // adds more. In an interview that is the difference between an
+            // answer and a silence the candidate has to fill.
+            //
+            // "Not personal" let anything through. Ask "solve this", then "what
+            // is Java", and Java went to the screen: a photograph of a code
+            // editor, two models, seven seconds, to answer a question that
+            // needed none of it.
+            //
+            // Length cannot do this. "What is Java" is three words and needs the
+            // fast path; "and the time complexity?" is four and needs the
+            // screen. The first draft of this rule used a word count and let
+            // Java straight through to the slow path, which is the exact case
+            // that prompted it.
+            //
+            // What separates them is whether the question stands on its own. A
+            // follow-up either joins on explicitly - "and", "so", "what about" -
+            // or points back at something already on screen - "that", "this",
+            // "it". A new question names its own subject and does neither.
+            bool looksLikeFollowUp = LeansOnWhatCameBefore(question)
+                                     || PromptBuilder.RefersToScreen(question);
+
             bool continuesScreen =
                 _watchScreenMode
                 && _screenFollowUpsLeft > 0
+                && looksLikeFollowUp
                 && !PromptBuilder.IsPersonalQuestion(question);
 
             bool aboutTheScreen = askedAboutScreen || continuesScreen;
