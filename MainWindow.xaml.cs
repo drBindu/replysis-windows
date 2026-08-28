@@ -4847,6 +4847,35 @@ namespace InterviewCopilot
                     Dispatcher.Invoke(ShowEngineUsageLimitError);
                     return;
                 }
+                // The account is busy, not broken.
+                //
+                // This shared a code with a genuine auth failure, so a full
+                // account was reported as "fix your Speechmatics key in
+                // Settings" - wrong, unactionable, and it sent the owner to
+                // check a key that was perfectly good. It also stopped the
+                // retry loop, so the app stayed dead after the other device
+                // had finished and only a relaunch brought it back.
+                //
+                // The cached token is thrown away too. It is still valid, so
+                // nothing would refetch it, and after a server-side account
+                // change that stale token is the reason a fix appears to do
+                // nothing - which cost hours. A refusal is exactly the moment
+                // to stop trusting it.
+                if (code == SpeechRecognitionExitCodes.ConcurrentSessionLimit)
+                {
+                    UserSession.InvalidateSpeechmaticsKey();
+                    _nextEngineRestartUtc = DateTime.UtcNow.AddSeconds(20);
+                    DebugWindow.Log("ENGINE",
+                        "Speechmatics account is at its session limit; another device is using "
+                        + "it. Retrying in 20s. Nothing needs fixing here.");
+                    Dispatcher.Invoke(() =>
+                    {
+                        ShowListeningModeNotice("ANOTHER DEVICE IS USING YOUR ACCOUNT");
+                        UpdateMicUi();
+                    });
+                    return;
+                }
+
                 if (code == SpeechRecognitionExitCodes.AuthenticationFailure)
                 {
                     if (!IsSarvamLanguage(SettingsWindow.GetTranscriptLanguage()) && !_engineTokenRefreshAttempted)

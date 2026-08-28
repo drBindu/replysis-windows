@@ -2590,12 +2590,19 @@ async def main():
                     reason = err.strip()[:160]
                     print(f">>> FATAL: SPEECHMATICS REFUSED THE SESSION — {reason}", flush=True)
                     if "quota" in err.lower():
+                        # Exit 4, not 2. A full account and a bad key were
+                        # sharing one code and they need opposite responses:
+                        # a key is permanent and only the user can fix it, a
+                        # full account clears itself the moment another device
+                        # stops. Sharing the code meant a busy account was
+                        # reported as "fix your Speechmatics key", which sent
+                        # somebody to check a key that was perfectly good.
                         print(">>> The account is at its limit of sessions running at once. "
-                              "Close the other app, or any window still holding a session, "
-                              "and start again.", flush=True)
-                    else:
-                        print(">>> This is a limit or permission on the account, not a network "
-                              "problem. Retrying will not clear it.", flush=True)
+                              "Another device is using it. This clears by itself when they "
+                              "stop; nothing needs fixing here.", flush=True)
+                        raise SystemExit(4)
+                    print(">>> This is a limit or permission on the account, not a network "
+                          "problem. Retrying will not clear it.", flush=True)
                     raise SystemExit(2)
 
                 print(">>> Trying next endpoint...", flush=True)
