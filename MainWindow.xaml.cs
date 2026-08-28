@@ -4752,7 +4752,27 @@ namespace InterviewCopilot
                 try
                 {
                     long freed = 0; int removed = 0;
-                    foreach (string rec in Directory.EnumerateFiles(AppDataFolder, "interview_*.wav*"))
+                    // Extensions listed, not globbed.
+                    //
+                    // Recordings and transcripts share a directory and a prefix
+                    // and differ only by extension - interview_12.wav.dpapi
+                    // beside interview_12.txt. A pattern one character looser
+                    // deletes every Past Session, which is the feature the
+                    // panel exists for.
+                    //
+                    // "interview_*.wav*" was already narrow enough and was
+                    // verified against the real directory before shipping: 77
+                    // recordings matched, 0 of 374 transcripts. The Mac session
+                    // pointed out that on their side the same folder holds
+                    // interview_1.txt through interview_16.txt, so the margin
+                    // there is thinner and the verification was the only thing
+                    // standing between the sweep and the transcripts. A rule
+                    // that is safe because somebody checked is weaker than one
+                    // that is safe because it cannot match.
+                    var recordings = new[] { "interview_*.wav", "interview_*.wav.dpapi" }
+                        .SelectMany(p => Directory.EnumerateFiles(AppDataFolder, p));
+
+                    foreach (string rec in recordings)
                     {
                         try
                         {

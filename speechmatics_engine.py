@@ -1467,6 +1467,27 @@ def build_text_from_results(results):
         print(f">>> DEBUG: segment DROPPED (avg confidence {avg:.2f} < {SEGMENT_CONF_FLOOR}) — words were: {words}", flush=True)
         return ""   # skip entire low-confidence segment
 
+    # Tell the app how sure the recogniser was.
+    #
+    # This number is computed here and thrown away. The clients only ever see
+    # surviving text, so they judge whether a transcript is real by looking at
+    # its grammar - and that cannot work. The Mac session measured it: scoring
+    # by function-word ratio put "Explain TCP three way handshake" at 0.20 and
+    # the worst non-English garbage at 0.22. They overlap. Any threshold that
+    # catches the noise also rejects a legitimate short technical question,
+    # which mid-interview is far worse than the noise.
+    #
+    # Confidence is the signal that actually separates them, because it is
+    # measuring the right thing: speech in another language transcribed as
+    # English scores low precisely because the recogniser was guessing.
+    #
+    # Emitted for every segment so a client can hold a stricter floor for
+    # ANSWERING than the engine holds for DISPLAYING. Showing a doubtful line
+    # costs nothing and may be right; spending a credit answering it is a
+    # decision the app should be able to make with the evidence.
+    if word_confs:
+        print(f">>> SEGMENT CONF: {average_confidence:.2f}", flush=True)
+
     word_confidence_floor = (
         QUIET_CONFIDENCE_THRESHOLD
         if average_confidence < QUIET_SEGMENT_CEILING

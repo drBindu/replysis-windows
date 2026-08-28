@@ -209,3 +209,54 @@ A bound that resets itself joins the list:
 All four look correct when read and do nothing when run. The question that
 catches them is not *is this right* but **what makes this run, and what makes
 it stop**.
+---
+
+## 2026-08-28 — segment confidence, and a negative result worth keeping
+
+### The engine now emits what it already knew
+
+`>>> SEGMENT CONF: 0.42`, one line per segment, from the average word
+confidence the engine already computes at `speechmatics_engine.py:1463` and
+previously discarded unless the segment was dropped entirely.
+
+**Mac's request, and the reasoning behind it is the valuable part.** The
+clients only ever saw surviving text, so both were judging whether a transcript
+was real by looking at its grammar — and that cannot work. Mac measured it:
+
+    Explain TCP three way handshake        0.20   real question
+    cara na the me la vata cheppu ela...   0.22   garbage
+
+They overlap. Any threshold catching the garbage also rejects a legitimate
+short technical question, and silently dropping *"Explain TCP three way
+handshake"* mid-interview is worse than the noise it prevents.
+
+**Confidence separates them because it measures the right thing** — speech in
+another language transcribed as English scores low precisely because the
+recogniser was guessing. Grammar scores it as fluent nonsense.
+
+Clients can now hold a stricter floor for **answering** than the engine holds
+for **displaying**. Showing a doubtful line costs nothing and may be right;
+spending a credit answering it is a decision the app should make with evidence.
+Mac is building the consumer and tuning the answer-floor against real
+recordings.
+
+### Recording: Windows writes it, Mac does not
+
+Gated on `record.flag` (`:630`, `:2189`). Mac never writes it — hence 457 MB
+on Windows and 600 KB of transcripts on Mac. Not a Mac problem.
+
+### The sweep pattern is now explicit, on Mac's advice
+
+Recordings and transcripts share a directory and a prefix and differ only by
+extension. `interview_*.wav*` was already narrow enough and was verified
+against the real directory — 77 recordings, 0 of 374 transcripts — but Mac's
+point stands: **a rule that is safe because somebody checked is weaker than one
+that is safe because it cannot match.** Now two explicit patterns, `.wav` and
+`.wav.dpapi`, with the same verified result.
+
+### On publishing negative results
+
+Mac tried function-word ratio, measured it, found it could not separate the two
+cases, and said so instead of shipping it. That is worth naming: this exchange
+has been much more productive since both sides started reporting what did not
+work and what remains unwatched, rather than only what landed.
