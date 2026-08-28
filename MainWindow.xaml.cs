@@ -4544,13 +4544,64 @@ namespace InterviewCopilot
             return found;
         }
 
-        /// <summary>Kill + Dispose the Python process and null the reference.</summary>
+        /// <summary>
+        /// Ask the engine to close its connection, then take it away.
+        ///
+        /// This killed the process outright, and a killed engine never closes
+        /// its websocket. Speechmatics then holds that session slot until it
+        /// times out server-side — and the account has a limit on sessions
+        /// running at once. So every engine restart, every settings change,
+        /// every app close left a ghost holding a slot, and enough ghosts
+        /// exhaust the account.
+        ///
+        /// The Mac session found this from the other end: its quota was
+        /// exhausted by the remains of its own test runs, and it observed that
+        /// with one shared account a leak on either platform starves the other.
+        /// A Windows leak silences a Mac user mid-interview and nothing on
+        /// either machine connects the two events.
+        ///
+        /// The engine already polls shutdown.flag and exits cleanly on it,
+        /// closing the socket on the way out. That mechanism existed and this
+        /// path did not use it.
+        ///
+        /// The wait is bounded because a hung engine must not hold the app up;
+        /// past that it is killed as before, which is no worse than what
+        /// happened every time.
+        /// </summary>
         private void KillAndDisposeEngine()
         {
             var proc = speechmaticsProcess;
             speechmaticsProcess = null;
             if (proc == null) return;
-            try { proc.Kill(entireProcessTree: true); } catch { }
+
+            string shutdownFlag = Path.Combine(AppDataFolder, "shutdown.flag");
+            try
+            {
+                File.WriteAllText(shutdownFlag, "1");
+                if (!proc.WaitForExit(1500))
+                {
+                    DebugWindow.Log("ENGINE",
+                        "Engine did not close its session within 1.5s; killing it. "
+                        + "Speechmatics will hold that session slot until it times out.");
+                    proc.Kill(entireProcessTree: true);
+                }
+                else
+                {
+                    DebugWindow.Log("ENGINE", "Engine closed its Speechmatics session cleanly.");
+                }
+            }
+            catch
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+            }
+            finally
+            {
+                // A flag left behind would stop the NEXT engine before it
+                // started. The engine clears it when it acts on it, but not
+                // when it was killed before reading it.
+                try { if (File.Exists(shutdownFlag)) File.Delete(shutdownFlag); } catch { }
+            }
+
             try { proc.Dispose(); } catch { }
             // Clean up PID file on a normal kill so NuclearKill doesn't double-attempt it
             try { if (File.Exists(EnginePidPath)) File.Delete(EnginePidPath); } catch { }
@@ -4644,8 +4695,31 @@ namespace InterviewCopilot
                             var orphan = Process.GetProcessById(savedPid);
                             if (!orphan.HasExited && orphan.StartTime.ToFileTimeUtc() == savedStartTime)
                             {
-                                orphan.Kill(entireProcessTree: true);
-                                DebugWindow.Log("ENGINE", $"Killed orphaned engine PID {savedPid}");
+                                // An orphan is the likeliest session leak of the
+                                // lot: it has been holding a Speechmatics slot
+                                // unattended since the app last died. Ask it to
+                                // close before killing it, for the same reason
+                                // as above - a killed engine leaves the session
+                                // open and the account has a limit.
+                                //
+                                // Safe to write the flag here: this runs before
+                                // any engine of ours is started, so nothing else
+                                // can read it by mistake.
+                                string flag = Path.Combine(AppDataFolder, "shutdown.flag");
+                                try { File.WriteAllText(flag, "1"); } catch { }
+                                if (!orphan.WaitForExit(1500))
+                                {
+                                    orphan.Kill(entireProcessTree: true);
+                                    DebugWindow.Log("ENGINE",
+                                        $"Orphaned engine PID {savedPid} would not close; killed. "
+                                        + "Its Speechmatics session will linger until it times out.");
+                                }
+                                else
+                                {
+                                    DebugWindow.Log("ENGINE",
+                                        $"Orphaned engine PID {savedPid} closed its session cleanly.");
+                                }
+                                try { if (File.Exists(flag)) File.Delete(flag); } catch { }
                             }
                             else if (!orphan.HasExited)
                                 DebugWindow.Log("ENGINE", $"Skipped reused PID {savedPid}");
