@@ -1,4 +1,4 @@
-﻿using InterviewCopilot;
+using InterviewCopilot;
 
 namespace CleanerTests;
 
@@ -123,6 +123,9 @@ internal static class Program
 
         Console.WriteLine("\n8. Background chatter is not a continuation");
         _failed += ContinuationTests.Run();
+
+        Console.WriteLine("\n9. Reading our answer aloud is not a question");
+        _failed += ReadBackTests.Run();
 
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");

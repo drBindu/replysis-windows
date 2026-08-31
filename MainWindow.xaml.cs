@@ -47,9 +47,23 @@ namespace InterviewCopilot
         // Firing slightly early is recoverable: the question is deduplicated, and
         // Space interrupts an answer instantly. Firing late is not, because the
         // candidate has already been silent in front of someone.
-        private const int    AutoTurnFinishedSilenceMs = 300;   // punctuated, lands on a real word
-        private const int    AutoTurnNaturalSilenceMs  = 820;   // could still be a pause
-        private const int    AutoTurnMaxSilenceMs      = 1_250; // never wait longer than this
+        // How long to wait, after the words stop changing, before deciding the
+        // question is finished.
+        //
+        // This is dead time the candidate stands in. Speechmatics is already
+        // 700ms behind live speech and cannot go lower - 0.7 is its floor - and
+        // the model takes about 640ms, so every millisecond here is one third
+        // of a budget that is already close to two seconds.
+        //
+        // Cut from 300/820/1250. The old numbers were chosen to be certain a
+        // sentence had ended; the cost of that certainty is a pause the
+        // interviewer can hear. Being occasionally early is recoverable - the
+        // continuation merge exists precisely to join the rest on - and being
+        // late is not, because the candidate has already had to fill the
+        // silence.
+        private const int    AutoTurnFinishedSilenceMs = 220;   // punctuated, lands on a real word
+        private const int    AutoTurnNaturalSilenceMs  = 520;   // could still be a pause
+        private const int    AutoTurnMaxSilenceMs      = 850;   // never wait longer than this
         private const int    AutoTurnMinimumSpeechMs = 500;   // reject clicks/noise bursts
         private const int    AutoTurnMinimumChars    = 4;     // reject empty or tiny fragments
         private const int    RecordingSaveTimeoutMs  = 10_000;
@@ -1982,6 +1996,46 @@ namespace InterviewCopilot
             return false;
         }
 
+        /// <summary>
+        /// Whether this transcript is the answer currently on screen, spoken.
+        ///
+        /// Deliberately lenient about wording. Somebody reading aloud
+        /// paraphrases, skips, stumbles and adds "um" - so this compares
+        /// vocabulary rather than sequence, and asks what fraction of what they
+        /// said is already sitting on the screen in front of them.
+        ///
+        /// Short utterances are exempt. "Yes", "and the complexity", "tell me
+        /// more" share words with any answer by accident, and a real follow-up
+        /// must never be swallowed by this. Below eight words it does not judge.
+        /// </summary>
+        private bool IsReadingOurAnswerBack(string candidate)
+        {
+            string shown = AiAnswerBox?.Text ?? "";
+            if (string.IsNullOrWhiteSpace(shown) || string.IsNullOrWhiteSpace(candidate))
+                return false;
+
+            static string[] Words(string s) =>
+                Regex.Matches(s.ToLowerInvariant(), @"[\p{L}\p{N}']+")
+                     .Select(m => m.Value)
+                     .ToArray();
+
+            string[] said = Words(candidate);
+
+            // A real follow-up is short. Only a passage long enough to be
+            // reading is judged here.
+            if (said.Length < 8) return false;
+
+            var onScreen = new HashSet<string>(Words(shown));
+            if (onScreen.Count < 20) return false;   // too little shown to compare against
+
+            int echoed = said.Count(onScreen.Contains);
+            double share = (double)echoed / said.Length;
+
+            // Half. A follow-up that happens to reuse the subject sits well
+            // below this; a passage being read sits far above it.
+            return share >= 0.55;
+        }
+
         private static bool IsFragmentedNoise(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return false;
@@ -2096,6 +2150,34 @@ namespace InterviewCopilot
                 {
                     _lastAutoRejectedTranscript = question;
                     DebugWindow.Log("AUTO", $"Waiting for a complete question ({question.Length} chars). No AI request sent.");
+                }
+                return;
+            }
+
+            // The candidate reading our own answer out loud is not a question.
+            //
+            // This is what the product is FOR: an answer appears and the
+            // candidate says it. In practice mode the microphone hears them do
+            // it, the words come back as a transcript, and the app treated them
+            // as a new question - so the answer they were part-way through
+            // reading was replaced, mid-sentence, by an answer to itself. Then
+            // it happened again. Every round cost a credit.
+            //
+            // Nobody would report this as "the echo suppression is missing".
+            // They report that the answer vanishes while they are reading it,
+            // and they blame the app, which is fair.
+            //
+            // Compared against the answer on screen rather than against a
+            // recording, because that is what they can be reading. Half the
+            // words already present means it is not a new question - a genuine
+            // follow-up shares vocabulary but not that much of it.
+            if (IsReadingOurAnswerBack(candidateQuestion))
+            {
+                if (!string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
+                {
+                    _lastAutoRejectedTranscript = question;
+                    DebugWindow.Log("AUTO",
+                        "That is our own answer being read aloud, not a new question. Ignored.");
                 }
                 return;
             }
