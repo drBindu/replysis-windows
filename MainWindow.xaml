@@ -1278,9 +1278,9 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="LISTENING MODE" Foreground="#6F8198" FontSize="9.5"
+                                    <TextBlock Text="ANSWER MODE" Foreground="#6F8198" FontSize="9.5"
                                                FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Who is the app listening to?"
+                                    <TextBlock Text="When should it answer?"
                                                Foreground="#C6D4E8" FontSize="11.5" FontWeight="SemiBold"
                                                FontFamily="Segoe UI" Margin="0,3,0,0"/>
                                 </StackPanel>
@@ -1294,8 +1294,59 @@
 
                             <Border Height="1" Background="#1B2A3C" Margin="8,0,8,6"/>
 
-                            <Border x:Name="ManualModeRow" Padding="10,10" Cursor="Hand"
-                                    CornerRadius="10" Margin="1,0,1,3"
+                            <!-- AUTO ─────────────────────────────────────────────
+                                 Listed first because it is what most people
+                                 want and what the product is for. -->
+                            <Border x:Name="AutoModeRow" Padding="11,11" Cursor="Hand"
+                                    CornerRadius="11" Margin="1,0,1,4"
+                                    MouseLeftButtonDown="AutoModeOption_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#102A1D"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="34" Height="34" CornerRadius="10" Background="#102A1D"
+                                            BorderBrush="#285D42" BorderThickness="1" Margin="0,0,11,0"
+                                            VerticalAlignment="Top">
+                                        <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                                   Foreground="#34E08A" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Automatic" Foreground="#E9FFF2" FontSize="12.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
+                                        <TextBlock Text="Answers by itself the moment a question ends. Nothing to press."
+                                                   Foreground="#80B89A" FontSize="10.5" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                        <TextBlock Text="Best when you cannot touch the keyboard."
+                                                   Foreground="#5E8B75" FontSize="10" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="AutoModeCheck" Grid.Column="2" Text="&#xE73E;"
+                                               FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                               Foreground="#34E08A" VerticalAlignment="Center" Margin="8,0,2,0"
+                                               Visibility="Collapsed"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- MANUAL ───────────────────────────────────────────
+                                 The accuracy claim here is real and worth stating:
+                                 in Automatic the app has to guess where a question
+                                 ended from a pause, and a pause mid-sentence cuts
+                                 it early. Space removes the guess. -->
+                            <Border x:Name="ManualModeRow" Padding="11,11" Cursor="Hand"
+                                    CornerRadius="11" Margin="1,0,1,2"
                                     MouseLeftButtonDown="ManualModeOption_Click">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -1314,17 +1365,21 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <Border Width="34" Height="34" CornerRadius="10" Background="#172438"
-                                            BorderBrush="#2A3A4F" BorderThickness="1" Margin="0,0,11,0">
+                                            BorderBrush="#2A3A4F" BorderThickness="1" Margin="0,0,11,0"
+                                            VerticalAlignment="Top">
                                         <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="14"
                                                    Foreground="#A9B6C8" HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Press Space" Foreground="#EEF4FB" FontSize="12.5"
+                                        <TextBlock Text="Manual  ·  Space" Foreground="#EEF4FB" FontSize="12.5"
                                                    FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="You start and stop it yourself"
+                                        <TextBlock Text="Press Space to start, Space again to answer."
                                                    Foreground="#7F93AB" FontSize="10.5" FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                        <TextBlock Text="More accurate — you decide where the question ended, so it is never cut off early."
+                                                   Foreground="#6F8198" FontSize="10" FontWeight="SemiBold"
+                                                   FontFamily="Segoe UI" Margin="0,3,0,0" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <TextBlock x:Name="ManualModeCheck" Grid.Column="2" Text="&#xE73E;"
                                                FontFamily="Segoe MDL2 Assets" FontSize="12"
@@ -1332,83 +1387,23 @@
                                 </Grid>
                             </Border>
 
-                            <Border x:Name="InterviewModeRow" Padding="10,10" Cursor="Hand"
-                                    CornerRadius="10" Margin="1,0,1,3"
-                                    MouseLeftButtonDown="InterviewModeOption_Click">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#102A1D"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="34" Height="34" CornerRadius="10" Background="#102A1D"
-                                            BorderBrush="#285D42" BorderThickness="1" Margin="0,0,11,0">
-                                        <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                                   Foreground="#34E08A" HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Interview" Foreground="#E9FFF2" FontSize="12.5"
-                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Hears the interviewer. Answers on its own."
-                                                   Foreground="#80B89A" FontSize="10.5" FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                    <TextBlock x:Name="InterviewModeCheck" Grid.Column="2" Text="&#xE73E;"
-                                               FontFamily="Segoe MDL2 Assets" FontSize="12"
-                                               Foreground="#34E08A" VerticalAlignment="Center" Margin="8,0,2,0"
-                                               Visibility="Collapsed"/>
-                                </Grid>
-                            </Border>
-
-                            <Border x:Name="PracticeModeRow" Padding="10,10" Cursor="Hand"
-                                    CornerRadius="10" Margin="1,0,1,1"
-                                    MouseLeftButtonDown="PracticeModeOption_Click">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="#0C2731"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="34" Height="34" CornerRadius="10" Background="#0C2731"
-                                            BorderBrush="#1E5D70" BorderThickness="1" Margin="0,0,11,0">
-                                        <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                                   Foreground="#38CFF2" HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Practice" Foreground="#E8FBFF" FontSize="12.5"
-                                                   FontWeight="Bold" FontFamily="Segoe UI"/>
-                                        <TextBlock Text="Hears you. Answers on its own."
-                                                   Foreground="#78B8C8" FontSize="10.5" FontWeight="SemiBold"
-                                                   FontFamily="Segoe UI" Margin="0,2,0,0" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                    <TextBlock x:Name="PracticeModeCheck" Grid.Column="2" Text="&#xE73E;"
-                                               FontFamily="Segoe MDL2 Assets" FontSize="12"
-                                               Foreground="#38CFF2" VerticalAlignment="Center" Margin="8,0,2,0"
-                                               Visibility="Collapsed"/>
-                                </Grid>
-                            </Border>
+                            <!-- Who is being listened to. Set in Settings, shown
+                                 here always: choosing wrong is otherwise silent —
+                                 a real interview with Practice selected hears the
+                                 candidate instead of the interviewer and nothing
+                                 says so. -->
+                            <Border Height="1" Background="#1B2A3C" Margin="8,7,8,0"/>
+                            <Grid Margin="12,9,11,4">
+                                <StackPanel>
+                                    <TextBlock x:Name="SessionTypeFooterText"
+                                               Text="Listening to the interviewer  ·  Real interview"
+                                               Foreground="#8FA3BC" FontSize="10.5" FontWeight="SemiBold"
+                                               FontFamily="Segoe UI" TextWrapping="Wrap"/>
+                                    <TextBlock Text="Change this in Settings"
+                                               Foreground="#5A6B82" FontSize="9.5" FontWeight="SemiBold"
+                                               FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Grid>
                         </StackPanel>
                     </Border>
                 </Border>

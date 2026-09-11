@@ -108,15 +108,42 @@ namespace InterviewCopilot
         private string _jobDescription   = "";
         private List<(string Name, string Content)> _savedResumes = new();
         private bool _answerIsBehavioral = false;
+        /// <summary>
+        /// WHEN the app answers. Nothing else.
+        ///
+        /// This used to be Manual / InterviewAuto / PracticeAuto, which put two
+        /// unrelated questions in one list of three. "Interview" and "Practice"
+        /// answer *whose voice is heard*; "Press Space" answers *when it
+        /// answers*. Picking one silently changed the other, so a user who
+        /// wanted manual control also chose an audio source without knowing it,
+        /// and a user who switched to Practice lost manual control.
+        ///
+        /// The two questions are now asked separately: this one here, and
+        /// <see cref="SessionType"/> in Settings.
+        /// </summary>
         private enum ListeningMode
         {
             Manual,
-            InterviewAuto,
-            PracticeAuto
+            Auto
         }
 
         private ListeningMode _listeningMode = ListeningMode.Manual;
-        private bool AutoModeEnabled => _listeningMode != ListeningMode.Manual;
+        private bool AutoModeEnabled => _listeningMode == ListeningMode.Auto;
+
+        /// <summary>
+        /// WHOSE voice the app listens to. Lives in Settings, because it is
+        /// chosen once when you set the app up and then left alone, unlike
+        /// Auto/Manual which a user flips during a session.
+        ///
+        /// Stored as the existing MicCaptureEnabled flag rather than a new
+        /// setting: that flag already meant exactly this, it was simply
+        /// described as "System audio + my voice", which is how the code thinks
+        /// and not how a candidate thinks.
+        ///
+        ///   RealInterview -> mic off,  system audio on   (hears the interviewer)
+        ///   Practice      -> mic on,   system audio on   (hears you)
+        /// </summary>
+        private static bool PracticeSession => SettingsWindow.GetMicCaptureEnabled();
         private bool _autoTurnSubmitting;
         private string _autoLastTranscript = "";
         private string _lastAutoRejectedTranscript = "";
@@ -1288,16 +1315,10 @@ namespace InterviewCopilot
             SelectListeningMode(ListeningMode.Manual);
         }
 
-        private void InterviewModeOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private void AutoModeOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             e.Handled = true;
-            SelectListeningMode(ListeningMode.InterviewAuto);
-        }
-
-        private void PracticeModeOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            SelectListeningMode(ListeningMode.PracticeAuto);
+            SelectListeningMode(ListeningMode.Auto);
         }
 
         private void SelectListeningMode(ListeningMode mode)
@@ -1309,8 +1330,12 @@ namespace InterviewCopilot
                 return;
             }
 
-            string previousCaptureMode = CaptureModeFor(_listeningMode);
-            string nextCaptureMode = CaptureModeFor(mode);
+            // Switching Auto/Manual cannot change the audio source any more, so
+            // it never needs to restart the engine. Kept as a comparison rather
+            // than deleted, because the engine restart below is still the right
+            // thing if a future change does affect capture.
+            string previousCaptureMode = CaptureMode();
+            string nextCaptureMode = CaptureMode();
 
             // Mode changes never submit a half-finished transcript. They stop capture,
             // clear only the auto-turn detector, and leave the user's saved Settings intact.
@@ -1344,21 +1369,23 @@ namespace InterviewCopilot
                 StartAutoListeningIfReady();
             }
 
-            string modeName = mode switch
-            {
-                ListeningMode.InterviewAuto => "Interview mode: hears the interviewer, not you",
-                ListeningMode.PracticeAuto => "Practice mode: hears you",
-                _ => "Press Space"
-            };
-            DebugWindow.Log("MODE", $"Selected {modeName}. Saved audio preference was not changed.");
+            DebugWindow.Log("MODE",
+                (mode == ListeningMode.Auto ? "Auto: answers on its own" : "Manual: you press Space")
+                + " | session type: "
+                + (PracticeSession ? "Practice (hears you)" : "Real interview (hears the interviewer)"));
         }
 
-        private static string CaptureModeFor(ListeningMode mode) => mode switch
-        {
-            ListeningMode.InterviewAuto => "system",
-            ListeningMode.PracticeAuto => "both",
-            _ => SettingsWindow.GetMicCaptureEnabled() ? "both" : "system"
-        };
+        /// <summary>
+        /// What the engine captures. Depends ONLY on the session type now.
+        ///
+        /// Previously Auto overrode this: choosing "Interview" forced system
+        /// audio and "Practice" forced the microphone, whatever the user had
+        /// saved in Settings. That is why Settings had to grey out the audio
+        /// cards and explain itself with a notice while Auto was on. Auto no
+        /// longer touches the audio source, so the notice and the greying-out
+        /// are gone with it.
+        /// </summary>
+        private static string CaptureMode() => PracticeSession ? "both" : "system";
 
         private void UpdateListeningModeUi()
         {
@@ -1366,41 +1393,37 @@ namespace InterviewCopilot
             static SolidColorBrush Brush(string hex) =>
                 new((Color)ColorConverter.ConvertFromString(hex));
 
+            string listening = PracticeSession
+                ? "Listening to you (Practice)."
+                : "Listening to the interviewer (Real interview).";
+
             switch (_listeningMode)
             {
-                case ListeningMode.InterviewAuto:
+                case ListeningMode.Auto:
                     AutoModePill.Background = Brush("#102A1D");
                     AutoModePill.BorderBrush = Brush("#2C7B50");
                     AutoModeDot.Fill = Brush("#34E08A");
-                    AutoModeLabel.Text = "INTERVIEW";
+                    AutoModeLabel.Text = "AUTO";
                     AutoModeLabel.Foreground = Brush("#B8F5D3");
                     AutoModeChevron.Foreground = Brush("#73C998");
                     AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#34E08A");
                     AutoModeGlow.Opacity = 0.42;
-                    AutoModePill.ToolTip = "Hears the interviewer and answers on its own. Your microphone stays off.";
-                    break;
-
-                case ListeningMode.PracticeAuto:
-                    AutoModePill.Background = Brush("#0C2731");
-                    AutoModePill.BorderBrush = Brush("#22768B");
-                    AutoModeDot.Fill = Brush("#38CFF2");
-                    AutoModeLabel.Text = "PRACTICE";
-                    AutoModeLabel.Foreground = Brush("#BDEFFC");
-                    AutoModeChevron.Foreground = Brush("#70C6DA");
-                    AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#38CFF2");
-                    AutoModeGlow.Opacity = 0.38;
-                    AutoModePill.ToolTip = "Hears you and answers on its own. No interviewer needed.";
+                    AutoModePill.ToolTip =
+                        "Auto — answers by itself as soon as a question finishes.\n"
+                        + listening + "\nChange who it listens to in Settings.";
                     break;
 
                 default:
                     AutoModePill.Background = Brush("#101827");
                     AutoModePill.BorderBrush = Brush("#26364C");
                     AutoModeDot.Fill = Brush("#607086");
-                    AutoModeLabel.Text = "PRESS SPACE";
+                    AutoModeLabel.Text = "MANUAL";
                     AutoModeLabel.Foreground = Brush("#A9B6C8");
                     AutoModeChevron.Foreground = Brush("#6F8198");
                     AutoModeGlow.Opacity = 0;
-                    AutoModePill.ToolTip = "Press Space to listen, Space again for the answer.";
+                    AutoModePill.ToolTip =
+                        "Manual — press Space to start, Space again to answer.\n"
+                        + listening + "\nChange who it listens to in Settings.";
                     break;
             }
 
@@ -1415,17 +1438,25 @@ namespace InterviewCopilot
 
             ManualModeCheck.Visibility = _listeningMode == ListeningMode.Manual
                 ? Visibility.Visible : Visibility.Collapsed;
-            InterviewModeCheck.Visibility = _listeningMode == ListeningMode.InterviewAuto
-                ? Visibility.Visible : Visibility.Collapsed;
-            PracticeModeCheck.Visibility = _listeningMode == ListeningMode.PracticeAuto
+            AutoModeCheck.Visibility = _listeningMode == ListeningMode.Auto
                 ? Visibility.Visible : Visibility.Collapsed;
 
+            SetModeRowSelection(AutoModeRow, _listeningMode == ListeningMode.Auto,
+                Brush("#102A1D"), Brush("#2C7B50"));
             SetModeRowSelection(ManualModeRow, _listeningMode == ListeningMode.Manual,
                 Brush("#152337"), Brush("#40536B"));
-            SetModeRowSelection(InterviewModeRow, _listeningMode == ListeningMode.InterviewAuto,
-                Brush("#102A1D"), Brush("#2C7B50"));
-            SetModeRowSelection(PracticeModeRow, _listeningMode == ListeningMode.PracticeAuto,
-                Brush("#0C2731"), Brush("#22768B"));
+
+            // The popup also states which voice is being listened to, because
+            // that choice lives in Settings and a user must never have to guess
+            // it. Getting it wrong is silent: a real interview with Practice
+            // selected hears the candidate instead of the interviewer, and
+            // nothing on screen would have said so.
+            if (SessionTypeFooterText != null)
+            {
+                SessionTypeFooterText.Text = PracticeSession
+                    ? "Listening to you  ·  Practice"
+                    : "Listening to the interviewer  ·  Real interview";
+            }
         }
 
         private static void SetModeRowSelection(System.Windows.Controls.Border row, bool selected,
@@ -4463,7 +4494,7 @@ namespace InterviewCopilot
                 string savedName = SettingsWindow.GetAudioDeviceName();
                 if (!string.IsNullOrWhiteSpace(savedName))
                     deviceArg += $" --device-name \"{savedName.Replace("\"", "")}\"";
-                string modeArg = $" --mode {CaptureModeFor(_listeningMode)}";
+                string modeArg = $" --mode {CaptureMode()}";
                 string langArg   = $" --language {SettingsWindow.GetTranscriptLanguage()}";
                 speechmaticsProcess.StartInfo.Arguments = $"{scriptArg}{deviceArg}{modeArg}{langArg}";
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SM_API_KEY"] = smKey;
@@ -5353,10 +5384,9 @@ namespace InterviewCopilot
 
         private void SettingsBtn_Click(object sender, RoutedEventArgs e)
         {
-            var sw = new SettingsWindow(
-                _audioDeviceId,
-                AutoModeEnabled,
-                _listeningMode == ListeningMode.PracticeAuto);
+            // Auto no longer overrides the audio source, so Settings no longer
+            // needs to know whether Auto is on in order to grey the cards out.
+            var sw = new SettingsWindow(_audioDeviceId);
             sw.Owner = this;
             sw.ShowDialog();
             if (sw.SignInRequested) { SignInHeaderBtn_Click(sender, e); return; }
@@ -5364,6 +5394,9 @@ namespace InterviewCopilot
             {
                 if (sw.SelectedDeviceIndex >= 0) _audioDeviceId = sw.SelectedDeviceIndex;
                 StartSpeechmaticsEngine();
+                // The session type may have changed in there, and it is what the
+                // pill and popup describe.
+                UpdateListeningModeUi();
                 ApplyMainWindowOpacity();
                 // Re-apply stealth in case it was changed in Settings. This must reach
                 // the overlay too, not just the main window.

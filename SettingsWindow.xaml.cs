@@ -55,19 +55,13 @@ namespace InterviewCopilot
         private const double PreferredDialogWidth = 460;
         private const double PreferredDialogHeight = 560;
         private const double OwnerInset = 32;
-        private readonly bool _autoModeActive;
-        private readonly bool _autoModeUsesMic;
-        private bool _savedMicCaptureEnabled;
-
-        public SettingsWindow(int currentDeviceId, bool autoModeActive = false, bool autoModeUsesMic = false)
+        public SettingsWindow(int currentDeviceId)
         {
             InitializeComponent();
             // Same glass as the main window, from the same stored setting.
             // Every window painted its own solid near-black before this, so
             // opening one dropped an opaque slab on top of a translucent app.
             Glass.Apply(this, RootGlass);
-            _autoModeActive = autoModeActive;
-            _autoModeUsesMic = autoModeUsesMic;
             try { WindowStealth.SetStealthMode(this, GetStealthMode()); } catch { }
             Loaded += SettingsWindow_Loaded;
             LoadDevices();
@@ -77,29 +71,17 @@ namespace InterviewCopilot
                     if (deviceIndices[i] == currentDeviceId) { AudioDeviceCombo.SelectedIndex = i; break; }
 
             var cfg = LoadConfig();
-            _savedMicCaptureEnabled = cfg.MicCaptureEnabled;
             BackendUrlBox.Text      = cfg.BackendUrl        ?? "";
             CoopilotEmailBox.Text   = cfg.CoopilotEmail     ?? "";
             TempSlider.Value        = cfg.Temperature;
 
-            MicBothRadio.IsChecked = _autoModeActive
-                ? _autoModeUsesMic
-                : cfg.MicCaptureEnabled;
-            MicSystemRadio.IsChecked = _autoModeActive
-                ? !_autoModeUsesMic
-                : !cfg.MicCaptureEnabled;
-            AutoModeAudioNotice.Visibility = _autoModeActive ? Visibility.Visible : Visibility.Collapsed;
-            MicBothRadio.IsHitTestVisible = !_autoModeActive;
-            MicSystemRadio.IsHitTestVisible = !_autoModeActive;
-            if (_autoModeActive)
-            {
-                AutoModeAudioNoticeTitle.Text = _autoModeUsesMic
-                    ? "PRACTISING ALONE IS ON"
-                    : "REAL INTERVIEW IS ON";
-                AutoModeAudioNoticeBody.Text = _autoModeUsesMic
-                    ? "Your microphone is included while this mode is on, so you can ask questions with no interviewer. The choice you saved here is unchanged."
-                    : "This mode hears the meeting only, so your microphone stays off. The choice you saved here is unchanged.";
-            }
+            // Session type. The cards were greyed out and overridden whenever
+            // Auto was on, because Auto used to force the audio source, and a
+            // notice had to explain that the setting on screen was not the
+            // setting in effect. Auto no longer touches audio, so the choice is
+            // always the user's and always live.
+            MicBothRadio.IsChecked   = cfg.MicCaptureEnabled;    // Practice
+            MicSystemRadio.IsChecked = !cfg.MicCaptureEnabled;   // Real interview
             CloudSyncCheckBox.IsChecked = cfg.CloudSyncEnabled;
             StealthCheckBox.IsChecked   = cfg.StealthMode;
             WatchScreenCheckBox.IsChecked = cfg.WatchScreenEnabled;
@@ -458,9 +440,7 @@ namespace InterviewCopilot
                 Temperature       = Math.Round(TempSlider.Value, 1),
                 MainWindowOpacity = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 2),
                 OverlayOpacity    = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 2),
-                MicCaptureEnabled = _autoModeActive
-                    ? _savedMicCaptureEnabled
-                    : MicBothRadio.IsChecked == true,
+                MicCaptureEnabled = MicBothRadio.IsChecked == true,
                 AudioDeviceIndex  = SelectedDeviceIndex,   // persist the chosen mic across restarts
                 AudioDeviceName   = SelectedDeviceName,     // and the name, which outlives the number
                 CloudSyncEnabled  = CloudSyncCheckBox.IsChecked == true,

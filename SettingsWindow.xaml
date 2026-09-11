@@ -227,29 +227,18 @@
                     </Grid>
                 </Border>
 
-                <!-- ── AUDIO CAPTURE ──────────────────────────────── -->
-                <TextBlock Text="AUDIO CAPTURE" Style="{StaticResource SectionLabel}"/>
-
-                <Border x:Name="AutoModeAudioNotice" Visibility="Collapsed"
-                        Background="#102A1D" BorderBrush="#2C7B50" BorderThickness="1"
-                        CornerRadius="9" Padding="12,9" Margin="0,0,0,10">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Ellipse Width="7" Height="7" Fill="#34E08A" Margin="0,5,9,0"
-                                 VerticalAlignment="Top"/>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock x:Name="AutoModeAudioNoticeTitle" Text="AUTO MODE ACTIVE" Foreground="#B8F5D3"
-                                       FontSize="10" FontWeight="Bold" FontFamily="Segoe UI"/>
-                            <TextBlock x:Name="AutoModeAudioNoticeBody"
-                                       Text="System audio only is temporarily active. Your saved manual audio choice returns when Auto is turned off."
-                                       Foreground="#8FCBAB" FontSize="10.5" FontWeight="SemiBold"
-                                       FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                <!-- ── SESSION TYPE ───────────────────────────────────
+                     This was headed "AUDIO CAPTURE" with the options "System
+                     audio only" and "System audio + my voice". Both are true
+                     and neither is a question a candidate can answer - they
+                     know whether they are in a real interview or practising
+                     alone, not which audio device that implies. Same setting,
+                     same stored flag, asked the way it is actually thought
+                     about. -->
+                <TextBlock Text="SESSION TYPE" Style="{StaticResource SectionLabel}"/>
+                <TextBlock Text="Who should the app listen to?"
+                           Foreground="#8FA3BC" FontSize="11.5" FontWeight="SemiBold"
+                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="2,-4,0,10"/>
 
                 <!-- System only -->
                 <RadioButton x:Name="MicSystemRadio" GroupName="MicMode"
@@ -271,12 +260,15 @@
                                          VerticalAlignment="Center" Visibility="Collapsed"/>
                             </Border>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="System audio only"
+                                <TextBlock Text="Real interview"
                                            Foreground="White" FontSize="13"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="Uses system audio only. Your microphone is not accessed in this mode."
+                                <TextBlock Text="Hears the interviewer through your computer's sound, and answers their questions."
                                            Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
                                            FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                <TextBlock Text="Your microphone is never opened, so your own voice is not recorded or sent anywhere."
+                                           Foreground="#6B7280" FontSize="10.5" FontWeight="SemiBold"
+                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,5,0,0"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -302,12 +294,15 @@
                                          VerticalAlignment="Center" Visibility="Collapsed"/>
                             </Border>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="System audio + my voice"
+                                <TextBlock Text="Practice"
                                            Foreground="White" FontSize="13"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="Includes your microphone only while you are actively listening."
+                                <TextBlock Text="Hears you through your microphone. Ask yourself a question out loud and rehearse the answer."
                                            Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
                                            FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                <TextBlock Text="No interviewer and no meeting needed. The microphone is opened only while you are listening."
+                                           Foreground="#6B7280" FontSize="10.5" FontWeight="SemiBold"
+                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,5,0,0"/>
                             </StackPanel>
                         </Grid>
                     </Border>
