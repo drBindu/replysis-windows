@@ -2423,6 +2423,11 @@ namespace InterviewCopilot
                 DeletePauseFlag();
                 DebugWindow.Log("MIC", $"[{source}] UNMUTED — listening");
                 _lastMicUseUtc = DateTime.UtcNow;
+                // Unmuting is the moment a question becomes possible, so take a
+                // shot now rather than waiting for the next tick. This is what
+                // lets the muted interval above be long without costing the
+                // first question its screenshot.
+                _ = PrepareShotAsync();
                 StartListeningMeter();
                 if (AutoModeEnabled) ResetAutoTurnDetection();
                 UpdateMicUi();
@@ -2866,6 +2871,23 @@ namespace InterviewCopilot
         // enough that an app left open all afternoon captures nothing.
         private static readonly TimeSpan PrepareShotsAfterMicWithin = TimeSpan.FromMinutes(5);
 
+        /// <summary>
+        /// How long to leave between prepared shots while the microphone is
+        /// MUTED, as opposed to the two seconds used while listening.
+        ///
+        /// Measured from a real session: the app captured and encoded a ~500 KB
+        /// screenshot every two seconds for the whole time the user sat muted,
+        /// because the only guard was "the mic was used within five minutes" -
+        /// one press of Space bought five minutes of capturing whatever was on
+        /// the screen. That is ~150 captures, several hundred milliseconds of
+        /// CPU each, for a question nobody can be asking while muted.
+        ///
+        /// Not zero, because a shot must be reasonably fresh the moment they
+        /// unmute. Fifteen seconds bounds how stale it can be, and unmuting
+        /// prepares one immediately anyway.
+        /// </summary>
+        private static readonly TimeSpan PreparedShotIntervalWhileMuted = TimeSpan.FromSeconds(15);
+
         private DateTime _lastMicUseUtc = DateTime.MinValue;
         private bool _warnedNoCloak;
 
@@ -2921,6 +2943,13 @@ namespace InterviewCopilot
             // happening" means here. Open the app and leave it, and nothing is
             // captured at all.
             if (DateTime.UtcNow - _lastMicUseUtc > PrepareShotsAfterMicWithin) return;
+
+            // While muted, slow right down. Nobody can be asking a question, so
+            // the only job left is keeping a shot fresh enough to be useful the
+            // instant they unmute - and unmuting prepares one directly.
+            if (isMuted
+                && _preparedShotUtc != DateTime.MinValue
+                && DateTime.UtcNow - _preparedShotUtc < PreparedShotIntervalWhileMuted) return;
 
             // If our own windows cannot be hidden from a capture, the fallback
             // drops the opacity to zero for ninety milliseconds. Once, before an
@@ -4785,17 +4814,34 @@ namespace InterviewCopilot
             string shutdownFlag = Path.Combine(AppDataFolder, "shutdown.flag");
             try
             {
+                // The bound was 1.5s and it was a guess. Measured on two real
+                // sessions it was never enough: once with a recording to flush
+                // first, once with nothing to flush at all, so the websocket
+                // close alone exceeds it. Every app close therefore stranded a
+                // Speechmatics slot until the server timed it out - which
+                // mattered little at a quota of 2 and matters more at 50, since
+                // a leak is now invisible for far longer before anyone notices.
+                //
+                // Raised to 6s, and the ACTUAL time is logged either way rather
+                // than another number being picked by feel. A longer bound costs
+                // nothing when the engine is quick, because WaitForExit returns
+                // the moment it exits; it only spends time that was going to be
+                // spent leaking a session instead.
+                var closeWatch = System.Diagnostics.Stopwatch.StartNew();
                 File.WriteAllText(shutdownFlag, "1");
-                if (!proc.WaitForExit(1500))
+                if (!proc.WaitForExit(6000))
                 {
+                    closeWatch.Stop();
                     DebugWindow.Log("ENGINE",
-                        "Engine did not close its session within 1.5s; killing it. "
+                        $"Engine did not close its session within {closeWatch.ElapsedMilliseconds}ms; killing it. "
                         + "Speechmatics will hold that session slot until it times out.");
                     proc.Kill(entireProcessTree: true);
                 }
                 else
                 {
-                    DebugWindow.Log("ENGINE", "Engine closed its Speechmatics session cleanly.");
+                    closeWatch.Stop();
+                    DebugWindow.Log("ENGINE",
+                        $"Engine closed its Speechmatics session cleanly in {closeWatch.ElapsedMilliseconds}ms.");
                 }
             }
             catch
@@ -4971,13 +5017,32 @@ namespace InterviewCopilot
                                 // Safe to write the flag here: this runs before
                                 // any engine of ours is started, so nothing else
                                 // can read it by mistake.
+                                // This bound stays short, unlike the one in
+                                // KillAndDisposeEngine which was raised to 6s.
+                                // NuclearKillOldProcesses runs synchronously in
+                                // the MainWindow constructor, before the window
+                                // is shown, so every millisecond here is a
+                                // frozen app on startup. Six seconds of white
+                                // screen to reclaim a slot that has ALREADY been
+                                // leaked since the last crash is the wrong
+                                // trade; the server times that slot out anyway.
+                                //
+                                // It cannot be made async either: the flag must
+                                // be written before our own engine starts, or
+                                // the new engine reads it and exits immediately.
+                                //
+                                // Logged with the real elapsed time so the cost
+                                // of this compromise is visible rather than
+                                // assumed.
+                                var orphanWatch = System.Diagnostics.Stopwatch.StartNew();
                                 string flag = Path.Combine(AppDataFolder, "shutdown.flag");
                                 try { File.WriteAllText(flag, "1"); } catch { }
                                 if (!orphan.WaitForExit(1500))
                                 {
                                     orphan.Kill(entireProcessTree: true);
+                                    orphanWatch.Stop();
                                     DebugWindow.Log("ENGINE",
-                                        $"Orphaned engine PID {savedPid} would not close; killed. "
+                                        $"Orphaned engine PID {savedPid} would not close in {orphanWatch.ElapsedMilliseconds}ms; killed. "
                                         + "Its Speechmatics session will linger until it times out.");
                                 }
                                 else
