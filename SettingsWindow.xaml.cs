@@ -91,12 +91,6 @@ namespace InterviewCopilot
             MainOpacitySlider.Value    = Math.Round(sharedSliderVal);
             OverlayOpacitySlider.Value = Math.Round(sharedSliderVal);
 
-            // Map stored model index → Groq or OpenAI radio. Groq (fast) is the default;
-            // only an explicit OpenAI pick (index 2) shows OpenAI, matching IsGroq().
-            bool useGroq = cfg.ModelIndex != IdxOpenAi;
-            ModelGroqRadio.IsChecked   = useGroq;
-            ModelOpenAiRadio.IsChecked = !useGroq;
-            RefreshModelCards();
 
             // About
             // On an installed copy this is the package version the updater
@@ -232,14 +226,7 @@ namespace InterviewCopilot
         // ═══════════════════════════════════════════════════════════════
         // EVENT HANDLERS
         // ═══════════════════════════════════════════════════════════════
-        private void ModelRadio_Checked(object sender, RoutedEventArgs e) => RefreshModelCards();
 
-        private void RefreshModelCards()
-        {
-            bool groq = ModelGroqRadio.IsChecked == true;
-            ApplyCardStyle(GroqCard,   GroqDot,   groq);
-            ApplyCardStyle(OpenAiCard, OpenAiDot, !groq);
-        }
 
 
         private static void ApplyCardStyle(System.Windows.Controls.Border card,
@@ -421,7 +408,9 @@ namespace InterviewCopilot
                 SelectedDeviceIndex = deviceIndices[AudioDeviceCombo.SelectedIndex];
                 SelectedDeviceName  = AudioDeviceCombo.SelectedItem?.ToString() ?? "";
 
-            int modelIdx = ModelGroqRadio.IsChecked == true ? IdxGroq : IdxOpenAi;
+            // The model picker was removed: the backend chooses the model and ignores
+            // this value. It now only feeds the provider label and a log header.
+            int modelIdx = IdxGroq;
 
             var cfg = new AppConfig
             {

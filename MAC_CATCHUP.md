@@ -1739,6 +1739,42 @@ underneath them, which ran regardless.
 
 ---
 
+## 2026-09-11, evening: an enterprise pass on visible text
+
+The owner reads certain patterns as "AI generated", has now said so for both
+the website and this app, and they are cheap to avoid on Mac from the start.
+
+**Keep out of anything a user sees:** em and en dashes, middle-dot separators,
+letters typed with spaces to fake tracking ("A I   A N S W E R"), marketing
+taglines under the product name ("Interview Intelligence", "tailors every
+answer"), glossy highlights, coloured glows, and emoji used as icons in the
+toolbar. WPF has no letter-spacing property, which is why the fake-spaced
+labels existed; SwiftUI has `.tracking()`, so Mac never needed the hack, but the
+taglines and dots are worth checking for.
+
+**The model picker was removed.** It offered "Fast" and "Accurate (GPT-4o)".
+The backend chooses the model itself and ignores the provider label the client
+sends, and the OpenAI account behind GPT-4o has been inactive since 2026-08-22,
+so the card promised something nobody could get. If Mac still shows a model
+choice, it is equally fake.
+
+**A status message must never live only in a tooltip.** When the Auto/Manual
+pill became a two-segment switch, its notice text moved into a tooltip, and
+nine warnings went invisible at once, including "Another device is using your
+account" and "Not transcribing. Restart the app." Nobody hovers a tooltip. The
+message now replaces the switch for four seconds, the way it replaced the old
+pill's label, and the wording is sentence case rather than shouted capitals.
+
+**Smaller changes, all visible:** the credits badge reads "5.0k credits, 21h 53m
+left" instead of emoji; keyboard shortcuts are drawn as key caps instead of a
+sentence joined by dots; the sessions list date is "Sep 11, 2026, 4:05 PM"; and
+long Settings descriptions were cut to one or two sentences while keeping every
+fact they carried. Two of those facts were dropped by mistake in the first draft
+and put back (the F7 shortcut, and "support varies" on stealth mode), which is
+the reason to compare old and new text line by line rather than rewriting blind.
+
+---
+
 ## Where the reasoning lives
 
 The Windows commit messages, `git log` on `windowsNative`, one commit per

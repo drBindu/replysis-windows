@@ -190,7 +190,7 @@
                             </StackPanel>
 
                             <Button Grid.Column="2" Click="CloseBtn_Click"
-                                    ToolTip="Back to the interview screen  &#183;  Esc"
+                                    ToolTip="Back to the interview screen (Esc)"
                                     Background="Transparent" BorderThickness="0"
                                     Cursor="Hand" VerticalAlignment="Center"
                                     FocusVisualStyle="{StaticResource KeyboardFocus}">

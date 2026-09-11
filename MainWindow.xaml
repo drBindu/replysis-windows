@@ -322,8 +322,9 @@
                                 </Ellipse.Fill>
                             </Ellipse>
 
-                            <!-- Glassy top highlight for a premium sheen -->
-                            <Ellipse x:Name="Gloss" Margin="7,5,7,22" Opacity="0.22">
+                            <!-- Collapsed: a shiny bubble on flat glass read as dated rather than premium.
+                                 Kept rather than deleted because hover triggers may name it. -->
+                            <Ellipse x:Name="Gloss" Margin="7,5,7,22" Opacity="0.22" Visibility="Collapsed">
                                 <Ellipse.Fill>
                                     <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
                                         <GradientStop Color="#FFFFFF" Offset="0"/>
@@ -404,6 +405,29 @@
             <Setter Property="FontFamily" Value="Segoe UI"/>
         </Style>
 
+        <!-- A keyboard shortcut drawn as a key cap. -->
+        <Style x:Key="KeyCap" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#2A3A50"/>
+            <Setter Property="Background" Value="#111A28"/>
+            <Setter Property="Padding" Value="5,1,5,1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="KeyCapText" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#CBD5E1"/>
+        </Style>
+        <Style x:Key="KeyCapLabel" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="#8A97AA"/>
+            <Setter Property="Margin" Value="7,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
     </Window.Resources>
 
     <!-- ====================================================================
@@ -448,8 +472,6 @@
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Replysis AI" Foreground="#F5F8FC" FontSize="14.5"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="I N T E R V I E W   I N T E L L I G E N C E" Foreground="#8598B4"
-                                           FontSize="7.5" FontWeight="Bold" FontFamily="Segoe UI" Margin="0,1,0,0"/>
                             </StackPanel>
                         </StackPanel>
 
@@ -499,34 +521,29 @@
                                  user needs to see at a glance during an
                                  interview. -->
                             <Border x:Name="ModeSegments" Margin="12,0,0,0"
-                                    Background="#0C1421" BorderBrush="#243449"
-                                    BorderThickness="1" CornerRadius="12" Padding="3"
+                                    Background="#101827" BorderBrush="#26364C"
+                                    BorderThickness="1" CornerRadius="10" Padding="3"
                                     VerticalAlignment="Center">
-                                <Border.Effect>
-                                    <DropShadowEffect x:Name="AutoModeGlow" BlurRadius="14" ShadowDepth="0"
-                                                      Opacity="0" Color="#34E08A"/>
-                                </Border.Effect>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-
-                                    <Border x:Name="SegAuto" CornerRadius="9" Padding="13,6" Cursor="Hand"
+                                    <Border x:Name="SegAuto" CornerRadius="7" Padding="12,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegAuto_Click"
-                                            ToolTip="Automatic — answers by itself the moment a question ends. Nothing to press.">
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Ellipse x:Name="AutoModeDot" Width="6" Height="6" Fill="#34E08A"
-                                                     Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                            <TextBlock x:Name="SegAutoText" Text="AUTO"
-                                                       FontFamily="Segoe UI" FontSize="10" FontWeight="Bold"
-                                                       Foreground="#64778F" VerticalAlignment="Center"/>
-                                        </StackPanel>
+                                            ToolTip="Auto. Answers as soon as the question ends.">
+                                        <TextBlock x:Name="SegAutoText" Text="AUTO"
+                                                   Style="{StaticResource ToolbarPillLabel}"/>
                                     </Border>
-
-                                    <Border x:Name="SegManual" CornerRadius="9" Padding="13,6" Cursor="Hand"
+                                    <Border x:Name="SegManual" CornerRadius="7" Padding="12,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegManual_Click"
-                                            ToolTip="Manual — press Space to start, Space again to answer.&#x0a;More accurate: you decide where the question ended, so it is never cut off early.">
+                                            ToolTip="Manual. Press Space to listen, and again to answer. Most accurate, because you decide when the question ends.">
                                         <TextBlock x:Name="SegManualText" Text="MANUAL"
-                                                   FontFamily="Segoe UI" FontSize="10" FontWeight="Bold"
-                                                   Foreground="#64778F" VerticalAlignment="Center"/>
+                                                   Style="{StaticResource ToolbarPillLabel}"/>
                                     </Border>
+                                    <!-- Status messages stand in for the switch for a few seconds, the
+                                         way they replaced the old pill's label. A tooltip is not a
+                                         substitute: nobody hovers it. See ShowListeningModeNotice. -->
+                                    <TextBlock x:Name="ModeNoticeText" Visibility="Collapsed"
+                                               FontFamily="Segoe UI" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="#E6EDF5" VerticalAlignment="Center"
+                                               Margin="10,5,10,5"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -564,7 +581,7 @@
                                          somebody actually presses. -->
                                     <Border x:Name="AnalyzePill" Style="{StaticResource ToolbarSegment}"
                                             MouseLeftButtonDown="ReadScreenPill_Click"
-                                            ToolTip="Read the screen now and answer from it, without saying anything.  &#183;  F8 this screen, F9 your main screen, F7 drag a box around one part.  &#183;  Answering from the screen when the interviewer asks about it is a setting, on by default.">
+                                            ToolTip="Read the screen and answer from it. F8 reads the window you are in, F9 your main screen, F7 a part you select.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock x:Name="WatchScreenIcon" Text="&#xE7F4;"
                                                        Style="{StaticResource ToolbarPillIcon}"/>
@@ -579,7 +596,7 @@
 
                                     <Border x:Name="CompactOverlayPill" Style="{StaticResource ToolbarSegment}"
                                             MouseLeftButtonDown="CompactOverlayPill_Click"
-                                            ToolTip="Shrink to a slim bar at the top of your screen for in-person interviews  &#183;  the full window comes back when you exit">
+                                            ToolTip="Shrink to a slim bar for in-person interviews.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock Text="&#xE890;" Style="{StaticResource ToolbarPillIcon}"/>
                                             <TextBlock Text="COMPACT" Style="{StaticResource ToolbarPillLabel}"/>
@@ -623,7 +640,7 @@
                                     Visibility="Collapsed"
                                     VerticalAlignment="Center" BorderThickness="1" Cursor="Hand"
                                     MouseLeftButtonDown="CreditsBadge_Click"
-                                    ToolTip="Credits  &#183;  click to refresh or view pricing">
+                                    ToolTip="Credits. Click to refresh or see pricing.">
                                 <Border.Background>
                                     <SolidColorBrush x:Name="CreditsBadgeBg" Color="#0DFFFFFF"/>
                                 </Border.Background>
@@ -806,7 +823,7 @@
                                         <TextBlock Text="or click to browse" Foreground="#7E90A8" FontSize="11"
                                                    FontFamily="Segoe UI" HorizontalAlignment="Center" Margin="0,3,0,11"/>
                                         <Border Background="#16FFFFFF" CornerRadius="6" Padding="9,3" HorizontalAlignment="Center">
-                                            <TextBlock Text="PDF  &#183;  DOCX  &#183;  TXT" Foreground="#93A4BA"
+                                            <TextBlock Text="PDF, DOCX or TXT" Foreground="#93A4BA"
                                                        FontSize="9.5" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                                         </Border>
                                     </StackPanel>
@@ -869,7 +886,7 @@
                                            Foreground="#66FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="TARGET ROLE" Foreground="#93A9C4" FontSize="10.5"
                                            FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                <TextBlock Text="  tailors every answer" Foreground="#40FFFFFF"
+                                <TextBlock Text="  optional" Foreground="#40FFFFFF"
                                            FontSize="9.5" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                             </StackPanel>
 
@@ -1041,7 +1058,7 @@
                                                     <TextBlock Text="&#xEA80;" FontFamily="Segoe MDL2 Assets"
                                                                Foreground="#BBBBBF" FontSize="9"
                                                                Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="A I   A N S W E R" Foreground="#9DB1CC"
+                                                    <TextBlock Text="AI ANSWER" Foreground="#9DB1CC"
                                                                FontSize="9" FontWeight="Bold" FontFamily="Segoe UI"/>
                                                 </StackPanel>
                                             </Border>
@@ -1064,7 +1081,7 @@
                                             </Button>
                                             <Button x:Name="ClearAnswerBtn" Style="{StaticResource GhostBtn}"
                                                     Click="ClearAnswerBtn_Click" Padding="9,4" Margin="0,0,5,0"
-                                                    ToolTip="Clear the screen and conversation memory &#183; stays in this session">
+                                                    ToolTip="Clear the screen and conversation memory. You stay in this session.">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets"
                                                                FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
@@ -1073,7 +1090,7 @@
                                             </Button>
                                             <Button x:Name="NewSessionBtn" Style="{StaticResource GreenBtn}"
                                                     Click="NewSessionBtn_Click" Padding="12,4"
-                                                    ToolTip="Saves this session automatically, then starts a new one with your resume and role still loaded">
+                                                    ToolTip="Save this session and start a new one. Your resume and role stay loaded.">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets"
                                                                FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -1104,10 +1121,15 @@
                                                    Foreground="#A9B6C8" FontSize="11" FontWeight="SemiBold"
                                                    VerticalAlignment="Center" FontFamily="Segoe UI"/>
                                     </StackPanel>
-                                    <TextBlock x:Name="ThinkingHintLabel"
-                                               Text="F8  this screen    &#183;    F9  main screen    &#183;    SPACE  listen / answer"
-                                               Foreground="#94A3B8" FontSize="10" FontWeight="Bold"
-                                               VerticalAlignment="Center" FontFamily="Segoe UI" Visibility="Visible"/>
+                                    <!-- Shortcuts as key caps rather than a sentence joined by dots. Space is not
+                                         repeated: the line underneath already explains it. -->
+                                    <StackPanel x:Name="ThinkingHintLabel" Orientation="Horizontal"
+                                                VerticalAlignment="Center" Visibility="Visible">
+                                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="F8" Style="{StaticResource KeyCapText}"/></Border>
+                                        <TextBlock Text="Read this window" Style="{StaticResource KeyCapLabel}"/>
+                                        <Border Style="{StaticResource KeyCap}" Margin="18,0,0,0"><TextBlock Text="F9" Style="{StaticResource KeyCapText}"/></Border>
+                                        <TextBlock Text="Read main screen" Style="{StaticResource KeyCapLabel}"/>
+                                    </StackPanel>
                                 </Grid>
 
                                 <ScrollViewer Grid.Row="2" Padding="16,12,16,14">
@@ -1228,7 +1250,7 @@
                                                     VerticalAlignment="Center">
                                             <Ellipse Width="6" Height="6" Fill="#7F93AB" Margin="0,0,7,0"
                                                      VerticalAlignment="Center"/>
-                                            <TextBlock Text="I N T E R V I E W E R" Foreground="#9DB1CC" FontSize="9"
+                                            <TextBlock Text="INTERVIEWER" Foreground="#9DB1CC" FontSize="9"
                                                        FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </DockPanel>
@@ -1307,7 +1329,7 @@
                             <!-- Letter-spaced and dimmer than the content it labels. A
                                  heading that competes with the list under it is the
                                  commonest way a small menu starts to feel cluttered. -->
-                            <TextBlock Text="S A V E D   R E S U M E S" Foreground="#63758C"
+                            <TextBlock Text="SAVED RESUMES" Foreground="#63758C"
                                        FontSize="8.5" FontWeight="Bold" FontFamily="Segoe UI"
                                        Margin="12,9,10,9"/>
 
@@ -1546,7 +1568,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Settings" Foreground="#FFFFFF" FontSize="12"
                                                FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="AI model  &#183;  audio  &#183;  appearance" Foreground="#66FFFFFF"
+                                    <TextBlock Text="Settings" Foreground="#66FFFFFF"
                                                FontSize="10.5" FontFamily="Segoe UI" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </StackPanel>
@@ -1715,7 +1737,7 @@
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="Upload your resume" Foreground="#EAF1F8"
                                                FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Tailors every answer to your real experience, projects and tools."
+                                    <TextBlock Text="Answers use your real experience, projects and tools."
                                                Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"
                                                FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                 </StackPanel>
@@ -1735,7 +1757,7 @@
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="Add the company &amp; role" Foreground="#EAF1F8"
                                                FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Gives sharper, role-specific answers for the exact job you're interviewing for."
+                                    <TextBlock Text="Tailors answers to this role."
                                                Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"
                                                FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                 </StackPanel>
@@ -1755,7 +1777,7 @@
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="Check capture protection before the call" Foreground="#EAF1F8"
                                                FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Stealth mode applies Windows capture exclusion. Support varies, so use Setup Check and verify it in your meeting app."
+                                    <TextBlock Text="Hides the app from screen sharing. Support varies, so check it in your meeting app first."
                                                Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"
                                                FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                 </StackPanel>
@@ -1775,7 +1797,7 @@
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="Then press SPACE for an instant answer" Foreground="#EAF1F8"
                                                FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="In the interview: tap once to start listening, tap again to get your AI answer. Works from any app."
+                                    <TextBlock Text="Press once to listen, again to answer. Works from any app."
                                                Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"
                                                FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                 </StackPanel>

@@ -799,7 +799,7 @@ namespace InterviewCopilot
             HideAvatarPhoto();
 
             // Credits badge — show loading state; real value fetched from backend via device ID
-            CreditsLabel.Text           = "⚡ ···";
+            CreditsLabel.Text           = "Credits";
             CreditsPlanLabel.Visibility = Visibility.Collapsed;
             CreditsIcon.Text            = "";
             CreditsLabel.Foreground     = new SolidColorBrush(
@@ -853,7 +853,7 @@ namespace InterviewCopilot
 
                 if (!res.IsSuccessStatusCode)
                 {
-                    Dispatcher.Invoke(() => { CreditsLabel.Text = "⚡"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
+                    Dispatcher.Invoke(() => { CreditsLabel.Text = "Credits"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
                     return;
                 }
 
@@ -879,7 +879,7 @@ namespace InterviewCopilot
                         string planName = string.IsNullOrWhiteSpace(plan)
                             ? "Pro"
                             : char.ToUpperInvariant(plan[0]) + plan[1..];
-                        CreditsLabel.Text = $"∞  {planName}";
+                        CreditsLabel.Text = $"{planName}, unlimited";
                         CreditsIcon.Text = "";
                         SetCreditsBadgeStyle("", "");
                         CreditsLabel.Foreground = new SolidColorBrush(
@@ -900,8 +900,8 @@ namespace InterviewCopilot
                         // the whole truth: they meter questions, and the microphone
                         // bills by the hour.
                         CreditsLabel.Text = _audioMinutesRemaining >= 0
-                            ? $"⚡ {display}   ⏱ {FormatListeningTime(_audioMinutesRemaining)}"
-                            : $"⚡ {display}";
+                            ? $"{display} credits, {FormatListeningTime(_audioMinutesRemaining)} left"
+                            : $"{display} credits";
                         CreditsIcon.Text = "";
 
                         // Pure glass: badge stays neutral; only the numeral flips to soft
@@ -927,7 +927,7 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => { CreditsLabel.Text = "⚡"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
+                Dispatcher.Invoke(() => { CreditsLabel.Text = "Credits"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
                 CLog($"EXCEPTION {ex.GetType().Name}: {ex.Message}");
             }
             }
@@ -1341,7 +1341,7 @@ namespace InterviewCopilot
 
             if (!string.Equals(previousCaptureMode, nextCaptureMode, StringComparison.Ordinal))
             {
-                ShowListeningModeNotice("SWITCHING");
+                ShowListeningModeNotice("Switching audio");
                 StartSpeechmaticsEngine();
             }
             else if (AutoModeEnabled)
@@ -1369,9 +1369,8 @@ namespace InterviewCopilot
             SettingsWindow.GetMicCaptureEnabled() ? "both" : "system";
 
         /// <summary>
-        /// Paints the four segments. Two are always lit: one on each side of
-        /// the divider, because the two questions are independent and both
-        /// always have an answer.
+        /// Paints the Auto / Manual switch and clears any status message that
+        /// was standing in for it.
         /// </summary>
         private void UpdateListeningModeUi()
         {
@@ -1379,32 +1378,24 @@ namespace InterviewCopilot
             static SolidColorBrush Brush(string hex) =>
                 new((Color)ColorConverter.ConvertFromString(hex));
 
-            // One accent for "this is the live one". Using a different colour
-            // per option made four colours on a toolbar that already has a mic
-            // ring and a credits badge, and read as decoration rather than
-            // state.
-            var onBg   = Brush("#22314A");
-            var onFg   = Brush("#F2F7FD");
-            var offFg  = Brush("#64778F");
+            // Neutral, like every other control in the toolbar. The green dot and
+            // glow it had were off the app's palette, which keeps colour for state
+            // that needs attention rather than for decoration.
+            var onBg  = Brush("#22314A");
+            var onFg  = Brush("#F2F7FD");
+            var offFg = Brush("#7F8FA6");
 
             bool auto = _listeningMode == ListeningMode.Auto;
+
+            SegAuto.Visibility        = Visibility.Visible;
+            SegManual.Visibility      = Visibility.Visible;
+            ModeNoticeText.Visibility = Visibility.Collapsed;
+            ModeSegments.ToolTip      = null;
 
             SegAuto.Background       = auto ? onBg : Brushes.Transparent;
             SegAutoText.Foreground   = auto ? onFg : offFg;
             SegManual.Background     = auto ? Brushes.Transparent : onBg;
             SegManualText.Foreground = auto ? offFg : onFg;
-
-            // The dot is the one piece of colour, and it means "answering on
-            // its own right now" - the state worth noticing across the room.
-            AutoModeDot.Visibility = auto ? Visibility.Visible : Visibility.Collapsed;
-            AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#34E08A");
-            AutoModeGlow.Opacity = auto ? 0.34 : 0;
-
-            // ShowListeningModeNotice recolours the container; this is the only
-            // place that puts it back, so it sets both rather than assuming.
-            ModeSegments.Background = Brush("#0C1421");
-            ModeSegments.BorderBrush = Brush("#243449");
-            ModeSegments.ToolTip = null;
         }
 
 
@@ -1412,21 +1403,22 @@ namespace InterviewCopilot
         private void ShowListeningModeNotice(string message)
         {
             if (ModeSegments == null) return;
-            static SolidColorBrush Brush(string hex) =>
-                new((Color)ColorConverter.ConvertFromString(hex));
 
-            // The segments carry their own state, so the notice borrows the
-            // container's outline rather than overwriting a label - there is no
-            // single label to overwrite any more, and blanking one segment's
-            // text would make it look unselected instead of busy.
-            ModeSegments.Background = Brush("#2A2110");
-            ModeSegments.BorderBrush = Brush("#8A6825");
-            AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#F5B83D");
-            AutoModeGlow.Opacity = 0.4;
-            ModeSegments.ToolTip = message + " — restarting the transcription engine for the new audio source";
+            // The message REPLACES the switch for a few seconds, the way it used
+            // to replace the old pill's label. When the pill became two segments
+            // the message was moved into a tooltip, which nobody hovers, and nine
+            // warnings went invisible at once - among them "Another device is
+            // using your account" and "Not transcribing. Restart the app."
+            SegAuto.Visibility = Visibility.Collapsed;
+            SegManual.Visibility = Visibility.Collapsed;
+            ModeNoticeText.Text = message;
+            ModeNoticeText.Visibility = Visibility.Visible;
+            ModeSegments.ToolTip = message;
 
+            // Four seconds rather than 2.5: several of these are instructions,
+            // and 2.5s was not long enough to read "Restart the app" and act.
             _autoModeNoticeTimer?.Stop();
-            _autoModeNoticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
+            _autoModeNoticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
             _autoModeNoticeTimer.Tick += (_, _) =>
             {
                 _autoModeNoticeTimer?.Stop();
@@ -1633,7 +1625,7 @@ namespace InterviewCopilot
             DebugWindow.Log("ENGINE",
                 $"Hearing speech but no words for {silentSeconds}s — "
                 + "transcription appears to have stopped while the engine still reports online.");
-            ShowListeningModeNotice("HEARING YOU BUT NOT TRANSCRIBING — RESTART THE APP");
+            ShowListeningModeNotice("Not transcribing. Restart the app.");
         }
 
         /// <summary>
@@ -1660,8 +1652,8 @@ namespace InterviewCopilot
             // with the mic still on — which is exactly when the answer mattered
             // most.
             ShowListeningModeNotice(_heardAnythingThisSession
-                ? $"MIC OFF AFTER {IdleListeningTimeout.TotalMinutes:0} MIN QUIET — SPACE TO RESUME"
-                : "MIC OFF — NOTHING HEARD");
+                ? $"Mic off after {IdleListeningTimeout.TotalMinutes:0} min of silence. Press Space to resume."
+                : "Mic off. Nothing was heard.");
             DebugWindow.Log("METER", "Microphone stopped after the idle timeout.");
             UpdateMicUi();
         }
@@ -1826,8 +1818,8 @@ namespace InterviewCopilot
 
             Dispatcher.Invoke(() => ShowListeningModeNotice(
                 _audioMinutesRemaining <= 0
-                    ? "LISTENING TIME USED UP"
-                    : $"{_audioMinutesRemaining} MIN LEFT THIS MONTH"));
+                    ? "Listening time used up"
+                    : $"{_audioMinutesRemaining} min left this month"));
         }
 
         private void ResetAutoTurnDetection()
@@ -2629,7 +2621,7 @@ namespace InterviewCopilot
             // forcing a slow fallback. Manual Space behavior is unchanged in Manual mode.
             if (AutoModeEnabled && source != "AUTO")
             {
-                ShowListeningModeNotice("AUTO ACTIVE");
+                ShowListeningModeNotice("Auto is on");
                 DebugWindow.Log("MODE", $"Ignored {source} Space while {_listeningMode} controls the turn.");
                 return;
             }
@@ -3326,7 +3318,7 @@ namespace InterviewCopilot
             _rescanArmedUtc = DateTime.UtcNow;
             DebugWindow.Log("SCREEN", "Answer asked for the rest of the page; will answer again once it changes.");
 
-            Dispatcher.Invoke(() => ShowListeningModeNotice("SCROLL — I WILL ANSWER AGAIN"));
+            Dispatcher.Invoke(() => ShowListeningModeNotice("Scroll to show the rest of the question"));
         }
 
         /// <summary>
@@ -4551,7 +4543,7 @@ namespace InterviewCopilot
                                 DebugWindow.Log("ENGINE", $"Engine gave up: {line}");
                                 _ = Dispatcher.BeginInvoke(new Action(() =>
                                 {
-                                    ShowListeningModeNotice(reason.ToUpperInvariant());
+                                    ShowListeningModeNotice(reason);
                                     UpdateMicUi();
                                 }));
                             }
@@ -5201,7 +5193,7 @@ namespace InterviewCopilot
                         + "it. Retrying in 20s. Nothing needs fixing here.");
                     Dispatcher.Invoke(() =>
                     {
-                        ShowListeningModeNotice("ANOTHER DEVICE IS USING YOUR ACCOUNT");
+                        ShowListeningModeNotice("Another device is using your account");
                         UpdateMicUi();
                     });
                     return;
@@ -6933,7 +6925,7 @@ namespace InterviewCopilot
                 return;
             }
             string name = string.IsNullOrWhiteSpace(_loadedResumeName)
-                ? "Resume · " + DateTime.Now.ToString("MMM d, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)
+                ? "Resume (" + DateTime.Now.ToString("MMM d, h:mm tt", System.Globalization.CultureInfo.InvariantCulture) + ")"
                 : _loadedResumeName;
             _savedResumes.Insert(0, (name, content));
             if (_savedResumes.Count > 10) _savedResumes.RemoveAt(_savedResumes.Count - 1);

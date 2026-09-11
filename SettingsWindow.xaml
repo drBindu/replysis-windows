@@ -99,71 +99,11 @@
                 <StackPanel>
 
                 <!-- ── AI MODEL ──────────────────────────────────────── -->
-                <TextBlock Text="AI MODEL" Style="{StaticResource SectionLabel}"/>
-
-                <!-- Groq card -->
-                <RadioButton x:Name="ModelGroqRadio" GroupName="ModelGroup"
-                             Style="{StaticResource InvisibleRadio}"
-                             Margin="0,0,0,8" Cursor="Hand"
-                             Checked="ModelRadio_Checked">
-                    <Border x:Name="GroqCard" CornerRadius="10" Padding="14,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10"
-                                    BorderBrush="#FFFFFF" BorderThickness="2"
-                                    Margin="0,0,12,0" VerticalAlignment="Center"
-                                    Background="Transparent">
-                                <Ellipse x:Name="GroqDot" Width="10" Height="10"
-                                         Fill="#FFFFFF" HorizontalAlignment="Center"
-                                         VerticalAlignment="Center" Visibility="Collapsed"/>
-                            </Border>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Fast (recommended for live interviews)"
-                                           Foreground="White" FontSize="13"
-                                           FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="Answers start appearing soonest  &#183;  5 credits per question"
-                                           Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
-                                           FontFamily="Segoe UI" Margin="0,3,0,0"/>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </RadioButton>
-
-                <!-- OpenAI card -->
-                <RadioButton x:Name="ModelOpenAiRadio" GroupName="ModelGroup"
-                             Style="{StaticResource InvisibleRadio}"
-                             Margin="0,0,0,24" Cursor="Hand"
-                             Checked="ModelRadio_Checked">
-                    <Border x:Name="OpenAiCard" CornerRadius="10" Padding="14,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10"
-                                    BorderBrush="#FFFFFF" BorderThickness="2"
-                                    Margin="0,0,12,0" VerticalAlignment="Center"
-                                    Background="Transparent">
-                                <Ellipse x:Name="OpenAiDot" Width="10" Height="10"
-                                         Fill="#FFFFFF" HorizontalAlignment="Center"
-                                         VerticalAlignment="Center" Visibility="Collapsed"/>
-                            </Border>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Accurate (GPT-4o)"
-                                           Foreground="White" FontSize="13"
-                                           FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="Stronger on hard technical questions  &#183;  5 credits per question"
-                                           Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
-                                           FontFamily="Segoe UI" Margin="0,3,0,0"/>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </RadioButton>
-
-                <Border Height="1" Background="#18FFFFFF" Margin="0,0,0,20"/>
+                <!-- AI MODEL section removed 2026-09-11. It offered Fast and Accurate (GPT-4o),
+                     but the backend picks the model itself and ignores this choice, and the
+                     OpenAI account behind GPT-4o has been inactive since 2026-08-22. A setting
+                     that changes nothing is not a setting. ModelIndex stays in the config so
+                     older saved files still load. -->
 
                 <TextBlock Text="PRIVACY" Style="{StaticResource SectionLabel}"/>
 
@@ -178,7 +118,7 @@
                                    Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Stealth mode" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
-                            <TextBlock Text="Applies Windows capture exclusion and removes the app from the taskbar and Alt-Tab. Verify it in your meeting app before every real call."
+                            <TextBlock Text="Hides the app from screen sharing, the taskbar and Alt-Tab. Test it in your meeting app first."
                                        Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
@@ -198,7 +138,7 @@
                                    Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Answer from the shared screen" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
-                            <TextBlock Text="When the interviewer asks about something on screen, the answer comes from what is there. Questions about you are answered normally, and the screen is only read when a question is actually about it. Press F8 any time to read the screen yourself."
+                            <TextBlock Text="Questions about your screen are answered from it. Questions about you are answered as usual. Press F8 to read the screen any time."
                                        Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
@@ -218,7 +158,7 @@
                                    Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Back up session history" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
-                            <TextBlock Text="Sends interview questions, answers, and a short resume snippet securely so they appear on your other signed-in devices."
+                            <TextBlock Text="Syncs questions, answers and a short part of your resume to your other signed-in devices."
                                        Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
@@ -245,10 +185,10 @@
                 <Border Background="#0E1A2A" BorderBrush="#243449" BorderThickness="1"
                         CornerRadius="10" Padding="14,12" Margin="0,0,0,12">
                     <StackPanel>
-                        <TextBlock Text="Works for real interviews and for practice"
+                        <TextBlock Text="Works for interviews and practice"
                                    Foreground="White" FontSize="13" FontWeight="Bold"
                                    FontFamily="Segoe UI"/>
-                        <TextBlock Text="The app listens to your computer's sound and your microphone at the same time, so it answers the interviewer in a real interview and answers you when you are rehearsing alone. There is no mode to set."
+                        <TextBlock Text="Listens to your computer's sound and your microphone together."
                                    Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
                                    FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,5,0,0"/>
                     </StackPanel>
@@ -265,7 +205,7 @@
                             <TextBlock Text="Use my microphone"
                                        Foreground="White" FontSize="13" FontWeight="Bold"
                                        FontFamily="Segoe UI"/>
-                            <TextBlock Text="Needed to hear you practise. Turn this off and the app hears only your computer's sound — real interviews still work, practising alone does not."
+                            <TextBlock Text="Needed for practice. When off, only your computer's sound is heard."
                                        Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
                                        FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,4,0,0"/>
                         </StackPanel>
@@ -328,7 +268,7 @@
             <!-- Footer -->
             <StackPanel Grid.Row="3">
                 <Border Height="1" Background="#18FFFFFF"/>
-            <TextBlock Text="Config saved locally · Replysis AI"
+            <TextBlock Text="Settings are saved on this device"
                        Foreground="#7E90A8" FontSize="10" FontFamily="Segoe UI"
                        Margin="22,10,22,14"/>
 

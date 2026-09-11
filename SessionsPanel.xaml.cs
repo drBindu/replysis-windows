@@ -832,7 +832,7 @@ namespace InterviewCopilot
             SessionNumber > 0 ? $"Session #{SessionNumber}" : "Session";
 
         public string DisplayDate =>
-            CreatedAt.ToString("MMM dd, yyyy  ·  h:mm tt");
+            CreatedAt.ToString("MMM d, yyyy, h:mm tt");
 
         public string DisplayStats =>
             $"{QuestionCount} question{(QuestionCount != 1 ? "s" : "")}";

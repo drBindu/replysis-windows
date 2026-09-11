@@ -19,7 +19,7 @@
             <StackPanel>
                 <TextBlock Text="Select the interview content" Foreground="White"
                            FontSize="15" FontWeight="SemiBold" />
-                <TextBlock Text="Drag around the question, code, error, or diagram · Esc cancels"
+                <TextBlock Text="Drag around the question, code or error. Press Esc to cancel."
                            Foreground="#AFC4DC" FontSize="11" Margin="0,3,0,0" />
             </StackPanel>
         </Border>

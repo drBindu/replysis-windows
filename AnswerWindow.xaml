@@ -78,7 +78,8 @@
                     <!-- Idle hint, hidden while listening or thinking -->
                     <TextBlock Grid.Column="2"
                                x:Name="IdleHintLabel"
-                               Text=" · press Space to listen"
+                               Text="Press Space to listen"
+                               Margin="8,0,0,0"
                                FontSize="10"
                                FontWeight="SemiBold"
                                FontFamily="Segoe UI"
@@ -99,7 +100,7 @@
                     <Button Grid.Column="4"
                             x:Name="AnalyzeBtn"
                             Click="AnalyzeBtn_Click"
-                            ToolTip="Read the screen now and answer from it  &#183;  same as F8"
+                            ToolTip="Read the screen and answer from it. Same as F8."
                              Margin="0,0,10,0"
                             Cursor="Hand"
                             Focusable="False"
