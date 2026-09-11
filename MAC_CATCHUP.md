@@ -1775,6 +1775,41 @@ the reason to compare old and new text line by line rather than rewriting blind.
 
 ---
 
+## 2026-09-11, late: screen answers, measured
+
+**Backend, shared, so Mac gets it without a client change** (commit `773b121`).
+A screen answer is two model calls: stage one reads the screenshot into text,
+stage two writes the answer from that text. Stage two never sees the image, so
+it moved from Gemini to Cerebras gpt-oss-120b. Measured from the server, same
+prompt, first token / full answer in ms, five runs each:
+
+    cerebras gpt-oss-120b   166/246   236/289   335/411   113/166   151/209
+    gemini-3.5-flash-lite   653/1165  698/1052  601/953   604/960   522/928
+
+Full answer time is the number that matters here, not first token: the backend
+buffers the whole coding answer to repair pointer signatures before sending
+anything. Checked against the REAL 2,864-character stage-two prompt on three
+problems before shipping, all passing SAY THIS / DETAIL / balanced fences / not
+truncated, including Insertion Sort List with a value-typed `ListNode head`,
+which Cerebras rewrote to `ListNode* insertionSortList(ListNode* head)` itself.
+Stage two has its own 1800-token cap now, because gpt-oss spends part of the cap
+reasoning and a class cut off mid-method does not compile.
+
+Stage one, the verbatim copy of the problem statement on Gemini, is now the
+larger share of the wait. It is left alone on purpose: it is what the code is
+written from.
+
+**Windows client: a staleness window shorter than its capture interval.**
+Prepared screenshots are taken every 2s but were only usable for 1.5s. For the
+last half second of every cycle the shot had already expired, so a question
+asked then, about a quarter of them, captured the screen again while the
+candidate waited AND uploaded the full image inside the request instead of the
+id already on the server. The comment beside the value argued for four seconds
+and the number never matched it. Now 2.5s, one interval plus a capture. If Mac
+prepares screenshots on a timer, compare its staleness limit with its interval.
+
+---
+
 ## Where the reasoning lives
 
 The Windows commit messages, `git log` on `windowsNative`, one commit per

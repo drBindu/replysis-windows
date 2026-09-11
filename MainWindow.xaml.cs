@@ -2847,11 +2847,21 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         private static readonly TimeSpan PreparedShotInterval = TimeSpan.FromSeconds(2);
 
-        // How stale a prepared shot may be and still be used. An interview screen
-        // is a problem statement that sits still; four seconds of it is the same
-        // screen. Past that it is captured fresh, because being fast about the
-        // wrong screen is worse than being slow about the right one.
-        private static readonly TimeSpan PreparedShotMaxAge = TimeSpan.FromMilliseconds(1_500);
+        // How stale a prepared shot may be and still be used.
+        //
+        // This was 1.5s while shots are taken every 2s, so for the last half
+        // second of every cycle the prepared shot had already expired. A question
+        // asked in that window - about a quarter of them - skipped it entirely:
+        // the screen was captured again while the candidate waited, and the full
+        // image went up inside the request instead of the id already on the
+        // server. The comment here argued for four seconds ("four seconds of it
+        // is the same screen") and the number never matched it.
+        //
+        // 2.5s is one interval plus the time a capture takes, so the shot from the
+        // most recent tick is always usable. Past that it is still captured fresh,
+        // because being fast about the wrong screen is worse than being slow about
+        // the right one.
+        private static readonly TimeSpan PreparedShotMaxAge = TimeSpan.FromMilliseconds(2_500);
 
         private DispatcherTimer? _preparedShotTimer;
         private byte[]? _preparedShot;
