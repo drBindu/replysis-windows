@@ -131,19 +131,30 @@ namespace InterviewCopilot
         private bool AutoModeEnabled => _listeningMode == ListeningMode.Auto;
 
         /// <summary>
-        /// WHOSE voice the app listens to. Lives in Settings, because it is
-        /// chosen once when you set the app up and then left alone, unlike
-        /// Auto/Manual which a user flips during a session.
+        /// There is no longer a Practice mode or an Interview mode. There is one
+        /// mode, and it listens to both the microphone and the computer's sound
+        /// at the same time.
         ///
-        /// Stored as the existing MicCaptureEnabled flag rather than a new
-        /// setting: that flag already meant exactly this, it was simply
-        /// described as "System audio + my voice", which is how the code thinks
-        /// and not how a candidate thinks.
+        /// The two "modes" only ever differed by where the question arrived
+        /// from: the interviewer through system audio, or the candidate through
+        /// the microphone. Listening to both answers both, so the question stops
+        /// needing to be asked - and asking it was the whole problem, because
+        /// getting it wrong is silent. A real interview with Practice selected
+        /// hears the candidate instead of the interviewer, the app looks
+        /// completely normal, and no answer ever arrives.
         ///
-        ///   RealInterview -> mic off,  system audio on   (hears the interviewer)
-        ///   Practice      -> mic on,   system audio on   (hears you)
+        /// This was not safe to do before 2026-09-11. With the microphone open
+        /// during a real interview the app hears the candidate read its answer
+        /// aloud and treated that as a new question, replacing the answer they
+        /// were half-way through and charging for it. Read-back detection
+        /// (commit d391348) is what makes one mode possible, and it is now
+        /// load-bearing rather than a nicety.
+        ///
+        /// MicCaptureEnabled survives as a Settings preference, not a mode:
+        /// default on, and available to turn off for anyone who does not want
+        /// their microphone opened at all. See CaptureMode().
         /// </summary>
-        private static bool PracticeSession => SettingsWindow.GetMicCaptureEnabled();
+        private static bool MicrophoneInUse => SettingsWindow.GetMicCaptureEnabled();
         private bool _autoTurnSubmitting;
         private string _autoLastTranscript = "";
         private string _lastAutoRejectedTranscript = "";
@@ -443,7 +454,6 @@ namespace InterviewCopilot
                     // separate windows the main-window stealth doesn't reach.
                     HookPopupStealth(ProfileDropdownPopup);
                     HookPopupStealth(SavedResumesPopup);
-                    HookPopupStealth(ListeningModePopup);
                     UpdateListeningModeUi();
 
                     // On by default, and remembered. It used to start off every
@@ -553,7 +563,6 @@ namespace InterviewCopilot
             {
                 if (SavedResumesPopup   != null) SavedResumesPopup.IsOpen   = false;
                 if (ProfileDropdownPopup != null) ProfileDropdownPopup.IsOpen = false;
-                if (ListeningModePopup  != null) ListeningModePopup.IsOpen  = false;
             }
             catch { }
         }
@@ -570,26 +579,6 @@ namespace InterviewCopilot
                 bool onBtn = src2 != null && IsDescendantOf(src2, SavedResumesBtn);
                 if (!insidePopup2 && !onBtn) SavedResumesPopup.IsOpen = false;
             }
-
-            if (ListeningModePopup.IsOpen)
-            {
-                var modeSource = e.OriginalSource as DependencyObject;
-                var modePopupChild = ListeningModePopup.Child as FrameworkElement;
-                bool insideModePopup = modePopupChild != null && modeSource != null &&
-                                       IsDescendantOf(modeSource, modePopupChild);
-                bool onModePill = modeSource != null && IsDescendantOf(modeSource, AutoModePill);
-                if (!insideModePopup && !onModePill) ListeningModePopup.IsOpen = false;
-            }
-
-            if (!ProfileDropdownPopup.IsOpen) return;
-
-            var srcP = e.OriginalSource as DependencyObject;
-            var ppc  = ProfileDropdownPopup.Child as FrameworkElement;
-            bool insideProfile = ppc != null && srcP != null && IsDescendantOf(srcP, ppc);
-            bool onBadge       = srcP != null && IsDescendantOf(srcP, ProfileBadge);
-            if (insideProfile || onBadge) return;
-
-            ProfileDropdownPopup.IsOpen = false;
         }
 
         private static bool IsDescendantOf(DependencyObject child, DependencyObject parent)
@@ -1171,15 +1160,6 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         private bool _spaceHandling = false;
 
-        private void AutoModePill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            ProfileDropdownPopup.IsOpen = false;
-            SavedResumesPopup.IsOpen = false;
-            ListeningModePopup.PlacementTarget = AutoModePill;
-            UpdateListeningModePopupSelection();
-            ListeningModePopup.IsOpen = !ListeningModePopup.IsOpen;
-        }
 
         // ══════════════════════════════════════════════════════════════════════
         // IN-APP ALERT
@@ -1305,25 +1285,25 @@ namespace InterviewCopilot
             e.Handled = true;
             ProfileDropdownPopup.IsOpen = false;
             SavedResumesPopup.IsOpen = false;
-            ListeningModePopup.IsOpen = false;
             CameraMode_Click(sender, new RoutedEventArgs());
         }
 
-        private void ManualModeOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            SelectListeningMode(ListeningMode.Manual);
-        }
-
-        private void AutoModeOption_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private void SegAuto_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             e.Handled = true;
             SelectListeningMode(ListeningMode.Auto);
         }
 
+        private void SegManual_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            SelectListeningMode(ListeningMode.Manual);
+        }
+
+
+
         private void SelectListeningMode(ListeningMode mode)
         {
-            ListeningModePopup.IsOpen = false;
             if (_listeningMode == mode)
             {
                 if (AutoModeEnabled) StartAutoListeningIfReady();
@@ -1372,7 +1352,7 @@ namespace InterviewCopilot
             DebugWindow.Log("MODE",
                 (mode == ListeningMode.Auto ? "Auto: answers on its own" : "Manual: you press Space")
                 + " | session type: "
-                + (PracticeSession ? "Practice (hears you)" : "Real interview (hears the interviewer)"));
+                + (MicrophoneInUse ? "Practice (hears you)" : "Real interview (hears the interviewer)"));
         }
 
         /// <summary>
@@ -1385,101 +1365,65 @@ namespace InterviewCopilot
         /// longer touches the audio source, so the notice and the greying-out
         /// are gone with it.
         /// </summary>
-        private static string CaptureMode() => PracticeSession ? "both" : "system";
+        private static string CaptureMode() =>
+            SettingsWindow.GetMicCaptureEnabled() ? "both" : "system";
 
+        /// <summary>
+        /// Paints the four segments. Two are always lit: one on each side of
+        /// the divider, because the two questions are independent and both
+        /// always have an answer.
+        /// </summary>
         private void UpdateListeningModeUi()
         {
-            if (AutoModePill == null) return;
+            if (ModeSegments == null) return;
             static SolidColorBrush Brush(string hex) =>
                 new((Color)ColorConverter.ConvertFromString(hex));
 
-            string listening = PracticeSession
-                ? "Listening to you (Practice)."
-                : "Listening to the interviewer (Real interview).";
+            // One accent for "this is the live one". Using a different colour
+            // per option made four colours on a toolbar that already has a mic
+            // ring and a credits badge, and read as decoration rather than
+            // state.
+            var onBg   = Brush("#22314A");
+            var onFg   = Brush("#F2F7FD");
+            var offFg  = Brush("#64778F");
 
-            switch (_listeningMode)
-            {
-                case ListeningMode.Auto:
-                    AutoModePill.Background = Brush("#102A1D");
-                    AutoModePill.BorderBrush = Brush("#2C7B50");
-                    AutoModeDot.Fill = Brush("#34E08A");
-                    AutoModeLabel.Text = "AUTO";
-                    AutoModeLabel.Foreground = Brush("#B8F5D3");
-                    AutoModeChevron.Foreground = Brush("#73C998");
-                    AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#34E08A");
-                    AutoModeGlow.Opacity = 0.42;
-                    AutoModePill.ToolTip =
-                        "Auto — answers by itself as soon as a question finishes.\n"
-                        + listening + "\nChange who it listens to in Settings.";
-                    break;
+            bool auto = _listeningMode == ListeningMode.Auto;
 
-                default:
-                    AutoModePill.Background = Brush("#101827");
-                    AutoModePill.BorderBrush = Brush("#26364C");
-                    AutoModeDot.Fill = Brush("#607086");
-                    AutoModeLabel.Text = "MANUAL";
-                    AutoModeLabel.Foreground = Brush("#A9B6C8");
-                    AutoModeChevron.Foreground = Brush("#6F8198");
-                    AutoModeGlow.Opacity = 0;
-                    AutoModePill.ToolTip =
-                        "Manual — press Space to start, Space again to answer.\n"
-                        + listening + "\nChange who it listens to in Settings.";
-                    break;
-            }
+            SegAuto.Background       = auto ? onBg : Brushes.Transparent;
+            SegAutoText.Foreground   = auto ? onFg : offFg;
+            SegManual.Background     = auto ? Brushes.Transparent : onBg;
+            SegManualText.Foreground = auto ? offFg : onFg;
 
-            UpdateListeningModePopupSelection();
+            // The dot is the one piece of colour, and it means "answering on
+            // its own right now" - the state worth noticing across the room.
+            AutoModeDot.Visibility = auto ? Visibility.Visible : Visibility.Collapsed;
+            AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#34E08A");
+            AutoModeGlow.Opacity = auto ? 0.34 : 0;
+
+            // ShowListeningModeNotice recolours the container; this is the only
+            // place that puts it back, so it sets both rather than assuming.
+            ModeSegments.Background = Brush("#0C1421");
+            ModeSegments.BorderBrush = Brush("#243449");
+            ModeSegments.ToolTip = null;
         }
 
-        private void UpdateListeningModePopupSelection()
-        {
-            if (ManualModeCheck == null) return;
-            static SolidColorBrush Brush(string hex) =>
-                new((Color)ColorConverter.ConvertFromString(hex));
 
-            ManualModeCheck.Visibility = _listeningMode == ListeningMode.Manual
-                ? Visibility.Visible : Visibility.Collapsed;
-            AutoModeCheck.Visibility = _listeningMode == ListeningMode.Auto
-                ? Visibility.Visible : Visibility.Collapsed;
-
-            SetModeRowSelection(AutoModeRow, _listeningMode == ListeningMode.Auto,
-                Brush("#102A1D"), Brush("#2C7B50"));
-            SetModeRowSelection(ManualModeRow, _listeningMode == ListeningMode.Manual,
-                Brush("#152337"), Brush("#40536B"));
-
-            // The popup also states which voice is being listened to, because
-            // that choice lives in Settings and a user must never have to guess
-            // it. Getting it wrong is silent: a real interview with Practice
-            // selected hears the candidate instead of the interviewer, and
-            // nothing on screen would have said so.
-            if (SessionTypeFooterText != null)
-            {
-                SessionTypeFooterText.Text = PracticeSession
-                    ? "Listening to you  ·  Practice"
-                    : "Listening to the interviewer  ·  Real interview";
-            }
-        }
-
-        private static void SetModeRowSelection(System.Windows.Controls.Border row, bool selected,
-            SolidColorBrush selectedBackground, SolidColorBrush selectedBorder)
-        {
-            row.Background = selected ? selectedBackground : Brushes.Transparent;
-            row.BorderBrush = selected ? selectedBorder : Brushes.Transparent;
-            row.BorderThickness = selected ? new Thickness(1) : new Thickness(0);
-        }
 
         private void ShowListeningModeNotice(string message)
         {
-            if (AutoModePill == null) return;
+            if (ModeSegments == null) return;
             static SolidColorBrush Brush(string hex) =>
                 new((Color)ColorConverter.ConvertFromString(hex));
 
-            AutoModePill.Background = Brush("#2A2110");
-            AutoModePill.BorderBrush = Brush("#8A6825");
-            AutoModeDot.Fill = Brush("#F5B83D");
-            AutoModeLabel.Text = message;
-            AutoModeLabel.Foreground = Brush("#F8D58B");
-            AutoModeChevron.Foreground = Brush("#C99D49");
-            AutoModePill.ToolTip = "Switching the existing transcription engine to the selected capture mode";
+            // The segments carry their own state, so the notice borrows the
+            // container's outline rather than overwriting a label - there is no
+            // single label to overwrite any more, and blanking one segment's
+            // text would make it look unselected instead of busy.
+            ModeSegments.Background = Brush("#2A2110");
+            ModeSegments.BorderBrush = Brush("#8A6825");
+            AutoModeGlow.Color = (Color)ColorConverter.ConvertFromString("#F5B83D");
+            AutoModeGlow.Opacity = 0.4;
+            ModeSegments.ToolTip = message + " — restarting the transcription engine for the new audio source";
 
             _autoModeNoticeTimer?.Stop();
             _autoModeNoticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
@@ -5987,7 +5931,6 @@ namespace InterviewCopilot
             e.Handled = true;
             ProfileDropdownPopup.IsOpen = false;
             SavedResumesPopup.IsOpen = false;
-            ListeningModePopup.IsOpen = false;
             ToggleWatchScreen();
         }
 

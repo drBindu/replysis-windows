@@ -227,86 +227,53 @@
                     </Grid>
                 </Border>
 
-                <!-- ── SESSION TYPE ───────────────────────────────────
-                     This was headed "AUDIO CAPTURE" with the options "System
-                     audio only" and "System audio + my voice". Both are true
-                     and neither is a question a candidate can answer - they
-                     know whether they are in a real interview or practising
-                     alone, not which audio device that implies. Same setting,
-                     same stored flag, asked the way it is actually thought
-                     about. -->
-                <TextBlock Text="SESSION TYPE" Style="{StaticResource SectionLabel}"/>
-                <TextBlock Text="Who should the app listen to?"
-                           Foreground="#8FA3BC" FontSize="11.5" FontWeight="SemiBold"
-                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="2,-4,0,10"/>
+                <!-- ── LISTENING ──────────────────────────────────────
+                     This was a choice between "Real interview" and "Practice",
+                     and before that between "System audio only" and "System
+                     audio + my voice". Both framings asked the user to pick a
+                     mode, and picking the wrong one failed silently: a real
+                     interview set to Practice hears the candidate instead of
+                     the interviewer, the app looks perfectly normal, and no
+                     answer ever arrives.
 
-                <!-- System only -->
-                <RadioButton x:Name="MicSystemRadio" GroupName="MicMode"
-                             Style="{StaticResource InvisibleRadio}"
-                             Margin="0,0,0,8" Cursor="Hand"
-                             Checked="MicRadio_Checked">
-                    <Border x:Name="MicSystemCard" CornerRadius="10" Padding="14,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10"
-                                    BorderBrush="#FFFFFF" BorderThickness="2"
-                                    Margin="0,0,12,0" VerticalAlignment="Top"
-                                    Background="Transparent">
-                                <Ellipse x:Name="MicSystemDot" Width="10" Height="10"
-                                         Fill="#FFFFFF" HorizontalAlignment="Center"
-                                         VerticalAlignment="Center" Visibility="Collapsed"/>
-                            </Border>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Real interview"
-                                           Foreground="White" FontSize="13"
-                                           FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="Hears the interviewer through your computer's sound, and answers their questions."
-                                           Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
-                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                                <TextBlock Text="Your microphone is never opened, so your own voice is not recorded or sent anywhere."
-                                           Foreground="#6B7280" FontSize="10.5" FontWeight="SemiBold"
-                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,5,0,0"/>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </RadioButton>
+                     The two modes differed only in which audio source was
+                     open. Listening to both removes the question. What is left
+                     here is not a mode - it is one switch for anyone who does
+                     not want their microphone opened at all. -->
+                <TextBlock Text="LISTENING" Style="{StaticResource SectionLabel}"/>
 
-                <!-- System + voice -->
-                <RadioButton x:Name="MicBothRadio" GroupName="MicMode"
-                             Style="{StaticResource InvisibleRadio}"
-                             Margin="0,0,0,24" Cursor="Hand"
-                             Checked="MicRadio_Checked">
-                    <Border x:Name="MicBothCard" CornerRadius="10" Padding="14,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10"
-                                    BorderBrush="#FFFFFF" BorderThickness="2"
-                                    Margin="0,0,12,0" VerticalAlignment="Top"
-                                    Background="Transparent">
-                                <Ellipse x:Name="MicBothDot" Width="10" Height="10"
-                                         Fill="#FFFFFF" HorizontalAlignment="Center"
-                                         VerticalAlignment="Center" Visibility="Collapsed"/>
-                            </Border>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Practice"
-                                           Foreground="White" FontSize="13"
-                                           FontWeight="Bold" FontFamily="Segoe UI"/>
-                                <TextBlock Text="Hears you through your microphone. Ask yourself a question out loud and rehearse the answer."
-                                           Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
-                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                                <TextBlock Text="No interviewer and no meeting needed. The microphone is opened only while you are listening."
-                                           Foreground="#6B7280" FontSize="10.5" FontWeight="SemiBold"
-                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,5,0,0"/>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </RadioButton>
+                <Border Background="#0E1A2A" BorderBrush="#243449" BorderThickness="1"
+                        CornerRadius="10" Padding="14,12" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Works for real interviews and for practice"
+                                   Foreground="White" FontSize="13" FontWeight="Bold"
+                                   FontFamily="Segoe UI"/>
+                        <TextBlock Text="The app listens to your computer's sound and your microphone at the same time, so it answers the interviewer in a real interview and answers you when you are rehearsing alone. There is no mode to set."
+                                   Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
+                                   FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#0AFFFFFF" BorderBrush="#16FFFFFF" BorderThickness="1"
+                        CornerRadius="10" Padding="14,12" Margin="0,0,0,20">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Use my microphone"
+                                       Foreground="White" FontSize="13" FontWeight="Bold"
+                                       FontFamily="Segoe UI"/>
+                            <TextBlock Text="Needed to hear you practise. Turn this off and the app hears only your computer's sound — real interviews still work, practising alone does not."
+                                       Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
+                                       FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" x:Name="MicCaptureCheckBox"
+                                  Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                                  Margin="10,0,0,0"/>
+                    </Grid>
+                </Border>
 
                 <TextBlock Text="Microphone" Foreground="#7E90A8"
                            FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,6"/>

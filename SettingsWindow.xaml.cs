@@ -80,12 +80,10 @@ namespace InterviewCopilot
             // notice had to explain that the setting on screen was not the
             // setting in effect. Auto no longer touches audio, so the choice is
             // always the user's and always live.
-            MicBothRadio.IsChecked   = cfg.MicCaptureEnabled;    // Practice
-            MicSystemRadio.IsChecked = !cfg.MicCaptureEnabled;   // Real interview
+            MicCaptureCheckBox.IsChecked = cfg.MicCaptureEnabled;
             CloudSyncCheckBox.IsChecked = cfg.CloudSyncEnabled;
             StealthCheckBox.IsChecked   = cfg.StealthMode;
             WatchScreenCheckBox.IsChecked = cfg.WatchScreenEnabled;
-            RefreshMicCards();
 
             LoadLanguages(cfg.TranscriptLanguage);
 
@@ -235,7 +233,6 @@ namespace InterviewCopilot
         // EVENT HANDLERS
         // ═══════════════════════════════════════════════════════════════
         private void ModelRadio_Checked(object sender, RoutedEventArgs e) => RefreshModelCards();
-        private void MicRadio_Checked(object sender, RoutedEventArgs e)  => RefreshMicCards();
 
         private void RefreshModelCards()
         {
@@ -244,12 +241,6 @@ namespace InterviewCopilot
             ApplyCardStyle(OpenAiCard, OpenAiDot, !groq);
         }
 
-        private void RefreshMicCards()
-        {
-            bool sysOnly = MicSystemRadio.IsChecked == true;
-            ApplyCardStyle(MicSystemCard, MicSystemDot,  sysOnly);
-            ApplyCardStyle(MicBothCard,   MicBothDot,   !sysOnly);
-        }
 
         private static void ApplyCardStyle(System.Windows.Controls.Border card,
                                            System.Windows.Shapes.Ellipse dot, bool selected)
@@ -440,7 +431,7 @@ namespace InterviewCopilot
                 Temperature       = Math.Round(TempSlider.Value, 1),
                 MainWindowOpacity = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 2),
                 OverlayOpacity    = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 2),
-                MicCaptureEnabled = MicBothRadio.IsChecked == true,
+                MicCaptureEnabled = MicCaptureCheckBox.IsChecked == true,
                 AudioDeviceIndex  = SelectedDeviceIndex,   // persist the chosen mic across restarts
                 AudioDeviceName   = SelectedDeviceName,     // and the name, which outlives the number
                 CloudSyncEnabled  = CloudSyncCheckBox.IsChecked == true,
