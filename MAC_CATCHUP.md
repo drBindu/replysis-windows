@@ -1655,6 +1655,90 @@ shapes, it is worth running rather than reading.
 
 ---
 
+## 2026-09-11, after 1.0.18: one mode, and it listens to both
+
+The biggest change on Windows since the nine fixes, and the one most worth
+copying, because it deletes a setting rather than renaming it.
+
+**Practice and Real interview are gone. There is one mode.** They were never
+two modes: they differed in exactly one thing, which audio source was open -
+the interviewer arrives through system audio, the candidate through the
+microphone. Opening BOTH answers both, and the choice stops existing.
+
+The choice was worth deleting rather than relabelling because getting it
+wrong fails silently. A real interview left on Practice listens to the
+candidate instead of the interviewer. Nothing errors, the mic ring lights,
+the engine reports healthy, and no answer ever arrives - the user concludes
+the product is broken. Three names were tried for this setting over the
+weeks ("System audio only / + my voice", then "Real interview / Practice")
+and renaming a trap does not disarm it.
+
+**This was not safe before the read-back fix.** With the microphone open
+during a real interview the app hears the candidate read its answer aloud and
+treats it as a new question - the answer they are half-way through reading is
+replaced by an answer to itself, and they are charged for it. `d391348` is
+what makes one mode possible, so on Windows it is now load-bearing rather
+than a nicety. If Mac merges the modes, that detector has to be there first.
+
+`MicCaptureEnabled` survives as a Settings switch, not a mode: default on,
+off means real interviews still work and practising alone does not, and the
+card says exactly that instead of naming an audio topology. Nothing migrates
+- same flag, different question.
+
+The toolbar is now one control, AUTO | MANUAL, and it is only ever about WHEN
+the app answers. It also stopped being a dropdown: a menu hides the state
+until you open it, and this is state a user needs at a glance mid-interview.
+Auto/Manual no longer restarts the speech engine either, since it cannot
+change the capture mode any more - that restart was a visible stall on every
+flip.
+
+The Manual card states the real reason it is more accurate, which is worth
+copying verbatim because it is true and specific rather than marketing: in
+Automatic the app infers where a question ended from a pause, so an
+interviewer pausing mid-sentence to think gets answered half-way. Space
+removes the inference.
+
+## Two measurements worth having on Mac
+
+**The Speechmatics session close takes ~3.9 seconds.** Windows waited 1.5s
+before killing the engine, which is less than half of what it needs, so every
+single app close stranded a session slot until the server timed it out. The
+number was a guess and it was wrong twice - once blamed on a recording being
+flushed first, then observed again with nothing to flush at all.
+
+Rather than pick a third number, the code now MEASURES it and logs the real
+elapsed time on both paths. First run after raising the bound to 6s:
+
+    [ENGINE] Engine closed its Speechmatics session cleanly in 3893ms.
+
+"Cleanly" is the word that matters - before this it was always killed. A
+longer bound costs nothing when the engine is quick, because WaitForExit
+returns the moment it exits. If Mac kills its engine on a timer, check the
+number against 3.9s.
+
+The orphan-cleanup path deliberately keeps its short 1.5s bound, and the code
+says why: it runs synchronously in the MainWindow constructor before the
+window is shown, so every millisecond is a frozen startup, and six seconds of
+white screen to reclaim a slot that has ALREADY been leaked since the last
+crash is the wrong trade. It cannot be made async either - the shutdown flag
+must be written before our own engine starts, or the new engine reads it and
+exits immediately.
+
+**The screen was being captured every two seconds while muted.** ~500 KB
+captured and encoded, several hundred milliseconds of CPU, for a question
+nobody can be asking while the microphone is off. The only guard was "the mic
+was used within five minutes", so one press of Space bought five minutes of
+capturing whatever was on the screen - about a hundred and fifty captures of
+somebody's private desktop that nothing would use.
+
+Now fifteen seconds while muted, two while listening, and unmuting prepares
+one directly rather than waiting for the next tick - which is what lets the
+muted interval be long without costing the first question its screenshot.
+Separate from `a7d70e5`, which stopped the UPLOADS; this is the capture
+underneath them, which ran regardless.
+
+---
+
 ## Where the reasoning lives
 
 The Windows commit messages, `git log` on `windowsNative`, one commit per
