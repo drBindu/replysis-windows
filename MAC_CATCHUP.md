@@ -15,13 +15,26 @@ backend.
 The Mac app talks to the same server. These are live and need nothing from
 the Mac side:
 
-**Answers no longer depend on one model.** Order is `gpt-oss-20b`, then
-`gpt-oss-120b`, then OpenAI if the account is active. Groq meters tokens per
-model, so the second is a whole separate allowance, not a share of one. The
-fallback used to be OpenAI alone, and when that account lapsed a rate limit
-became a hard failure.
+**Answers no longer run on Groq at all.** Corrected 2026-09-11; the paragraph
+that stood here described the Groq chain and had been false since `164ccd7`.
+Every answer path is now `gemini-3.5-flash-lite`, with `gemini-3.1-flash-lite`
+behind it. Both verified answering 200 on the live key.
 
-**Screen analysis runs on Groq**, `qwen/qwen3.6-27b`, free on the same key.
+Groq was faster and still is, by roughly 200 ms. It was dropped anyway, because
+Groq sells no capacity above 8,000 tokens a minute - about three and a half
+questions a minute for the whole product, across every user. Speed you cannot
+buy more of is not speed you can build on. Falling back onto a hard-capped free
+tier is not a fallback either: at any real volume it is already exhausted by the
+time it is reached, so the fallback is a second Gemini model rather than Groq.
+
+The Groq branch still exists in the source and is reachable only when the Gemini
+key is absent. With the key present it is dead code. If the Mac app pins a
+provider string, note that the backend ignores it for the answer path now.
+
+**Screen analysis runs on Gemini**, `gemini-3.5-flash-lite`, same key as the
+answer path. It ran on Groq `qwen/qwen3.6-27b` when the paragraph below was
+written, and the reasoning in it is still worth reading even though the model
+named has changed.
 The code used to say no Groq vision model existed. It was wrong: asking each
 model for an image is how you find out, and qwen answers "image must have at
 least 2 pixels", which is a complaint about the test pixel and means it read
@@ -29,7 +42,7 @@ the image.
 
 **Coding answers are written by a different model than the one that reads the
 screen.** The vision model reports what is there — statement, language,
-existing code, the error and its line — and `gpt-oss-120b` writes the answer
+existing code, the error and its line — and a second model writes the answer
 from that description, never seeing the picture. Asked to fix an LRU Cache,
 the vision model had produced three implementations across three attempts,
 each broken differently: `Node head, tail;` declared as objects then used
@@ -1482,6 +1495,165 @@ cannot produce a working app — it has the `.spec` but not the `.py`. Both
 sides can silently run different engines and neither can tell. A tagged
 release built for both platforms would fix that; copying a binary between
 machines will not.
+
+## Nine changes after 1.0.17, none of them shipped yet
+
+Recorded 2026-09-11. These landed over the week after 1.0.17 went to the Store
+and this file was not updated with them at the time, which was the rule being
+broken rather than an oversight worth repeating. Store users still have 1.0.17
+and have none of this.
+
+Several came from the Mac side or were found on both at once. Where that is
+true it is said, because it is the argument for keeping this file current:
+neither platform found all of them.
+
+**Reading our own answer aloud was treated as a new question.** `d391348`. The
+product exists so an answer appears and the candidate says it. In practice mode
+the microphone hears exactly that, the words return as a transcript, and the
+app answered itself - replacing the answer being read half-way through,
+charging a credit, then doing it again. Nobody reports this as missing echo
+suppression; they report that the answer disappears while they read it.
+Compared against the text on screen rather than against audio, since the screen
+is what they can be reading, and by vocabulary overlap rather than sequence,
+since someone reading aloud paraphrases, skips and adds filler. At or above 55%
+overlap it is not a new question. Below eight words it does not judge at all -
+"and the complexity" or "I use Docker" share words with any answer by accident,
+and swallowing a real follow-up is worse than the bug.
+
+**Plain questions were taking the screen path.** `6ae0397`. Measured against
+production: spoken answer 0.64 s, screen stage 1 3.89 s, screen stage 2 2.87 s.
+Seven seconds against half a second. Any question that merely failed to look
+personal was routed through a photograph of a code editor and two models - ask
+"solve this", then "what is Java", and Java went the slow way. A follow-up now
+has to look like one: it either joins onto what came before (and, so, what
+about) or points back at it (that, this, it). The first draft used a word count
+and let "what is Java" straight through, because it is three words and "and the
+time complexity?" is four. Length cannot separate them; standing alone can.
+"Why" and "how" are deliberately not openers on their own, or "why is Java
+slow" would read as a follow-up. Anything naming the screen still takes the
+screen path first.
+
+**The engine now emits the segment confidence it already computed.** `678ccdb`.
+Average word confidence was calculated per segment and thrown away unless the
+segment was dropped, so both clients were judging whether a transcript was real
+by looking at its grammar. The Mac session measured why that cannot work:
+scoring by function-word ratio put "Explain TCP three way handshake" at 0.20
+and the worst non-English garbage at 0.22. They overlap, so any threshold
+catching the noise also rejects a legitimate short technical question. They
+reported the negative result instead of shipping it, which is why this fix
+exists. Confidence measures the right thing - speech in another language
+transcribed as English scores low precisely because the recogniser was
+guessing. One line per segment, ">>> SEGMENT CONF: 0.42". Clients can now hold
+a stricter floor for answering than the engine holds for displaying: showing a
+doubtful line costs nothing, spending a credit on it is a decision that should
+have evidence.
+
+**The continuation chain was extending its own deadline.** `6c98dfb`. The
+window was measured from the last submission, and a merge is a submission, so
+every merge pushed the deadline forward and the chain could only end if the
+speaker went quiet. Background speech never does. One API call and one credit
+per fragment, the answer replaced mid-read, the question growing into a
+paragraph of noise. The Mac session hit it first and measured roughly two
+hundred credits in five minutes; Windows had it identically. Four independent
+bounds now, so no single one has to be right: the window anchors to the chain
+start which a merge never moves, at most two merges whatever the clock says, at
+most sixty words merged, and a fragmented-noise test ported from the Mac
+AutoTurnDetector. That last one refuses to judge below twelve words and five
+stops, so a genuine "Okay. Sure." is never caught - my first two noise samples
+were eleven words and were correctly refused, which is the floor working rather
+than the detector failing.
+
+**The Speechmatics session is closed before the engine is killed.** `2349f80`.
+A killed engine never closes its websocket, so Speechmatics holds the session
+slot until it times out server-side, and the account has a limit on concurrent
+sessions. Every engine restart, every settings change and every app close left
+a ghost holding a slot; the orphan cleanup at startup did the same, and that
+one is worse, since an orphan has been holding a slot unattended since the app
+last died. The shutdown.flag mechanism already existed and the engine already
+exited cleanly on it - neither kill path used it. Both now write the flag, wait
+1.5 s, and kill only past that. Found from the Mac side, which exhausted the
+shared quota with the remains of its own test runs: with one account, a leak on
+either platform starves the other, and nothing on either machine connects the
+two events. A Windows leak silences a Mac user mid-interview.
+
+**A busy account and a broken key no longer share an exit code.** `73f6bf6`.
+They need opposite responses: a key is permanent and only the user can fix it,
+a full account is temporary and clears the moment another device stops. Sharing
+code 2 meant a busy account was reported as "fix your Speechmatics key in
+Settings" - wrong, unactionable - and it stopped the retry loop, so the app
+stayed dead after the other device finished and only a relaunch revived it.
+Quota refusals now exit 4. The app says another device is using the account and
+retries in twenty seconds. It also throws the cached token away on that
+refusal, which is the part that cost hours: the minted token is cached to disk
+for an hour and stays valid when the account behind it changes, so after the
+key was swapped server-side both machines kept using a token pointing at the
+old exhausted account. Deleting sttkey.json by hand was the only thing that
+moved it. Mac caches the same token in the Keychain and had the identical
+asymmetry - check that the Keychain copy is discarded on a quota refusal too,
+or a correct server-side fix will again look like it did nothing.
+
+**The plan's real limits are read out of the token the app already holds.**
+`e21902b`. The Speechmatics token is a JWT and its claims carry the numbers
+that decide whether the product works: connection_quota is how many people may
+transcribe at once across the whole account, account_type says which plan.
+Nobody knew the number. It is two - two customers, ever, simultaneously - and
+it was found only after a day of chasing symptoms. It was sitting in every
+token the app had ever received. The Mac session suggested reading it and it is
+the best technique either side produced that week: no API call, no portal
+access, no credential beyond a string already in memory, and it answers "what
+are the real limits" for an account nobody can log into. Logged on every fetch
+with an explicit warning at two or below. Never throws - a token whose shape
+changes must not stop the app transcribing; this is information, not a gate.
+
+**A month of interview audio was accumulating on disk.** `3e17264`. Every
+session records itself. Nothing asked for it, nothing plays it back - the
+Sessions panel only ever deletes these - and nothing removed them. Measured on
+one machine after a month: 77 files, 457 MB, individual recordings up to 64 MB,
+279 MB of it more than a week old. Two reasons that matters and the second is
+larger: it is somebody's disk, and it is a month of their interviews kept
+indefinitely by a product whose entire value is discretion, without anyone
+having chosen that. Recordings older than seven days are now removed by the
+sweep that already runs at startup, sharing its cutoff so there is one
+retention rule rather than two. Transcripts are untouched - verified the
+pattern matched 77 recordings and zero of 374 transcript files before shipping,
+because a glob that deletes the wrong thing here destroys the feature the panel
+exists for. `678ccdb` later pinned it to two explicit patterns, on the Mac
+session's point that a rule which is safe because somebody checked is weaker
+than one that is safe because it cannot match. Whether to record at all is a
+product decision and was not made here - it is open on both platforms.
+
+**Screenshots upload when the screen changes, not every two seconds.**
+`a7d70e5`. The check meant to stop repeat uploads hashed the PNG bytes, and a
+hash of exact bytes almost never matches on a real screen - a caret blinks, a
+clock ticks, a counter changes, and a handful of pixels gives a completely
+different hash. It never once stopped an upload. From a real session, every two
+seconds without pause: 528 KB, 529 KB, 542 KB, 547 KB, 546 KB - roughly fifteen
+megabytes a minute of the user's connection, for a screen nobody was asking
+about. LastCaptureSignature already existed for exactly this distinction, 16x16
+in sixteen greys, and is what tells scrolling from a ticking counter a few
+lines further down. This may also be why answers felt slow: a question competes
+for the same upstream as a 500 KB upload that had no reason to be in flight.
+
+### The shape these keep having
+
+Four faults that week read as correct and did nothing when run: a guard that
+cannot fail (the byte-hash dedupe), a check that answers a narrower question
+(grammar scoring standing in for confidence), recovery behind an unreachable
+branch (the OpenAI third try on a lapsed account), and a bound that resets
+itself (the continuation window). If a fix on the Mac side has one of these
+shapes, it is worth running rather than reading.
+
+### Still open on both sides
+
+- Speechmatics is Free with a 2-session quota. This is a purchase, not a code
+  change, and it blocks launch on either platform.
+- The debug log is appended one line at a time with File.AppendAllText, opening
+  and closing the file roughly ten times a second while listening. Bounded per
+  run since it is truncated at launch, so waste rather than growth.
+- The engine still has no versioned artifact. Unchanged from the note below,
+  and still the thing most likely to make the two apps silently differ.
+
+---
 
 ## Where the reasoning lives
 
