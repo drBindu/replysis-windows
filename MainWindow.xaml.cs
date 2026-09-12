@@ -3582,7 +3582,37 @@ namespace InterviewCopilot
             }
 
             // ── 1. Send request — errors handled outside the iterator ──────────
-            using HttpResponseMessage res = await SendBackendRequestAsync(question, resume, ct);
+            HttpResponseMessage res = await SendBackendRequestAsync(question, resume, ct);
+
+            // A 401 used to sign the user out on the spot, and it could not have
+            // been avoided.
+            //
+            // UserSession.Clear() wipes the refresh token and deletes the session
+            // file, so a paying user was dropped into guest mode mid-answer and
+            // had to log in again to get their plan back. The comment on
+            // EnsureFreshTokenAsync above names that outcome exactly, and the
+            // mitigation it added could never work: TryRefreshAsync asked
+            // IsTokenExpired() first, which is the CLIENT's opinion, a timestamp
+            // under 55 minutes old, and returned true without refreshing anything
+            // whenever the client disagreed with the server. A token the server
+            // rejects and the client believes in was unrepairable by construction,
+            // so the only path left was to destroy the session.
+            //
+            // Now: ask for a new token, forcing past that check, and try once more.
+            // Signing out is for when the refresh itself is refused, which is the
+            // only evidence that the session is really gone.
+            if ((int)res.StatusCode == 401)
+            {
+                DebugWindow.Log("AUTH", "Backend rejected the token; forcing a refresh before giving up.");
+                if (await UserSession.TryRefreshAsync(force: true))
+                {
+                    res.Dispose();
+                    res = await SendBackendRequestAsync(question, resume, ct);
+                    DebugWindow.Log("AUTH", $"Retried with a fresh token: HTTP {(int)res.StatusCode}");
+                }
+            }
+
+            using HttpResponseMessage ownedResponse = res;
 
             // ── 2. Handle non-200 status codes with plain yields (no try/catch) ─
             int status = (int)res.StatusCode;
@@ -4683,12 +4713,45 @@ namespace InterviewCopilot
         {
             try
             {
+                // Read the resume on the UI thread, whatever thread we are on.
+                //
+                // StartSpeechmaticsEngine awaits the Speechmatics key with
+                // ConfigureAwait(false), so everything after that line, including this
+                // method, runs on a thread-pool thread. Touching ResumeTextBox from
+                // there throws, and the catch below was empty, so the throw silently
+                // became an empty resume and the file was rewritten with nothing.
+                //
+                // From the owner's log, same app, same day:
+                //     12:04  Wrote 170 interview terms   key cached, no await, UI thread
+                //     20:00  Wrote 0 interview terms     key fetched, await, pool thread
+                //
+                // An empty vocabulary costs Speechmatics the candidate's name, their
+                // technologies and the company: exactly the words a recogniser gets
+                // wrong. It degraded on every engine restart that had to fetch a key,
+                // and said nothing.
                 string resume = "";
-                try { resume = ResumeTextBox?.Text ?? ""; } catch { }
+                try
+                {
+                    resume = Dispatcher.CheckAccess()
+                        ? (ResumeTextBox?.Text ?? "")
+                        : Dispatcher.Invoke(() => ResumeTextBox?.Text ?? "");
+                }
+                catch (Exception ex)
+                {
+                    DebugWindow.Log("VOCAB", $"resume text unreadable: {ex.GetType().Name}: {ex.Message}");
+                }
+
                 string blob = $"{_companyName}\n{_jobDescription}\n{_liveHints}\n{resume}";
                 var terms = ExtractVocabTerms(blob, _companyName);
                 File.WriteAllLines(Path.Combine(AppDataFolder, "vocab.txt"), terms);
-                DebugWindow.Log("VOCAB", $"Wrote {terms.Count} interview terms for STT accuracy");
+
+                // Zero terms is a fault, not a result, so it does not get to look like one.
+                if (terms.Count == 0)
+                    DebugWindow.Log("VOCAB",
+                        $"No terms written; STT loses its custom dictionary. resume={resume.Length} chars, "
+                        + $"company={_companyName.Length}, jd={_jobDescription.Length}, hints={_liveHints.Length}");
+                else
+                    DebugWindow.Log("VOCAB", $"Wrote {terms.Count} interview terms for STT accuracy");
             }
             catch (Exception ex) { DebugWindow.Log("VOCAB", $"write failed: {ex.Message}"); }
         }

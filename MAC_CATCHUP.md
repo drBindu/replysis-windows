@@ -1855,6 +1855,56 @@ app. The Windows binary shipping today is a PyInstaller build, so editing the
 
 ---
 
+## 2026-09-11, audit: two faults found by auditing, both silent
+
+**The speech vocabulary was being erased on every engine restart that fetched a
+key.** WriteVocabFile builds a word list from the resume, company and job
+description and writes vocab.txt, which the engine feeds to Speechmatics as a
+custom dictionary. It reads the resume from a WPF TextBox, and it is called from
+StartSpeechmaticsEngine AFTER this line:
+
+    await UserSession.EnsureSpeechmaticsKeyAsync(...).ConfigureAwait(false);
+
+ConfigureAwait(false) abandons the UI thread, so the rest of that method runs on
+a thread-pool thread, where touching the TextBox throws. The catch was:
+
+    try { resume = ResumeTextBox?.Text ?? ""; } catch { }
+
+From the owner's log, same app, same day:
+
+    12:04  Wrote 170 interview terms     key cached, no await, UI thread
+    20:00  Wrote 0 interview terms       key fetched, await, pool thread
+
+Zero terms costs the recogniser the candidate's name, their technologies and the
+company - precisely the words it gets wrong - and it reported "Wrote 0" as though
+that were a normal result. The resume is now read through the Dispatcher, and an
+empty vocabulary logs what was missing instead of looking like success. If Mac
+builds a vocabulary the same way, check which thread it reads the UI from.
+
+**A rejected token signed the user out permanently, mid-answer.** On HTTP 401 the
+answer path called UserSession.Clear(), which wipes the refresh token and deletes
+the session file, then switched to guest. A paid plan became guest credits in the
+middle of an interview, recoverable only by logging in again.
+
+It could not have been avoided by refreshing, because TryRefreshAsync opened with
+
+    if (!IsTokenExpired()) return true;
+
+IsTokenExpired is the CLIENT's opinion: a saved timestamp under 55 minutes old.
+When the server rejects a token the client still believes in - a revoked session,
+a slept laptop, clock drift - the refresh returned "true" having done nothing, so
+the token was unrepairable by construction and destroying the session was the
+only path left. The code even had a comment naming this outcome; the mitigation
+beside it called the same unusable refresh.
+
+TryRefreshAsync now takes force, which skips that check, and refusals are logged
+rather than silent. A 401 forces one refresh and retries once; the sign-out
+happens only when the refresh itself is refused, which is the only real evidence
+the session is gone. Mac shares this backend and this Firebase flow, so if it
+clears a session on 401, it has the same defect.
+
+---
+
 ## Where the reasoning lives
 
 The Windows commit messages, `git log` on `windowsNative`, one commit per

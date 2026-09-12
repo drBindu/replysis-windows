@@ -556,15 +556,26 @@ namespace InterviewCopilot
             }
         }
 
-        public static async Task<bool> TryRefreshAsync()
+        /// <summary>
+        /// Exchanges the refresh token for a new id token.
+        ///
+        /// <paramref name="force"/> exists because the ordinary path asks
+        /// IsTokenExpired() first, and that is the CLIENT's opinion: a timestamp
+        /// more than 55 minutes old. When the server rejects a token the client
+        /// still believes in - a revoked session, a clock that drifted, a laptop
+        /// that slept for four hours - every refresh returned "true" without
+        /// refreshing anything, so the token could never be repaired and the only
+        /// remaining path was to sign the user out.
+        /// </summary>
+        public static async Task<bool> TryRefreshAsync(bool force = false)
         {
             if (string.IsNullOrEmpty(RefreshToken)) return false;
-            if (!IsTokenExpired()) return true;
+            if (!force && !IsTokenExpired()) return true;
             await _refreshSem.WaitAsync();
             try
             {
                 // Re-check after acquiring: a concurrent caller may have already refreshed
-                if (!IsTokenExpired()) return true;
+                if (!force && !IsTokenExpired()) return true;
 
                 string url = $"https://securetoken.googleapis.com/v1/token?key={FirebaseApiKey}";
                 using var content = new System.Net.Http.FormUrlEncodedContent(new[]
@@ -574,7 +585,14 @@ namespace InterviewCopilot
                 });
                 using var res = await _http.PostAsync(url, content);
                 string body = await res.Content.ReadAsStringAsync();
-                if (!res.IsSuccessStatusCode) return false;
+                if (!res.IsSuccessStatusCode)
+                {
+                    // Logged because this failing silently is what made a 401 look
+                    // like a dead session rather than a refresh that did not happen.
+                    DebugWindow.Log("AUTH",
+                        $"Token refresh refused: HTTP {(int)res.StatusCode} {body[..Math.Min(body.Length, 160)]}");
+                    return false;
+                }
 
                 using var doc = JsonDocument.Parse(body);
                 string newIdToken  = doc.RootElement.TryGetProperty("id_token",      out var t)  ? t.GetString()  ?? "" : "";
@@ -587,7 +605,11 @@ namespace InterviewCopilot
                 SaveToDisk();
                 return true;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("AUTH", $"Token refresh failed: {ex.GetType().Name}: {ex.Message}");
+                return false;
+            }
             finally { _refreshSem.Release(); }
         }
 
