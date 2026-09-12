@@ -4830,14 +4830,30 @@ namespace InterviewCopilot
                 // the moment it exits; it only spends time that was going to be
                 // spent leaking a session instead.
                 var closeWatch = System.Diagnostics.Stopwatch.StartNew();
-                File.WriteAllText(shutdownFlag, "1");
-                if (!proc.WaitForExit(6000))
+
+                // Only an engine that is actually connected is worth waiting for.
+                //
+                // The graceful close exists to free the Speechmatics session slot,
+                // and only a live session holds one. When the engine is not online
+                // there is nothing to close politely, and the six seconds spent
+                // discovering that are six seconds the user waits with nothing
+                // transcribing. Measured on a real session: the wait ran out in
+                // full, 6003ms, while the user was pressing Space to ask a
+                // question, and the whole restart took eleven seconds.
+                if (!_engineOnline)
+                {
+                    closeWatch.Stop();
+                    try { proc.Kill(entireProcessTree: true); } catch { }
+                    DebugWindow.Log("ENGINE",
+                        "Engine was not connected, so there was no session to close; killed at once.");
+                }
+                else if (!WaitForGracefulExit(proc, shutdownFlag))
                 {
                     closeWatch.Stop();
                     DebugWindow.Log("ENGINE",
                         $"Engine did not close its session within {closeWatch.ElapsedMilliseconds}ms; killing it. "
                         + "Speechmatics will hold that session slot until it times out.");
-                    proc.Kill(entireProcessTree: true);
+                    try { proc.Kill(entireProcessTree: true); } catch { }
                 }
                 else
                 {
@@ -4861,6 +4877,16 @@ namespace InterviewCopilot
             try { proc.Dispose(); } catch { }
             // Clean up PID file on a normal kill so NuclearKill doesn't double-attempt it
             try { if (File.Exists(EnginePidPath)) File.Delete(EnginePidPath); } catch { }
+        }
+
+        /// <summary>
+        /// Asks a live engine to close its Speechmatics session and waits for it.
+        /// True when it exited on its own, false when the bound ran out.
+        /// </summary>
+        private static bool WaitForGracefulExit(Process proc, string shutdownFlag)
+        {
+            File.WriteAllText(shutdownFlag, "1");
+            return proc.WaitForExit(6000);
         }
 
         private void WritePauseFlag() { try { File.WriteAllText(Path.Combine(AppDataFolder, "pause.flag"), "1"); } catch (Exception ex) { DebugWindow.Log("FILE", $"pause.flag write failed: {ex.Message}"); } }

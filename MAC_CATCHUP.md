@@ -1810,6 +1810,51 @@ prepares screenshots on a timer, compare its staleness limit with its interval.
 
 ---
 
+## 2026-09-11, night: an error handler that only printed
+
+**This one is in the SHARED engine, so it is Mac's bug too, in the same lines.**
+
+`speechmatics_engine.py` registered this:
+
+    ws.add_event_handler("Error", lambda e: print(f">>> WS ERROR: {e}", flush=True))
+
+A Speechmatics Error ends the session: the server stops listening and closes.
+The handler printed it and nothing else in the process ever learned. Captured on
+a real machine, from the owner's own log:
+
+    13:04  WS ERROR: idle_timeout, no audio sent within the last 1h0m0s
+    ...    seven hours of HEARTBEAT lines, process alive, socket dead
+    20:00  user presses Space and waits ELEVEN SECONDS
+
+The engine kept running, kept reading the microphone, kept heart-beating into a
+connection nobody was reading. The auto-reconnect loop that has always been
+there never ran, because nothing raised. The first thing to notice was a person
+pressing a key.
+
+Fixed by recording the error and letting the read loop raise it, which is
+exactly what the shutdown flag already does. It leaves through `ws.run()` into
+the existing `except`, where the text is classified as it always was: a bad key
+still exits 2, a full account still exits 4, and a drop like idle_timeout takes
+the retry-with-backoff path. Cleared before every connection attempt, or the
+first drop would make every reconnect raise at once.
+
+If Mac ships its own copy of this file, it has the same dead handler.
+
+**Windows side: the kill path made the user wait for a corpse.** The graceful
+close added this morning waits up to 6s for the engine to close its session, and
+a hung engine can never answer, so the wait always ran out in full. Measured in
+the same incident: 6003ms of an eleven second delay, spent while the user was
+pressing Space. It now waits only when the engine is actually online, because a
+disconnected engine has no session to close politely. The 6s stays for the live
+case, where a real close was measured at 3.9s.
+
+Rebuilding the bundled engine is required for this to reach users:
+`powershell -ExecutionPolicy Bypass -File toolsuild-engine.ps1`, then build the
+app. The Windows binary shipping today is a PyInstaller build, so editing the
+.py alone changes nothing a user runs.
+
+---
+
 ## Where the reasoning lives
 
 The Windows commit messages, `git log` on `windowsNative`, one commit per

@@ -631,6 +631,31 @@ RECORD_FLAG    = os.path.join(APP_DATA, "record.flag")
 RECORDING_ID_FILE = os.path.join(APP_DATA, "recording.id")
 RECORDING_SESSION_NUMBER_FILE = os.path.join(APP_DATA, "recording_session_number.txt")
 SHUTDOWN_FLAG  = os.path.join(APP_DATA, "shutdown.flag")
+
+# The last Error message the server sent, or None.
+#
+# A Speechmatics Error ends the session: the server stops listening and closes
+# the connection. The handler for it only printed the message, so nothing else
+# in the process ever learned the session was over. Observed on a real machine:
+# the server sent idle_timeout at 13:04 after an hour with no audio, the engine
+# logged it and carried on, and SEVEN HOURS later the process was still alive,
+# still heart-beating, still reading the microphone into a socket nobody was
+# reading. The user pressed Space and waited eleven seconds while the whole
+# engine was torn down and rebuilt, because the first thing that noticed was a
+# person.
+#
+# Read in MixedStream.read below, which turns it into the same RuntimeError the
+# shutdown flag raises, so it leaves through ws.run() and the reconnect loop
+# that has always been there picks it up.
+_ws_session_error = None
+
+
+def _clear_ws_session_error():
+    """Forget the last session-ending error, before opening a new connection."""
+    global _ws_session_error
+    _ws_session_error = None
+
+
 RECORDINGS_DIR = APP_DATA
 
 print(f">>> Script folder : {SCRIPT_DIR}", flush=True)
@@ -1876,7 +1901,10 @@ async def main():
                             sys.exit(2)
                         continue
 
-                print(f">>>[Attempt {attempt}] Connecting to {endpoint}...", flush=True)
+                    # Cleared per attempt. Left set, the first dropped session would make
+                    # every reconnect raise at once and the engine would never recover.
+                    _clear_ws_session_error()
+                    print(f">>>[Attempt {attempt}] Connecting to {endpoint}...", flush=True)
 
                 # The relay reads the token from the query string, not the
                 # Authorization header the SDK sets. Not a preference: a
@@ -1975,8 +2003,16 @@ async def main():
                 ws.add_event_handler("AddPartialTranscript", handle_partial)
                 ws.add_event_handler("RecognitionStarted",
                                      lambda m: print(">>> STATUS: ONLINE ✓", flush=True))
-                ws.add_event_handler("Error",
-                                     lambda e: print(f">>> WS ERROR: {e}", flush=True))
+                def _on_ws_error(e):
+                    # Terminal by protocol: the server sends one Error and closes.
+                    # Recording it is what lets the read loop end the session; a
+                    # handler that only prints leaves the socket dead and the
+                    # process alive, which is how this was found.
+                    global _ws_session_error
+                    _ws_session_error = e
+                    print(f">>> WS ERROR: {e}", flush=True)
+
+                ws.add_event_handler("Error", _on_ws_error)
 
                 # The recogniser saying a turn is over.
                 #
@@ -2206,6 +2242,14 @@ async def main():
                         global _mic_native_rate, _mic_native_channels, _mic_chunk_frames
 
                         _read_started = time.time()
+
+                        # The server ended the session. Raising here is what the
+                        # shutdown flag does a few lines down, and it leaves through
+                        # ws.run() into the reconnect loop, which already knows how
+                        # to tell a retriable drop from a bad key or a full account.
+                        if _ws_session_error is not None:
+                            raise RuntimeError(f"session ended by server: {_ws_session_error}")
+
                         shutdown_requested = os.path.exists(SHUTDOWN_FLAG)
                         recording_requested = os.path.exists(RECORD_FLAG)
                         paused = os.path.exists(PAUSE_FLAG)
