@@ -121,7 +121,7 @@ namespace InterviewCopilot
                 {
                     SubtitleLabel.Text = _sessions.Count == 0
                         ? "Checking cloud backup..."
-                        : $"{_sessions.Count} local · checking cloud...";
+                        : $"{_sessions.Count} local, checking cloud...";
                 });
 
                 if (UserSession.IsTokenExpired())
@@ -443,7 +443,7 @@ namespace InterviewCopilot
             // Show detail header
             DetailHeader.Visibility = Visibility.Visible;
             DetailTitle.Text = info.DisplayTitle;
-            DetailMeta.Text = $"{info.DisplayDate}  ·  {info.DisplayStats}  ·  {info.DisplayModel}";
+            DetailMeta.Text = $"{info.DisplayDate}   {info.DisplayStats}   {info.DisplayModel}";
 
             // Cloud sessions have no delete API — hide the button (matches Mac behaviour)
             DeleteBtn.Visibility = info.IsCloud ? Visibility.Collapsed : Visibility.Visible;
@@ -828,7 +828,7 @@ namespace InterviewCopilot
 
         // ── Formatted display properties (used by XAML DataTemplate bindings) ──
         public string DisplayTitle =>
-            IsCloud ? "☁ Web Session" :
+            IsCloud ? "Web session" :
             SessionNumber > 0 ? $"Session #{SessionNumber}" : "Session";
 
         public string DisplayDate =>

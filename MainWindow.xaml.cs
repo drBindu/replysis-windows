@@ -6342,13 +6342,13 @@ namespace InterviewCopilot
             // mistake the user spots instantly.
             string target     = ScreenAnalyzer.LastCaptureTarget;
             string header     = string.IsNullOrWhiteSpace(target)
-                ? $"📸 SCREEN  ·  {timestamp}\n\n"
-                : $"📸 SCREEN  ·  {timestamp}  ·  {target}\n\n";
+                ? $"SCREEN   {timestamp}\n\n"
+                : $"SCREEN   {timestamp}   {target}\n\n";
 
             // A hairline between this answer and the ones before it. A rule of 45
             // box characters read as the start of another section rather than the
             // end of one, and it competed with the answer for attention.
-            string sep        = "\n" + new string('·', 12) + "\n\n";
+            string sep        = "\n\n";
 
             // Save previous answers so we can prepend the new one on top.
             // Treat placeholder/welcome messages as "empty" so they aren't carried forward.
@@ -6972,7 +6972,7 @@ namespace InterviewCopilot
                 {
                     text.Children.Add(new System.Windows.Controls.TextBlock
                     {
-                        Text       = isCurrent ? when + "   ·   in use" : when,
+                        Text       = isCurrent ? when + "   in use" : when,
                         Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
                             isCurrent ? "#7FD8AC" : "#7E90A8")),
                         FontSize   = 10.5,
