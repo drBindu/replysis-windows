@@ -209,17 +209,65 @@ namespace InterviewCopilot
 
             if (hasText)
             {
-                AnswerTextBlock.Text      = FormatForReading(text);
+                // Split what is spoken from what is only glanced at.
+                //
+                // Both used to land in one block at one size, so the literal words
+                // MORE TO SAY printed as a sentence in the middle of the answer and
+                // the four follow-up bullets looked exactly as urgent as the words
+                // the candidate was in the middle of saying out loud. The marker is
+                // now a quiet label and the bullets are smaller and dimmer, so the
+                // eye lands on the spoken part first.
+                //
+                // A partially streamed marker is left alone: until the whole phrase
+                // has arrived it stays in the spoken block, rather than the heading
+                // appearing one letter at a time.
+                string formatted = FormatForReading(text);
+                int moreAt = formatted.IndexOf("MORE TO SAY", StringComparison.OrdinalIgnoreCase);
+
+                if (moreAt >= 0)
+                {
+                    AnswerTextBlock.Text = formatted[..moreAt].TrimEnd();
+                    MoreTextBlock.Text   = formatted[(moreAt + "MORE TO SAY".Length)..].Trim();
+
+                    bool hasMore = MoreTextBlock.Text.Length > 0;
+                    MoreDivider.Visibility   = hasMore ? Visibility.Visible : Visibility.Collapsed;
+                    MoreLabel.Visibility     = hasMore ? Visibility.Visible : Visibility.Collapsed;
+                    MoreTextBlock.Visibility = hasMore ? Visibility.Visible : Visibility.Collapsed;
+                }
+                else
+                {
+                    AnswerTextBlock.Text     = formatted;
+                    MoreTextBlock.Text       = "";
+                    MoreDivider.Visibility   = Visibility.Collapsed;
+                    MoreLabel.Visibility     = Visibility.Collapsed;
+                    MoreTextBlock.Visibility = Visibility.Collapsed;
+                }
+
                 AnswerDivider.Visibility  = Visibility.Visible;
                 AnswerScroller.Visibility = Visibility.Visible;
 
-                // Scroll to bottom so the latest streamed content is always visible
-                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
-                    new Action(() => AnswerScroller.ScrollToBottom()));
+                // Show the START of a new answer, not the end of it.
+                //
+                // This scrolled to the bottom on every update, which is right for a
+                // chat log and wrong here: the overlay is what a candidate reads out
+                // loud, and the words they need first are the first ones. By the time
+                // an answer finished streaming they were looking at the MORE TO SAY
+                // bullets at the end, with the spoken answer scrolled off the top.
+                //
+                // Only on a new answer. While one keeps streaming the position is left
+                // alone, so a reader who has scrolled is not dragged somewhere else
+                // mid-sentence.
+                if (wasEmpty)
+                    Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+                        new Action(() => AnswerScroller.ScrollToTop()));
             }
             else
             {
                 AnswerTextBlock.Text      = "";
+                MoreTextBlock.Text        = "";
+                MoreDivider.Visibility    = Visibility.Collapsed;
+                MoreLabel.Visibility      = Visibility.Collapsed;
+                MoreTextBlock.Visibility  = Visibility.Collapsed;
                 AnswerDivider.Visibility  = Visibility.Collapsed;
                 AnswerScroller.Visibility = Visibility.Collapsed;
             }
@@ -315,7 +363,11 @@ namespace InterviewCopilot
                 string trimmed = line.Trim();
                 if (trimmed.StartsWith("•"))
                 {
-                    if (result.Length > 0) result.AppendLine();
+                    // No blank line between bullets any more. It was there to keep
+                    // them apart when they shared one block with the spoken answer;
+                    // they now have a block of their own, where line height already
+                    // separates them and the blank lines only cost vertical space
+                    // the scroller does not have.
                     result.AppendLine(trimmed);
                 }
                 else if (!string.IsNullOrWhiteSpace(trimmed))

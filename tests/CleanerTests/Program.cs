@@ -127,6 +127,9 @@ internal static class Program
         Console.WriteLine("\n9. Reading our answer aloud is not a question");
         _failed += ReadBackTests.Run();
 
+        Console.WriteLine("\n10. Punctuation that reads as AI generated");
+        _failed += HumanVoiceTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

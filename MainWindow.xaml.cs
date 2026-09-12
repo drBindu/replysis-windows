@@ -3858,7 +3858,9 @@ namespace InterviewCopilot
             ("underscore",    "show"),
         };
 
-        private string CleanAiOutput(string ans)
+        // Static and internal so the test project can call this one, rather than
+        // a second copy of its rules. It touches no instance state.
+        internal static string CleanAiOutput(string ans)
         {
             // Fences stay. They were stripped here because everything was shown in
             // one prose box and a stray ``` was just noise on screen. The code
@@ -3899,6 +3901,14 @@ namespace InterviewCopilot
             {
                 prose = Regex.Replace(prose, @"(\S)[ \t]*[—–―][ \t]+", "$1, ");   // mid-sentence break -> comma
                 prose = prose.Replace("—", "-").Replace("–", "-").Replace("―", "-");  // any remaining -> hyphen
+
+                // The model also reaches for the non-breaking hyphen in compound
+                // adjectives, writing statically‑typed and key‑value. It is not a dash
+                // so the rules above never saw it, and it renders as a hyphen that
+                // refuses to wrap, which pushes a long compound onto its own line in
+                // the compact overlay. The figure dash and the minus sign turn up in
+                // numbers for the same reason.
+                prose = prose.Replace("‑", "-").Replace("‒", "-").Replace("−", "-");
                 prose = Regex.Replace(prose, @",\s*,", ",");           // collapse accidental double commas
                 return prose;
             });

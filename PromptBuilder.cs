@@ -168,7 +168,8 @@ namespace InterviewCopilot
         /// they were providing.
         /// </summary>
         private static readonly Regex HistoryCodeBlock =
-            new(@"```[A-Za-z0-9+#_-]*?
+            new(@"```[A-Za-z0-9+#_-]*
+?
 .*?(?:```|$)",
                 RegexOptions.Singleline | RegexOptions.Compiled);
 
@@ -1087,8 +1088,47 @@ namespace InterviewCopilot
 
                 case QuestionType.Technical:
                     if (IsSimpleDefinitionQuestion(question))
-                        return "3 concise spoken sentences. Give a plain-English definition first, explain the key mechanism or purpose, then add one practical detail or example. " +
-                               "Do NOT mention your background, job, project, company, or personal experience unless the interviewer explicitly asks about it.";
+                        // This used to say "Do NOT mention your background, job, project,
+                        // company, or personal experience", which contradicts the voice
+                        // rules in the same prompt: those say to give what it is for and
+                        // where you have met it, with a worked Java example doing exactly
+                        // that. Two rules pointing opposite ways, and this one sits
+                        // directly above the question, where the comment above says the
+                        // model looks hardest. It won every time.
+                        //
+                        // Measured against the live model over ten definition
+                        // questions: the old text opened "X is a ..." in 8 of 10, this
+                        // text in 0 of 10. Two things mattered. Naming the shape of
+                        // the banned opening mechanically, including that a leading
+                        // "A" or "An" does not exempt it, because an earlier draft
+                        // that banned only the bare term still produced "A hash map
+                        // is a key-value store". And asking for an action as the main
+                        // verb rather than only forbidding "is", which gives the model
+                        // somewhere to go: "A hash map gets you a value back in
+                        // roughly constant time."
+                        //
+                        // Test the wording, do not reason about it: an earlier draft
+                        // was reworded slightly while being applied here and scored
+                        // far worse than the version that had been measured.
+                        //
+                        // The owner reported the old answers as robotic and hard to
+                        // read aloud, and produced this exact sentence:
+                        // "Java is a statically-typed programming language that runs on
+                        // the Java Virtual Machine, letting the same compiled code
+                        // execute on any platform with a JVM."
+                        return "3 concise spoken sentences, the way you would answer a colleague out loud. " +
+                               "Do not open by classifying the term. An opening of the form TERM is a NOUN, " +
+                               "TERM is an NOUN or TERM is the NOUN is the single clearest sign an answer is " +
+                               "being read off a screen, and a leading A or An does not exempt it. Open with " +
+                               "what it does or what you use it for, so the main verb is an action rather " +
+                               "than is. " +
+                               "Yes: A hash map gets you a value back in roughly constant time by hashing the " +
+                               "key to a bucket. " +
+                               "Yes: Docker packages an app with everything it needs so it runs the same on " +
+                               "my laptop and in prod. " +
+                               "No: A hash map is a key-value data structure. " +
+                               "Use contractions the way you would speaking. One short clause of your own use " +
+                               "is good. No project story, no employer list, no history lesson.";
 
                     return "3-4 SHORT paragraphs separated by blank lines. NO bullet symbols. " +
                            "Give a COMPLETE, substantive answer — enough depth to actually speak for 30-45 seconds. " +

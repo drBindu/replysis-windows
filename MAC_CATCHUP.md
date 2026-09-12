@@ -1905,6 +1905,99 @@ clears a session on 401, it has the same defect.
 
 ---
 
+## 2026-09-11, night: why the answers sounded like a textbook
+
+The owner's words: the answers are "very robotic and difficult to read like a
+real candidate is speaking in real interview". He was right, and the cause was
+not the model. It was our own prompt arguing with itself.
+
+`AppendSharedVoiceRules` tells the model to say what a thing is for and where
+you have met it, and carries a worked Java example doing exactly that. Then
+`BuildFormatReminder`, for a simple definition question, said:
+
+> Do NOT mention your background, job, project, company, or personal experience
+> unless the interviewer asked about it.
+
+Two rules pointing opposite ways. The format reminder wins, because it is
+placed in the user message directly above the question, which the code's own
+comment says is where the model looks hardest. The production transcript shows
+what came out:
+
+> "Java is a statically-typed programming language that runs on the Java Virtual
+> Machine, letting the same compiled code execute on any platform with a JVM."
+
+**How this was fixed, and the part worth copying.** The prompt was reconstructed
+from the C# source, sent to the live Cerebras model, and scored on one thing:
+does the first sentence open by classifying the term. Ten definition questions
+per variant.
+
+| reminder text | opens "X is a ..." |
+|---|---|
+| what shipped | 8 of 10 |
+| ban the bare term | 3 of 10 |
+| name the shape, and ask for an action verb | **0 of 10** |
+
+Two details decided it. The ban has to describe the opening mechanically and
+say a leading "A" or "An" does not exempt it, because banning only the bare
+term still produced "A hash map is a key-value store". And it has to ask for an
+action as the main verb, not merely forbid "is", so the model has somewhere to
+go: "A hash map gets you a value back in roughly constant time."
+
+**The mistake to avoid.** A first draft scored 0 of 4, was reworded slightly
+while being pasted into the C# and never re-measured. Measured properly, that
+reworded string scored 8 of 10. Test the exact bytes that ship; a prompt is not
+code you can reason about.
+
+Mac builds its own copy of this reminder. No Mac source was reachable from
+the Windows machine, so this is a thing to check, not a thing checked: open
+`PromptBuilder.swift`, find the branch for a simple definition question, and
+see whether it still forbids mentioning your own experience while the voice
+rules ask for it. The measurement harness is worth rerunning there rather
+than trusting these numbers, since the Mac prompt is assembled differently.
+
+## 2026-09-11, night: the compact overlay showed the wrong end of the answer
+
+Same report, second half: "in the compact it is messy and weird".
+
+`AnswerWindow.UpdateAnswer` called `AnswerScroller.ScrollToBottom()` on every
+update. That is right for a chat log and wrong here. This overlay is what the
+candidate reads out loud, the words they need are the first ones, and the
+scroller caps at 340px, so by the time an answer finished streaming they were
+looking at the MORE TO SAY bullets with the spoken answer scrolled off the top.
+It now scrolls to the top, and only when a new answer starts, so a reader who
+has scrolled is not yanked somewhere else mid-sentence.
+
+The second half of "messy": the spoken answer and the follow-up bullets were
+one TextBlock at one size, so the literal words MORE TO SAY printed as a
+sentence in the middle of the answer and the bullets looked exactly as urgent
+as the words being spoken. They are now two blocks: the answer at 16pt
+semibold, then a quiet 10pt label and the bullets at 13pt in a dimmer grey.
+The blank line that used to separate bullets is gone, since line height now
+does that job and the gaps cost 60px of a 340px budget.
+
+Both were verified by rendering the real `AnswerWindow` out of the built
+assembly into a PNG and looking at it, not by reading the XAML.
+
+## 2026-09-11, night: the non-breaking hyphen
+
+`CleanAiOutput` already rewrites em and en dashes, which the owner reads as the
+AI-generated look. It matched `[—–―]` and so never saw U+2011, the
+non-breaking hyphen, which this model reaches for constantly in compound
+adjectives: "statically‑typed", "key‑value", "real‑time",
+"self‑healing". It renders as a hyphen that refuses to wrap, which drops a
+long compound onto its own line in the narrow overlay. U+2011, U+2012 and
+U+2212 now normalise to a plain hyphen.
+
+`CleanAiOutput` was made `internal static` so the test project calls the
+shipping function rather than a copy of its rules, and `HumanVoiceTests` covers
+all of it, including that hyphens inside a fenced code block still survive.
+That suite opens with a self-check proving it can see a non-breaking hyphen at
+all, because a sweep for exactly these characters was once written in a shell
+heredoc that collapsed the backslashes, reported zero for a file containing
+eight, and the zero was passed on as clean.
+
+---
+
 ## Where the reasoning lives
 
 The Windows commit messages, `git log` on `windowsNative`, one commit per
