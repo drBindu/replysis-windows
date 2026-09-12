@@ -1998,6 +1998,142 @@ eight, and the zero was passed on as clean.
 
 ---
 
+## 2026-09-12: the backend and the website changed under you
+
+All of this is deployed and live. The Mac app talks to the same backend, so most
+of it is already yours without a line of Swift.
+
+### Every billable action is now recorded
+
+There was no record of a charge anywhere. `deductCredits` moved two numbers on
+the user document and printed a line to stdout, so the product could bill
+somebody and never say why. A new collection, `usage_events`, now takes one row
+per action: who, what (answer / screen / resume), provider, model, credits, and
+the real prompt and completion token counts.
+
+Written inside `FirestoreCreditsService`, which every charge already passes
+through, so no caller can forget. It never blocks a request: rows go on a
+bounded background queue and a full queue drops the row rather than adding
+milliseconds to an answer. It never fails one either; every path swallows its
+own exceptions.
+
+Nothing is needed from the Mac side. The rows appear because the backend writes
+them.
+
+### Token counts, and a trap in getting them
+
+Both Cerebras and Gemini report tokens only when the request sets
+`stream_options: {"include_usage": true}`. Verified accepted on both before
+wiring, because that endpoint rejects unknown fields outright and a rejected
+request is a blank answer on somebody's screen.
+
+Two things worth knowing if the Mac client ever parses provider streams
+directly:
+
+- Cerebras puts usage on a chunk whose `choices[0].delta` is empty, with
+  `finish_reason`.
+- **Gemini puts usage on a chunk that also carries content.** It does not follow
+  the OpenAI convention. A naive "drop the usage chunk" rule deletes words out of
+  the middle of an answer.
+
+The backend now captures that chunk and does NOT relay it, so no client sees a
+new shape. The Windows parser was checked and ignores an empty `choices` array
+safely; the Mac one could not be checked from the Windows machine. **Check
+it anyway**: find where the Mac app reads SSE and confirm an empty `choices`
+array returns "no token" rather than throwing.
+
+### A credit bug that gave away free usage
+
+Found while auditing before deploy, and it predates all of this.
+
+On `/ask`, if the charge failed for want of credits, the code wrote an error and
+returned. The `finally` block then refunded, because no answer had been
+delivered. Nothing had been taken, so the refund was a grant: `refundCredits`
+adds the cost back, capped at the plan allowance. An account sitting at zero
+could press space, be told it had no credits, and be handed five. Repeat and the
+meter never runs out.
+
+Fixed: a refund now requires a charge to have actually happened. The screen path
+never had this, because it charges synchronously and returns 402 before the
+stream body exists.
+
+If the Mac app has any client-side refund or retry logic around a 402, look at
+it with this in mind.
+
+### Answers on the website now use the same model as the apps
+
+`app/api/stt/tokens/route.ts` on the website is what the mock-interview and
+resume pages call. It still had a full Groq client and defaulted to it. Groq is
+gone from the account, so that route now calls Cerebras `gpt-oss-120b` with
+`reasoning_effort: "low"`, the same as the Java backend.
+
+A note on how that was nearly missed. The route was first judged dead because a
+grep of the website container's logs for its path returned zero. The production
+Next.js container logs no request lines at all, so that zero could never have
+been anything else. The rule from the last time this happened still holds: prove
+the detector fires on something you know is there before believing a zero.
+
+### Measured latency, end to end
+
+From the server, three runs each, time to the first VISIBLE word rather than the
+first chunk, because gpt-oss streams hidden reasoning first.
+
+| stage | measured |
+|---|---|
+| owner machine to server | 82ms warm, 160ms cold |
+| answer, Cerebras gpt-oss-120b at effort low | **129ms** |
+| answer, Gemini 3.5 flash-lite | 458 to 523ms |
+| screen read, Gemini 3.5 flash-lite | 770 to 1276ms |
+| Speechmatics | 700ms, the API's hard floor |
+
+An answer is about 210ms end to end to the first word. There is no easy win
+left: `gpt-oss-120b` with no `reasoning_effort` never reached a visible word at
+all, `qwen-3.8-27b` is also a reasoning model with the same problem, and
+`gemma-4-31b` is not accessible on this account (its "59ms" was a
+`model_not_found` error, not speed).
+
+Screen reading is the slow stage and it is Gemini's latency, not ours. Shrinking
+the screenshot does not help: 640px measured slower than 1280px, which is
+variance rather than payload. Cerebras has no vision model, so the only lever is
+a different vision provider.
+
+### Provider truth in user-visible text
+
+The site claimed Groq in places the product no longer uses it. Corrected: the
+privacy policy listed Groq and omitted Cerebras, which now processes every
+spoken answer; the terms named Groq; the homepage said "Groq LPU inference"; the
+resume page offered a Groq button that silently resolved to Gemini.
+
+If any Mac screen names a provider, check it against Cerebras for answers and
+Gemini for vision.
+
+### The OpenAI key is NOT dead
+
+Worth stating because it was briefly claimed otherwise. `gpt-4o` is the
+third-tier answer fallback in `InterviewController`, reached when both Cerebras
+and Gemini fail, and `ResumeTailorService` uses it when a user picks OpenAI.
+Deleting the key degrades gracefully but removes a real safety net.
+
+Groq, by contrast, is now genuinely unreferenced except as an accepted input
+string: shipped desktop clients still send `provider: "groq"` and the backend
+maps it onto the current provider. **Do not remove that string from the
+allow-list.** It would reject every already-installed copy of both apps.
+
+### Admin portal
+
+Rewritten around the new data: per-user credits, answers, screen reads, tokens
+and provider cost, against what that user pays. Revenue, refund rate, a
+credits-per-day chart, and a live activity feed.
+
+Cost is deliberately not calculated yet. `data/providerRates.ts` ships with
+every rate null, and the portal shows "not priced" rather than a number invented
+from a price list nobody checked. Token counts are measured and always shown.
+
+`ADMIN_EMAIL` was never set on the server, which meant the admin API refused
+every request and the portal had never worked for anyone. Set now.
+
+---
+
 ## Where the reasoning lives
 
 The Windows commit messages, `git log` on `windowsNative`, one commit per
