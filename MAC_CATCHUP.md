@@ -2107,17 +2107,31 @@ resume page offered a Groq button that silently resolved to Gemini.
 If any Mac screen names a provider, check it against Cerebras for answers and
 Gemini for vision.
 
-### The OpenAI key is NOT dead
+### OpenAI is removed (corrected 2026-09-14)
 
-Worth stating because it was briefly claimed otherwise. `gpt-4o` is the
-third-tier answer fallback in `InterviewController`, reached when both Cerebras
-and Gemini fail, and `ResumeTailorService` uses it when a user picks OpenAI.
-Deleting the key degrades gracefully but removes a real safety net.
+An earlier version of this section said the OpenAI key was not dead. It was.
+The account has no billing and answers every request with
+`429 billing_not_active`, and two website features still defaulted to it, so
+both failed on first use: the mock interview (default model `gpt-4o`) and the
+resume tailor (default provider OpenAI, which `ResumeTailorService` skipped
+only when the key was missing, never when it was unfunded).
 
-Groq, by contrast, is now genuinely unreferenced except as an accepted input
-string: shipped desktop clients still send `provider: "groq"` and the backend
-maps it onto the current provider. **Do not remove that string from the
-allow-list.** It would reject every already-installed copy of both apps.
+OpenAI is now out of the product. The backend has no third-try OpenAI fallback
+and the tailor always uses Gemini. The website route maps the `gpt-4o` ids onto
+Cerebras, the pickers no longer offer GPT-4o, and the privacy policy no longer
+lists OpenAI.
+
+Two strings must stay accepted on the backend allow-list: `"groq"` and
+`"openai"`. Installed Windows builds send `"openai"` for anyone who once chose
+GPT-4o (`MainWindow.xaml.cs`, `ScreenAnalyzer.cs`). Removing either rejects
+already-installed copies. **If the Mac app sends a provider string, check
+which one**, and do not remove it from the backend.
+
+Retired by Google and remapped the same day: `gemini-1.5-flash` and
+`gemini-1.5-pro` both answer 404 "not found for API version v1beta". The
+live-interview picker offered Gemini 1.5 Flash; it is gone, and both ids now
+resolve to `gemini-3.5-flash-lite`. If a Mac setting names a Gemini 1.x or 2.0
+model, it is dead.
 
 ### Admin portal
 
