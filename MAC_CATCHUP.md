@@ -48,6 +48,19 @@ backoff, and two of them hand over. Proved against a local server that accepts
 and hangs up: two sessions of 0.0 s, then Speechmatics came online. The contract
 test "Deepgram instant closes count as failures" guards it.
 
+## Shutdown opened a second paid session on the way out (older bug, fixed after 1.0.18)
+
+Found by audit 2026-09-15 and present before Deepgram. When shutdown.flag was
+written, MixedStream raised to end the session, the Speechmatics endpoint loop
+caught that as a failed endpoint, opened a fresh session on the next region,
+then slept the reconnect delay before noticing the flag. Timed with the flag
+written at a known moment: the pre-Deepgram engine (e02d14d) took 24.6 s to
+exit, which is longer than the app's 6 s graceful wait, so the app killed it
+and the session was stranded. The current engine took 4.6 s and still opened
+the extra US session. The except block now checks the flag first and returns:
+measured 0.4 s to exit, no second session. The Mac engine has the same loop, so
+this applies to Mac as soon as it takes the shared engine.
+
 ---
 
 ## Deepgram is now the first recogniser for English, Speechmatics the fallback

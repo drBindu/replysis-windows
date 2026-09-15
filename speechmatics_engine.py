@@ -2880,6 +2880,19 @@ async def main():
                 err = str(e)
                 print(f">>> ERROR on {endpoint}: {err}", flush=True)
 
+                # Asked to stop. MixedStream raises to end the session, and that
+                # arrives here looking like a failed endpoint, so the loop went on
+                # to open a fresh session on the next region and then slept the
+                # reconnect delay before noticing the flag. Measured: 4.6 s to
+                # exit, and a second paid session opened on the way out.
+                if os.path.exists(SHUTDOWN_FLAG):
+                    print(">>> Shutdown flag detected. Exiting cleanly.", flush=True)
+                    try:
+                        os.remove(SHUTDOWN_FLAG)
+                    except Exception:
+                        pass
+                    return
+
                 # The newer model was refused. Drop to the older one and retry
                 # immediately rather than working through the remaining endpoints
                 # with a request every one of them will also refuse.
