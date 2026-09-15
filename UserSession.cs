@@ -49,6 +49,11 @@ namespace InterviewCopilot
         // ── Speechmatics key (fetched from backend; works for guests via X-Device-Id) ──
         public static string SpeechmaticsKey { get; private set; } = "";
 
+        // Deepgram token issued alongside it, empty when the server offered none.
+        // The engine uses it first for English and falls back to Speechmatics by
+        // itself, so an empty value just means Speechmatics.
+        public static string DeepgramToken { get; private set; } = "";
+
         /// <summary>
         /// How much of a token's life must remain for it to be worth reusing.
         ///
@@ -110,6 +115,7 @@ namespace InterviewCopilot
                 if (HasValidSpeechmaticsKey) return Task.FromResult(true);
                 if (TryLoadCachedSpeechmaticsKey()) return Task.FromResult(true);
                 SpeechmaticsKey = "";
+                DeepgramToken = "";
                 _speechmaticsExpiresAtUtc = DateTime.MinValue;
                 if (DateTime.UtcNow < _speechmaticsRetryAfterUtc) return Task.FromResult(false);
                 if (_smKeyInFlight != null && !_smKeyInFlight.IsCompleted) return _smKeyInFlight;
@@ -177,6 +183,7 @@ namespace InterviewCopilot
 
                 using var doc = System.Text.Json.JsonDocument.Parse(body);
                 string key = doc.RootElement.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "";
+                string deepgramToken = doc.RootElement.TryGetProperty("deepgramToken", out var dg) ? dg.GetString() ?? "" : "";
                 int expiresIn = doc.RootElement.TryGetProperty("expiresIn", out var expiry) && expiry.TryGetInt32(out int ttl)
                     ? Math.Clamp(ttl, 60, 86_400)
                     : 3_600;
@@ -191,13 +198,15 @@ namespace InterviewCopilot
                 lock (_smKeyLock)
                 {
                     SpeechmaticsKey = key;
+                    DeepgramToken = deepgramToken;
                     _speechmaticsExpiresAtUtc = DateTime.UtcNow.AddSeconds(expiresIn);
                     _speechmaticsRetryAfterUtc = DateTime.MinValue;
                     SpeechmaticsLastStatusCode = 0;
                     SpeechmaticsOutOfListeningTime = false;
                 }
                 SaveCachedSpeechmaticsKey();
-                DebugWindow.Log("STT_KEY", $"Temporary key fetched; valid for {expiresIn} seconds");
+                DebugWindow.Log("STT_KEY", $"Temporary key fetched; valid for {expiresIn} seconds"
+                    + (deepgramToken.Length > 0 ? "; Deepgram token included" : "; no Deepgram token, Speechmatics only"));
                 ReadPlanLimitsFromToken(key);
                 return true;
             }
@@ -235,6 +244,8 @@ namespace InterviewCopilot
         private sealed class CachedSttKey
         {
             public string Key { get; set; } = "";
+            // Absent in caches written before Deepgram; those load as Speechmatics only.
+            public string DeepgramToken { get; set; } = "";
             public DateTime ExpiresAtUtc { get; set; }
         }
 
@@ -256,6 +267,7 @@ namespace InterviewCopilot
                 if (DateTime.UtcNow >= cached.ExpiresAtUtc.Subtract(TokenRenewalMargin)) return false;
 
                 SpeechmaticsKey = cached.Key;
+                DeepgramToken = cached.DeepgramToken ?? "";
                 _speechmaticsExpiresAtUtc = cached.ExpiresAtUtc;
                 DebugWindow.Log("STT_KEY",
                     $"Reusing cached key; {(int)(cached.ExpiresAtUtc - DateTime.UtcNow).TotalSeconds}s left");
@@ -274,6 +286,7 @@ namespace InterviewCopilot
                     json = JsonSerializer.Serialize(new CachedSttKey
                     {
                         Key = SpeechmaticsKey,
+                        DeepgramToken = DeepgramToken,
                         ExpiresAtUtc = _speechmaticsExpiresAtUtc,
                     });
                 File.WriteAllText(SpeechmaticsKeyPath, SecureDataProtector.Protect(json));
@@ -363,6 +376,7 @@ namespace InterviewCopilot
             lock (_smKeyLock)
             {
                 SpeechmaticsKey = "";
+                DeepgramToken = "";
                 _speechmaticsExpiresAtUtc = DateTime.MinValue;
                 _speechmaticsRetryAfterUtc = DateTime.MinValue;
                 SpeechmaticsLastStatusCode = 0;
@@ -413,6 +427,7 @@ namespace InterviewCopilot
             lock (_smKeyLock)
             {
                 SpeechmaticsKey = "";
+                DeepgramToken = "";
                 _speechmaticsExpiresAtUtc = DateTime.MinValue;
                 _speechmaticsRetryAfterUtc = DateTime.MinValue;
                 SpeechmaticsLastStatusCode = 0;

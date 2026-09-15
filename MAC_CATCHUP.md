@@ -10,6 +10,60 @@ backend.
 
 ---
 
+## Deepgram is now the first recogniser for English, Speechmatics the fallback
+
+Added 2026-09-15. Windows only so far; the Mac is unaffected until it opts in.
+
+**Why.** The owner asked for transcription faster than Speechmatics. Measured by
+streaming the same audio live to every provider at once, first on a synthetic
+64-second interview answer and then on the owner's own voice:
+
+| | words on screen after spoken | errors on the owner's voice |
+|---|---|---|
+| Deepgram nova-3 + keyterms | 0.14-0.17 s | one inserted word |
+| ElevenLabs scribe_v2_realtime | 0.34-0.50 s | none, but a partial only about once a second |
+| Speechmatics enhanced (before) | 0.35-0.37 s | "and are" for a filler, "Redies as a cash" on the synthetic clip |
+
+Without keyterms nova-3 was no better than Speechmatics ("Kubernets", "Readys",
+"Next dot j s"), so keyterms are the reason this works, not a tuning extra.
+Deepgram also allows 150 sessions at once on pay-as-you-go against the 50 that
+capped Speechmatics. Soniox could not be measured: its account has no balance.
+
+**Backend (live for both apps).** `GET /api/v1/stt/key` now also returns
+`deepgramToken` when `DEEPGRAM_API_KEY` is set on the server. It is minted with
+Deepgram's `/v1/auth/grant` for the same 3600 s as the Speechmatics token and
+behind the same identity, credit, listening-time and rate checks. It is never
+required: without the key, or with Deepgram refusing, the response is exactly
+what it was. Unsetting that variable turns Deepgram off for every install.
+
+**Engine (`speechmatics_engine.py`, shared).**
+
+- `DG_TOKEN` in the environment plus `--language en` runs `run_deepgram()` first.
+  Anything else runs exactly as before. No token means no change, which is why
+  the Mac is untouched today.
+- It returns only to exit or to hand over. HTTP 401, 402, 403 or 429 on the
+  handshake hands over at once; two failed connections in a row hand over too.
+  main() then carries on into the Speechmatics path in the same process, relay
+  included, so the worst case is the old latency, never silence.
+- Same stdout contract: `STATUS: ONLINE`, `STATUS: OFFLINE`, `PARTIAL received`,
+  `FINAL received`, and `UTTERANCE END` from Deepgram's UtteranceEnd event
+  (`utterance_end_ms` from `--utterance-silence`, floored at Deepgram's 1000 ms).
+  Same latest.txt, pause.flag and reset.flag behaviour.
+- While muted it sends Deepgram `KeepAlive` instead of silence. Deepgram bills
+  audio, not connection time, so a muted session costs nothing.
+- `MixedStream` and `BufferedMixedStream` moved unchanged from inside main() to
+  module level so both recognisers share one capture path. `BufferedMixedStream`
+  gained `read_timeout()`, which only the Deepgram sender uses.
+- Keyterms: the built-in tech and job terms, then vocab.txt, capped at 100.
+
+**For the Mac to opt in:** read `deepgramToken` from the `/stt/key` response,
+cache it with the Speechmatics token, clear it wherever that token is cleared,
+and pass it to the engine as `DG_TOKEN`. Nothing else changes. Windows does this
+in `UserSession.cs` (`DeepgramToken`, carried through `sttkey.json`) and
+`MainWindow.xaml.cs` (`DG_TOKEN` next to `SM_API_KEY`).
+
+---
+
 ## The backend is shared, so half of this is already yours
 
 The Mac app talks to the same server. These are live and need nothing from

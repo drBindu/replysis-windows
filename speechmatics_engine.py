@@ -1815,6 +1815,612 @@ def _downgrade_model_if_rejected(err_text: str) -> bool:
     return False
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# AUDIO CAPTURE  (shared by the Deepgram and Speechmatics paths)
+# ══════════════════════════════════════════════════════════════════════════════
+# These lived inside main()'s reconnect loop, which suited one recogniser. They
+# touch only module state, so they moved here unchanged when Deepgram needed the
+# same capture: mic auto-switch, loopback hot-swap, recording and the prebuffer
+# are exactly the behaviour a second copy would have drifted away from.
+class MixedStream:
+    _call_count = 0
+    _last_heartbeat = 0.0
+
+    def read(self, num_frames, exception_on_overflow=False):
+        global is_recording, recording_frames, active_recording_id
+        global _last_pause_state
+        global _silent_chunk_count
+        global _sys_hang_count, sys_stream
+        global _mic_ever_heard, _mic_quiet_reads, _mic_autoswitch_tried
+        global mic_stream, _mic_device_index, _mic_device_name
+        global _mic_native_rate, _mic_native_channels, _mic_chunk_frames
+
+        _read_started = time.time()
+
+        # The server ended the session. Raising here is what the
+        # shutdown flag does a few lines down, and it leaves through
+        # ws.run() into the reconnect loop, which already knows how
+        # to tell a retriable drop from a bad key or a full account.
+        if _ws_session_error is not None:
+            raise RuntimeError(f"session ended by server: {_ws_session_error}")
+
+        shutdown_requested = os.path.exists(SHUTDOWN_FLAG)
+        recording_requested = os.path.exists(RECORD_FLAG)
+        paused = os.path.exists(PAUSE_FLAG)
+
+        # One-shot transition log, independent of mic amplitude — proves
+        # whether this process actually observes the C# mute/unmute toggle.
+        if paused != _last_pause_state:
+            print(f">>> {'PAUSED (pause.flag set)' if paused else 'RESUMED (pause.flag cleared) - now reading real audio'}", flush=True)
+            _last_pause_state = paused
+
+        # Heartbeat, proving read() is still being called and showing the
+        # live paused state. This counted calls rather than time, on the
+        # assumption that a call takes ~100ms. While paused nothing blocks,
+        # so the loop ran far faster and this printed thousands of lines a
+        # second: one measured session reached 128 million calls and a 1.6 GB
+        # log. Timed instead, so the rate no longer depends on how fast the
+        # loop happens to turn.
+        MixedStream._call_count += 1
+        _hb_now = time.time()
+        if _hb_now - MixedStream._last_heartbeat >= 5.0:
+            MixedStream._last_heartbeat = _hb_now
+            print(f">>> HEARTBEAT #{MixedStream._call_count}: paused={paused}", flush=True)
+
+        if paused:
+            try:
+                if mic_stream:
+                    _read_stream_timeout(mic_stream, num_frames, 0.5, "MIC-drain")
+                if sys_stream:
+                    sys_drain = _read_stream_timeout(
+                        sys_stream,
+                        _sys_chunk_frames,
+                        SYS_READ_TIMEOUT_SECS if args.mode == "both" else 0.5,
+                        "SYS-drain",
+                    )
+                    if sys_drain is None and args.mode == "both":
+                        disable_unresponsive_system_audio(
+                            "loopback did not return audio while idle"
+                        )
+            except:
+                pass
+            if not recording_requested:
+                stopped = stop_recording(shutdown_requested)
+                if not stopped:
+                    mark_recording_saved(get_recording_id())
+            if shutdown_requested and not recording_requested:
+                raise RuntimeError("Shutdown requested")
+
+            # Pace the idle loop. While paused nothing here necessarily
+            # blocks: if a drain read is skipped or returns at once, this
+            # returns immediately and the consumer calls straight back,
+            # so the loop spun as fast as the CPU allowed. Measured at
+            # roughly 4,800 iterations a second against the 10 it is meant
+            # to run at, holding a full core while the app sat muted, and
+            # writing a 1.6 GB log. Sleeping a chunk's worth costs nothing
+            # while muted, because no audio is being transcribed anyway.
+            _idle_elapsed = time.time() - _read_started
+            if _idle_elapsed < CHUNK_SECONDS:
+                time.sleep(CHUNK_SECONDS - _idle_elapsed)
+            return SILENCE
+
+        if args.mode == "system":
+            # System-audio-only: never touch the mic stream
+            if sys_stream:
+                try:
+                    raw = _read_stream_timeout(
+                        sys_stream,
+                        _sys_chunk_frames,
+                        SYS_READ_TIMEOUT_SECS,
+                        "SYS",
+                    )
+                    if raw is None:
+                        raw = SILENCE
+                    data = (resample_to_16k_mono(raw, _sys_native_rate, _sys_native_channels, num_frames)
+                            if (_sys_native_rate != SAMPLE_RATE or _sys_native_channels != 1)
+                            else raw)
+                except Exception as re:
+                    print(f">>> sys_stream.read error: {re}", flush=True)
+                    data = SILENCE
+
+                # Hot-swap: if this device has been silent too long, try next
+                amp = _signal_level(data)
+                if amp >= LIVE_THRESHOLD:
+                    if _silent_chunk_count > 0:
+                        print(f">>> SYS AUDIO live on [{_loopback_candidates[_active_loopback_index]['index'] if _loopback_candidates else '?'}]: amp={amp}", flush=True)
+                    _silent_chunk_count = 0
+                else:
+                    _silent_chunk_count += 1
+                    if _silent_chunk_count % 20 == 0:
+                        dev_name = _loopback_candidates[_active_loopback_index]['name'][:35] if _loopback_candidates else '?'
+                        print(f">>> SYS AUDIO silent {_silent_chunk_count} chunks on [{dev_name}], amp={amp}", flush=True)
+                    if _silent_chunk_count >= SILENCE_HOTSWAP_LIMIT:
+                        _silent_chunk_count = 0
+                        _try_next_loopback()
+                        data = SILENCE
+            else:
+                data = SILENCE
+        else:
+            # Both: read mic, mix with system audio if available
+            try:
+                if mic_stream:
+                    mic_raw = _read_stream_timeout(mic_stream, _mic_chunk_frames, 0.5, "MIC")
+                    if mic_raw is None:
+                        mic_data = SILENCE
+                        mic_amp = 0
+                    else:
+                        mic_data = (resample_to_16k_mono(mic_raw, _mic_native_rate, _mic_native_channels, num_frames)
+                                    if (_mic_native_rate != SAMPLE_RATE or _mic_native_channels != 1)
+                                    else mic_raw)
+                        mic_amp = _signal_level(mic_data)
+                    if mic_amp > 400:
+                        print(f">>> MIC SIGNAL DETECTED: amp={mic_amp}", flush=True)
+                        _mic_ever_heard = True
+                        _mic_quiet_reads = 0
+                    else:
+                        _mic_quiet_reads += 1
+
+                    # Four seconds of listening to a device that
+                    # has never once produced signal. The user is
+                    # talking - that is what listening means here
+                    # - so this is the device, not the room.
+                    if (not _mic_ever_heard
+                            and not _mic_autoswitch_tried
+                            and _mic_quiet_reads >= MIC_QUIET_READS_BEFORE_SWITCH):
+                        _mic_autoswitch_tried = True
+                        print(">>> MIC is silent; asking the other inputs "
+                              "whether they can hear you.", flush=True)
+                        found = _find_a_microphone_that_hears(p, _mic_device_index)
+                        if found:
+                            new_index, new_name, peak = found
+                            try:
+                                old = mic_stream
+                                mic_stream = p.open(
+                                    format=pyaudio.paInt16, channels=1,
+                                    rate=SAMPLE_RATE, input=True,
+                                    input_device_index=new_index,
+                                    frames_per_buffer=CHUNK_FRAMES)
+                                _mic_native_rate     = SAMPLE_RATE
+                                _mic_native_channels = 1
+                                _mic_chunk_frames    = CHUNK_FRAMES
+                                _mic_device_index    = new_index
+                                _mic_device_name     = new_name
+                                try: old.close()
+                                except Exception: pass
+                                # Named on stdout so the app can
+                                # remember it and skip this next time.
+                                print(f">>> MIC SWITCHED [{new_index}] {new_name} "
+                                      f"(peak {peak})", flush=True)
+                            except Exception as se:
+                                print(f">>> MIC switch failed: {se}", flush=True)
+                        else:
+                            # Every input is silent, so it is not
+                            # the choice of device. Said plainly
+                            # because only the user can fix it.
+                            print(">>> MIC NO_AUDIO: every microphone on this "
+                                  "machine is silent. It is muted, unplugged, "
+                                  "or blocked by Windows privacy settings.",
+                                  flush=True)
+
+                    if mic_amp <= 400 and MixedStream._call_count % 3 == 0:
+                        # Below the 400 threshold — still show it so we can tell
+                        # "quiet/no signal at all" (amp near 0) apart from
+                        # "signal present but too quiet to count" (amp in the
+                        # tens/hundreds).
+                        print(f">>> mic ambient amp={mic_amp} (below 400 threshold)", flush=True)
+                else:
+                    mic_data = SILENCE
+            except Exception as me:
+                print(f">>> mic_stream.read error: {me}", flush=True)
+                mic_data = SILENCE
+            if sys_stream:
+                # System audio is BEST-EFFORT here — the mic (the user's
+                # voice on Space) is the primary path and must never be
+                # disrupted. We do NOT hot-swap on silence: silence is the
+                # normal case (user is speaking, nothing is playing), and
+                # churning through loopback devices on silence was both
+                # pointless and, on some setups, actively corrupted the mic
+                # stream. Instead we only track genuine read HANGS/errors,
+                # and if the chosen loopback proves unreliable we silently
+                # drop system audio for the rest of the session so it can
+                # never interfere with mic capture again.
+                try:
+                    raw = _read_stream_timeout(sys_stream, _sys_chunk_frames, 0.5, "SYS")
+                except Exception:
+                    raw = None
+
+                if raw is None:
+                    _sys_hang_count += 1
+                    data = mic_data
+                    if _sys_hang_count >= SYS_HANG_DISABLE_LIMIT:
+                        print(">>> SYSTEM AUDIO disabled for this session — its loopback "
+                              "device kept hanging. Running mic-only; your voice still "
+                              "transcribes normally.", flush=True)
+                        # Deliberately abandon WITHOUT closing: a hung read left a
+                        # daemon thread blocked inside the native stream.read(), and
+                        # closing it out from under that thread is a use-after-close
+                        # crash at the C level. Dropping the reference is safe.
+                        sys_stream = None
+                else:
+                    _sys_hang_count = 0
+                    sys_data = (resample_to_16k_mono(raw, _sys_native_rate, _sys_native_channels, num_frames)
+                                if (_sys_native_rate != SAMPLE_RATE or _sys_native_channels != 1)
+                                else raw)
+                    data = mix_audio(mic_data, sys_data)
+            else:
+                data = mic_data
+
+        # Handle recording — all state changes under record_lock so
+        # is_recording and recording_frames are always consistent.
+        # The save thread is started AFTER releasing the lock to
+        # avoid deadlock (save_recording also acquires record_lock).
+        if recording_requested:
+            with record_lock:
+                if not is_recording:
+                    is_recording = True
+                    active_recording_id = get_recording_id()
+                    print(">>> Recording started", flush=True)
+                if len(recording_frames) < MAX_RECORDING_FRAMES:
+                    recording_frames.append(data)
+        else:
+            stopped = stop_recording(shutdown_requested)
+            if not stopped:
+                mark_recording_saved(get_recording_id())
+
+        if shutdown_requested and not recording_requested:
+            raise RuntimeError("Shutdown requested")
+
+        return data
+
+class BufferedMixedStream:
+    """Continuously drain audio while Speechmatics completes its handshake.
+
+    The SDK deliberately waits for RecognitionStarted before asking the
+    stream for a chunk. Without this buffer, speech that begins right
+    after Space is pressed is discarded during the WebSocket handshake.
+    Only audio captured while listening is retained, so paused sessions
+    can never leak stale audio into the next question.
+    """
+
+    MAX_BUFFERED_CHUNKS = 120  # 12 seconds at the 100 ms capture cadence
+
+    def __init__(self, source):
+        self._source = source
+        self._chunks = deque()
+        self._condition = threading.Condition()
+        self._stopped = threading.Event()
+        self._capture_error = None
+        self._was_paused = True
+        self._thread = threading.Thread(
+            target=self._capture_loop,
+            name="speechmatics-audio-prebuffer",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _capture_loop(self):
+        while not self._stopped.is_set():
+            try:
+                # The source owns all PyAudio reads and recording state,
+                # preserving the existing capture behavior exactly once.
+                data = self._source.read(CHUNK_FRAMES, exception_on_overflow=False)
+            except Exception as ex:
+                with self._condition:
+                    self._capture_error = ex
+                    self._condition.notify_all()
+                return
+
+            paused = os.path.exists(PAUSE_FLAG)
+            with self._condition:
+                if paused:
+                    self._chunks.clear()
+                else:
+                    if self._was_paused:
+                        self._chunks.clear()
+                        print(
+                            ">>> PREBUFFER: preserving early speech while Speechmatics connects",
+                            flush=True,
+                        )
+                    if len(self._chunks) >= self.MAX_BUFFERED_CHUNKS:
+                        self._chunks.popleft()
+                    self._chunks.append(data)
+                    self._condition.notify_all()
+                self._was_paused = paused
+
+    def read(self, num_frames, exception_on_overflow=False):
+        with self._condition:
+            while not self._chunks:
+                if self._capture_error is not None:
+                    raise RuntimeError(
+                        f"audio prebuffer failed: {self._capture_error}"
+                    )
+                if self._stopped.is_set():
+                    return b""
+                self._condition.wait(timeout=0.25)
+            return self._chunks.popleft()
+
+    def read_timeout(self, timeout):
+        """read() for a caller that cannot wait indefinitely: None if nothing arrived.
+
+        read() blocks until a chunk exists, and none ever does while muted,
+        because the capture loop discards audio then. The Deepgram sender runs
+        this on an executor thread and has to keep turning while muted to send
+        KeepAlive, so it needs a read that gives up.
+        """
+        deadline = time.monotonic() + timeout
+        with self._condition:
+            while not self._chunks:
+                if self._capture_error is not None:
+                    raise RuntimeError(
+                        f"audio prebuffer failed: {self._capture_error}"
+                    )
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or self._stopped.is_set():
+                    return None
+                self._condition.wait(timeout=remaining)
+            return self._chunks.popleft()
+
+    def close(self):
+        self._stopped.set()
+        with self._condition:
+            self._condition.notify_all()
+        # The source read has its own 0.5 s timeout, so this prevents a
+        # reconnect from ever leaving a second reader on the same device.
+        self._thread.join(timeout=0.75)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DEEPGRAM ENGINE  (English; first choice whenever the app passes DG_TOKEN)
+# ══════════════════════════════════════════════════════════════════════════════
+# Why Deepgram sits in front of Speechmatics. Measured 2026-09-15 by streaming
+# the same audio, in real time, to both at once:
+#
+#   words on screen after being spoken    nova-3 0.14-0.17s   Speechmatics 0.35-0.37s
+#   sessions running at once on the plan  nova-3 150          Speechmatics 50
+#
+# Accuracy matched or beat Speechmatics only with keyterms. Without them nova-3
+# wrote "Kubernets", "Readys" and "Next dot j s", so the keyterm list is part of
+# the reason this path exists, not a tuning extra.
+#
+# Speechmatics stays underneath. Anything that stops Deepgram serving the
+# session (no token, token refused, no credit, over the concurrency limit, a
+# network that blocks the host, repeated drops) returns "fallback" and main()
+# carries on into the Speechmatics path in the same process. The worst case is
+# therefore the latency the app had before, never silence.
+#
+# The server decides whether a token is issued at all, so unsetting
+# DEEPGRAM_API_KEY there turns this path off for every installed app at once.
+
+DEEPGRAM_URL = "wss://api.deepgram.com/v1/listen"
+DEEPGRAM_LANGUAGES = {"en"}
+_DG_TOKEN = os.environ.get("DG_TOKEN", "").strip()
+
+# Deepgram allows about 500 tokens of keyterms per request. A hundred terms of
+# this length stays inside that with room to spare.
+DEEPGRAM_MAX_KEYTERMS = 100
+
+# The same families as the Speechmatics additional_vocab list, as plain words:
+# keyterms carry no sounds_like. Builtins go first because vocab.txt holds
+# single resume words ("Engineer", "Gen") that would otherwise spend the budget.
+_DEEPGRAM_BUILTIN_TERMS = [
+    "Replysis",
+    "TypeScript", "JavaScript", "Python", "Java", "Golang", "Rust", "Kotlin",
+    "Swift", "C#", "C++", ".NET", "Node.js",
+    "React", "Angular", "Vue", "Next.js", "Spring Boot", "Hibernate", "Django",
+    "FastAPI",
+    "SQL", "NoSQL", "PostgreSQL", "MongoDB", "Redis", "Kafka", "Elasticsearch",
+    "DynamoDB",
+    "AWS", "Azure", "Kubernetes", "Docker", "Terraform", "Jenkins", "GitHub",
+    "CI/CD", "microservices", "serverless",
+    "API", "REST", "GraphQL", "gRPC", "OAuth", "JWT", "webhook",
+    "idempotent", "middleware", "scalability", "latency", "throughput",
+    "concurrency", "asynchronous", "schema",
+    "C2C", "W2", "1099", "corp to corp", "contract to hire", "H1B", "OPT",
+    "CPT", "EAD", "green card", "notice period", "relocation", "onsite",
+    "hybrid",
+]
+
+
+def _deepgram_eligible() -> bool:
+    return bool(_DG_TOKEN) and args.language in DEEPGRAM_LANGUAGES
+
+
+def _deepgram_keyterms():
+    terms, seen = [], set()
+    for term in _DEEPGRAM_BUILTIN_TERMS + [v["content"] for v in _load_extra_vocab()]:
+        key = term.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        terms.append(term)
+        if len(terms) >= DEEPGRAM_MAX_KEYTERMS:
+            break
+    return terms
+
+
+def _deepgram_url() -> str:
+    query = [
+        ("model", "nova-3"),
+        ("language", "en"),
+        ("encoding", "linear16"),
+        ("sample_rate", str(SAMPLE_RATE)),
+        ("channels", "1"),
+        ("interim_results", "true"),
+        ("smart_format", "true"),
+        ("punctuate", "true"),
+        # Finalise after 300 ms of silence rather than the 10 ms default, so a
+        # short pause mid-sentence does not split a question into two finals.
+        ("endpointing", "300"),
+    ]
+    # UtteranceEnd is what ">>> UTTERANCE END" is printed from, the turn signal
+    # the Mac client waits on. Deepgram will not go below 1000 ms.
+    if args.utterance_silence > 0:
+        query.append(("utterance_end_ms", str(max(1000, int(args.utterance_silence * 1000)))))
+    query += [("keyterm", term) for term in _deepgram_keyterms()]
+    return DEEPGRAM_URL + "?" + urllib.parse.urlencode(query)
+
+
+def _http_status(exc) -> int:
+    """The HTTP status a refused websocket handshake carried, or 0."""
+    response = getattr(exc, "response", None)
+    code = getattr(response, "status_code", None) or getattr(exc, "status_code", None)
+    try:
+        return int(code or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+# Refusals that retrying cannot clear: a bad or expired token, no credit, or
+# the account at its limit of sessions running at once. Speechmatics takes over.
+_DEEPGRAM_REFUSED = {401, 402, 403, 429}
+
+# Consecutive failed connections before handing over. Two, so one dropped
+# packet does not cost the faster recogniser, and a blocked host costs the user
+# a few seconds rather than a minute of "connecting".
+_DEEPGRAM_MAX_FAILURES = 2
+
+
+async def run_deepgram() -> str:
+    """Stream to Deepgram until told to stop.
+
+    Returns "shutdown" when the app asked the engine to exit, or "fallback" when
+    Deepgram cannot serve this session and Speechmatics should take over.
+    """
+    import websockets  # already bundled for the Sarvam path
+
+    url = _deepgram_url()
+    headers = {"Authorization": f"Bearer {_DG_TOKEN}"}
+    loop = asyncio.get_running_loop()
+
+    print("", flush=True)
+    print("===============================================", flush=True)
+    print("   DEEPGRAM ENGINE: READY  (nova-3, Speechmatics as fallback)", flush=True)
+    print("===============================================", flush=True)
+
+    failures = 0
+    reconnect_delay = 1
+
+    while True:
+        if os.path.exists(SHUTDOWN_FLAG):
+            print(">>> Shutdown flag detected. Exiting cleanly.", flush=True)
+            try:
+                os.remove(SHUTDOWN_FLAG)
+            except Exception:
+                pass
+            return "shutdown"
+
+        online = False
+        # Created before the handshake, like the Speechmatics path, so speech that
+        # starts while the connection opens is kept rather than lost.
+        buffered = BufferedMixedStream(MixedStream())
+        try:
+            print(">>> [DEEPGRAM] Connecting...", flush=True)
+            async with websockets.connect(url, additional_headers=headers, max_size=None,
+                                          open_timeout=8, ping_interval=20) as ws:
+                print(">>> STATUS: ONLINE ✓", flush=True)
+                online = True
+                failures = 0
+                reconnect_delay = 1
+                transcript = {"confirmed": "", "partial": ""}
+
+                async def sender():
+                    last_sent = time.monotonic()
+                    while True:
+                        chunk = await loop.run_in_executor(None, buffered.read_timeout, 0.25)
+                        now = time.monotonic()
+                        if chunk and not os.path.exists(PAUSE_FLAG):
+                            await ws.send(chunk)
+                            last_sent = now
+                        elif now - last_sent >= 4.0:
+                            # Muted. Deepgram closes a session after ten seconds
+                            # without data, and bills audio rather than connection
+                            # time, so KeepAlive holds the session for free where
+                            # silence would be paid for.
+                            await ws.send(json.dumps({"type": "KeepAlive"}))
+                            last_sent = now
+
+                async def receiver():
+                    async for raw in ws:
+                        if isinstance(raw, bytes):
+                            continue
+                        try:
+                            msg = json.loads(raw)
+                        except Exception:
+                            continue
+                        kind = msg.get("type")
+                        if kind == "UtteranceEnd":
+                            print(">>> UTTERANCE END", flush=True)
+                            continue
+                        if kind != "Results":
+                            if kind == "Error" or msg.get("err_code"):
+                                print(f">>> [DEEPGRAM] error: {str(msg)[:200]}", flush=True)
+                            continue
+                        # Same contract as handle_partial/handle_final: a reset
+                        # clears both halves and drops the message that saw it.
+                        if os.path.exists(RESET_FLAG):
+                            transcript["confirmed"] = ""
+                            transcript["partial"] = ""
+                            try:
+                                os.remove(RESET_FLAG)
+                            except Exception:
+                                pass
+                            continue
+                        if os.path.exists(PAUSE_FLAG):
+                            continue
+
+                        alternatives = (msg.get("channel") or {}).get("alternatives") or [{}]
+                        text = (alternatives[0].get("transcript") or "").strip()
+                        if msg.get("is_final"):
+                            transcript["partial"] = ""
+                            if not text:
+                                continue
+                            transcript["confirmed"] = f"{transcript['confirmed']} {text}".strip()
+                            label = "FINAL"
+                        else:
+                            if not text and not transcript["partial"]:
+                                continue
+                            transcript["partial"] = text
+                            label = "PARTIAL"
+                        display = f"{transcript['confirmed']} {transcript['partial']}".strip()
+                        print(f">>> {label} received ({len(display)} chars)", flush=True)
+                        _write_latest(display)
+
+                tasks = [asyncio.create_task(sender()), asyncio.create_task(receiver())]
+                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for task in pending:
+                    task.cancel()
+                for task in done:
+                    if task.exception() is not None:
+                        raise task.exception()
+                try:
+                    await ws.send(json.dumps({"type": "CloseStream"}))
+                except Exception:
+                    pass
+            print(">>> STATUS: OFFLINE", flush=True)
+            print(">>> [DEEPGRAM] Session closed by the server; reconnecting.", flush=True)
+
+        except Exception as e:
+            if online:
+                print(">>> STATUS: OFFLINE", flush=True)
+            if os.path.exists(SHUTDOWN_FLAG):
+                continue   # the top of the loop exits cleanly
+
+            status = _http_status(e)
+            print(f">>> [DEEPGRAM] {'HTTP ' + str(status) if status else 'error'}: {str(e)[:200]}", flush=True)
+            if status in _DEEPGRAM_REFUSED:
+                print(f">>> [DEEPGRAM] Refused with {status}; Speechmatics takes over.", flush=True)
+                return "fallback"
+            failures += 1
+            if failures >= _DEEPGRAM_MAX_FAILURES:
+                print(f">>> [DEEPGRAM] {failures} failed connections in a row; Speechmatics takes over.",
+                      flush=True)
+                return "fallback"
+            await asyncio.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 2, 8)
+        finally:
+            buffered.close()
+
+
 # ── MAIN WITH AUTO-RECONNECT ──────────────────────────────────────────────────
 async def main():
     # Route Speechmatics-unsupported languages (Telugu, etc.) to Sarvam AI and skip
@@ -1822,6 +2428,13 @@ async def main():
     if _USE_SARVAM:
         await run_sarvam()
         return
+
+    # Deepgram first for English when the app passed a token. It returns only to
+    # exit or to hand over, and handing over continues straight into Speechmatics.
+    if _deepgram_eligible():
+        if await run_deepgram() == "shutdown":
+            return
+        print(">>> Speechmatics is taking over this session.", flush=True)
 
     print("", flush=True)
     print("===============================================", flush=True)
@@ -2227,331 +2840,6 @@ async def main():
                     sample_rate = SAMPLE_RATE,
                     chunk_size  = CHUNK_FRAMES,
                 )
-
-                class MixedStream:
-                    _call_count = 0
-                    _last_heartbeat = 0.0
-
-                    def read(self, num_frames, exception_on_overflow=False):
-                        global is_recording, recording_frames, active_recording_id
-                        global _last_pause_state
-                        global _silent_chunk_count
-                        global _sys_hang_count, sys_stream
-                        global _mic_ever_heard, _mic_quiet_reads, _mic_autoswitch_tried
-                        global mic_stream, _mic_device_index, _mic_device_name
-                        global _mic_native_rate, _mic_native_channels, _mic_chunk_frames
-
-                        _read_started = time.time()
-
-                        # The server ended the session. Raising here is what the
-                        # shutdown flag does a few lines down, and it leaves through
-                        # ws.run() into the reconnect loop, which already knows how
-                        # to tell a retriable drop from a bad key or a full account.
-                        if _ws_session_error is not None:
-                            raise RuntimeError(f"session ended by server: {_ws_session_error}")
-
-                        shutdown_requested = os.path.exists(SHUTDOWN_FLAG)
-                        recording_requested = os.path.exists(RECORD_FLAG)
-                        paused = os.path.exists(PAUSE_FLAG)
-
-                        # One-shot transition log, independent of mic amplitude — proves
-                        # whether this process actually observes the C# mute/unmute toggle.
-                        if paused != _last_pause_state:
-                            print(f">>> {'PAUSED (pause.flag set)' if paused else 'RESUMED (pause.flag cleared) - now reading real audio'}", flush=True)
-                            _last_pause_state = paused
-
-                        # Heartbeat, proving read() is still being called and showing the
-                        # live paused state. This counted calls rather than time, on the
-                        # assumption that a call takes ~100ms. While paused nothing blocks,
-                        # so the loop ran far faster and this printed thousands of lines a
-                        # second: one measured session reached 128 million calls and a 1.6 GB
-                        # log. Timed instead, so the rate no longer depends on how fast the
-                        # loop happens to turn.
-                        MixedStream._call_count += 1
-                        _hb_now = time.time()
-                        if _hb_now - MixedStream._last_heartbeat >= 5.0:
-                            MixedStream._last_heartbeat = _hb_now
-                            print(f">>> HEARTBEAT #{MixedStream._call_count}: paused={paused}", flush=True)
-
-                        if paused:
-                            try:
-                                if mic_stream:
-                                    _read_stream_timeout(mic_stream, num_frames, 0.5, "MIC-drain")
-                                if sys_stream:
-                                    sys_drain = _read_stream_timeout(
-                                        sys_stream,
-                                        _sys_chunk_frames,
-                                        SYS_READ_TIMEOUT_SECS if args.mode == "both" else 0.5,
-                                        "SYS-drain",
-                                    )
-                                    if sys_drain is None and args.mode == "both":
-                                        disable_unresponsive_system_audio(
-                                            "loopback did not return audio while idle"
-                                        )
-                            except:
-                                pass
-                            if not recording_requested:
-                                stopped = stop_recording(shutdown_requested)
-                                if not stopped:
-                                    mark_recording_saved(get_recording_id())
-                            if shutdown_requested and not recording_requested:
-                                raise RuntimeError("Shutdown requested")
-
-                            # Pace the idle loop. While paused nothing here necessarily
-                            # blocks: if a drain read is skipped or returns at once, this
-                            # returns immediately and the consumer calls straight back,
-                            # so the loop spun as fast as the CPU allowed. Measured at
-                            # roughly 4,800 iterations a second against the 10 it is meant
-                            # to run at, holding a full core while the app sat muted, and
-                            # writing a 1.6 GB log. Sleeping a chunk's worth costs nothing
-                            # while muted, because no audio is being transcribed anyway.
-                            _idle_elapsed = time.time() - _read_started
-                            if _idle_elapsed < CHUNK_SECONDS:
-                                time.sleep(CHUNK_SECONDS - _idle_elapsed)
-                            return SILENCE
-
-                        if args.mode == "system":
-                            # System-audio-only: never touch the mic stream
-                            if sys_stream:
-                                try:
-                                    raw = _read_stream_timeout(
-                                        sys_stream,
-                                        _sys_chunk_frames,
-                                        SYS_READ_TIMEOUT_SECS,
-                                        "SYS",
-                                    )
-                                    if raw is None:
-                                        raw = SILENCE
-                                    data = (resample_to_16k_mono(raw, _sys_native_rate, _sys_native_channels, num_frames)
-                                            if (_sys_native_rate != SAMPLE_RATE or _sys_native_channels != 1)
-                                            else raw)
-                                except Exception as re:
-                                    print(f">>> sys_stream.read error: {re}", flush=True)
-                                    data = SILENCE
-
-                                # Hot-swap: if this device has been silent too long, try next
-                                amp = _signal_level(data)
-                                if amp >= LIVE_THRESHOLD:
-                                    if _silent_chunk_count > 0:
-                                        print(f">>> SYS AUDIO live on [{_loopback_candidates[_active_loopback_index]['index'] if _loopback_candidates else '?'}]: amp={amp}", flush=True)
-                                    _silent_chunk_count = 0
-                                else:
-                                    _silent_chunk_count += 1
-                                    if _silent_chunk_count % 20 == 0:
-                                        dev_name = _loopback_candidates[_active_loopback_index]['name'][:35] if _loopback_candidates else '?'
-                                        print(f">>> SYS AUDIO silent {_silent_chunk_count} chunks on [{dev_name}], amp={amp}", flush=True)
-                                    if _silent_chunk_count >= SILENCE_HOTSWAP_LIMIT:
-                                        _silent_chunk_count = 0
-                                        _try_next_loopback()
-                                        data = SILENCE
-                            else:
-                                data = SILENCE
-                        else:
-                            # Both: read mic, mix with system audio if available
-                            try:
-                                if mic_stream:
-                                    mic_raw = _read_stream_timeout(mic_stream, _mic_chunk_frames, 0.5, "MIC")
-                                    if mic_raw is None:
-                                        mic_data = SILENCE
-                                        mic_amp = 0
-                                    else:
-                                        mic_data = (resample_to_16k_mono(mic_raw, _mic_native_rate, _mic_native_channels, num_frames)
-                                                    if (_mic_native_rate != SAMPLE_RATE or _mic_native_channels != 1)
-                                                    else mic_raw)
-                                        mic_amp = _signal_level(mic_data)
-                                    if mic_amp > 400:
-                                        print(f">>> MIC SIGNAL DETECTED: amp={mic_amp}", flush=True)
-                                        _mic_ever_heard = True
-                                        _mic_quiet_reads = 0
-                                    else:
-                                        _mic_quiet_reads += 1
-
-                                    # Four seconds of listening to a device that
-                                    # has never once produced signal. The user is
-                                    # talking - that is what listening means here
-                                    # - so this is the device, not the room.
-                                    if (not _mic_ever_heard
-                                            and not _mic_autoswitch_tried
-                                            and _mic_quiet_reads >= MIC_QUIET_READS_BEFORE_SWITCH):
-                                        _mic_autoswitch_tried = True
-                                        print(">>> MIC is silent; asking the other inputs "
-                                              "whether they can hear you.", flush=True)
-                                        found = _find_a_microphone_that_hears(p, _mic_device_index)
-                                        if found:
-                                            new_index, new_name, peak = found
-                                            try:
-                                                old = mic_stream
-                                                mic_stream = p.open(
-                                                    format=pyaudio.paInt16, channels=1,
-                                                    rate=SAMPLE_RATE, input=True,
-                                                    input_device_index=new_index,
-                                                    frames_per_buffer=CHUNK_FRAMES)
-                                                _mic_native_rate     = SAMPLE_RATE
-                                                _mic_native_channels = 1
-                                                _mic_chunk_frames    = CHUNK_FRAMES
-                                                _mic_device_index    = new_index
-                                                _mic_device_name     = new_name
-                                                try: old.close()
-                                                except Exception: pass
-                                                # Named on stdout so the app can
-                                                # remember it and skip this next time.
-                                                print(f">>> MIC SWITCHED [{new_index}] {new_name} "
-                                                      f"(peak {peak})", flush=True)
-                                            except Exception as se:
-                                                print(f">>> MIC switch failed: {se}", flush=True)
-                                        else:
-                                            # Every input is silent, so it is not
-                                            # the choice of device. Said plainly
-                                            # because only the user can fix it.
-                                            print(">>> MIC NO_AUDIO: every microphone on this "
-                                                  "machine is silent. It is muted, unplugged, "
-                                                  "or blocked by Windows privacy settings.",
-                                                  flush=True)
-
-                                    if mic_amp <= 400 and MixedStream._call_count % 3 == 0:
-                                        # Below the 400 threshold — still show it so we can tell
-                                        # "quiet/no signal at all" (amp near 0) apart from
-                                        # "signal present but too quiet to count" (amp in the
-                                        # tens/hundreds).
-                                        print(f">>> mic ambient amp={mic_amp} (below 400 threshold)", flush=True)
-                                else:
-                                    mic_data = SILENCE
-                            except Exception as me:
-                                print(f">>> mic_stream.read error: {me}", flush=True)
-                                mic_data = SILENCE
-                            if sys_stream:
-                                # System audio is BEST-EFFORT here — the mic (the user's
-                                # voice on Space) is the primary path and must never be
-                                # disrupted. We do NOT hot-swap on silence: silence is the
-                                # normal case (user is speaking, nothing is playing), and
-                                # churning through loopback devices on silence was both
-                                # pointless and, on some setups, actively corrupted the mic
-                                # stream. Instead we only track genuine read HANGS/errors,
-                                # and if the chosen loopback proves unreliable we silently
-                                # drop system audio for the rest of the session so it can
-                                # never interfere with mic capture again.
-                                try:
-                                    raw = _read_stream_timeout(sys_stream, _sys_chunk_frames, 0.5, "SYS")
-                                except Exception:
-                                    raw = None
-
-                                if raw is None:
-                                    _sys_hang_count += 1
-                                    data = mic_data
-                                    if _sys_hang_count >= SYS_HANG_DISABLE_LIMIT:
-                                        print(">>> SYSTEM AUDIO disabled for this session — its loopback "
-                                              "device kept hanging. Running mic-only; your voice still "
-                                              "transcribes normally.", flush=True)
-                                        # Deliberately abandon WITHOUT closing: a hung read left a
-                                        # daemon thread blocked inside the native stream.read(), and
-                                        # closing it out from under that thread is a use-after-close
-                                        # crash at the C level. Dropping the reference is safe.
-                                        sys_stream = None
-                                else:
-                                    _sys_hang_count = 0
-                                    sys_data = (resample_to_16k_mono(raw, _sys_native_rate, _sys_native_channels, num_frames)
-                                                if (_sys_native_rate != SAMPLE_RATE or _sys_native_channels != 1)
-                                                else raw)
-                                    data = mix_audio(mic_data, sys_data)
-                            else:
-                                data = mic_data
-
-                        # Handle recording — all state changes under record_lock so
-                        # is_recording and recording_frames are always consistent.
-                        # The save thread is started AFTER releasing the lock to
-                        # avoid deadlock (save_recording also acquires record_lock).
-                        if recording_requested:
-                            with record_lock:
-                                if not is_recording:
-                                    is_recording = True
-                                    active_recording_id = get_recording_id()
-                                    print(">>> Recording started", flush=True)
-                                if len(recording_frames) < MAX_RECORDING_FRAMES:
-                                    recording_frames.append(data)
-                        else:
-                            stopped = stop_recording(shutdown_requested)
-                            if not stopped:
-                                mark_recording_saved(get_recording_id())
-
-                        if shutdown_requested and not recording_requested:
-                            raise RuntimeError("Shutdown requested")
-
-                        return data
-
-                class BufferedMixedStream:
-                    """Continuously drain audio while Speechmatics completes its handshake.
-
-                    The SDK deliberately waits for RecognitionStarted before asking the
-                    stream for a chunk. Without this buffer, speech that begins right
-                    after Space is pressed is discarded during the WebSocket handshake.
-                    Only audio captured while listening is retained, so paused sessions
-                    can never leak stale audio into the next question.
-                    """
-
-                    MAX_BUFFERED_CHUNKS = 120  # 12 seconds at the 100 ms capture cadence
-
-                    def __init__(self, source):
-                        self._source = source
-                        self._chunks = deque()
-                        self._condition = threading.Condition()
-                        self._stopped = threading.Event()
-                        self._capture_error = None
-                        self._was_paused = True
-                        self._thread = threading.Thread(
-                            target=self._capture_loop,
-                            name="speechmatics-audio-prebuffer",
-                            daemon=True,
-                        )
-                        self._thread.start()
-
-                    def _capture_loop(self):
-                        while not self._stopped.is_set():
-                            try:
-                                # The source owns all PyAudio reads and recording state,
-                                # preserving the existing capture behavior exactly once.
-                                data = self._source.read(CHUNK_FRAMES, exception_on_overflow=False)
-                            except Exception as ex:
-                                with self._condition:
-                                    self._capture_error = ex
-                                    self._condition.notify_all()
-                                return
-
-                            paused = os.path.exists(PAUSE_FLAG)
-                            with self._condition:
-                                if paused:
-                                    self._chunks.clear()
-                                else:
-                                    if self._was_paused:
-                                        self._chunks.clear()
-                                        print(
-                                            ">>> PREBUFFER: preserving early speech while Speechmatics connects",
-                                            flush=True,
-                                        )
-                                    if len(self._chunks) >= self.MAX_BUFFERED_CHUNKS:
-                                        self._chunks.popleft()
-                                    self._chunks.append(data)
-                                    self._condition.notify_all()
-                                self._was_paused = paused
-
-                    def read(self, num_frames, exception_on_overflow=False):
-                        with self._condition:
-                            while not self._chunks:
-                                if self._capture_error is not None:
-                                    raise RuntimeError(
-                                        f"audio prebuffer failed: {self._capture_error}"
-                                    )
-                                if self._stopped.is_set():
-                                    return b""
-                                self._condition.wait(timeout=0.25)
-                            return self._chunks.popleft()
-
-                    def close(self):
-                        self._stopped.set()
-                        with self._condition:
-                            self._condition.notify_all()
-                        # The source read has its own 0.5 s timeout, so this prevents a
-                        # reconnect from ever leaving a second reader on the same device.
-                        self._thread.join(timeout=0.75)
 
                 buffered_stream = BufferedMixedStream(MixedStream())
                 try:

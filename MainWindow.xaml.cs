@@ -4513,6 +4513,10 @@ namespace InterviewCopilot
                 string langArg   = $" --language {SettingsWindow.GetTranscriptLanguage()}";
                 speechmaticsProcess.StartInfo.Arguments = $"{scriptArg}{deviceArg}{modeArg}{langArg}";
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SM_API_KEY"] = smKey;
+                // Deepgram goes first for English when the server issued a token. The
+                // engine hands over to Speechmatics on its own if Deepgram refuses or
+                // cannot connect, so an empty token simply means Speechmatics.
+                speechmaticsProcess.StartInfo.EnvironmentVariables["DG_TOKEN"] = UserSession.DeepgramToken;
                 // Sarvam key for Telugu / other Speechmatics-unsupported languages. Passed via
                 // env (never on the command line) exactly like the Speechmatics key.
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SARVAM_API_KEY"] = SettingsWindow.GetSarvamApiKey();

@@ -114,6 +114,30 @@ check("max-delay is at the API floor",
       delay is not None and float(delay.group(1)) >= 0.7,
       f"default={delay.group(1) if delay else '?'} (API rejects below 0.7)")
 
+# ── Deepgram ─────────────────────────────────────────────────────────────────
+# Deepgram runs first for English and Speechmatics is its fallback. The fallback
+# is the promise: a Deepgram path that cannot hand over turns a refused token or
+# a full account into silence, where before it was only slower transcription.
+check("Deepgram hands over to Speechmatics",
+      '"fallback"' in SOURCE and "Speechmatics is taking over" in SOURCE)
+check("Deepgram refusals are not retried",
+      re.search(r"_DEEPGRAM_REFUSED\s*=\s*\{[^}]*401[^}]*402[^}]*403[^}]*429", SOURCE) is not None,
+      "401 402 403 429 go straight to Speechmatics")
+check("Deepgram only with a token", 'os.environ.get("DG_TOKEN"' in SOURCE,
+      "the Mac passes no DG_TOKEN and must stay on Speechmatics")
+
+# Without keyterms nova-3 wrote "Kubernets", "Readys" and "Next dot j s" in the
+# comparison that chose it. The speed only counted because keyterms fixed that.
+check("Deepgram sends keyterms", '("keyterm", term)' in SOURCE)
+
+# Both apps read these lines. Windows latches online from STATUS: ONLINE and the
+# Mac answers only after UTTERANCE END, so a path that prints neither transcribes
+# into an app that never shows it as connected or never answers.
+dg = SOURCE[SOURCE.find("async def run_deepgram"):SOURCE.find("# ── MAIN WITH AUTO-RECONNECT")]
+check("Deepgram path reports STATUS: ONLINE", "STATUS: ONLINE" in dg)
+check("Deepgram path reports UTTERANCE END", "UTTERANCE END" in dg)
+check("Deepgram path honours reset.flag", "RESET_FLAG" in dg)
+
 print()
 print("ALL PASS" if not failures else f"{len(failures)} FAILED: {', '.join(failures)}")
 sys.exit(1 if failures else 0)
