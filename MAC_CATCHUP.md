@@ -10,6 +10,46 @@ backend.
 
 ---
 
+## Tell people to turn the microphone off in a real interview (after 1.0.18)
+
+Added 2026-09-15, Windows committed, not yet released. Copy it on Mac.
+
+**Why.** One mode opens computer sound and the microphone together, and Auto
+cannot tell who spoke. Read-back detection catches a candidate reading the
+answer on screen, and the question filter ignores "okay", "yes" and speech of
+several sentences. What still gets through is the candidate's OWN answer spoken
+as one sentence of five or more words: Auto can take it as a new question and
+replace the answer. In a real Zoom, Teams or Meet interview the interviewer
+arrives through computer sound, so turning the microphone off removes that case
+entirely. People only do that if they are told, so the app now tells them.
+
+**What changed, with the exact words used on Windows:**
+
+- Settings, LISTENING info card, second sentence added: "In a real Zoom, Teams
+  or Meet interview, turn off Use my microphone below, so only the interviewer
+  is heard."
+- Settings, "Use my microphone" switch description is now: "Turn off for real
+  interviews, so your own voice is never taken as a question. Keep on to
+  practice alone."
+- Toolbar: the first time AUTO is chosen in a launch with the microphone on,
+  the AUTO | MANUAL switch is replaced for four seconds by: "Real interview? Mic
+  off in Settings". Once per launch.
+- Website how-it-works guide carries the same advice (already live).
+
+## Deepgram: a server that closes at once no longer loops forever (after 1.0.18)
+
+Found by audit 2026-09-15, fixed in the shared engine, not yet released.
+`run_deepgram()` reset its failure count on every successful handshake, so a
+server that accepted and then closed immediately (no credit mid-session, a
+policy refusal, a proxy that drops websockets) was reconnected in a tight loop
+and never handed over to Speechmatics. A session shorter than
+`_DEEPGRAM_HEALTHY_SECONDS` (5 s) now counts as a failed connection with
+backoff, and two of them hand over. Proved against a local server that accepts
+and hangs up: two sessions of 0.0 s, then Speechmatics came online. The contract
+test "Deepgram instant closes count as failures" guards it.
+
+---
+
 ## Deepgram is now the first recogniser for English, Speechmatics the fallback
 
 Added 2026-09-15. Windows only so far; the Mac is unaffected until it opts in.

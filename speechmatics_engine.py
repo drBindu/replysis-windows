@@ -2279,6 +2279,11 @@ _DEEPGRAM_REFUSED = {401, 402, 403, 429}
 # a few seconds rather than a minute of "connecting".
 _DEEPGRAM_MAX_FAILURES = 2
 
+# A session shorter than this counts as a failed connection. Without it a server
+# that accepts and then closes at once was reconnected in a tight loop forever,
+# because a successful handshake reset the failure count every time.
+_DEEPGRAM_HEALTHY_SECONDS = 5.0
+
 
 async def run_deepgram() -> str:
     """Stream to Deepgram until told to stop.
@@ -2310,6 +2315,7 @@ async def run_deepgram() -> str:
             return "shutdown"
 
         online = False
+        session_started = 0.0
         # Created before the handshake, like the Speechmatics path, so speech that
         # starts while the connection opens is kept rather than lost.
         buffered = BufferedMixedStream(MixedStream())
@@ -2319,8 +2325,7 @@ async def run_deepgram() -> str:
                                           open_timeout=8, ping_interval=20) as ws:
                 print(">>> STATUS: ONLINE ✓", flush=True)
                 online = True
-                failures = 0
-                reconnect_delay = 1
+                session_started = time.monotonic()
                 transcript = {"confirmed": "", "partial": ""}
 
                 async def sender():
@@ -2397,13 +2402,33 @@ async def run_deepgram() -> str:
                 except Exception:
                     pass
             print(">>> STATUS: OFFLINE", flush=True)
-            print(">>> [DEEPGRAM] Session closed by the server; reconnecting.", flush=True)
+            lasted = time.monotonic() - session_started
+            if lasted >= _DEEPGRAM_HEALTHY_SECONDS:
+                failures = 0
+                reconnect_delay = 1
+                print(">>> [DEEPGRAM] Session closed by the server; reconnecting.", flush=True)
+            else:
+                # Closed almost as soon as it opened: out of credit mid-handshake,
+                # a policy refusal, a proxy cutting websockets. Reconnecting at once
+                # would spin forever, so it counts as a failed connection.
+                failures += 1
+                print(f">>> [DEEPGRAM] Session closed after {lasted:.1f}s.", flush=True)
+                if failures >= _DEEPGRAM_MAX_FAILURES:
+                    print(f">>> [DEEPGRAM] {failures} sessions closed at once; Speechmatics takes over.",
+                          flush=True)
+                    return "fallback"
+                await asyncio.sleep(reconnect_delay)
+                reconnect_delay = min(reconnect_delay * 2, 8)
 
         except Exception as e:
             if online:
                 print(">>> STATUS: OFFLINE", flush=True)
             if os.path.exists(SHUTDOWN_FLAG):
                 continue   # the top of the loop exits cleanly
+            # A long healthy session that finally dropped is not a failed connection.
+            if online and time.monotonic() - session_started >= _DEEPGRAM_HEALTHY_SECONDS:
+                failures = 0
+                reconnect_delay = 1
 
             status = _http_status(e)
             print(f">>> [DEEPGRAM] {'HTTP ' + str(status) if status else 'error'}: {str(e)[:200]}", flush=True)

@@ -1302,6 +1302,12 @@ namespace InterviewCopilot
 
 
 
+        // Shown once per launch. In Auto with the microphone open, the candidate's
+        // own spoken answer can read as a new question; in a real interview the
+        // fix is to turn the microphone off, and people need to be told that
+        // where they choose Auto, not only in Settings.
+        private bool _realInterviewMicTipShown;
+
         private void SelectListeningMode(ListeningMode mode)
         {
             if (_listeningMode == mode)
@@ -1349,10 +1355,15 @@ namespace InterviewCopilot
                 StartAutoListeningIfReady();
             }
 
+            if (mode == ListeningMode.Auto && MicrophoneInUse && !_realInterviewMicTipShown)
+            {
+                _realInterviewMicTipShown = true;
+                ShowListeningModeNotice("Real interview? Mic off in Settings");
+            }
+
             DebugWindow.Log("MODE",
                 (mode == ListeningMode.Auto ? "Auto: answers on its own" : "Manual: you press Space")
-                + " | session type: "
-                + (MicrophoneInUse ? "Practice (hears you)" : "Real interview (hears the interviewer)"));
+                + (MicrophoneInUse ? " | hears computer sound and microphone" : " | hears computer sound only"));
         }
 
         /// <summary>

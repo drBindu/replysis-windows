@@ -138,6 +138,11 @@ check("Deepgram path reports STATUS: ONLINE", "STATUS: ONLINE" in dg)
 check("Deepgram path reports UTTERANCE END", "UTTERANCE END" in dg)
 check("Deepgram path honours reset.flag", "RESET_FLAG" in dg)
 
+# A server that accepts and closes at once was reconnected in a tight loop
+# forever, because every successful handshake reset the failure count.
+check("Deepgram instant closes count as failures",
+      "_DEEPGRAM_HEALTHY_SECONDS" in dg and "sessions closed at once" in dg)
+
 print()
 print("ALL PASS" if not failures else f"{len(failures)} FAILED: {', '.join(failures)}")
 sys.exit(1 if failures else 0)
