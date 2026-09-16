@@ -177,8 +177,27 @@ jobs:
       - name: Rename bundle to clean name
         shell: powershell
         run: |
-          $bundle = Get-ChildItem -Path "AppxPackages" -Filter "*.msixbundle" -Recurse | Select-Object -First 1
-          if (-not $bundle) { throw "No .msixbundle found in AppxPackages" }
+          # Search the whole tree rather than one guessed folder.
+          #
+          # This looked in "AppxPackages" because the build is asked for that
+          # with /p:AppxPackageDir. The packaging project ignores it and writes
+          # where it always writes, InterviewCopilotPackager\AppPackages\, so
+          # every run since August failed right here with "No .msixbundle found"
+          # while a perfectly good bundle sat one folder away. Five runs, and not
+          # one of them was a real build problem: the last Store package had to
+          # be built by hand in Visual Studio instead.
+          #
+          # Newest wins, so a stale bundle from an earlier build cannot be picked
+          # up and shipped as this version.
+          $bundle = Get-ChildItem -Path . -Filter "*.msixbundle" -Recurse -ErrorAction SilentlyContinue |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $bundle) {
+            Write-Host "Packages that were produced:"
+            Get-ChildItem -Path . -Include *.msix,*.msixbundle,*.msixupload -Recurse -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "  $($_.FullName)" }
+            throw "The build produced no .msixbundle."
+          }
+          Write-Host "Bundle: $($bundle.FullName)"
 
           # Look inside the package itself, not next to it.
           #
@@ -216,6 +235,18 @@ jobs:
           }
           Write-Host "Speech engine confirmed inside the bundle."
           Copy-Item $bundle.FullName "InterviewCopilot.msixbundle"
+
+          # Partner Center takes the .msixupload, which the build writes beside
+          # the bundle. Carrying it out as well means the Store submission needs
+          # nothing rebuilt by hand.
+          $upload = Get-ChildItem -Path . -Filter "*.msixupload" -Recurse -ErrorAction SilentlyContinue |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($upload) {
+            Copy-Item $upload.FullName "Replysis-Store.msixupload"
+            Write-Host "Store upload package: $($upload.Name)"
+          } else {
+            Write-Host "No .msixupload produced; upload the .msixbundle instead."
+          }
           echo "Bundle: $($bundle.Name) ($([math]::Round($bundle.Length / 1MB, 1)) MB)"
 
       - name: Generate .appinstaller
@@ -253,7 +284,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: replysis-msix-${{ env.APP_VERSION }}
-          path: InterviewCopilot.msixbundle
+          path: |
+            InterviewCopilot.msixbundle
+            Replysis-Store.msixupload
           retention-days: 30
           if-no-files-found: error
 
