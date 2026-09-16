@@ -63,6 +63,49 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Real questions were answered with "Doing really well, thanks!" (fixed after 1.0.19)
+
+Reported by the owner 2026-09-16, fixed on Windows, NOT released yet. The Mac
+has the same function in PromptBuilder.swift and almost certainly the same bug.
+
+**Symptom.** Different questions kept getting the identical chit-chat answer,
+including real ones. The canned line is returned locally, before any model call,
+so nothing in the logs says an answer was invented and the candidate is not
+warned: the panel hears "Doing really well, thanks! Excited to be here and learn
+more about the role" in reply to a technical question.
+
+**Cause.** `IsSmallTalk` fired when a line under sixty characters merely
+CONTAINED a pleasantry ("how are you", "nice to meet"), unless it also contained
+one of about twenty hardcoded words: what, why, explain, java, python, sql,
+code, project, experience and so on. Anything outside that list was treated as
+chit-chat. Real questions that lost:
+
+- "How are you handling state in React?"
+- "How are you deploying to AWS?"
+- "How are you testing this?"
+- "Nice to meet you, shall we start with your background?"
+
+None contain a listed word. All are short. All got the canned reply. The rule
+has been there since the first commit, so it has been shipping the whole time.
+
+**Fix: subtract instead of allow-listing.** Take the pleasantry away, take the
+filler away (hi, thanks, today, sir, you, doing, and so on), and if any word is
+still standing the interviewer asked something, whatever it was about. A list
+can only ever name the technologies somebody thought of; subtracting asks the
+question the code actually cares about. The phrase list is now one array used
+both to match and to subtract, so the two cannot drift apart.
+
+Unchanged on purpose: the sixty character early-out, and `IsGreeting`, which is
+tight already (exact "hi"/"hello"/"good morning", plus repeats like "hello
+hello" from recogniser artifacts).
+
+**Tests.** New suite 11 in tests/CleanerTests (SmallTalkTests.cs), 21 cases,
+calling the shipping PromptBuilder directly rather than a copy: the five real
+questions above must reach the model, and plain pleasantries must still skip it.
+All pass. Worth porting the cases to the Mac verbatim.
+
+---
+
 ## Deepgram is now the first recogniser for English, Speechmatics the fallback
 
 Added 2026-09-15. Windows only so far; the Mac is unaffected until it opts in.

@@ -341,6 +341,38 @@ namespace InterviewCopilot
             return false;
         }
 
+        /// <summary>The pleasantries themselves, matched and then subtracted.</summary>
+        private static readonly string[] SmallTalkPhrases =
+        {
+            "how are you", "how's it going", "how is it going", "how you doing",
+            "how have you been", "how is your day", "how's your day",
+            "how was your day", "how is your evening", "how's your evening",
+            "how is your night", "nice to meet", "thanks for coming",
+            "pleasure to meet",
+        };
+
+        /// <summary>
+        /// Words that can trail a pleasantry without making it a question.
+        ///
+        /// Deliberately generous: a word wrongly listed here costs a canned
+        /// reply to chit-chat, and a word wrongly missing costs the model a
+        /// round trip. Only one of those is visible to an interviewer.
+        /// </summary>
+        private static readonly HashSet<string> PleasantryFiller = new(StringComparer.Ordinal)
+        {
+            "hi", "hello", "hey", "there", "greetings",
+            "good", "great", "fine", "well", "ok", "okay", "alright",
+            "morning", "afternoon", "evening", "night", "day", "today",
+            "you", "your", "yours", "yourself", "u", "i", "im", "me", "my",
+            "we", "us", "it", "its", "and", "so", "too", "very", "much",
+            "thanks", "thank", "thankyou", "welcome", "please",
+            "sir", "maam", "madam", "mam",
+            "am", "are", "is", "was", "be", "been", "doing", "do", "did",
+            "how", "hope", "glad", "happy", "nice", "meet", "meeting",
+            "pleasure", "coming", "come", "in", "for", "to", "the", "a", "an",
+            "yeah", "yes", "yep", "no", "um", "uh", "er", "oh", "hmm",
+        };
+
         public static bool IsSmallTalk(string q)
         {
             string t = q.Trim().ToLower();
@@ -350,27 +382,39 @@ namespace InterviewCopilot
             // greeting in the same breath) must never get the canned small-talk reply.
             if (t.Length > 60) return false;
 
-            bool hasSmallTalk =
-                t.Contains("how are you") || t.Contains("how's it going") ||
-                t.Contains("how you doing") || t.Contains("how have you been") ||
-                t.Contains("how is your day") || t.Contains("how's your day") ||
-                t.Contains("how was your day") || t.Contains("how is your evening") ||
-                t.Contains("how's your evening") || t.Contains("how is your night") ||
-                t.Contains("nice to meet") || t.Contains("thanks for coming") ||
-                t.Contains("pleasure to meet");
+            bool hasSmallTalk = SmallTalkPhrases.Any(t.Contains);
             if (!hasSmallTalk) return false;
 
-            // If it also carries a substantive question, it's a real question, not chit-chat.
-            string[] realQuestion =
-            {
-                "what", "how do", "how does", "why", "explain", "difference", "describe",
-                "write", "implement", "design", "tell me about", "walk me through",
-                "java", "python", "spring", "sql", "code", "algorithm", "project", "experience"
-            };
-            foreach (var k in realQuestion)
-                if (t.Contains(k)) return false;
+            // Take the pleasantry away and see whether anything is left standing.
+            //
+            // This used to be a list of about twenty words - what, why, java,
+            // python, code - that a question had to contain to escape being
+            // treated as chit-chat. "How are you handling state in React?"
+            // contains none of them, is under sixty characters, and matched
+            // "how are you", so it was answered with "Doing really well,
+            // thanks! Excited to be here" while the panel waited. So were "How
+            // are you deploying to AWS?" and "Nice to meet you, shall we start
+            // with your background?".
+            //
+            // A list can only name the technologies somebody thought of on the
+            // day. Subtracting asks the question the code actually cares about:
+            // after the greeting, the pleasantry and the filler are removed, did
+            // the interviewer say anything else? If they did, it is a question,
+            // whatever it happens to be about.
+            string stripped = t;
+            foreach (var phrase in SmallTalkPhrases)
+                stripped = stripped.Replace(phrase, " ");
 
-            return true;
+            var leftovers = stripped
+                .Select(c => char.IsLetterOrDigit(c) ? c : ' ')
+                .Aggregate(new StringBuilder(), (sb, c) => sb.Append(c))
+                .ToString()
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => !PleasantryFiller.Contains(w))
+                .ToArray();
+
+            // Anything substantive left means they asked something.
+            return leftovers.Length == 0;
         }
 
         public static string GetGreetingResponse() =>
