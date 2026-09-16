@@ -291,7 +291,37 @@ jobs:
           if-no-files-found: error
 
       # ── Deploy to Oracle Cloud ─────────────────────────────────────────────
+      # Everything below is optional and refreshes the sideload .appinstaller on
+      # the website. It is NOT part of the Store package, which is finished and
+      # uploaded as this run's artifact by the step above.
+      #
+      # It used to fail the whole run when the server credentials were absent,
+      # and this repository has no secrets at all, so runs #6 and #7 built a
+      # perfectly good Store package and then reported failure anyway. A red
+      # cross on a finished build is worse than a skipped step: it reads as "the
+      # Store build is broken" and sends somebody hunting a problem that is not
+      # there.
+      - name: Check the website deploy secrets
+        id: deploy_secrets
+        shell: powershell
+        env:
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+        run: |
+          $ready = -not (
+            [string]::IsNullOrWhiteSpace($env:ORACLE_SSH_KEY) -or
+            [string]::IsNullOrWhiteSpace($env:ORACLE_KNOWN_HOSTS) -or
+            [string]::IsNullOrWhiteSpace($env:ORACLE_HOST)
+          )
+          echo "ready=$($ready.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          if (-not $ready) {
+            Write-Host "No server credentials, so the sideload .appinstaller is left alone."
+            Write-Host "The Store package is already published as this run's artifact."
+          }
+
       - name: Setup SSH key
+        if: steps.deploy_secrets.outputs.ready == 'true'
         shell: powershell
         env:
           ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
@@ -303,6 +333,7 @@ jobs:
           echo "SSH_KEY_PATH=$keyPath" >> $env:GITHUB_ENV
 
       - name: Configure trusted Oracle host key
+        if: steps.deploy_secrets.outputs.ready == 'true'
         shell: powershell
         env:
           ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
@@ -315,14 +346,18 @@ jobs:
           echo "KNOWN_HOSTS_PATH=$knownHostsPath" >> $env:GITHUB_ENV
 
       - name: Deploy .appinstaller to website
+        if: steps.deploy_secrets.outputs.ready == 'true'
         shell: powershell
         env:
           ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
         run: |
           $key  = "${{ env.SSH_KEY_PATH }}"
           $knownHosts = "${{ env.KNOWN_HOSTS_PATH }}"
-          $host = $env:ORACLE_HOST
-          $dest = "ubuntu@${host}"
+          # Not $host: PowerShell reserves that name for the host object and
+          # refuses the assignment, so this step could not have worked even
+          # with the secrets in place.
+          $oracleHost = $env:ORACLE_HOST
+          $dest = "ubuntu@${oracleHost}"
 
           # Upload .appinstaller to server /tmp/
           scp -i $key -o UserKnownHostsFile=$knownHosts -o StrictHostKeyChecking=yes `
