@@ -135,13 +135,21 @@ DetectType are now internal so the rule can be tested directly.
 - Version 1.0.20.0 in the csproj and the Store manifest.
 - The engine log said "while Speechmatics connects" even on Deepgram. Fixed.
 
-### Still open, not fixed here
+### Space typed in another app no longer toggles listening
 
-The Space hotkey is system wide and only ignores typing inside Replysis's own
-text boxes. Typing anywhere else (a chat window, notes) toggles listening. The
-owner's log showed MUTED / UNMUTED every one to two seconds while typing
-elsewhere. Needs a fix before relying on Manual during an interview where the
-candidate types.
+The Space hotkey is system wide on purpose (the meeting window has focus in an
+interview), but it toggled on every Space and only ignored typing inside
+Replysis's own text boxes. The owner's log, while typing a chat message in
+another window, showed MUTED / UNMUTED every one to two seconds: each space
+between words flipped the microphone.
+
+Now a Space that follows another character key (letters, digits, punctuation,
+Backspace) within 1000ms is treated as typing and passed through untouched.
+Ctrl, Shift or Win plus Space never toggles, since those are system shortcuts.
+A deliberate toggle only needs a one second pause after typing. Ignored presses
+log at most once every five seconds. The decision is a pure function
+(GlobalHotkey.IsSpaceAToggle) with its own test suite, 14. The Mac hotkey
+almost certainly needs the same rule.
 
 ---
 

@@ -139,6 +139,9 @@ internal static class Program
         Console.WriteLine("\n13. Windows update release tags");
         _failed += UpdateTests.Run();
 
+        Console.WriteLine("\n14. Space typed in another app is not a toggle");
+        _failed += SpaceHotkeyTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

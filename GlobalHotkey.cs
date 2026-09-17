@@ -27,6 +27,42 @@ namespace InterviewCopilot
         private readonly Action? _onPrimaryScreenAnalysisPressed;
 
         private bool _spaceDown = false;
+
+        // When a character key was last typed anywhere on the machine, and when
+        // an ignored Space was last logged (typing a paragraph must not write a
+        // log line per word).
+        private long _lastTypingKeyMs  = -TypingWindowMs;
+        private long _lastIgnoreLogMs  = long.MinValue / 2;
+
+        /// <summary>
+        /// How recently another character key must have been typed for a Space to
+        /// count as typing rather than a deliberate toggle.
+        ///
+        /// The hook is system wide because the meeting window has focus during an
+        /// interview, and it used to toggle on every Space. Typing a chat message in
+        /// another window muted and unmuted the microphone between every word, which
+        /// the owner's own log showed every one to two seconds. Most people type the
+        /// next character well inside 300ms; a second leaves room for slow typists,
+        /// and a deliberate toggle only needs a one second pause after typing.
+        /// </summary>
+        internal const int TypingWindowMs = 1000;
+
+        /// <summary>Keys that produce text, plus Backspace: correcting a word is still typing.</summary>
+        internal static bool IsTypingKey(int vk) =>
+            (vk >= 0x30 && vk <= 0x39) ||   // 0-9
+            (vk >= 0x41 && vk <= 0x5A) ||   // A-Z
+            (vk >= 0x60 && vk <= 0x6F) ||   // numpad digits and operators
+            (vk >= 0xBA && vk <= 0xC0) ||   // ; = , - . / `
+            (vk >= 0xDB && vk <= 0xDF) ||   // [ \ ] '
+            vk == 0xE2 ||                   // the extra key some layouts have
+            vk == 0x08;                     // Backspace
+
+        /// <summary>
+        /// Whether a Space press should toggle listening. Not while typing, and not
+        /// as part of Ctrl, Shift or Win+Space, which are system shortcuts.
+        /// </summary>
+        internal static bool IsSpaceAToggle(long nowMs, long lastTypingKeyMs, bool modifierHeld) =>
+            !modifierHeld && nowMs - lastTypingKeyMs >= TypingWindowMs;
         private bool _f7Down = false;
         private bool _f8Down = false;
         private bool _f9Down = false;
@@ -100,6 +136,10 @@ namespace InterviewCopilot
 
             if (isDown)
             {
+                // Recorded before any shortcut branch can return, so every typed
+                // character counts, whichever window it was typed into.
+                if (IsTypingKey(vkCode)) _lastTypingKeyMs = Environment.TickCount64;
+
                 // F7 - Drag a box around one part. Reaching this needed the app
                 // window in front, which is the one place it cannot be during an
                 // interview, so the sharpest and fastest way to read a screen was
@@ -189,8 +229,25 @@ namespace InterviewCopilot
                 if (isDown && !_spaceDown)
                 {
                     _spaceDown = true;
-                    DebugWindow.Log("HOOK", "SPACE TOGGLE PRESS");
-                    _onSpacePressed?.Invoke();
+                    bool modifierHeld =
+                        (GetAsyncKeyState(0x11) & 0x8000) != 0 ||   // Ctrl
+                        (GetAsyncKeyState(0x10) & 0x8000) != 0 ||   // Shift
+                        (GetAsyncKeyState(0x5B) & 0x8000) != 0 ||   // left Windows key
+                        (GetAsyncKeyState(0x5C) & 0x8000) != 0;     // right Windows key
+                    long now = Environment.TickCount64;
+
+                    if (IsSpaceAToggle(now, _lastTypingKeyMs, modifierHeld))
+                    {
+                        DebugWindow.Log("HOOK", "SPACE TOGGLE PRESS");
+                        _onSpacePressed?.Invoke();
+                    }
+                    else if (now - _lastIgnoreLogMs >= 5000)
+                    {
+                        _lastIgnoreLogMs = now;
+                        DebugWindow.Log("HOOK", modifierHeld
+                            ? "Space ignored: pressed with Ctrl, Shift or Win, which is a shortcut"
+                            : $"Space ignored: typing ({now - _lastTypingKeyMs}ms after a key)");
+                    }
                 }
                 else if (isUp)
                 {
