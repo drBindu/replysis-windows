@@ -63,6 +63,28 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Answers with real substance, across question types (2026-09-17, later)
+
+- Owner tested the previous change: "What is Java?" came back as two thin sentences
+  with filler ("basically", "pretty smooth"). Their approved target: what it is, how
+  it works, why it matters, about 30 seconds, spoken, tied to their own work.
+- Definition answers: 4-5 sentences with the real mechanisms, still picked by
+  whether the term is in the resume (see the entry below).
+- Technical: 30-45 seconds with specific mechanisms and trade-offs; one clause of
+  own work only if the topic is named in the resume; never claim a tool that is not.
+- WhyRole: never invent facts about the company when no company or role was given
+  (a test produced "you've invested in Kubernetes" with nothing to go on).
+- Situational: no more "P1: a real past situation", which made the model invent a
+  whole incident. Approach step by step; an example only from the resume.
+- DetectType: "How do you handle a disagreement/pressure/feedback..." is Situational,
+  not Technical.
+- System prompt: length now matches the question (quick ones 1-2 sentences,
+  technical 30-45s, stories 45-60s). Voice rules: the approved Java answer is the
+  example, and filler words are banned instead of invited.
+- Measured on 12 question types with the real prompts and the live model.
+
+---
+
 ## "What is X?" answers start from the candidate, checked against the resume (2026-09-17)
 
 - Owner tested 1.0.20: "What is Java?" answered "Java lets you write code that runs

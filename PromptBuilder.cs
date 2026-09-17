@@ -811,6 +811,11 @@ namespace InterviewCopilot
                 t.Contains("what makes you"))
                 return QuestionType.WhyRole;
 
+            // "How do you handle a disagreement with a teammate?" matched "how do you"
+            // in the technical rule below and was answered as a technical explanation.
+            if (Regex.IsMatch(t, @"\bhow do (you|u) (handle|deal with|manage|approach|respond to|react to|work through|resolve)\b.*\b(disagree|conflict|pressure|stress|criticism|feedback|deadline|difficult|failure|mistake|setback|ambiguity|priorit|change|stakeholder|teammate|coworker|co-worker|manager|boss|colleague)"))
+                return QuestionType.Situational;
+
             if (t.Contains("what would you do") || t.Contains("how would you handle") ||
                 t.Contains("if you were") || t.Contains("hypothetically") ||
                 t.Contains("imagine you") || t.Contains("scenario where"))
@@ -1024,8 +1029,8 @@ namespace InterviewCopilot
             sb.AppendLine("The spoken answer itself carries no headings, bullets or numbered lists: it is");
             sb.AppendLine("read out loud, and a list read aloud sounds like a list. Bullets appear only");
             sb.AppendLine("under MORE TO SAY, described at the end of these instructions.");
-            sb.AppendLine("Give a complete answer without wasting time: simple questions get 1-2 natural sentences; most answers fit in 2-5 sentences and 1-2 short spoken paragraphs.");
-            sb.AppendLine("For open, behavioral, or technical questions, aim for roughly 25-40 seconds unless the interviewer explicitly asks for more depth.");
+            sb.AppendLine("Match the length to the question. Quick factual, yes/no and logistics questions get 1-2 natural sentences.");
+            sb.AppendLine("Technical and experience questions get real substance, usually 30-45 seconds spoken; stories 45-60 seconds. A short answer with nothing in it is worse than no answer.");
             sb.AppendLine("For behavioral questions, tell a concise STAR story without naming the STAR sections.");
             sb.AppendLine("For technical questions, give the direct answer first, then explain how it works, why it matters, and one relevant tradeoff or example.");
             sb.AppendLine("If asked to write, implement, or show code, output complete runnable code immediately. Never only describe the code, never refuse, and never claim you are not a programmer.");
@@ -1146,10 +1151,14 @@ namespace InterviewCopilot
             sb.AppendLine("    \"Java is a statically typed, object-oriented programming language that");
             sb.AppendLine("     runs on the JVM. It is known for its write once, run anywhere");
             sb.AppendLine("     philosophy.\"");
-            sb.AppendLine("  This:");
-            sb.AppendLine("    \"Java's what most of the backend work I've done is in. It's statically");
-            sb.AppendLine("     typed, runs on the JVM, so the same build runs anywhere. Day to day");
-            sb.AppendLine("     that mostly means Spring Boot services for me.\"");
+            sb.AppendLine("  This (the substance stays, only the voice changes):");
+            sb.AppendLine("    \"Java's an object-oriented, statically typed language, and it's what most of");
+            sb.AppendLine("     my backend work is in. You compile to bytecode, and the JVM runs that bytecode");
+            sb.AppendLine("     on any operating system, so the same jar runs on my laptop and in our Linux");
+            sb.AppendLine("     containers. The JVM also manages memory with garbage collection and has");
+            sb.AppendLine("     multithreading built in, which matters a lot for backend services.\"");
+            sb.AppendLine("  Sounding like a person never means saying less. An experienced engineer's");
+            sb.AppendLine("  answer is full of real specifics; it is only the textbook phrasing that goes.");
             sb.AppendLine();
             sb.AppendLine("  How real speech differs from written prose:");
             sb.AppendLine("    Contractions throughout. It's, I've, that's, doesn't, we'd. Always.");
@@ -1157,8 +1166,8 @@ namespace InterviewCopilot
             sb.AppendLine("    evenly balanced sentences in a row, which is the rhythm nothing but a");
             sb.AppendLine("    machine produces.");
             sb.AppendLine("    One idea per sentence. Nobody speaks in subordinate clauses.");
-            sb.AppendLine("    Say \"so\" or \"basically\" or \"honestly\" where a person naturally");
-            sb.AppendLine("    would, at most once in an answer. Not as a decoration on every one.");
+            sb.AppendLine("    No filler words such as basically, pretty smooth, super or kind of. They");
+            sb.AppendLine("    make an answer sound unsure without making it sound human.");
             sb.AppendLine();
             sb.AppendLine("  Never use these. They are not words people say out loud, and an");
             sb.AppendLine("  interviewer hearing one knows immediately what produced it:");
@@ -1301,36 +1310,38 @@ namespace InterviewCopilot
         internal static string DefinitionReminder(string term, string resumeFacts)
         {
             string t = string.IsNullOrWhiteSpace(term) ? "it" : term;
-            const string shared =
-                "Never open with TERM is a NOUN or TERM lets you, and a leading A, An or The does not exempt it. " +
-                "No lecture signposts such as in practice, it works by, the key thing is, essentially. ";
-            const string tail =
-                "Use contractions. No project story, no employer list, no history lesson. ";
+
+            // The owner, shown a two-sentence answer with nothing in it: "very small,
+            // this is not the actual real answer". The target they approved says what
+            // it is, how it works and why it matters, in about 30 seconds, spoken, and
+            // tied to their own work. Sounding human was never meant to mean saying less.
+            const string substance =
+                "4 or 5 spoken sentences, about 30-40 seconds, with real substance, the way an experienced engineer answers in an interview. " +
+                "Cover what it is in plain words, how it actually works underneath with the real mechanism names, and the one or two things that matter most in real work. " +
+                "Sound like a person talking, not an encyclopedia: contractions, no filler such as basically, pretty smooth or super, " +
+                "and never a bare TERM lets you sentence standing in for the explanation. ";
+            const string more =
+                "The MORE TO SAY lines are what an experienced engineer would add if pushed: a deeper mechanism, a gotcha, a trade-off, " +
+                "or when you'd pick something else. Never claim a tool, project or incident that is not in the verified facts.";
 
             if (FactsMention(resumeFacts, term))
-                return "2 or 3 short spoken sentences, the way you would answer a colleague out loud, not the way a textbook explains it. " +
-                       $"{t} is in the verified facts, so start from your own side: the first sentence says where {t} sits in your work, " +
-                       "without inventing a project, employer or detail that is not in the facts. " +
-                       "Then one or two plain details a working engineer would mention about it. " +
-                       shared +
-                       "The example shows the shape only; never reuse its words: Kafka's what carries the events between our services, " +
-                       "so I'm in it most weeks. What matters is you can replay a topic when a consumer falls over. " +
-                       "No: Kafka lets you publish and subscribe to streams of records. " +
-                       tail +
-                       "The MORE TO SAY lines are what someone who has worked with it would add, a gotcha, a trade-off, or when you'd " +
-                       "pick something else, never spec facts, version features or tuning trivia.";
+                return substance +
+                       $"{t} is in the verified facts, so the first sentence says what {t} is and, in the same breath, where it sits in your work, " +
+                       "without inventing a project or detail that is not in the facts. " +
+                       "Shape only, never reuse its words: Kafka's a distributed event streaming platform, and at work it's what carries events between our services. " +
+                       "Producers write to topics, each topic is split into partitions, and every partition is an append-only log that consumers read at their own pace by offset. " +
+                       "That's what makes it durable, because a consumer that falls over just picks up from its last offset. " +
+                       "And partitions are how it scales, since consumers in a group split them between them. " +
+                       more;
 
-            return "2 or 3 short spoken sentences, the way you would answer a colleague out loud, not the way a textbook explains it. " +
-                   $"{t} is NOT in the verified facts, so do not say you use it, have used it, reach for it, or work with it. " +
-                   $"Open with the practical point of {t} in plain words, the reason anyone bothers with it. " +
-                   "Then one or two plain details a working engineer would mention about it. " +
-                   shared +
-                   "The example shows the shape only; never reuse its words: The whole point of Rust is the compiler catching memory " +
-                   "bugs you'd normally only find in production. The price is fighting the borrow checker for a while. " +
-                   "No: Rust is a systems programming language focused on safety. " +
-                   tail +
-                   "The MORE TO SAY lines are what someone who has thought it through would add, a gotcha, a trade-off, or when you'd " +
-                   "pick something else, never spec facts, version features or tuning trivia.";
+            return substance +
+                   $"{t} is NOT in the verified facts, so never say you use it, have used it, or work with it. " +
+                   $"The first sentence says what {t} is and why people bother with it. " +
+                   "Shape only, never reuse its words: Rust's a systems language built so the compiler catches memory bugs before the code ever runs. " +
+                   "It does that with ownership, where every value has exactly one owner, and borrowing rules the compiler checks for you. " +
+                   "So you get C-level speed with no garbage collector, and whole classes of crashes and data races just can't compile. " +
+                   "The price is a steeper learning curve, you spend real time early on fighting the borrow checker. " +
+                   more;
         }
 
         /// <summary>
@@ -1492,10 +1503,11 @@ namespace InterviewCopilot
                         // copied word for word into a Spring Boot answer.
                         return DefinitionReminder(DefinitionTerm(question), resumeFacts);
 
-                    return "1-2 SHORT spoken paragraphs, normally 25-40 seconds. " +
-                           "Start with the direct explanation in plain words, then add the most useful how, why, trade-off, or concrete detail. " +
-                           "Use one resume-backed example only when the interviewer asks about your experience or it genuinely clarifies the answer. " +
-                           "Never inventory the resume or stack: name at most two tools unless they specifically ask for tooling. Never invent a project, result, or personal story.";
+                    return "1-2 spoken paragraphs, about 30-45 seconds, with real substance. " +
+                           "Give the direct answer first, then how it actually works and why, with the specific mechanisms, names and trade-offs an experienced engineer would give, never vague words. " +
+                           "Only if the topic itself is named in the verified facts, add one short clause about where it sits in your own work. " +
+                           "Never invent a project, incident, result or personal story, and never say you use a tool that is not named in the verified facts: " +
+                           "other tools can come up as options, not as things you use. Name at most two tools unless they ask for tooling.";
 
                 case QuestionType.Coding:
                     return "CODING TASK. Output complete runnable code, not an explanation-only response. " +
@@ -1514,11 +1526,21 @@ namespace InterviewCopilot
                            "Casual: 'honestly, I used to...' Mention steps + evidence of progress.";
 
                 case QuestionType.WhyRole:
-                    return "2-3 SHORT paragraphs. Name something CONCRETE about THIS company. " +
-                           "No generic 'I'm passionate about your mission' fluff.";
+                    // A test with no company details given produced "your team is building
+                    // end-to-end AI pipelines" and "you've invested in Kubernetes": facts about
+                    // a company the model knew nothing about, read aloud to that company.
+                    return "2 short spoken paragraphs, about 30-45 seconds. " +
+                           "If TARGET CONTEXT names the company or describes the role, point to one concrete thing from it. " +
+                           "If it does not, never invent facts about the company, its products, stack, team or plans: " +
+                           "talk about what draws you to this kind of role and what you'd bring, from the verified facts. " +
+                           "No generic 'passionate about your mission' fluff.";
 
                 case QuestionType.Situational:
-                    return "2-3 SHORT paragraphs. P1: A real past situation. P2: How it applies. Concrete specifics.";
+                    // "P1: A real past situation" had the model write one: a schema dispute at
+                    // UHG with a versioned topic and an adapter service, none of it in the facts.
+                    return "1-2 spoken paragraphs, about 30-45 seconds. Say concretely what you actually do, step by step, and why it works, " +
+                           "the way an experienced engineer would. Give a past example only if one is in the verified facts; " +
+                           "otherwise stay with your approach and never invent an incident, teammate, project or outcome.";
 
                 case QuestionType.ContextStatement:
                     return "1-2 SHORT conversational sentences acknowledging what the interviewer shared. " +
