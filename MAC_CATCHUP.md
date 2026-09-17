@@ -63,6 +63,22 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Audit fixes on today's changes (2026-09-17)
+
+- Engine: static needs both >5% of samples at the rail AND a zero-crossing rate
+  above 0.3, so a loud voice clipping on a hot mic is never muted as static.
+- Engine: after 3 searches the mic search keeps retrying every 30s instead of
+  stopping; a headset unplugged during three silent searches left it deaf.
+- Prompt: "What is Kafka and how have you used it?", "What is the difference
+  between X and Y?" and "pros and cons" questions are no longer treated as plain
+  definitions (the whole clause became the term, matched nothing in the resume,
+  and the answer was told never to claim Kafka). DefinitionTerm keeps dots inside
+  names, so "What is Node.js?" is Node.js, not Node.
+- Ctrl+Alt+R in compact mode raises the compact window instead of showing the
+  hidden main window over it.
+
+---
+
 ## Pin in front, Ctrl+Alt+R, and a mic that dies mid-interview (2026-09-17)
 
 - Stealth mode hides the window from the taskbar and Alt+Tab, so once another

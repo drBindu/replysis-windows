@@ -136,12 +136,19 @@ def _is_capture_noise(data: bytes) -> bool:
             return False
         samples = struct.unpack_from(f'<{n}h', data)
         pinned = sum(1 for v in samples if v >= 32000 or v <= -32000)
-        return pinned / n > MIC_NOISE_PINNED_SHARE
+        if pinned / n <= MIC_NOISE_PINNED_SHARE:
+            return False
+        # A loud voice on a hot microphone can clip too, but speech swings
+        # slowly: its zero-crossing rate stays well under 0.3, where static
+        # measured 0.47 to 0.5. Both have to hold, so clipped speech is kept.
+        crossings = sum(1 for a, b in zip(samples, samples[1:]) if (a >= 0) != (b >= 0))
+        return crossings / n > MIC_NOISE_CROSSING_RATE
     except Exception:
         return False
 
 
 MIC_NOISE_PINNED_SHARE = 0.05
+MIC_NOISE_CROSSING_RATE = 0.3
 
 
 def _signal_level(data: bytes) -> int:
@@ -974,6 +981,8 @@ _mic_noise_noted       = False  # static from the current mic already reported
 MIC_AUTOSWITCH_MAX_ATTEMPTS = 3   # per loss of signal; hearing a voice again resets it
 _mic_dead_reads         = 0      # consecutive reads with no signal at all (not a quiet room)
 _last_sys_sound_at      = 0.0    # when system audio last carried sound
+_mic_last_search_at     = 0.0    # when the last microphone search ran
+MIC_RESEARCH_BACKOFF_SECS = 30.0 # after the first three, search again this often
 MIC_DEAD_LEVEL          = 8      # a working mic in a quiet room reads 25 to 150
 MIC_DEAD_READS_BEFORE_RESEARCH = 100   # ~10s of nothing from a mic that used to work
 MIC_QUIET_READS_BEFORE_SWITCH = 40    # ~4s at 0.1s per read
@@ -1987,6 +1996,7 @@ class MixedStream:
         global _sys_hang_count, sys_stream
         global _default_silence_noted
         global _mic_ever_heard, _mic_quiet_reads, _mic_autoswitch_attempts, _mic_noise_noted, _mic_dead_reads, _last_sys_sound_at
+        global _mic_last_search_at
         global mic_stream, _mic_device_index, _mic_device_name
         global _mic_native_rate, _mic_native_channels, _mic_chunk_frames
 
@@ -2152,13 +2162,22 @@ class MixedStream:
                     # deaf until restart. A quiet room is never "nothing at all",
                     # and the search only switches to a device that hears a
                     # voice, so a mic that is fine but gated is kept.
-                    mic_lost = (not _mic_ever_heard and _mic_quiet_reads >= MIC_QUIET_READS_BEFORE_SWITCH) or                                (_mic_ever_heard and _mic_dead_reads >= MIC_DEAD_READS_BEFORE_RESEARCH)
+                    mic_lost = ((not _mic_ever_heard and _mic_quiet_reads >= MIC_QUIET_READS_BEFORE_SWITCH)
+                                or (_mic_ever_heard and _mic_dead_reads >= MIC_DEAD_READS_BEFORE_RESEARCH))
                     # A search holds up reading for a second or two, so it
                     # waits while the interviewer's audio is playing rather
                     # than lose their words to find the candidate's mic.
-                    if (mic_lost and _mic_autoswitch_attempts < MIC_AUTOSWITCH_MAX_ATTEMPTS
+                    #
+                    # After three searches it keeps trying every 30 seconds
+                    # rather than stopping: a headset unplugged while the user
+                    # happened to be silent for three searches would otherwise
+                    # leave the rest of the interview deaf.
+                    search_allowed = (_mic_autoswitch_attempts < MIC_AUTOSWITCH_MAX_ATTEMPTS
+                                      or time.time() - _mic_last_search_at >= MIC_RESEARCH_BACKOFF_SECS)
+                    if (mic_lost and search_allowed
                             and time.time() - _last_sys_sound_at > 2.0):
                         _mic_autoswitch_attempts += 1
+                        _mic_last_search_at = time.time()
                         _mic_quiet_reads = 0
                         _mic_dead_reads = 0
                         print(">>> MIC is silent; asking the other inputs "
@@ -2187,7 +2206,7 @@ class MixedStream:
                                       f"(peak {peak})", flush=True)
                             except Exception as se:
                                 print(f">>> MIC switch failed: {se}", flush=True)
-                        elif _mic_autoswitch_attempts >= MIC_AUTOSWITCH_MAX_ATTEMPTS:
+                        elif _mic_autoswitch_attempts == MIC_AUTOSWITCH_MAX_ATTEMPTS:
                             # Every input is silent, so it is not
                             # the choice of device. Said plainly
                             # because only the user can fix it.

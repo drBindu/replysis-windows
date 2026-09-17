@@ -33,6 +33,13 @@ internal static class DefinitionVoiceTests
         Case("term: speech with no punctuation", PromptBuilder.DefinitionTerm("what is kafka exactly") == "kafka", PromptBuilder.DefinitionTerm("what is kafka exactly"));
         Case("term: define", PromptBuilder.DefinitionTerm("Define the CAP theorem.") == "CAP theorem", PromptBuilder.DefinitionTerm("Define the CAP theorem."));
 
+        // Compound and comparison questions are not plain definitions
+        Case("term: 'and how have you used it' is not a definition", PromptBuilder.DefinitionTerm("What is Kafka and how have you used it?") == "");
+        Case("term: difference between is not a definition", PromptBuilder.DefinitionTerm("What is the difference between an abstract class and an interface?") == "");
+        Case("term: pros and cons is not a definition", PromptBuilder.DefinitionTerm("What are the pros and cons of microservices?") == "");
+        Case("term: a dot inside a name is kept", PromptBuilder.DefinitionTerm("What is Node.js?") == "Node.js", PromptBuilder.DefinitionTerm("What is Node.js?"));
+        Case("term: time complexity still is", PromptBuilder.DefinitionTerm("What is the time complexity of quicksort?") == "time complexity of quicksort");
+
         // On the resume: may say where it sits in their work
         Case("Java is in the facts", PromptBuilder.FactsMention(facts, "Java"));
         Case("lowercase speech still matches", PromptBuilder.FactsMention(facts, "kafka"));

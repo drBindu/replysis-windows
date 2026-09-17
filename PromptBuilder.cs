@@ -1258,9 +1258,19 @@ namespace InterviewCopilot
         internal static string DefinitionTerm(string question)
         {
             var m = Regex.Match(question ?? "",
-                @"(?:^|[?.!]\s*)(?:what is|what are|define)\s+(?:an?\s+|the\s+)?([^?.!]+)",
+                @"(?:^|[?.!]\s*)(?:what is|what are|define)\s+(?:an?\s+|the\s+)?(.+?)(?:[?!]|\.(?=\s|$)|$)",
                 RegexOptions.IgnoreCase);
             if (!m.Success) return "";
+            // "What is Kafka and how have you used it" and "What is the difference
+            // between X and Y" are not "What is X?". Treated as one, the whole
+            // clause became the term, it matched nothing in the resume, and the
+            // answer was told never to say the candidate uses Kafka while the
+            // interviewer was asking exactly how they had. Those go to the normal
+            // technical format instead.
+            if (Regex.IsMatch(m.Groups[1].Value,
+                    @"\b(and|or|how|why|where|when|which|that|you|your|between|versus|vs|differ|difference|differences|compared|pros|cons|advantages?|disadvantages?)\b|,",
+                    RegexOptions.IgnoreCase))
+                return "";
             string term = Regex.Replace(m.Groups[1].Value.Trim(),
                 @"\s+(?:exactly|actually|again|then|really|about)$", "", RegexOptions.IgnoreCase);
             return term.Length > 60 ? term[..60].Trim() : term;
@@ -1468,7 +1478,7 @@ namespace InterviewCopilot
                            "Only explain why this company if the interviewer asked. Do not list the whole resume or force filler words like 'yeah', 'so', or 'honestly'.";
 
                 case QuestionType.Technical:
-                    if (IsSimpleDefinitionQuestion(question))
+                    if (IsSimpleDefinitionQuestion(question) && DefinitionTerm(question).Length > 0)
                         // This used to say "Do NOT mention your background, job, project,
                         // company, or personal experience", which contradicts the voice
                         // rules in the same prompt: those say to give what it is for and

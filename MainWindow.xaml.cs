@@ -5569,12 +5569,25 @@ namespace InterviewCopilot
         {
             try
             {
+                // Compact mode hides the main window on purpose. Showing it here
+                // left both windows up with the main one empty.
+                if (_isCameraMode)
+                {
+                    if (answerWindow != null)
+                    {
+                        if (answerWindow.WindowState == WindowState.Minimized) answerWindow.WindowState = WindowState.Normal;
+                        if (!answerWindow.IsVisible) answerWindow.Show();
+                        answerWindow.Topmost = true;
+                        answerWindow.Activate();
+                    }
+                    DebugWindow.Log("PIN", "Brought the compact window to front with Ctrl+Alt+R");
+                    return;
+                }
                 if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
                 if (!IsVisible) Show();
                 Topmost = true;
                 Activate();
                 Topmost = _keepOnTop;
-                if (answerWindow != null && answerWindow.IsVisible) answerWindow.Activate();
                 DebugWindow.Log("PIN", "Brought to front with Ctrl+Alt+R");
             }
             catch (Exception ex) { DebugWindow.Log("PIN", $"bring to front failed: {ex.Message}"); }

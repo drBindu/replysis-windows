@@ -99,6 +99,9 @@ check("a locked or failed mic counts as dead air", "_mic_dead_reads += 1" in SOU
 check("white noise at full scale counts as static", _ns["_is_capture_noise"](_noise))
 check("a normal voice is not static", not _ns["_is_capture_noise"](_voice))
 check("a voice clipping briefly is not static", not _ns["_is_capture_noise"](_loud))
+_clipped = _struct.pack("<1600h", *[(32767 if (i // 40) % 2 == 0 else -32768) for i in range(1600)])
+check("a loud voice clipping hard is not static", not _ns["_is_capture_noise"](_clipped))
+check("the search never gives up for good", "MIC_RESEARCH_BACKOFF_SECS" in SOURCE and "search_allowed" in SOURCE)
 
 check("--sysfifo exists", "--sysfifo" in SOURCE, "macOS has no other route to system audio")
 
