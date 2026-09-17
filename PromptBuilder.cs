@@ -424,6 +424,36 @@ namespace InterviewCopilot
             "Doing really well, thanks! Excited to be here and learn more about the role.";
 
         /// <summary>
+        /// Words that begin a genuine question or task. When one appears AFTER a
+        /// closing phrase, the turn did not end there.
+        ///
+        /// Checked on the words after the phrase, never on the whole turn and
+        /// never by sentence punctuation, which speech recognition often drops:
+        /// "does that answer your question so how would you test this service"
+        /// arrives with no punctuation at all, and a recap that mentions earlier
+        /// questions must not stop a final thank-you from counting.
+        /// </summary>
+        private static readonly Regex RequestCue = new(
+            @"\b(how|what|why|when|where|which|who|can you|could you|would you|will you|" +
+            @"tell me|tell us|walk me|walk us|explain|describe|design|write|implement|" +
+            @"build|create|solve|show me|let's|let us)\b",
+            RegexOptions.Compiled);
+
+        private static bool RequestFollows(string t, int phraseEnd) =>
+            phraseEnd < t.Length && RequestCue.IsMatch(t, phraseEnd);
+
+        /// <summary>
+        /// "Is there another angle on the role, the tech, or the team that you'd
+        /// like me to focus on?" is a repeat invitation. "What other angle would
+        /// you take to reduce the latency?" is a technical question. The difference
+        /// is that the first is about the role or team and asks what to focus on.
+        /// </summary>
+        private static readonly Regex AnotherAngleOnRole = new(
+            @"\banother angle\b[^?.!]{0,60}\b(role|team|company|position|job|tech|product)\b" +
+            @"[^?.!]{0,60}\b(focus on|like to know|want to know|like me to cover)\b",
+            RegexOptions.Compiled);
+
+        /// <summary>
         /// True when the interviewer has handed the conversation to the candidate
         /// for questions, or is checking whether an earlier candidate question was
         /// answered. These are closing turns, not invitations to give another
@@ -457,14 +487,20 @@ namespace InterviewCopilot
                 "want me to go deeper", "do you want more detail",
             };
 
-            // Judge the last sentence only. "Does that answer your question
-            // about deploys? So how would you test this service?" ends on a
-            // real question, and matching anywhere in the turn answered it
-            // with a fixed sign-off instead of sending it to the model.
-            string last = Regex.Split(t, @"(?<=[.?!])\s+")
-                               .Select(s => s.Trim())
-                               .LastOrDefault(s => s.Length > 0) ?? t;
-            return invitations.Any(last.Contains);
+            // Find where the last invitation phrase ends, then ask whether a real
+            // question or task follows it. Splitting on sentence punctuation was
+            // not enough: "does that answer your question so how would you test
+            // this service" arrives unpunctuated and got a fixed wrap-up reply.
+            int end = -1;
+            foreach (string phrase in invitations)
+            {
+                int at = t.LastIndexOf(phrase, StringComparison.Ordinal);
+                if (at >= 0) end = Math.Max(end, at + phrase.Length);
+            }
+            Match angle = AnotherAngleOnRole.Match(t);
+            if (angle.Success) end = Math.Max(end, angle.Index + angle.Length);
+
+            return end >= 0 && !RequestFollows(t, end);
         }
 
         /// <summary>
@@ -477,34 +513,51 @@ namespace InterviewCopilot
             string t = Regex.Replace(question ?? "", @"\s+", " ").Trim().ToLowerInvariant();
             if (t.Length == 0) return false;
 
-            if (t.Contains("we'll be in touch") || t.Contains("we will be in touch") ||
-                t.Contains("we'll follow up") || t.Contains("we will follow up") ||
-                t.Contains("that concludes the interview") || t.Contains("this concludes the interview") ||
-                t.Contains("that wraps up the interview") || t.Contains("this wraps up the interview"))
+            // Strong closings end the interview unless a question follows them.
+            // "We'll be in touch with next steps, but first can you explain your
+            // testing approach?" returned a goodbye when these returned at once.
+            string[] strong =
+            {
+                "we'll be in touch", "we will be in touch", "we'll follow up",
+                "we will follow up", "that concludes the interview",
+                "this concludes the interview", "that wraps up the interview",
+                "this wraps up the interview",
+            };
+            int strongEnd = -1;
+            foreach (string phrase in strong)
+            {
+                int at = t.LastIndexOf(phrase, StringComparison.Ordinal);
+                if (at >= 0) strongEnd = Math.Max(strongEnd, at + phrase.Length);
+            }
+            if (strongEnd >= 0 && !RequestFollows(t, strongEnd) && t.IndexOf('?', strongEnd) < 0)
                 return true;
 
-            bool thanked = t.Contains("thank you") || t.Contains("thanks");
-            bool signOff = t.Contains("taking the time") || t.Contains("for your time") ||
-                           t.Contains("speaking with me") || t.Contains("speaking with us") ||
-                           t.Contains("meeting with me") || t.Contains("meeting with us") ||
-                           t.Contains("joining us today") || t.Contains("talking with me") ||
-                           t.Contains("talking with us");
-            if (!(thanked && signOff)) return false;
+            // A thank-you sign-off is judged from the LAST thank-you onward. A final
+            // turn that recaps earlier questions before thanking the candidate is
+            // still a goodbye; scanning the whole turn for "?" and "question" made
+            // it look like a new question. And thanking someone for their time is
+            // how interviews START as often as how they end: "Thank you for taking
+            // the time... Can you start by telling me about yourself?" carries on.
+            int thanksAt = Math.Max(t.LastIndexOf("thank you", StringComparison.Ordinal),
+                                    t.LastIndexOf("thanks", StringComparison.Ordinal));
+            if (thanksAt < 0) return false;
+            string tail = t.Substring(thanksAt);
 
-            // Thanking someone for their time is how interviews START as often as
-            // how they end. "Thank you for taking the time to speak with us
-            // today. Can you start by telling me about yourself?" was answered
-            // with a goodbye. A thank-you that carries on into a question or the
-            // next step is not a sign-off.
-            if (t.Contains('?')) return false;
+            bool signOff = tail.Contains("taking the time") || tail.Contains("for your time") ||
+                           tail.Contains("speaking with me") || tail.Contains("speaking with us") ||
+                           tail.Contains("meeting with me") || tail.Contains("meeting with us") ||
+                           tail.Contains("joining us today") || tail.Contains("talking with me") ||
+                           tail.Contains("talking with us");
+            if (!signOff) return false;
+            if (tail.Contains('?') || RequestCue.IsMatch(tail)) return false;
+
             string[] carriesOn =
             {
-                "let's", "let us", "can you", "could you", "would you",
-                "tell me", "tell us", "walk me", "walk us", "start", "begin",
-                "move on", "next", "now ", "first", "go ahead", "welcome",
-                "coding", "question", "introduce", "background",
+                "start", "begin", "move on", "next question", "next round",
+                "next one", "now ", "go ahead", "welcome", "introduce",
+                "background", "coding", "anything", "any final", "thoughts",
             };
-            return !carriesOn.Any(t.Contains);
+            return !carriesOn.Any(tail.Contains);
         }
 
         private static int PriorCandidateQuestionInvitations() =>
@@ -630,6 +683,13 @@ namespace InterviewCopilot
             if (IsInterviewEndStatement(t))
                 return QuestionType.InterviewClosing;
 
+            // Coding and task requests first. "I'm going to give you an exercise:
+            // write a function..." starts like an introduction, and "For this next
+            // exercise I want a function..." is long with no question mark; both
+            // were only acknowledged because the rules below ran first.
+            if (IsCodingRequest(t))
+                return QuestionType.Coding;
+
             bool startsWithInterviewerInfo =
                 t.StartsWith("my name is") || t.StartsWith("i am ") || t.StartsWith("i'm ") ||
                 t.StartsWith("we are ") || t.StartsWith("we're ") || t.StartsWith("this role") ||
@@ -653,7 +713,12 @@ namespace InterviewCopilot
             // team and the process; a request is addressed to the candidate.
             bool addressesCandidate = Regex.IsMatch(t,
                 @"\b(you|your|yourself|walk me|tell me|imagine|suppose|let's say|lets say|assume|design|debug|describe|explain|implement|build)\b");
-            if (!hasQuestionMark && !startsLikeQuestionOrCommand && !addressesCandidate &&
+            // And positive evidence that the interviewer is describing something
+            // (we, our, the team, the role), rather than treating any long
+            // unpunctuated sentence as context. When unsure, answer it.
+            bool explainsSomething = Regex.IsMatch(t,
+                @"\b(we|we're|we've|we'll|our|the team|this team|the company|the role|this role|the position|the process|the interview|the project|the product)\b");
+            if (!hasQuestionMark && !startsLikeQuestionOrCommand && !addressesCandidate && explainsSomething &&
                 Regex.Matches(t, @"[\p{L}\p{N}']+").Count >= 18)
                 return QuestionType.ContextStatement;
 
@@ -670,10 +735,16 @@ namespace InterviewCopilot
                 t.Contains("go on") || t.Contains("continue"))
                 return QuestionType.FollowUp;
 
-            // Coding requests must be detected before the generic yes/no check.
-            // "Can you write code?" is an instruction to produce code, not a yes/no question.
-            if (IsCodingRequest(t))
-                return QuestionType.Coding;
+            // Coding requests are detected at the top of this method, before the
+            // acknowledge-only rules and the generic yes/no check.
+
+            // Story requests that happen to open like a yes/no question. "Can you
+            // think of a specific project where you and a researcher disagreed?" was
+            // classed YesNo in a real session and got a short yes/no style answer
+            // where the interviewer wanted the story.
+            if (Regex.IsMatch(t,
+                    @"\b(can you think of|could you think of|can you recall|do you remember a|a specific (project|time|situation|example|case)|a time (when|where)|(project|situation|case) where)\b"))
+                return QuestionType.Behavioral;
 
             if (Regex.IsMatch(t, @"^(are you|do you|can you|will you|have you|is your|would you|did you|are u|r u)"))
                 return QuestionType.YesNo;
@@ -780,7 +851,11 @@ namespace InterviewCopilot
                    Regex.IsMatch(text,
                        @"\b(code|program)\s+(this|that|it|me|for me|a|an|the)\b") ||
                    Regex.IsMatch(text,
-                       @"\bimplement\s+(a|an|the)?\s*[a-z0-9+#. -]{2,60}$");
+                       @"\bimplement\s+(a|an|the)?\s*[a-z0-9+#. -]{2,60}$") ||
+                   // Tasks named rather than commanded: "for this next exercise I want
+                   // a function that...", "the next exercise is a SQL query returning..."
+                   Regex.IsMatch(text,
+                       @"\b(i want|i'd like|i would like|please|next exercise|next task|next problem|coding exercise|coding problem|exercise is|task is|problem is)\b.{0,80}\b(function|method|class|algorithm|query|sql|api|endpoint|program|script|code)\b");
         }
 
         // =====================================================================
@@ -956,6 +1031,7 @@ namespace InterviewCopilot
             sb.AppendLine("If asked to write, implement, or show code, output complete runnable code immediately. Never only describe the code, never refuse, and never claim you are not a programmer.");
             sb.AppendLine("When a coding request is vague, make one sensible interview-style assumption, use the requested or most recently discussed language, and provide a compact working example.");
             sb.AppendLine("Never invent employers, tools, dates, percentages, metrics, or achievements.");
+            sb.AppendLine("Never state immigration, visa, tax or legal facts, such as what STEM OPT, H-1B or an EAD allows, beyond what the candidate's own profile says. Confirm status only; do not explain the rules.");
             sb.AppendLine("Be specific and credible. Do not cut off a useful explanation, but never pad the answer with generic filler.");
             sb.AppendLine("Do not turn an answer into a tour of the resume. Use one relevant example, and name at most two tools unless the interviewer specifically asks for the stack.");
             sb.AppendLine("When the interviewer is explaining or wrapping up, react conversationally. Do not paraphrase their whole statement back to them.");

@@ -63,6 +63,44 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Closing turns, second pass (after an external review, 2026-09-17)
+
+An outside review ran exact sentences through the 1.0.20 classifier. Every one
+of its findings reproduced on the build, and all are fixed:
+
+- "We'll be in touch with next steps, but first can you explain your testing
+  approach?" returned a goodbye. Strong closing phrases now count only when no
+  question or task follows them.
+- "Does that answer your question so how would you test this service" (no
+  punctuation, as speech recognition often delivers) got a fixed wrap-up. The
+  last-sentence split needed punctuation. Now: find where the last invitation
+  phrase ENDS and check whether a question word or task follows it.
+- "Is there another angle on the role, the tech, or the team that you'd like me
+  to focus on?" was not recognised. It is, when it names the role, team or
+  company and asks what to focus on; "what other angle would you take to reduce
+  latency" still goes to the model.
+- A final turn that recaps earlier questions and then thanks the candidate was
+  not a sign-off, because the whole turn was scanned for "?" and "question".
+  Sign-offs are now judged from the LAST thank-you onward.
+- Coding tasks phrased as a task rather than a command ("For this next exercise
+  I want a function that...", "The next exercise is a SQL query returning...")
+  were only acknowledged. Coding detection now runs first, IsCodingRequest
+  recognises task phrasing, and the acknowledge-only rule needs positive
+  evidence of an explanation (we, our, the team, the role).
+- "Can you think of a specific project where..." was YesNo and got a yes/no
+  style answer. Story cues now win over the yes/no opener.
+- The system prompt now forbids stating immigration or legal facts (what STEM
+  OPT, H-1B or an EAD allows) beyond the candidate's own profile. A real session
+  claimed STEM OPT works "without needing an EAD", which is wrong.
+
+Verified against a real 17-turn session run statefully in order (locally only,
+never committed; the repository is public): turns 1-11 and 15 go to the model
+with sensible types, the first question invitation goes to the model, repeat
+invitations and the final thank-you get the short local replies. Tests: suite
+12 now has 40 cases, all passing.
+
+---
+
 ## 1.0.20: system audio that stays on the call, and closing turns
 
 Windows, 2026-09-17. Both halves apply to Mac: the engine change is in the

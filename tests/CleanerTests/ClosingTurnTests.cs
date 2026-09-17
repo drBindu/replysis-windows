@@ -113,6 +113,53 @@ internal static class ClosingTurnTests
               == PromptBuilder.QuestionType.ContextStatement,
             "a genuine explanation of the team is still only acknowledged");
 
+        // ── Second pass: confirmed on the 1.0.20 build before fixing ──────────
+        Check(PromptBuilder.IsCandidateQuestionInvitation(
+                "Is there another angle on the role, the tech, or the team that you'd like me to focus on?"),
+            "another angle on the role or team is an invitation");
+
+        string touchThenQuestion = "We'll be in touch with next steps, but first can you explain your testing approach?";
+        Check(!PromptBuilder.IsInterviewEndStatement(touchThenQuestion),
+            "'we'll be in touch, but first' is not the end");
+        Check(!PromptBuilder.TryGetClosingResponse(touchThenQuestion, out _),
+            "'we'll be in touch, but first' goes to the model");
+
+        string unpunctuated = "Does that answer your question so how would you test this service";
+        Check(!PromptBuilder.TryGetClosingResponse(unpunctuated, out _),
+            "unpunctuated question after 'does that answer' goes to the model");
+
+        string recapThenThanks = "One question about research versus production and one about how the team " +
+                                 "works, both good questions. Thank you for taking the time to speak with us today.";
+        Check(PromptBuilder.IsInterviewEndStatement(recapThenThanks),
+            "recap of earlier questions then a thank-you is still the end");
+
+        Check(PromptBuilder.IsInterviewEndStatement("We'll be in touch."),
+            "a plain 'we'll be in touch' is the end");
+        Check(PromptBuilder.IsInterviewEndStatement(
+                "Thank you for your time today, we'll share next steps by email."),
+            "thanks with next steps by email is the end");
+        Check(!PromptBuilder.IsInterviewEndStatement("Thanks for your time, any final thoughts"),
+            "thanks followed by 'any final thoughts' is answered");
+
+        string[] codingTasks =
+        {
+            "For this next exercise I want a function that returns the first non-repeating character in a string using Python",
+            "For the next task please create a REST API that supports pagination filtering and sorting for a list of products",
+            "The next exercise is a SQL query returning the top three customers by total order value in the last year",
+            "I'm going to give you a coding exercise now, write a function that reverses a linked list in place",
+        };
+        foreach (string task in codingTasks)
+            Check(PromptBuilder.DetectType(task) == PromptBuilder.QuestionType.Coding,
+                "coding task gets code, not an acknowledgement", task);
+
+        Check(PromptBuilder.DetectType(
+                "Can you think of a specific project where you and a researcher disagreed on the approach?")
+              == PromptBuilder.QuestionType.Behavioral,
+            "'can you think of a specific project' asks for a story, not yes or no");
+        Check(PromptBuilder.DetectType("Are you authorized to work in the US?")
+              == PromptBuilder.QuestionType.YesNo,
+            "a genuine yes/no question stays yes/no");
+
         PromptBuilder.ClearHistory();
         return failed;
     }
