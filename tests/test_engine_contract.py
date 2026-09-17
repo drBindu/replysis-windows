@@ -77,6 +77,25 @@ check("save_recording marks only after closing the file",
       _save is not None and _save.group(1).find("wf.close()") < _save.group(1).find("mark_recording_saved("),
       "marker follows close")
 
+# -- Microphone static ---------------------------------------------------------
+# Every DirectSound input at 16 kHz returned white noise at full scale on a real
+# machine. Chosen as "the loudest microphone", it drowned the interviewer too.
+check("static from a microphone is detected", "def _is_capture_noise" in SOURCE)
+check("DirectSound inputs are never offered as a switch",
+      "directsound" in SOURCE[SOURCE.index("def _real_input_devices"):SOURCE.index("def _find_a_microphone_that_hears")])
+check("static is never mixed into the audio",
+      "if _is_capture_noise(mic_data):" in SOURCE and "mic_data = SILENCE" in SOURCE)
+check("the microphone search can run more than once", "MIC_AUTOSWITCH_MAX_ATTEMPTS = 3" in SOURCE)
+import struct as _struct
+_ns = {"struct": _struct}
+exec(SOURCE[SOURCE.index("def _is_capture_noise"):SOURCE.index("def _signal_level")], _ns)
+_noise = _struct.pack("<1600h", *([32767, -32768] * 800))
+_voice = _struct.pack("<1600h", *[int(9000 * ((i % 40) - 20) / 20) for i in range(1600)])
+_loud = _struct.pack("<1600h", *([32767] * 30 + [1000] * 1570))
+check("white noise at full scale counts as static", _ns["_is_capture_noise"](_noise))
+check("a normal voice is not static", not _ns["_is_capture_noise"](_voice))
+check("a voice clipping briefly is not static", not _ns["_is_capture_noise"](_loud))
+
 check("--sysfifo exists", "--sysfifo" in SOURCE, "macOS has no other route to system audio")
 
 # ── Environment ──────────────────────────────────────────────────────────────

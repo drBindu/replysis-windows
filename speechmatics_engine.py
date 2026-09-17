@@ -118,6 +118,32 @@ def find_vbcable_device(p):
     return None
 
 
+def _is_capture_noise(data: bytes) -> bool:
+    """True when a microphone buffer is static rather than sound.
+
+    Measured on a real machine: every input opened through DirectSound at 16 kHz
+    mono returned the same thing, the laptop's own microphone array included -
+    RMS about 19,000, 15% of samples pinned at full scale, and a zero-crossing
+    rate of 0.5, which is white noise. The same devices opened through MME read
+    a quiet room at RMS 9 to 95. Picking a microphone by loudness chose that
+    static every time, and mixed with system audio it drowned the interviewer
+    too, so nothing was ever transcribed. A voice, even shouted, does not hold
+    more than a few percent of samples at the rail.
+    """
+    try:
+        n = len(data) // 2
+        if n == 0:
+            return False
+        samples = struct.unpack_from(f'<{n}h', data)
+        pinned = sum(1 for v in samples if v >= 32000 or v <= -32000)
+        return pinned / n > MIC_NOISE_PINNED_SHARE
+    except Exception:
+        return False
+
+
+MIC_NOISE_PINNED_SHARE = 0.05
+
+
 def _signal_level(data: bytes) -> int:
     """Return max absolute amplitude from a PCM S16LE buffer."""
     try:
@@ -943,7 +969,9 @@ SYS_READ_TIMEOUT_SECS  = 0.20   # system audio must never hold up the microphone
 # appear.
 _mic_ever_heard        = False  # has this device produced real signal, ever
 _mic_quiet_reads       = 0      # consecutive reads at effectively zero
-_mic_autoswitch_tried  = False  # only ever done once per session
+_mic_autoswitch_attempts = 0    # searches for a working microphone so far
+_mic_noise_noted       = False  # static from the current mic already reported
+MIC_AUTOSWITCH_MAX_ATTEMPTS = 3
 MIC_QUIET_READS_BEFORE_SWITCH = 40    # ~4s at 0.1s per read
 MIC_SIGNAL_THRESHOLD          = 400   # same figure the rest of the file uses
 
@@ -969,6 +997,14 @@ def _real_input_devices(audio, exclude_index=None):
         low = name.lower()
         if "[loopback]" in low or "sound mapper" in low or "primary sound capture" in low:
             continue
+        # DirectSound inputs opened at 16 kHz mono return static on this driver
+        # stack (see _is_capture_noise), so they are never offered as a switch.
+        try:
+            api = str(audio.get_host_api_info_by_index(info.get("hostApi", -1)).get("name", ""))
+        except Exception:
+            api = ""
+        if "directsound" in api.lower():
+            continue
         out.append((i, name))
     return out
 
@@ -991,11 +1027,17 @@ def _find_a_microphone_that_hears(audio, exclude_index, sample_secs=0.4):
             continue
         try:
             peak = 0
+            noisy = False
             deadline = time.time() + sample_secs
             while time.time() < deadline:
-                peak = max(peak, _signal_level(probe.read(CHUNK_FRAMES,
-                                                          exception_on_overflow=False)))
-            if peak > MIC_SIGNAL_THRESHOLD and (best is None or peak > best[2]):
+                chunk = probe.read(CHUNK_FRAMES, exception_on_overflow=False)
+                if _is_capture_noise(chunk):
+                    noisy = True
+                    break
+                peak = max(peak, _signal_level(chunk))
+            if noisy:
+                print(f">>> MIC probe [{index}] {name}: static, not a voice. Skipped.", flush=True)
+            elif peak > MIC_SIGNAL_THRESHOLD and (best is None or peak > best[2]):
                 best = (index, name, peak)
         except Exception:
             pass
@@ -1940,7 +1982,7 @@ class MixedStream:
         global _silent_chunk_count
         global _sys_hang_count, sys_stream
         global _default_silence_noted
-        global _mic_ever_heard, _mic_quiet_reads, _mic_autoswitch_tried
+        global _mic_ever_heard, _mic_quiet_reads, _mic_autoswitch_attempts, _mic_noise_noted
         global mic_stream, _mic_device_index, _mic_device_name
         global _mic_native_rate, _mic_native_channels, _mic_chunk_frames
 
@@ -2073,6 +2115,14 @@ class MixedStream:
                                     if (_mic_native_rate != SAMPLE_RATE or _mic_native_channels != 1)
                                     else mic_raw)
                         mic_amp = _signal_level(mic_data)
+                        if _is_capture_noise(mic_data):
+                            if not _mic_noise_noted:
+                                _mic_noise_noted = True
+                                print(">>> MIC is sending static, not sound. Ignoring it "
+                                      "and looking for a microphone that works.", flush=True)
+                            mic_data = SILENCE
+                            mic_amp = 0
+                            _mic_ever_heard = False
                     if mic_amp > 400:
                         print(f">>> MIC SIGNAL DETECTED: amp={mic_amp}", flush=True)
                         _mic_ever_heard = True
@@ -2084,10 +2134,14 @@ class MixedStream:
                     # has never once produced signal. The user is
                     # talking - that is what listening means here
                     # - so this is the device, not the room.
+                    # Tried up to three times, each after another four
+                    # quiet seconds: one probe can land in a pause between
+                    # sentences and miss the working microphone entirely.
                     if (not _mic_ever_heard
-                            and not _mic_autoswitch_tried
+                            and _mic_autoswitch_attempts < MIC_AUTOSWITCH_MAX_ATTEMPTS
                             and _mic_quiet_reads >= MIC_QUIET_READS_BEFORE_SWITCH):
-                        _mic_autoswitch_tried = True
+                        _mic_autoswitch_attempts += 1
+                        _mic_quiet_reads = 0
                         print(">>> MIC is silent; asking the other inputs "
                               "whether they can hear you.", flush=True)
                         found = _find_a_microphone_that_hears(p, _mic_device_index)
@@ -2105,6 +2159,7 @@ class MixedStream:
                                 _mic_chunk_frames    = CHUNK_FRAMES
                                 _mic_device_index    = new_index
                                 _mic_device_name     = new_name
+                                _mic_noise_noted     = False
                                 try: old.close()
                                 except Exception: pass
                                 # Named on stdout so the app can
@@ -2113,7 +2168,7 @@ class MixedStream:
                                       f"(peak {peak})", flush=True)
                             except Exception as se:
                                 print(f">>> MIC switch failed: {se}", flush=True)
-                        else:
+                        elif _mic_autoswitch_attempts >= MIC_AUTOSWITCH_MAX_ATTEMPTS:
                             # Every input is silent, so it is not
                             # the choice of device. Said plainly
                             # because only the user can fix it.

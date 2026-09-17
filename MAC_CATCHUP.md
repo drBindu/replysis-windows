@@ -63,6 +63,24 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Microphone search never picks static (2026-09-17, shared engine)
+
+- On the owner's laptop every input opened through DirectSound at 16 kHz mono
+  returned white noise at full scale (RMS about 19,000, 15% of samples pinned,
+  zero-crossing rate 0.5), the built-in mic array included. The same devices
+  through MME read a quiet room normally.
+- When the chosen mic was silent, _find_a_microphone_that_hears picked the
+  loudest input, which was always that static, and mixing it in drowned the
+  system audio too: nothing was transcribed, mic on or off in practice.
+- Now: _is_capture_noise() flags a buffer with more than 5% of samples at the
+  rail; DirectSound inputs are never offered as a switch; static from the open
+  mic is replaced with silence and triggers a new search; the search runs up to
+  3 times (one probe can land in a pause). Tests in test_engine_contract.py.
+- Mac: the Mac mic path does not use DirectSound, but take the engine for the
+  static guard.
+
+---
+
 ## "Java is", never "Java's"; off-resume terms connect to the real stack (2026-09-17, latest)
 
 - Owner: answers must open with the name written out, "Java is", never "Java's".
