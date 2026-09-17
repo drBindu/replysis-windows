@@ -1241,6 +1241,99 @@ namespace InterviewCopilot
                 RegexOptions.IgnoreCase);
 
         /// <summary>
+        /// The thing a definition question asks about: "What is a REST API?" gives
+        /// "REST API". Empty when there is nothing usable.
+        /// </summary>
+        internal static string DefinitionTerm(string question)
+        {
+            var m = Regex.Match(question ?? "",
+                @"(?:^|[?.!]\s*)(?:what is|what are|define)\s+(?:an?\s+|the\s+)?([^?.!]+)",
+                RegexOptions.IgnoreCase);
+            if (!m.Success) return "";
+            string term = Regex.Replace(m.Groups[1].Value.Trim(),
+                @"\s+(?:exactly|actually|again|then|really|about)$", "", RegexOptions.IgnoreCase);
+            return term.Length > 60 ? term[..60].Trim() : term;
+        }
+
+        private static readonly HashSet<string> TermFillerWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "a", "an", "the", "of", "in", "on", "for", "to", "and", "or", "with", "is", "are", "vs", "versus",
+        };
+
+        /// <summary>
+        /// True when every meaningful word of the term appears in the candidate's
+        /// facts, so the answer may say where it sits in their work. One- and
+        /// two-letter words ("Go", "C", "R") must match with a capital, or "go"
+        /// in ordinary resume prose would count as the Go language.
+        /// </summary>
+        internal static bool FactsMention(string resumeFacts, string term)
+        {
+            if (string.IsNullOrWhiteSpace(resumeFacts) || string.IsNullOrWhiteSpace(term)
+                || resumeFacts == "No resume provided.")
+                return false;
+
+            var words = Regex.Split(term, @"\s+")
+                .Select(w => w.Trim(',', ';', ':', '"', '\''))
+                .Where(w => w.Length > 0 && !TermFillerWords.Contains(w))
+                .ToList();
+            if (words.Count == 0 || words.Count > 3) return false;
+
+            foreach (string word in words)
+            {
+                string stem = word.Length > 3 && word.EndsWith("s", StringComparison.OrdinalIgnoreCase)
+                    ? word[..^1] : word;
+                bool shortWord = stem.Length <= 2;
+                string body = shortWord
+                    ? char.ToUpperInvariant(stem[0]) + Regex.Escape(stem[1..])
+                    : Regex.Escape(stem);
+                var options = shortWord ? RegexOptions.None : RegexOptions.IgnoreCase;
+                if (!Regex.IsMatch(resumeFacts, @"(?<![A-Za-z0-9])" + body + @"(?:e?s)?(?![A-Za-z0-9])", options))
+                    return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// The format line for "What is X?". Two versions, chosen by whether X is
+        /// in the candidate's facts, because only then may the answer say they use it.
+        /// Wording measured against the live model; change it by testing, not by feel.
+        /// </summary>
+        internal static string DefinitionReminder(string term, string resumeFacts)
+        {
+            string t = string.IsNullOrWhiteSpace(term) ? "it" : term;
+            const string shared =
+                "Never open with TERM is a NOUN or TERM lets you, and a leading A, An or The does not exempt it. " +
+                "No lecture signposts such as in practice, it works by, the key thing is, essentially. ";
+            const string tail =
+                "Use contractions. No project story, no employer list, no history lesson. ";
+
+            if (FactsMention(resumeFacts, term))
+                return "2 or 3 short spoken sentences, the way you would answer a colleague out loud, not the way a textbook explains it. " +
+                       $"{t} is in the verified facts, so start from your own side: the first sentence says where {t} sits in your work, " +
+                       "without inventing a project, employer or detail that is not in the facts. " +
+                       "Then one or two plain details a working engineer would mention about it. " +
+                       shared +
+                       "The example shows the shape only; never reuse its words: Kafka's what carries the events between our services, " +
+                       "so I'm in it most weeks. What matters is you can replay a topic when a consumer falls over. " +
+                       "No: Kafka lets you publish and subscribe to streams of records. " +
+                       tail +
+                       "The MORE TO SAY lines are what someone who has worked with it would add, a gotcha, a trade-off, or when you'd " +
+                       "pick something else, never spec facts, version features or tuning trivia.";
+
+            return "2 or 3 short spoken sentences, the way you would answer a colleague out loud, not the way a textbook explains it. " +
+                   $"{t} is NOT in the verified facts, so do not say you use it, have used it, reach for it, or work with it. " +
+                   $"Open with the practical point of {t} in plain words, the reason anyone bothers with it. " +
+                   "Then one or two plain details a working engineer would mention about it. " +
+                   shared +
+                   "The example shows the shape only; never reuse its words: The whole point of Rust is the compiler catching memory " +
+                   "bugs you'd normally only find in production. The price is fighting the borrow checker for a while. " +
+                   "No: Rust is a systems programming language focused on safety. " +
+                   tail +
+                   "The MORE TO SAY lines are what someone who has thought it through would add, a gotcha, a trade-off, or when you'd " +
+                   "pick something else, never spec facts, version features or tuning trivia.";
+        }
+
+        /// <summary>
         /// Returns true ONLY when the interviewer is asserting/implying a value that
         /// contradicts a locked fact — NOT when they are simply asking if you know something.
         /// E.g. locked=Java:
@@ -1288,7 +1381,7 @@ namespace InterviewCopilot
         }
 
         private static string BuildFormatReminder(
-            QuestionType qType, string question, bool isDrillDown)
+            QuestionType qType, string question, bool isDrillDown, string resumeFacts = "")
         {
             // Conflict push: interviewer is asserting a different value than what's locked.
             // ALWAYS MICRO — hold your ground in 1-2 sentences, no bullets, no elaboration.
@@ -1379,19 +1472,25 @@ namespace InterviewCopilot
                         // "Java is a statically-typed programming language that runs on
                         // the Java Virtual Machine, letting the same compiled code
                         // execute on any platform with a JVM."
-                        return "3 concise spoken sentences, the way you would answer a colleague out loud. " +
-                               "Do not open by classifying the term. An opening of the form TERM is a NOUN, " +
-                               "TERM is an NOUN or TERM is the NOUN is the single clearest sign an answer is " +
-                               "being read off a screen, and a leading A or An does not exempt it. Open with " +
-                               "what it does or what you use it for, so the main verb is an action rather " +
-                               "than is. " +
-                               "Yes: A hash map gets you a value back in roughly constant time by hashing the " +
-                               "key to a bucket. " +
-                               "Yes: Docker packages an app with everything it needs so it runs the same on " +
-                               "my laptop and in prod. " +
-                               "No: A hash map is a key-value data structure. " +
-                               "Use contractions the way you would speaking. One short clause of your own use " +
-                               "is good. No project story, no employer list, no history lesson.";
+                        //
+                        // 2026-09-17: that still read as a textbook. Session 418 asked
+                        // "What is Java?" and got "Java lets you write code that runs on
+                        // any platform with a JVM", with GC tuning and Java 17 records
+                        // under MORE TO SAY. Banning "is a" only moved the definition
+                        // into "lets you": 10 of 12 live answers opened that way.
+                        //
+                        // What works is starting from the candidate. But the model
+                        // cannot be trusted to check the resume itself: told to claim
+                        // use only for tools in the facts, it still said "Rust's the
+                        // language I use" and "Terraform is the tool I use" for a
+                        // candidate with neither. So the check happens here, in code,
+                        // and the model gets one of two instructions naming the term.
+                        // Measured: on-resume terms 6 of 6 open from the candidate's own
+                        // work; off-resume terms 0 of 9 claim use, where the single
+                        // instruction claimed use in 3 of 3. The examples use terms
+                        // other than the ones most asked, because a Java example was
+                        // copied word for word into a Spring Boot answer.
+                        return DefinitionReminder(DefinitionTerm(question), resumeFacts);
 
                     return "1-2 SHORT spoken paragraphs, normally 25-40 seconds. " +
                            "Start with the direct explanation in plain words, then add the most useful how, why, trade-off, or concrete detail. " +
@@ -1504,7 +1603,7 @@ namespace InterviewCopilot
             // Format reminder goes BEFORE the question so the model commits to length FIRST.
 
             string lockBlock      = BuildLockedConstraintBlock(currentQuestion);
-            string formatReminder = BuildFormatReminder(qType, currentQuestion, drillDown);
+            string formatReminder = BuildFormatReminder(qType, currentQuestion, drillDown, resumeFacts);
             string contextNote    = BuildContextNote();
 
             string historyHint = "";
@@ -1697,7 +1796,7 @@ namespace InterviewCopilot
                 sb.AppendLine(lockBlock);
 
             // ── 3. FORMAT RULE (before the question so model commits first) ───
-            string fmt = BuildFormatReminder(qType, rawQuestion, isDrill);
+            string fmt = BuildFormatReminder(qType, rawQuestion, isDrill, resumeFacts);
             sb.AppendLine($"FORMAT RULE (obey exactly): {fmt}");
             sb.AppendLine();
 

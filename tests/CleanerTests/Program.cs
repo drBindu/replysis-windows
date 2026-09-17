@@ -142,6 +142,9 @@ internal static class Program
         Console.WriteLine("\n14. Space typed in another app is not a toggle");
         _failed += SpaceHotkeyTests.Run();
 
+        Console.WriteLine("\n15. What is X? sounds like the candidate, never claims a tool they lack");
+        _failed += DefinitionVoiceTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

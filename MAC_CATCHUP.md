@@ -63,6 +63,28 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## "What is X?" answers start from the candidate, checked against the resume (2026-09-17)
+
+- Owner tested 1.0.20: "What is Java?" answered "Java lets you write code that runs
+  on any platform with a JVM", with GC tuning and Java 17 records under MORE TO SAY.
+  Read as a textbook. Banning "X is a" had only moved the definition into "X lets
+  you": 10 of 12 live answers opened that way.
+- PromptBuilder now picks the definition format line in code. DefinitionTerm()
+  pulls the term out of the question; FactsMention() checks every meaningful word
+  of it against the resume (short words like Go need a capital); DefinitionReminder()
+  returns one of two lines naming the term:
+  - in the resume: the first sentence says where it sits in your work;
+  - not in the resume, or no resume: never say you use it, open with why it matters.
+- Why in code: told to check the resume itself, the model still said "Rust's the
+  language I use" and "Terraform is the tool I use" for a candidate with neither.
+- Live model, real prompts: on-resume terms 6 of 6 open from the candidate's work,
+  off-resume terms 0 of 9 claim use. MORE TO SAY asks for a gotcha, trade-off or
+  alternative, never spec facts or version features.
+- Tests: suite 15, DefinitionVoiceTests. Mac: port the three methods and pass the
+  resume into your format reminder the same way.
+
+---
+
 ## Recording saved marker written only when it is true (2026-09-17)
 
 Shared engine fix, found by a second external review.
