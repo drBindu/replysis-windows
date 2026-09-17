@@ -423,6 +423,120 @@ namespace InterviewCopilot
         public static string GetSmallTalkResponse() =>
             "Doing really well, thanks! Excited to be here and learn more about the role.";
 
+        /// <summary>
+        /// True when the interviewer has handed the conversation to the candidate
+        /// for questions, or is checking whether an earlier candidate question was
+        /// answered. These are closing turns, not invitations to give another
+        /// resume answer.
+        /// </summary>
+        internal static bool IsCandidateQuestionInvitation(string question)
+        {
+            string t = Regex.Replace(question ?? "", @"\s+", " ").Trim().ToLowerInvariant();
+            if (t.Length == 0) return false;
+
+            string[] invitations =
+            {
+                "do you have any questions", "have any questions for me",
+                "have any questions for us", "any questions for me", "any questions for us",
+                "are there any questions", "is there any questions", "is there any question you have",
+                "is there any question do you have", "any question you have",
+                "do you still have questions", "do you have still questions", "still have any questions",
+                "any other questions", "anything you'd like to ask", "anything you would like to ask",
+                "anything you want to ask", "is there anything you want to ask",
+                "anything else you'd like to ask", "anything else you would like to ask",
+                "what questions do you have", "what else would you like to know",
+                "what else do you want to know", "what else do you want to ask",
+                // Not "what other angle" or "would you like me to focus on":
+                // those are ordinary technical questions ("What other angle
+                // would you take to reduce the latency?") and were being
+                // answered with a fixed sign-off.
+                "is that the level of detail", "did that answer your question",
+                "does that answer your question", "did that cover your question",
+                "does that cover your question", "do you want me to go deeper",
+                "would you like me to go deeper", "want me to go a bit deeper",
+                "want me to go deeper", "do you want more detail",
+            };
+
+            // Judge the last sentence only. "Does that answer your question
+            // about deploys? So how would you test this service?" ends on a
+            // real question, and matching anywhere in the turn answered it
+            // with a fixed sign-off instead of sending it to the model.
+            string last = Regex.Split(t, @"(?<=[.?!])\s+")
+                               .Select(s => s.Trim())
+                               .LastOrDefault(s => s.Length > 0) ?? t;
+            return invitations.Any(last.Contains);
+        }
+
+        /// <summary>
+        /// Detects a real sign-off. A final thank-you used to be treated as a new
+        /// interview question, which produced a long technical answer after the
+        /// interviewer had already closed the call.
+        /// </summary>
+        internal static bool IsInterviewEndStatement(string question)
+        {
+            string t = Regex.Replace(question ?? "", @"\s+", " ").Trim().ToLowerInvariant();
+            if (t.Length == 0) return false;
+
+            if (t.Contains("we'll be in touch") || t.Contains("we will be in touch") ||
+                t.Contains("we'll follow up") || t.Contains("we will follow up") ||
+                t.Contains("that concludes the interview") || t.Contains("this concludes the interview") ||
+                t.Contains("that wraps up the interview") || t.Contains("this wraps up the interview"))
+                return true;
+
+            bool thanked = t.Contains("thank you") || t.Contains("thanks");
+            bool signOff = t.Contains("taking the time") || t.Contains("for your time") ||
+                           t.Contains("speaking with me") || t.Contains("speaking with us") ||
+                           t.Contains("meeting with me") || t.Contains("meeting with us") ||
+                           t.Contains("joining us today") || t.Contains("talking with me") ||
+                           t.Contains("talking with us");
+            if (!(thanked && signOff)) return false;
+
+            // Thanking someone for their time is how interviews START as often as
+            // how they end. "Thank you for taking the time to speak with us
+            // today. Can you start by telling me about yourself?" was answered
+            // with a goodbye. A thank-you that carries on into a question or the
+            // next step is not a sign-off.
+            if (t.Contains('?')) return false;
+            string[] carriesOn =
+            {
+                "let's", "let us", "can you", "could you", "would you",
+                "tell me", "tell us", "walk me", "walk us", "start", "begin",
+                "move on", "next", "now ", "first", "go ahead", "welcome",
+                "coding", "question", "introduce", "background",
+            };
+            return !carriesOn.Any(t.Contains);
+        }
+
+        private static int PriorCandidateQuestionInvitations() =>
+            History.Count(turn => IsCandidateQuestionInvitation(turn.Q));
+
+        /// <summary>
+        /// Returns a guaranteed short, human closing response when another model
+        /// keeps asking whether the candidate has more questions. The first
+        /// invitation still goes to the answer model so it can ask one relevant
+        /// question; only repeats and the final sign-off are handled here.
+        /// </summary>
+        internal static bool TryGetClosingResponse(string question, out string response)
+        {
+            response = "";
+
+            if (IsCandidateQuestionInvitation(question))
+            {
+                int priorInvitations = PriorCandidateQuestionInvitations();
+                if (priorInvitations == 0) return false;
+
+                response = priorInvitations == 1
+                    ? "That answered what I wanted to know, thank you. I think that covers my questions."
+                    : "No, I'm all set. Thank you for walking me through it.";
+                return true;
+            }
+
+            if (!IsInterviewEndStatement(question)) return false;
+
+            response = "Thank you for your time. I enjoyed learning more about the role and the team.";
+            return true;
+        }
+
         public static string NormalizeInterviewerQuestion(string question)
         {
             string normalized = Regex.Replace(question ?? "", @"\s+", " ").Trim();
@@ -495,17 +609,26 @@ namespace InterviewCopilot
         // QUESTION TYPE
         // =====================================================================
 
-        private enum QuestionType
+        internal enum QuestionType
         {
             YesNo, Intro, Technical, Coding, Behavioral, Situational,
             Weakness, WhyRole, Salary, Availability, FollowUp,
-            Preference, Logistics, ContextStatement, MemoryRecall, General
+            Preference, Logistics, CandidateQuestions, InterviewClosing,
+            ContextStatement, MemoryRecall, General
         }
 
-        private static QuestionType DetectType(string q)
+        internal static QuestionType DetectType(string q)
         {
             string t = q.ToLower().Trim();
             bool hasQuestionMark = t.Contains('?');
+
+            // Closing turns have to win over generic yes/no and follow-up rules.
+            // "Do you have any questions?" otherwise becomes a yes/no answer, and
+            // "want me to go deeper?" otherwise asks for yet another long answer.
+            if (IsCandidateQuestionInvitation(t))
+                return QuestionType.CandidateQuestions;
+            if (IsInterviewEndStatement(t))
+                return QuestionType.InterviewClosing;
 
             bool startsWithInterviewerInfo =
                 t.StartsWith("my name is") || t.StartsWith("i am ") || t.StartsWith("i'm ") ||
@@ -515,6 +638,23 @@ namespace InterviewCopilot
                 t.StartsWith("i work for") || t.StartsWith("i currently") ||
                 t.StartsWith("just so you know") || t.StartsWith("fyi") || t.StartsWith("by the way");
             if (startsWithInterviewerInfo && !hasQuestionMark)
+                return QuestionType.ContextStatement;
+
+            // Interviewers often explain a process or answer the candidate's
+            // question in a long declarative turn. Treat that as conversation to
+            // acknowledge, not as a prompt to recite the same content back.
+            bool startsLikeQuestionOrCommand = Regex.IsMatch(t,
+                @"^(what|why|how|when|where|who|which|do|does|did|is|are|can|could|would|will|have|has|tell|describe|explain|define|compare|walk|give|share|write|create|build|implement|develop|generate|code|program|solve|show)\b");
+            // Spoken requests rarely open with the textbook question word, and
+            // recognition often drops the question mark: "So for this next one I
+            // want you to describe how you would design a URL shortener", "I'd
+            // like you to walk me through...", "Now imagine you are leading...".
+            // All of those were only acknowledged. An explanation talks about the
+            // team and the process; a request is addressed to the candidate.
+            bool addressesCandidate = Regex.IsMatch(t,
+                @"\b(you|your|yourself|walk me|tell me|imagine|suppose|let's say|lets say|assume|design|debug|describe|explain|implement|build)\b");
+            if (!hasQuestionMark && !startsLikeQuestionOrCommand && !addressesCandidate &&
+                Regex.Matches(t, @"[\p{L}\p{N}']+").Count >= 18)
                 return QuestionType.ContextStatement;
 
             if ((t.Contains("what") || t.Contains("tell me")) &&
@@ -809,14 +949,16 @@ namespace InterviewCopilot
             sb.AppendLine("The spoken answer itself carries no headings, bullets or numbered lists: it is");
             sb.AppendLine("read out loud, and a list read aloud sounds like a list. Bullets appear only");
             sb.AppendLine("under MORE TO SAY, described at the end of these instructions.");
-            sb.AppendLine("Give a complete answer without wasting time: simple questions get 2-3 natural sentences; normal questions get 2-3 short spoken paragraphs.");
-            sb.AppendLine("For open, behavioral, or technical questions, provide enough useful depth to speak for roughly 30-45 seconds.");
+            sb.AppendLine("Give a complete answer without wasting time: simple questions get 1-2 natural sentences; most answers fit in 2-5 sentences and 1-2 short spoken paragraphs.");
+            sb.AppendLine("For open, behavioral, or technical questions, aim for roughly 25-40 seconds unless the interviewer explicitly asks for more depth.");
             sb.AppendLine("For behavioral questions, tell a concise STAR story without naming the STAR sections.");
             sb.AppendLine("For technical questions, give the direct answer first, then explain how it works, why it matters, and one relevant tradeoff or example.");
             sb.AppendLine("If asked to write, implement, or show code, output complete runnable code immediately. Never only describe the code, never refuse, and never claim you are not a programmer.");
             sb.AppendLine("When a coding request is vague, make one sensible interview-style assumption, use the requested or most recently discussed language, and provide a compact working example.");
             sb.AppendLine("Never invent employers, tools, dates, percentages, metrics, or achievements.");
             sb.AppendLine("Be specific and credible. Do not cut off a useful explanation, but never pad the answer with generic filler.");
+            sb.AppendLine("Do not turn an answer into a tour of the resume. Use one relevant example, and name at most two tools unless the interviewer specifically asks for the stack.");
+            sb.AppendLine("When the interviewer is explaining or wrapping up, react conversationally. Do not paraphrase their whole statement back to them.");
             sb.AppendLine();
 
             if (hasResume)
@@ -963,7 +1105,7 @@ namespace InterviewCopilot
             sb.AppendLine();
             sb.AppendLine("  Then, on its own line, the word:");
             sb.AppendLine("    MORE TO SAY");
-            sb.AppendLine("  followed by 4 to 6 short lines, each opening with the character • and");
+            sb.AppendLine("  followed by 2 or 3 short lines, each opening with the character • and");
             sb.AppendLine("  one space, never a hyphen and never an asterisk, and each a different");
             sb.AppendLine("  thing that could be added if the interviewer wants");
             sb.AppendLine("  depth: a trade-off, an edge case, a decision and why it was made, what");
@@ -984,7 +1126,8 @@ namespace InterviewCopilot
             sb.AppendLine("  complete it: \"we handled about [your number] a day\".");
             sb.AppendLine();
             sb.AppendLine("  Skip MORE TO SAY entirely for greetings, small talk, yes/no logistics,");
-            sb.AppendLine("  and anything already answered in one sentence. There is nothing to add");
+            sb.AppendLine("  interviewer explanations, candidate questions, closing turns, and anything");
+            sb.AppendLine("  already answered in one sentence. There is nothing to add");
             sb.AppendLine("  to \"I am on STEM OPT\", and offering some makes it look padded.");
             sb.AppendLine();
             sb.AppendLine("  The bullets are the one place bullets are allowed. The spoken answer");
@@ -1126,9 +1269,9 @@ namespace InterviewCopilot
                            "Otherwise express flexibility and ask to consider the role scope and total package. Never invent a salary number.";
 
                 case QuestionType.Intro:
-                    return "3-4 SHORT scannable paragraphs separated by blank lines. NO bullet symbols. " +
-                           "P1: Who you are now + current role. P2: One specific win WITH a metric (only if it's in your resume) + tools used. " +
-                           "P3: Previous role briefly. P4: Why this company (something specific). Mix sentence length. Use 'yeah', 'so', 'honestly'.";
+                    return "2-3 SHORT spoken paragraphs, about 30-40 seconds total. " +
+                           "Start with who you are now, give one relevant resume-backed example, then one brief line connecting the earlier background. " +
+                           "Only explain why this company if the interviewer asked. Do not list the whole resume or force filler words like 'yeah', 'so', or 'honestly'.";
 
                 case QuestionType.Technical:
                     if (IsSimpleDefinitionQuestion(question))
@@ -1174,11 +1317,10 @@ namespace InterviewCopilot
                                "Use contractions the way you would speaking. One short clause of your own use " +
                                "is good. No project story, no employer list, no history lesson.";
 
-                    return "3-4 SHORT paragraphs separated by blank lines. NO bullet symbols. " +
-                           "Give a COMPLETE, substantive answer — enough depth to actually speak for 30-45 seconds. " +
-                           "Start with the direct explanation in plain words, then go a level deeper: the how and the why, a trade-off or a concrete detail that shows real understanding. " +
-                           "Use a real, resume-backed work example only when the interviewer asks about your experience or it genuinely clarifies the answer. " +
-                           "Never invent a project, tool, result, or personal story. Don't stop after one thin sentence — flesh it out like a strong candidate who knows the topic.";
+                    return "1-2 SHORT spoken paragraphs, normally 25-40 seconds. " +
+                           "Start with the direct explanation in plain words, then add the most useful how, why, trade-off, or concrete detail. " +
+                           "Use one resume-backed example only when the interviewer asks about your experience or it genuinely clarifies the answer. " +
+                           "Never inventory the resume or stack: name at most two tools unless they specifically ask for tooling. Never invent a project, result, or personal story.";
 
                 case QuestionType.Coding:
                     return "CODING TASK. Output complete runnable code, not an explanation-only response. " +
@@ -1188,9 +1330,9 @@ namespace InterviewCopilot
                            "Never refuse, never ask the interviewer to repeat a vague request, and never say you are not a programmer or expert.";
 
                 case QuestionType.Behavioral:
-                    return "3-5 SHORT paragraphs separated by blank lines. NO bullet symbols. NOT textbook STAR. " +
-                           "P1: Scene casually. P2: Concrete problem. P3: What YOU personally did. " +
-                           "P4: How it turned out (use a real number ONLY if your resume has one, otherwise describe it qualitatively). NEVER invent stats.";
+                    return "3 SHORT spoken paragraphs, about 40-55 seconds. NOT textbook STAR. " +
+                           "Set the scene briefly, spend most of the answer on what YOU did, then give the outcome. " +
+                           "Use a real number only if it appears in the verified facts. Never invent stats.";
 
                 case QuestionType.Weakness:
                     return "2-3 SHORT paragraphs. Real weakness, no humble-brags. " +
@@ -1204,7 +1346,21 @@ namespace InterviewCopilot
                     return "2-3 SHORT paragraphs. P1: A real past situation. P2: How it applies. Concrete specifics.";
 
                 case QuestionType.ContextStatement:
-                    return "1-2 SHORT conversational sentences acknowledging what the interviewer shared. Do NOT launch into your own introduction.";
+                    return "1-2 SHORT conversational sentences acknowledging what the interviewer shared. " +
+                           "Do not repeat their explanation point by point, answer a question they did not ask, or launch into your own background.";
+
+                case QuestionType.CandidateQuestions:
+                    if (PriorCandidateQuestionInvitations() > 0)
+                        return "The candidate already asked a question and the interviewer answered it. " +
+                               "Close naturally in 1-2 sentences: thank them and say that covers your questions. " +
+                               "Do not ask another question and do not restart a technical discussion.";
+                    return "Ask ONE concise, thoughtful question about the role, team, expectations, or current priorities. " +
+                           "It should sound like a real candidate in conversation, not a multi-part consulting questionnaire. " +
+                           "Do not answer your own question, list tools, or add a second question.";
+
+                case QuestionType.InterviewClosing:
+                    return "The interview is ending. Reply with 1-2 warm, natural sentences thanking them for their time. " +
+                           "Do not recap your background, answer earlier questions, ask anything new, or add MORE TO SAY.";
 
                 case QuestionType.MemoryRecall:
                     return "1-2 SHORT sentences ONLY. Answer exactly what was asked. DO NOT add your own background. Stop there.";
@@ -1215,9 +1371,9 @@ namespace InterviewCopilot
                 default:
                     return "This is a general question, use your judgment. Read what the interviewer is ACTUALLY " +
                            "asking and answer it directly, the way a sharp human would. Match length to the question: " +
-                           "a quick or factual one gets 1-2 sentences; a deep or open one gets 3-4 short paragraphs with real substance. " +
-                           "When it's an open question, give a COMPLETE answer with enough depth to speak for 30-45 seconds — don't cut it short. " +
-                           "Stay specific and human, NO bullet symbols, don't pad with filler.";
+                           "a quick or factual one gets 1-2 sentences; a deep or open one gets 1-2 short paragraphs with real substance. " +
+                           "Most answers should take 15-35 seconds aloud. Use one relevant example rather than listing every related tool or role. " +
+                           "Stay specific and human, don't pad with filler.";
             }
         }
 
@@ -1296,6 +1452,13 @@ namespace InterviewCopilot
                     "    is heard as evasion by the one person who knows what was said.\n\n";
             }
 
+            bool includeMoreToSay = qType is QuestionType.Intro or QuestionType.Technical or
+                QuestionType.Behavioral or QuestionType.Weakness or QuestionType.WhyRole or
+                QuestionType.Situational or QuestionType.General;
+            string depthInstruction = includeMoreToSay
+                ? "Then add a blank line, the words MORE TO SAY on their own line, and 2 or 3 short lines of what you could add if pushed, each beginning with the bullet character and a space. That section is the only place bullets belong.\n"
+                : "Do not add a MORE TO SAY section for this conversational or short-answer turn.\n";
+
             string userMsg =
                 lockBlock +
                 // Stated here as well as in the system prompt. This sits directly
@@ -1303,11 +1466,7 @@ namespace InterviewCopilot
                 // looking, and the per-type reminders it follows most closely
                 // said nothing about the second part.
                 "FORMAT (read BEFORE answering): " + formatReminder + "\n" +
-                "Then, unless this was a greeting, small talk, or a one-sentence " +
-                "yes/no, add a blank line, the words MORE TO SAY on their own " +
-                "line, and 4 to 6 lines of what you could add if pushed, each " +
-                "beginning with the bullet character and a space. " +
-                "That section is the only place bullets belong.\n" +
+                depthInstruction +
                 "Nothing in either part may be invented: no employer, percentage, " +
                 "metric, team size, salary or project name that is not in the " +
                 "verified facts. Where a figure belongs and none is known, write " +

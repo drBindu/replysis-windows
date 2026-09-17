@@ -133,9 +133,14 @@ internal static class Program
         Console.WriteLine("\n11. Greetings and small talk, and questions wearing one");
         _failed += SmallTalkTests.Run();
 
+        Console.WriteLine("\n12. Candidate questions and interview closing turns");
+        _failed += ClosingTurnTests.Run();
+
+        Console.WriteLine("\n13. Windows update release tags");
+        _failed += UpdateTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;
     }
 }
-

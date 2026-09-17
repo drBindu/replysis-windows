@@ -105,6 +105,36 @@
                      that changes nothing is not a setting. ModelIndex stays in the config so
                      older saved files still load. -->
 
+                <!-- This is deliberately the first thing in Settings. The same
+                     advice used to live below three privacy cards and in a
+                     four-second toolbar notice, so users on the way into a real
+                     interview could truthfully say they never saw it. -->
+                <Border x:Name="RealInterviewTipBorder"
+                        Background="#241B09" BorderBrush="#7A5A18" BorderThickness="1"
+                        CornerRadius="10" Padding="14,12" Margin="0,0,0,20">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="RealInterviewTipIcon" Grid.Column="0"
+                                   Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="17" Foreground="#F6C85F"
+                                   Margin="0,1,12,0" VerticalAlignment="Top"/>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock x:Name="RealInterviewTipTitle"
+                                       Text="Real interview: turn your microphone off"
+                                       Foreground="#FFF4CC" FontSize="13"
+                                       FontWeight="Bold" FontFamily="Segoe UI"/>
+                            <TextBlock x:Name="RealInterviewTipText"
+                                       Text="Before Zoom, Teams or Meet, turn off Use my microphone under Listening. The app will still hear the interviewer through your computer sound, without mistaking your spoken answer for a new question."
+                                       Foreground="#D9C58F" FontSize="11"
+                                       FontWeight="SemiBold" FontFamily="Segoe UI"
+                                       TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
                 <TextBlock Text="PRIVACY" Style="{StaticResource SectionLabel}"/>
 
                 <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,8">
@@ -211,7 +241,9 @@
                         </StackPanel>
                         <CheckBox Grid.Column="1" x:Name="MicCaptureCheckBox"
                                   Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  Margin="10,0,0,0"/>
+                                  Margin="10,0,0,0"
+                                  Checked="MicCaptureCheckBox_StateChanged"
+                                  Unchecked="MicCaptureCheckBox_StateChanged"/>
                     </Grid>
                 </Border>
 

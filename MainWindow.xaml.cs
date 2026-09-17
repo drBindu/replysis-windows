@@ -3427,6 +3427,15 @@ namespace InterviewCopilot
             // Fast-path: local responses that need no network call
             if (PromptBuilder.IsGreeting(question)) { yield return PromptBuilder.GetGreetingResponse(); yield break; }
             if (PromptBuilder.IsSmallTalk(question)) { yield return PromptBuilder.GetSmallTalkResponse(); yield break; }
+            if (PromptBuilder.TryGetClosingResponse(question, out string closingResponse))
+            {
+                // Once the candidate has already asked a question, another
+                // "anything else?" should end the loop rather than spend a
+                // credit inventing a new multi-part question. A final thank-you
+                // gets the same guaranteed conversational treatment.
+                yield return closingResponse;
+                yield break;
+            }
 
             // Some questions cannot be answered from the words in them. An
             // interviewer who says "have a look at this and walk me through it"

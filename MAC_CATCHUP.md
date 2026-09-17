@@ -63,6 +63,88 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## 1.0.20: system audio that stays on the call, and closing turns
+
+Windows, 2026-09-17. Both halves apply to Mac: the engine change is in the
+shared speechmatics_engine.py, and the prompt change is in PromptBuilder.
+
+### System audio went deaf in a real Google Meet
+
+Owner's own call, microphone off so only computer sound was heard. The log:
+
+    19:37:56  SYSTEM AUDIO (WASAPI loopback): Speakers (2- Realtek(R) Audio)
+    19:37:58  FINAL received          <- the one question that worked
+    19:38:23  HOTSWAP CABLE In 16ch (VB-Audio Virtual Cable)
+    ...then CABLE Input, NVIDIA Broadcast, Sonar Gaming, all silent
+
+Meet played into the Realtek speakers the whole time. After ~3.5s of quiet the
+engine assumed it had the wrong device and rotated to virtual cables nothing
+plays into. Result: one question in Auto, then nothing; nothing at all in
+Manual. One bug, both symptoms.
+
+Pinning to the Windows default is not the fix either: on this machine the
+default output IS a VB-Cable. So the rule is now "follow the sound":
+
+- Quiet is never treated as a wrong device.
+- After the silence threshold, `_follow_the_audio()` probes a few other
+  loopbacks (4 per sweep, 200ms each, cursor covers the rest over time) and
+  moves ONLY to one that answers and carries real signal.
+- If nothing else has sound either, it stays and says so once.
+- The old blind rotation is kept only for devices that hang.
+
+Proven: two runs with 30s of silence showed 0 hotswaps where the old engine
+made 4, and a spoken passage transcribed cleanly. NOT yet proven: the case
+where sound plays on a different device than the one selected, because the
+test voice played through the same device. Watch for ">>> SYS AUDIO found sound
+on" in a real call before relying on it.
+
+### Closing turns, and three rules that answered real questions locally
+
+A second model added handling so "any other questions?" loops end and a final
+thank-you gets a short goodbye. Good idea, but three of its rules answered
+ordinary interview questions with a fixed line and no model call. Each was
+confirmed against the shipping code before fixing:
+
+- "Thank you for taking the time to speak with us today. Can you start by
+  telling me about yourself?" was answered with a goodbye. Almost every
+  interview opens that way. A thank-you now counts as a sign-off only when it
+  has no question mark and does not carry on ("let's", "can you", "start",
+  "next", "background"...).
+- "What other angle would you take to reduce the latency here?" was answered
+  "That answered what I wanted to know." Ambiguous phrases were removed, and
+  only the LAST sentence of a turn is checked, so "Does that answer your
+  question? So how would you test this?" goes to the model.
+- A rule treated any 18+ word turn without a question mark as an explanation
+  to acknowledge. "So for this next one I want you to describe how you would
+  design a URL shortener" was acknowledged, not answered. It now also requires
+  the turn not to address the candidate (you, your, walk me, imagine, design...).
+
+Tests: suite 12 has 25 cases, including every sentence above. QuestionType and
+DetectType are now internal so the rule can be tested directly.
+
+### Also in 1.0.20
+
+- Settings "check for updates" was broken for everyone: releases are tagged
+  v1.0.19 but the parser only accepted windows-v1.0.x. Both forms now parse
+  (suite 13).
+- Answers are shorter: most 2-5 sentences, 25-40s aloud; MORE TO SAY is 2-3
+  points, not 4-6; at most two tools named unless asked.
+- A live tip card at the top of Settings: amber "turn your microphone off"
+  when the mic is on, green "ready for a real interview" when it is off.
+- Compact overlay: the interviewer transcript no longer clips at three lines.
+- Version 1.0.20.0 in the csproj and the Store manifest.
+- The engine log said "while Speechmatics connects" even on Deepgram. Fixed.
+
+### Still open, not fixed here
+
+The Space hotkey is system wide and only ignores typing inside Replysis's own
+text boxes. Typing anywhere else (a chat window, notes) toggles listening. The
+owner's log showed MUTED / UNMUTED every one to two seconds while typing
+elsewhere. Needs a fix before relying on Manual during an interview where the
+candidate types.
+
+---
+
 ## Real questions were answered with "Doing really well, thanks!" (fixed after 1.0.19)
 
 Reported by the owner 2026-09-16, fixed on Windows, NOT released yet. The Mac

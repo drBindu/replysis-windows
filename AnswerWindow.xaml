@@ -191,8 +191,6 @@
 
                 <Grid x:Name="TranscriptRow"
                       Margin="16,10,16,10"
-                      MaxHeight="76"
-                      ClipToBounds="True"
                       Visibility="Collapsed">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -213,7 +211,9 @@
                                    FontFamily="Segoe UI"/>
                     </Border>
 
-                    <!-- Transcript text: 13pt, capped at 3 lines via grid MaxHeight -->
+                    <!-- Let the compact window's SizeToContent height follow the
+                         interviewer transcript. The former three-line cap clipped
+                         long questions while the normal window kept showing them. -->
                     <TextBlock Grid.Column="1"
                                x:Name="QuestionTextBlock"
                                Text="Listening..."

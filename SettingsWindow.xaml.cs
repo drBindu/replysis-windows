@@ -81,6 +81,7 @@ namespace InterviewCopilot
             // setting in effect. Auto no longer touches audio, so the choice is
             // always the user's and always live.
             MicCaptureCheckBox.IsChecked = cfg.MicCaptureEnabled;
+            UpdateMicSafetyTip();
             CloudSyncCheckBox.IsChecked = cfg.CloudSyncEnabled;
             StealthCheckBox.IsChecked   = cfg.StealthMode;
             WatchScreenCheckBox.IsChecked = cfg.WatchScreenEnabled;
@@ -361,20 +362,23 @@ namespace InterviewCopilot
         }
 
         /// <summary>
-        /// Releases for this app are tagged <c>windows-v1.0.11.0</c>. The prefix
-        /// keeps Windows releases separate from the macOS ones in the same
-        /// account, so a tag without it is not a Windows build and must not be
-        /// compared against the installed version.
+        /// Current releases are tagged <c>v1.0.19</c>. Older releases used the
+        /// <c>windows-v1.0.11.0</c> form, so both shapes remain valid. Any other
+        /// tag is ignored rather than compared against the installed version.
         /// </summary>
         internal static string? ParseWindowsReleaseTag(string? tag)
         {
             if (string.IsNullOrWhiteSpace(tag)) return null;
 
             string value = tag.Trim();
-            const string prefix = "windows-v";
-            if (!value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return null;
+            const string legacyPrefix = "windows-v";
+            if (value.StartsWith(legacyPrefix, StringComparison.OrdinalIgnoreCase))
+                value = value.Substring(legacyPrefix.Length);
+            else if (value.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                value = value.Substring(1);
+            else
+                return null;
 
-            value = value.Substring(prefix.Length);
             return Version.TryParse(value, out Version? parsed) ? parsed.ToString() : null;
         }
 
@@ -443,6 +447,61 @@ namespace InterviewCopilot
         }
 
         private void CancelBtn_Click(object sender, RoutedEventArgs e) => this.Close();
+
+        private void MicCaptureCheckBox_StateChanged(object sender, RoutedEventArgs e) =>
+            UpdateMicSafetyTip();
+
+        /// <summary>
+        /// Keeps the first card in Settings honest about the current state. A
+        /// generic warning is easy to skim past; a green confirmation when the
+        /// microphone is already off, or an amber instruction when it is on,
+        /// tells the user what will actually happen in their next call.
+        /// </summary>
+        private void UpdateMicSafetyTip()
+        {
+            if (RealInterviewTipBorder == null || RealInterviewTipTitle == null ||
+                RealInterviewTipText == null || RealInterviewTipIcon == null)
+                return;
+
+            bool microphoneOn = MicCaptureCheckBox?.IsChecked == true;
+
+            RealInterviewTipBorder.Background =
+                new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                        microphoneOn ? "#241B09" : "#10291F"));
+            RealInterviewTipBorder.BorderBrush =
+                new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                        microphoneOn ? "#7A5A18" : "#266B50"));
+            RealInterviewTipIcon.Foreground =
+                new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                        microphoneOn ? "#F6C85F" : "#61D39B"));
+            RealInterviewTipTitle.Foreground =
+                new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                        microphoneOn ? "#FFF4CC" : "#D7FFEC"));
+            RealInterviewTipText.Foreground =
+                new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                        microphoneOn ? "#D9C58F" : "#9ED8BD"));
+
+            if (microphoneOn)
+            {
+                RealInterviewTipTitle.Text = "Real interview: turn your microphone off";
+                RealInterviewTipText.Text =
+                    "Before Zoom, Teams or Meet, turn off Use my microphone under Listening. " +
+                    "The app will still hear the interviewer through your computer sound, " +
+                    "without mistaking your spoken answer for a new question.";
+            }
+            else
+            {
+                RealInterviewTipTitle.Text = "Ready for a real interview";
+                RealInterviewTipText.Text =
+                    "Use my microphone is off. Replysis will hear the interviewer through " +
+                    "your computer sound and will not listen to your own spoken answers.";
+            }
+        }
 
         /// <summary>
         /// Looks up the latest published Windows release and returns its version if

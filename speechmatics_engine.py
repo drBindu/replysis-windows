@@ -255,7 +255,7 @@ def find_wasapi_loopback_device(p):
     Populates _loopback_candidates (all devices) for hot-swap.
     Returns (device_index, native_rate, native_channels) or None.
     """
-    global _loopback_candidates, _active_loopback_index
+    global _loopback_candidates, _active_loopback_index, _default_loopback_index
 
     if not _WPATCH:
         print(">>> PyAudioWPatch not installed -- WASAPI loopback unavailable.", flush=True)
@@ -341,7 +341,8 @@ def find_wasapi_loopback_device(p):
                     print(f">>> Default output loopback [{dev['index']}] did not answer; "
                           f"looking for another.", flush=True)
                     break
-                _active_loopback_index = i
+                _active_loopback_index  = i
+                _default_loopback_index = i
                 print(f">>> WASAPI loopback selected (default output): "
                       f"[{dev['index']}] {dev['name'][:45]}", flush=True)
                 return (dev['index'], dev['rate'], dev['channels'])
@@ -392,6 +393,66 @@ def find_wasapi_loopback_device(p):
         return None
 
 
+def _follow_the_audio(reason=""):
+    """Move to a loopback that actually has sound on it, if one does.
+
+    Returns True when a different device was opened. False means nothing else
+    is making noise either, which is the normal case in a quiet room and the
+    reason to stay exactly where we are.
+
+    Only devices that ANSWER and carry signal qualify. A virtual cable that
+    accepts a stream and never produces a buffer measures zero the same as a
+    silent speaker, and _probe_device separates those two.
+    """
+    global sys_stream, _sys_native_rate, _sys_native_channels, _sys_chunk_frames
+    global _active_loopback_index, _sys_use_loopback, _probe_cursor
+
+    n = len(_loopback_candidates)
+    if n <= 1:
+        return False
+
+    best_pos, best_level = None, PROBE_SIGNAL_THRESHOLD
+    for _ in range(min(PROBE_BATCH, n)):
+        _probe_cursor = (_probe_cursor + 1) % n
+        if _probe_cursor == _active_loopback_index:
+            continue
+        cand = _loopback_candidates[_probe_cursor]
+        if "microphone" in cand["name"].lower():
+            continue
+        responded, level = _probe_device(p, cand, timeout_sec=PROBE_TIMEOUT)
+        if responded and level > best_level:
+            best_level, best_pos = level, _probe_cursor
+
+    if best_pos is None:
+        return False
+
+    dev      = _loopback_candidates[best_pos]
+    lb_chunk = max(CHUNK_FRAMES, int(CHUNK_FRAMES * dev["rate"] / SAMPLE_RATE))
+    print(f">>> SYS AUDIO found sound on [{dev['index']}] {dev['name'][:45]} "
+          f"(amp={best_level}){reason}; following it.", flush=True)
+    try:
+        # Same deliberate non-close as the rotator below: a hung read leaves a
+        # daemon thread inside the native call, and closing under it is an
+        # access violation rather than a Python exception.
+        sys_stream = p.open(
+            format=pyaudio.paInt16,
+            channels=dev["channels"],
+            rate=dev["rate"],
+            input=True,
+            input_device_index=dev["index"],
+            frames_per_buffer=lb_chunk,
+        )
+        _active_loopback_index = best_pos
+        _sys_native_rate       = dev["rate"]
+        _sys_native_channels   = dev["channels"]
+        _sys_chunk_frames      = lb_chunk
+        _sys_use_loopback      = True
+        return True
+    except Exception as e:
+        print(f">>> Could not open [{dev['index']}]: {e}", flush=True)
+        return False
+
+
 def _try_next_loopback():
     """
     Round-robin to the next loopback candidate when the current one is silent.
@@ -401,7 +462,7 @@ def _try_next_loopback():
     "moved on" and "nothing left to move to".
     """
     global sys_stream, _sys_native_rate, _sys_native_channels, _sys_chunk_frames
-    global _active_loopback_index, _sys_use_loopback
+    global _active_loopback_index, _sys_use_loopback, _default_loopback_index
 
     if len(_loopback_candidates) <= 1:
         return False
@@ -410,10 +471,19 @@ def _try_next_loopback():
     # devices, never system output, so hot-swapping onto one would silently turn
     # "system audio" into a second mic feed.
     n = len(_loopback_candidates)
-    for _ in range(n):
-        _active_loopback_index = (_active_loopback_index + 1) % n
-        if 'microphone' not in _loopback_candidates[_active_loopback_index]['name'].lower():
-            break
+
+    # Prefer returning to the default output over advancing to the next stranger.
+    # This machine has fourteen endpoints: three VB-Cable, four SteelSeries Sonar,
+    # NVIDIA Broadcast, a TV. A blind round robin that left the real speakers took
+    # a long time to come back, and in a live meeting it never did.
+    if (_default_loopback_index >= 0
+            and _active_loopback_index != _default_loopback_index):
+        _active_loopback_index = _default_loopback_index
+    else:
+        for _ in range(n):
+            _active_loopback_index = (_active_loopback_index + 1) % n
+            if 'microphone' not in _loopback_candidates[_active_loopback_index]['name'].lower():
+                break
 
     dev      = _loopback_candidates[_active_loopback_index]
     lb_chunk = max(CHUNK_FRAMES, int(CHUNK_FRAMES * dev['rate'] / SAMPLE_RATE))
@@ -796,6 +866,11 @@ _sys_chunk_frames    = CHUNK_FRAMES
 _sys_use_loopback    = False
 _loopback_candidates   = []
 _active_loopback_index = 0
+# Which candidate is the machine's default output, or -1 when unknown. The
+# default output IS system audio: it is where the interviewer's voice plays.
+# Silence on it means nobody is talking, so it is the one device the silence
+# rotation must never walk away from.
+_default_loopback_index = -1
 _hang_swaps = 0   # loopbacks abandoned this session for hanging
 _mic_device_name       = ""   # set once the mic device is resolved below
 _mic_device_index      = None # which device index that name refers to
@@ -803,6 +878,16 @@ _silent_chunk_count    = 0
 SILENCE_HOTSWAP_LIMIT  = 35
 LIVE_THRESHOLD         = 400
 _last_pause_state      = True   # engine starts muted; log the first observed transition too
+_default_silence_noted = False  # say "staying put" once, not every 3.5s
+_probe_cursor          = 0      # where the next signal sweep resumes
+# How many devices one sweep may open. Each costs PROBE_TIMEOUT, and this runs
+# on the capture thread, so a full fourteen-device sweep would stall audio for
+# seconds. Four keeps a sweep under a second and the cursor covers the rest.
+PROBE_BATCH            = 4
+PROBE_TIMEOUT          = 0.2
+# Amplitude that counts as somebody actually talking, matching the startup
+# selection's own threshold rather than inventing a second number.
+PROBE_SIGNAL_THRESHOLD = 50
 _sys_hang_count        = 0      # consecutive system-audio read hangs/errors (both mode)
 SYS_HANG_DISABLE_LIMIT = 1      # a stuck loopback must never delay microphone transcription
 SYS_READ_TIMEOUT_SECS  = 0.20   # system audio must never hold up the microphone
@@ -1831,6 +1916,7 @@ class MixedStream:
         global _last_pause_state
         global _silent_chunk_count
         global _sys_hang_count, sys_stream
+        global _default_silence_noted
         global _mic_ever_heard, _mic_quiet_reads, _mic_autoswitch_tried
         global mic_stream, _mic_device_index, _mic_device_name
         global _mic_native_rate, _mic_native_channels, _mic_chunk_frames
@@ -1936,8 +2022,20 @@ class MixedStream:
                         print(f">>> SYS AUDIO silent {_silent_chunk_count} chunks on [{dev_name}], amp={amp}", flush=True)
                     if _silent_chunk_count >= SILENCE_HOTSWAP_LIMIT:
                         _silent_chunk_count = 0
-                        _try_next_loopback()
-                        data = SILENCE
+                        # Quiet here is not proof of the wrong device: it is what
+                        # a meeting sounds like between sentences. Only move if
+                        # some other device actually has sound on it. Blind
+                        # rotation cost a real Google Meet, and pinning to the
+                        # Windows default would have pinned this machine to a
+                        # virtual cable, since that is what its default is.
+                        if _follow_the_audio():
+                            _default_silence_noted = False
+                            data = SILENCE
+                        elif not _default_silence_noted:
+                            _default_silence_noted = True
+                            print(">>> SYS AUDIO quiet everywhere. Staying on this "
+                                  "device: nothing else has sound on it either.",
+                                  flush=True)
             else:
                 data = SILENCE
         else:
@@ -2118,7 +2216,7 @@ class BufferedMixedStream:
                     if self._was_paused:
                         self._chunks.clear()
                         print(
-                            ">>> PREBUFFER: preserving early speech while Speechmatics connects",
+                            ">>> PREBUFFER: preserving early speech while speech recognition connects",
                             flush=True,
                         )
                     if len(self._chunks) >= self.MAX_BUFFERED_CHUNKS:

@@ -492,7 +492,7 @@ namespace InterviewCopilot
             // Photographs and gradients are the case it cannot help, and there
             // it can even come out larger. So both are measured and the smaller
             // one is sent, which also means a failure here costs nothing.
-            byte[] indexed = TryEncodeIndexedPng(bmp);
+            byte[]? indexed = TryEncodeIndexedPng(bmp);
             byte[] best = full;
             if (indexed != null && indexed.Length > 0 && indexed.Length < full.Length)
             {
