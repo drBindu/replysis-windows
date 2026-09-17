@@ -23,3 +23,11 @@ jobs:
       - run: dotnet build InterviewCopilot.csproj --configuration Release --no-restore
       - run: dotnet list InterviewCopilot.csproj package --vulnerable --include-transitive
       - run: python -m py_compile speechmatics_engine.py
+      # The suites existed but CI only compiled. A rule that answers a real
+      # interview question with a fixed reply passes a build and fails these.
+      - name: App behaviour tests
+        run: dotnet run --project tests/CleanerTests --configuration Release
+      - name: Engine contract tests
+        run: python tests/test_engine_contract.py
+      - name: Output pipeline tests
+        run: python tests/verify_output_pipeline.py

@@ -266,13 +266,18 @@ namespace InterviewCopilot
                 try
                 {
                     if (btn != null) btn.Content = "Downloading...";
-                    string? staged = await UpdateService.CheckAndStageAsync();
+                    var (outcome, staged) = await UpdateService.CheckForUpdateAsync();
 
-                    if (staged == null)
+                    // A failed check and "nothing newer" used to share one null, so a
+                    // dropped connection told the user they were up to date.
+                    if (outcome == UpdateService.UpdateCheckOutcome.Failed || staged == null)
                     {
-                        MessageBox.Show(this,
-                            $"You are up to date ({UpdateService.CurrentVersion}).",
-                            "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Information);
+                        if (outcome == UpdateService.UpdateCheckOutcome.UpToDate)
+                            MessageBox.Show(this,
+                                $"You are up to date ({UpdateService.CurrentVersion}).",
+                                "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Information);
+                        else
+                            ShowUpdateCheckFailed(UpdateService.CurrentVersion);
                         return;
                     }
 

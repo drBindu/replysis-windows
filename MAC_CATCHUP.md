@@ -63,6 +63,22 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Update check honesty, overlay height, CI runs the tests (2026-09-17)
+
+- Settings "check for updates" said "You are up to date" when the check FAILED:
+  a network error, a timeout and "no newer version" all returned the same null.
+  UpdateService.CheckForUpdateAsync now returns an outcome (Staged, UpToDate,
+  NotInstalled, Failed) and Settings shows the failure message on Failed. The
+  quiet launch check still uses CheckAndStageAsync and behaves as before.
+- Compact overlay transcript: 1.0.20 removed the three-line cap, but with no cap
+  a long turn grew the overlay past the bottom of the screen. It now caps at
+  eight lines (152px), scrolls beyond that with the scrollbar hidden, and keeps
+  the newest words in view.
+- CI (verify-windows.yml) only compiled. It now runs CleanerTests, the engine
+  contract and the output pipeline tests on every push.
+
+---
+
 ## Closing turns, second pass (after an external review, 2026-09-17)
 
 An outside review ran exact sentences through the 1.0.20 classifier. Every one

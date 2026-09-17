@@ -78,19 +78,35 @@ namespace InterviewCopilot
             }
         }
 
+        /// <summary>What an update check actually found.</summary>
+        internal enum UpdateCheckOutcome { Staged, UpToDate, NotInstalled, Failed }
+
         /// <summary>
         /// Looks for a newer release and, if there is one, downloads it in the
         /// background. Returns the version now waiting to be installed, or null
         /// if the app is already current, is not an installed copy, or the check
         /// could not be completed. Never throws.
+        ///
+        /// Kept for the quiet launch check, which treats every non-update alike.
+        /// Anything that talks to the user should call CheckForUpdateAsync.
         /// </summary>
-        internal static async Task<string?> CheckAndStageAsync(CancellationToken ct = default)
+        internal static async Task<string?> CheckAndStageAsync(CancellationToken ct = default) =>
+            (await CheckForUpdateAsync(ct).ConfigureAwait(false)).Version;
+
+        /// <summary>
+        /// The same check, but saying which of "up to date" and "could not check"
+        /// happened. They used to share one null, so a failed network call made the
+        /// Settings button tell the user "You are up to date", which is exactly the
+        /// wrong thing to hear when an update is waiting.
+        /// </summary>
+        internal static async Task<(UpdateCheckOutcome Outcome, string? Version)> CheckForUpdateAsync(
+            CancellationToken ct = default)
         {
-            if (!IsManaged) return null;
+            if (!IsManaged) return (UpdateCheckOutcome.NotInstalled, null);
 
             // Already staged from an earlier check. Re-downloading would waste the
             // user's bandwidth to arrive at the same place.
-            if (PendingVersion != null) return PendingVersion;
+            if (PendingVersion != null) return (UpdateCheckOutcome.Staged, PendingVersion);
 
             // Queue behind any check already running rather than giving up on it.
             // Returning early here is what made the Settings button answer "you
@@ -101,13 +117,15 @@ namespace InterviewCopilot
             try
             {
                 // The check we waited on may have already found it.
-                if (PendingVersion != null) return PendingVersion;
+                if (PendingVersion != null) return (UpdateCheckOutcome.Staged, PendingVersion);
 
+                // No update source means the check could not run, not that the
+                // app is current.
                 UpdateManager? mgr = Manager;
-                if (mgr == null) return null;
+                if (mgr == null) return (UpdateCheckOutcome.Failed, null);
 
                 UpdateInfo? update = await mgr.CheckForUpdatesAsync().ConfigureAwait(false);
-                if (update == null) return null;
+                if (update == null) return (UpdateCheckOutcome.UpToDate, null);
 
                 string version = update.TargetFullRelease.Version.ToString();
                 DebugWindow.Log("UPDATE", $"Downloading {version}");
@@ -117,16 +135,17 @@ namespace InterviewCopilot
                 _staged = update;
                 PendingVersion = version;
                 DebugWindow.Log("UPDATE", $"{version} staged, will install on next restart");
-                return version;
+                return (UpdateCheckOutcome.Staged, version);
             }
             catch (OperationCanceledException)
             {
-                return null;
+                // A timeout arrives this way too, so it did not complete.
+                return (UpdateCheckOutcome.Failed, null);
             }
             catch (Exception ex)
             {
                 DebugWindow.Log("UPDATE", $"Update check failed: {ex.GetType().Name}: {ex.Message}");
-                return null;
+                return (UpdateCheckOutcome.Failed, null);
             }
             finally
             {

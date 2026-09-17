@@ -185,11 +185,15 @@ namespace InterviewCopilot
                 QuestionTextBlock.Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)); // #cbd5e1
                 TranscriptDivider.Visibility = Visibility.Visible;
                 TranscriptRow.Visibility     = Visibility.Visible;
+                // Past eight lines the transcript scrolls; the newest words are the
+                // ones the candidate is waiting on, so keep them in view.
+                TranscriptScroll.ScrollToEnd();
             }
             else
             {
                 QuestionTextBlock.Text       = "Listening...";
                 QuestionTextBlock.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)); // #64748b
+                TranscriptScroll.ScrollToHome();
                 if (!_isListening)
                 {
                     TranscriptDivider.Visibility = Visibility.Collapsed;

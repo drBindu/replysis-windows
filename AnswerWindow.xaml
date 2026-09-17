@@ -213,9 +213,18 @@
 
                     <!-- Let the compact window's SizeToContent height follow the
                          interviewer transcript. The former three-line cap clipped
-                         long questions while the normal window kept showing them. -->
-                    <TextBlock Grid.Column="1"
-                               x:Name="QuestionTextBlock"
+                         long questions while the normal window kept showing them.
+                         Capped at eight lines, though: with no cap a long rambling
+                         turn grew the overlay past the bottom of the screen. Past
+                         eight lines it scrolls, and the code keeps the newest words
+                         in view. The scrollbar is hidden so the overlay keeps its
+                         look; the wheel still scrolls. -->
+                    <ScrollViewer Grid.Column="1"
+                                  x:Name="TranscriptScroll"
+                                  MaxHeight="152"
+                                  VerticalScrollBarVisibility="Hidden"
+                                  HorizontalScrollBarVisibility="Disabled">
+                    <TextBlock x:Name="QuestionTextBlock"
                                Text="Listening..."
                                FontSize="13"
                                FontFamily="Segoe UI"
@@ -227,6 +236,7 @@
                             <SolidColorBrush Color="#C8DCEE"/>
                         </TextBlock.Foreground>
                     </TextBlock>
+                    </ScrollViewer>
                 </Grid>
 
                 <!-- ══ ANSWER DIVIDER + AREA ══ (collapsed when no answer) -->
