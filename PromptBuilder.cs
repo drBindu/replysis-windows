@@ -1148,11 +1148,11 @@ namespace InterviewCopilot
             sb.AppendLine("  clearest sign to an interviewer that something is being read out.");
             sb.AppendLine();
             sb.AppendLine("  Not this:");
-            sb.AppendLine("    \"Java is a statically typed, object-oriented programming language that");
+            sb.AppendLine("    \"Java is a general-purpose, object-oriented programming language that");
             sb.AppendLine("     runs on the JVM. It is known for its write once, run anywhere");
             sb.AppendLine("     philosophy.\"");
             sb.AppendLine("  This (the substance stays, only the voice changes):");
-            sb.AppendLine("    \"Java's an object-oriented, statically typed language, and it's what most of");
+            sb.AppendLine("    \"Java is an object-oriented, statically typed language, and it's what most of");
             sb.AppendLine("     my backend work is in. You compile to bytecode, and the JVM runs that bytecode");
             sb.AppendLine("     on any operating system, so the same jar runs on my laptop and in our Linux");
             sb.AppendLine("     containers. The JVM also manages memory with garbage collection and has");
@@ -1162,6 +1162,8 @@ namespace InterviewCopilot
             sb.AppendLine();
             sb.AppendLine("  How real speech differs from written prose:");
             sb.AppendLine("    Contractions throughout. It's, I've, that's, doesn't, we'd. Always.");
+            sb.AppendLine("    Except the name of the thing being asked about: say \"Java is\", never");
+            sb.AppendLine("    \"Java's\". The candidate reads the name out in full.");
             sb.AppendLine("    Sentence lengths vary. A long one, then a short one. Never three");
             sb.AppendLine("    evenly balanced sentences in a row, which is the rhythm nothing but a");
             sb.AppendLine("    machine produces.");
@@ -1315,32 +1317,44 @@ namespace InterviewCopilot
             // this is not the actual real answer". The target they approved says what
             // it is, how it works and why it matters, in about 30 seconds, spoken, and
             // tied to their own work. Sounding human was never meant to mean saying less.
-            const string substance =
+            //
+            // The owner also wants the opening written out: "Java is", never "Java's".
+            // And for a term their resume does not have, the approved answer explains it
+            // properly and then connects honestly to what the resume does have ("Most of
+            // my own work is in Python..."), rather than ending as a textbook paragraph.
+            string opening =
+                $"Begin the answer with the words \"{t} is\" written out in full, starting with a capital letter and with A, An or The in front when English needs it, as in A hash map is. Never write \"{t}'s\". " +
                 "4 or 5 spoken sentences, about 30-40 seconds, with real substance, the way an experienced engineer answers in an interview. " +
-                "Cover what it is in plain words, how it actually works underneath with the real mechanism names, and the one or two things that matter most in real work. " +
-                "Sound like a person talking, not an encyclopedia: contractions, no filler such as basically, pretty smooth or super, " +
-                "and never a bare TERM lets you sentence standing in for the explanation. ";
+                "Cover what it is in plain words, how it actually works underneath with the real mechanism names, and why it matters in real work. " +
+                "Sound like a person talking, not an encyclopedia: no filler such as basically, pretty smooth or super, no phrases such as general-purpose, " +
+                "is known for or the big advantage is, and never a bare lets you sentence standing in for the explanation. ";
             const string more =
                 "The MORE TO SAY lines are what an experienced engineer would add if pushed: a deeper mechanism, a gotcha, a trade-off, " +
                 "or when you'd pick something else. Never claim a tool, project or incident that is not in the verified facts.";
 
             if (FactsMention(resumeFacts, term))
-                return substance +
-                       $"{t} is in the verified facts, so the first sentence says what {t} is and, in the same breath, where it sits in your work, " +
+                return opening +
+                       $"{t} is in the verified facts, so the first or second sentence says where it sits in your work, " +
                        "without inventing a project or detail that is not in the facts. " +
-                       "Shape only, never reuse its words: Kafka's a distributed event streaming platform, and at work it's what carries events between our services. " +
+                       "Shape only, never reuse its words: Kafka is a distributed event streaming platform, and at work it's what carries events between our services. " +
                        "Producers write to topics, each topic is split into partitions, and every partition is an append-only log that consumers read at their own pace by offset. " +
                        "That's what makes it durable, because a consumer that falls over just picks up from its last offset. " +
                        "And partitions are how it scales, since consumers in a group split them between them. " +
                        more;
 
-            return substance +
+            bool hasFacts = !string.IsNullOrWhiteSpace(resumeFacts) && resumeFacts != "No resume provided.";
+            return opening +
                    $"{t} is NOT in the verified facts, so never say you use it, have used it, or work with it. " +
-                   $"The first sentence says what {t} is and why people bother with it. " +
-                   "Shape only, never reuse its words: Rust's a systems language built so the compiler catches memory bugs before the code ever runs. " +
+                   (hasFacts
+                       ? "End with one honest sentence connecting it to what the verified facts show you do work with, for example your main language or tools, " +
+                         "and how the idea carries over. Never imply you have used the term itself. "
+                       : "") +
+                   "Shape only, never reuse its words: Rust is a systems language built so the compiler catches memory bugs before the code ever runs. " +
                    "It does that with ownership, where every value has exactly one owner, and borrowing rules the compiler checks for you. " +
                    "So you get C-level speed with no garbage collector, and whole classes of crashes and data races just can't compile. " +
-                   "The price is a steeper learning curve, you spend real time early on fighting the borrow checker. " +
+                   (hasFacts
+                       ? "Most of my own work is in Python, so I lean on the runtime for memory, but that trade-off between safety and control is the same one. "
+                       : "The price is a steeper learning curve, you spend real time early on fighting the borrow checker. ") +
                    more;
         }
 

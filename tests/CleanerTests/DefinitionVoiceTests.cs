@@ -54,7 +54,10 @@ internal static class DefinitionVoiceTests
         string offResume = PromptBuilder.DefinitionReminder("Rust", facts);
         Case("on-resume reminder starts from their work", onResume.Contains("Java is in the verified facts") && onResume.Contains("sits in your work"));
         Case("off-resume reminder forbids claiming use", offResume.Contains("Rust is NOT in the verified facts") && offResume.Contains("never say you use it"));
-        Case("both ban a bare lets-you explanation", onResume.Contains("TERM lets you") && offResume.Contains("TERM lets you"));
+        Case("opens with the full name, never Java's", onResume.Contains("\"Java is\"") && onResume.Contains("Never write \"Java's\""));
+        Case("off-resume answer connects to what they do have", offResume.Contains("connecting it to what the verified facts show"));
+        Case("no resume: no connection line to invent", !PromptBuilder.DefinitionReminder("Rust", "").Contains("connecting it to what the verified facts show"));
+        Case("both ban a bare lets-you explanation", onResume.Contains("lets you sentence") && offResume.Contains("lets you sentence"));
 
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "definition voice: all passed" : $"definition voice: {failed} FAILED");

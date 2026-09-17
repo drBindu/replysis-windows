@@ -63,6 +63,21 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## "Java is", never "Java's"; off-resume terms connect to the real stack (2026-09-17, latest)
+
+- Owner: answers must open with the name written out, "Java is", never "Java's".
+  DefinitionReminder now requires that (with A/An/The when English needs it), and
+  the voice rules make it the one exception to "contractions throughout".
+- Owner's loaded resume was an ML resume with no Java, so "What is Java?" rightly
+  claimed nothing, but read as a textbook. For a term NOT in the resume the answer
+  now explains it properly, then ends with one honest sentence connecting it to
+  what the resume does show ("Most of my own work is in Python..."). Tested on an
+  ML, a Java backend and a frontend resume: it used Python, Java and JavaScript
+  respectively and never claimed the term. No resume: no connection sentence.
+- Tests added to suite 15.
+
+---
+
 ## Answers with real substance, across question types (2026-09-17, later)
 
 - Owner tested the previous change: "What is Java?" came back as two thin sentences
