@@ -595,6 +595,10 @@ namespace InterviewCopilot
             public bool   SaveSessionAudio   { get; set; } = false;
             // Plain F7, F8 and F9 read the screen from any app unless turned off.
             public bool   ScreenKeysEverywhere { get; set; } = true;
+            // Main window stays in front of other apps. In stealth mode the app has
+            // no taskbar button and no Alt+Tab entry, so once another window covers
+            // it there was no way back to it.
+            public bool   KeepOnTop          { get; set; } = true;
             // true  = system audio + mic (default)
             // false = system audio only  (mic never opened — fully invisible, no OS mic indicator)
             public bool   MicCaptureEnabled  { get; set; } = true;
@@ -739,6 +743,7 @@ namespace InterviewCopilot
         public static bool   GetWatchScreenEnabled() => LoadConfig().WatchScreenEnabled;
         public static bool   GetSaveSessionAudio()   => LoadConfig().SaveSessionAudio;
         public static bool   GetScreenKeysEverywhere() => LoadConfig().ScreenKeysEverywhere;
+        public static bool   GetKeepOnTop()          => LoadConfig().KeepOnTop;
 
         public static void SetWatchScreenEnabled(bool enabled)
         {

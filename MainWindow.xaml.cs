@@ -90,6 +90,7 @@ namespace InterviewCopilot
         private const double ResumePanelExpandedWidth = 260;
         private bool _isCameraMode = false;
         private bool _stealthMode = SettingsWindow.GetStealthMode();
+        private bool _keepOnTop = SettingsWindow.GetKeepOnTop();
         // Load the persisted mic choice so it survives restarts (-1 = Windows default).
         private int _audioDeviceId = SettingsWindow.GetAudioDeviceIndex();
         private bool _justStartedListening = false;  // suppress stale reads for 400ms after unmute
@@ -281,6 +282,7 @@ namespace InterviewCopilot
                 {
                     try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
                     UpdateStealthBtn();
+                    ApplyKeepOnTop();
 
                     answerWindow = new AnswerWindow();
                     answerWindow.ShowInTaskbar = false;
@@ -369,6 +371,7 @@ namespace InterviewCopilot
                             })
                         );
                         _globalHotkey.OwnerWindowHandle = mainHwnd;
+                        _globalHotkey.OnBringToFront = () => Dispatcher.BeginInvoke(() => BringToFront());
                         // Cleanup is deliberately left to OnClosed rather than an
                         // app-lifetime event. A DispatcherUnhandledException handler
                         // would fire for recoverable errors and kill the Space hotkey
@@ -5525,6 +5528,57 @@ namespace InterviewCopilot
         }
         private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
         private void MinimizeBtn_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+        // ── Pin: keep the window in front of other apps ─────────────────────────
+        private void PinWindowBtn_Click(object sender, RoutedEventArgs e)
+        {
+            _keepOnTop = !_keepOnTop;
+            try
+            {
+                var cfg = SettingsWindow.LoadConfig();
+                cfg.KeepOnTop = _keepOnTop;
+                SettingsWindow.SaveConfig(cfg);
+            }
+            catch (Exception ex) { DebugWindow.Log("PIN", $"persist failed: {ex.Message}"); }
+            ApplyKeepOnTop();
+            DebugWindow.Log("PIN", _keepOnTop ? "Pinned in front of other windows" : "Unpinned");
+        }
+
+        private void ApplyKeepOnTop()
+        {
+            Topmost = _keepOnTop;
+            if (PinWindowIcon != null)
+            {
+                PinWindowIcon.Text = _keepOnTop ? "\uE718" : "\uE77A";
+                PinWindowIcon.Foreground = new SolidColorBrush(_keepOnTop
+                    ? Color.FromRgb(0xEA, 0xF1, 0xF8)
+                    : Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
+            }
+            if (PinWindowBtn != null)
+                PinWindowBtn.ToolTip = _keepOnTop
+                    ? "Pinned: stays in front of other windows. Click to unpin."
+                    : "Unpinned: other windows can cover it. Click to pin, or press Ctrl+Alt+R to bring it back.";
+        }
+
+        /// <summary>
+        /// Ctrl+Alt+R. Restores and raises the window from anywhere, pinned or not.
+        /// Raising through Topmost works even when Windows refuses to hand focus to
+        /// a background app, so the window always becomes visible.
+        /// </summary>
+        private void BringToFront()
+        {
+            try
+            {
+                if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+                if (!IsVisible) Show();
+                Topmost = true;
+                Activate();
+                Topmost = _keepOnTop;
+                if (answerWindow != null && answerWindow.IsVisible) answerWindow.Activate();
+                DebugWindow.Log("PIN", "Brought to front with Ctrl+Alt+R");
+            }
+            catch (Exception ex) { DebugWindow.Log("PIN", $"bring to front failed: {ex.Message}"); }
+        }
 
         private void SettingsBtn_Click(object sender, RoutedEventArgs e)
         {

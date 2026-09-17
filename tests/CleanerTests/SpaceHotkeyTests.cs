@@ -68,6 +68,12 @@ internal static class SpaceHotkeyTests
         Check(!defaults.SaveSessionAudio, "session audio is not saved unless turned on");
         Check(defaults.ScreenKeysEverywhere, "screen keys work everywhere by default");
         Check(defaults.WatchScreenEnabled, "continuous screen reading stays on by default");
+        Check(defaults.KeepOnTop, "window is pinned in front by default");
+
+        // Ctrl+Alt+R brings the app back from behind other windows
+        Check(GlobalHotkey.BringToFrontChord(0x52, ctrlAltHeld: true), "Ctrl+Alt+R brings Replysis to the front");
+        Check(!GlobalHotkey.BringToFrontChord(0x52, ctrlAltHeld: false), "plain R typed in another app does nothing");
+        Check(!GlobalHotkey.BringToFrontChord(0x54, ctrlAltHeld: true), "Ctrl+Alt+T is not the shortcut");
 
         return failed;
     }

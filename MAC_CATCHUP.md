@@ -63,6 +63,27 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Pin in front, Ctrl+Alt+R, and a mic that dies mid-interview (2026-09-17)
+
+- Stealth mode hides the window from the taskbar and Alt+Tab, so once another
+  window covered it, or it was minimized, the owner had no way back to it.
+  - New pin button left of Minimize. Pinned (default, AppConfig.KeepOnTop = true)
+    keeps the main window Topmost; click to unpin; remembered.
+  - Ctrl+Alt+R from any app restores and raises the window (GlobalHotkey
+    OnBringToFront, BringToFrontChord). Not swallowed, so AltGr+R still types.
+  - Minimize tooltip says Ctrl+Alt+R brings it back.
+  - Mac: the same problem exists wherever the window hides from the Dock/Cmd+Tab;
+    give it a pin and a global shortcut.
+- Engine microphone, on top of the static guard below:
+  - a mic that worked and then gives nothing at all for ~10s (unplugged, driver
+    stopped, locked by another app, read errors) is searched for again;
+  - hearing a voice resets the search count, so every loss gets 3 tries;
+  - a search waits until system audio has been quiet for 2s, because it holds
+    up reading and would otherwise cost the interviewer's words;
+  - read errors are logged once per 50, not every chunk.
+
+---
+
 ## Microphone search never picks static (2026-09-17, shared engine)
 
 - On the owner's laptop every input opened through DirectSound at 16 kHz mono

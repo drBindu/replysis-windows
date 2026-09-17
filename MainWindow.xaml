@@ -693,7 +693,26 @@
                                     Content="Sign In" Padding="10,5" Margin="0,0,4,0"/>
 
                             <!-- Window controls -->
-                            <Button Click="MinimizeBtn_Click" ToolTip="Minimize" Cursor="Hand"
+                            <Button x:Name="PinWindowBtn" Click="PinWindowBtn_Click" Cursor="Hand"
+                                    ToolTip="Pinned: stays in front of other windows. Click to unpin."
+                                    Background="Transparent" BorderThickness="0" Padding="7,0" Margin="2,0,0,0">
+                                <TextBlock x:Name="PinWindowIcon" Text="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                           Foreground="#EAF1F8"/>
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                                CornerRadius="5" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button Click="MinimizeBtn_Click" ToolTip="Minimize. Press Ctrl+Alt+R to bring Replysis back." Cursor="Hand"
                                     Background="Transparent" BorderThickness="0" Padding="7,0" Margin="2,0,0,0">
                                 <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10"
                                            Foreground="#66FFFFFF"/>

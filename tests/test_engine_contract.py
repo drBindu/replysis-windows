@@ -92,6 +92,10 @@ exec(SOURCE[SOURCE.index("def _is_capture_noise"):SOURCE.index("def _signal_leve
 _noise = _struct.pack("<1600h", *([32767, -32768] * 800))
 _voice = _struct.pack("<1600h", *[int(9000 * ((i % 40) - 20) / 20) for i in range(1600)])
 _loud = _struct.pack("<1600h", *([32767] * 30 + [1000] * 1570))
+check("a mic that dies mid-interview is searched for again",
+      "_mic_dead_reads >= MIC_DEAD_READS_BEFORE_RESEARCH" in SOURCE)
+check("hearing a voice again resets the searches", "_mic_autoswitch_attempts = 0" in SOURCE)
+check("a locked or failed mic counts as dead air", "_mic_dead_reads += 1" in SOURCE)
 check("white noise at full scale counts as static", _ns["_is_capture_noise"](_noise))
 check("a normal voice is not static", not _ns["_is_capture_noise"](_voice))
 check("a voice clipping briefly is not static", not _ns["_is_capture_noise"](_loud))

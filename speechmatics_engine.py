@@ -971,7 +971,11 @@ _mic_ever_heard        = False  # has this device produced real signal, ever
 _mic_quiet_reads       = 0      # consecutive reads at effectively zero
 _mic_autoswitch_attempts = 0    # searches for a working microphone so far
 _mic_noise_noted       = False  # static from the current mic already reported
-MIC_AUTOSWITCH_MAX_ATTEMPTS = 3
+MIC_AUTOSWITCH_MAX_ATTEMPTS = 3   # per loss of signal; hearing a voice again resets it
+_mic_dead_reads         = 0      # consecutive reads with no signal at all (not a quiet room)
+_last_sys_sound_at      = 0.0    # when system audio last carried sound
+MIC_DEAD_LEVEL          = 8      # a working mic in a quiet room reads 25 to 150
+MIC_DEAD_READS_BEFORE_RESEARCH = 100   # ~10s of nothing from a mic that used to work
 MIC_QUIET_READS_BEFORE_SWITCH = 40    # ~4s at 0.1s per read
 MIC_SIGNAL_THRESHOLD          = 400   # same figure the rest of the file uses
 
@@ -1982,7 +1986,7 @@ class MixedStream:
         global _silent_chunk_count
         global _sys_hang_count, sys_stream
         global _default_silence_noted
-        global _mic_ever_heard, _mic_quiet_reads, _mic_autoswitch_attempts, _mic_noise_noted
+        global _mic_ever_heard, _mic_quiet_reads, _mic_autoswitch_attempts, _mic_noise_noted, _mic_dead_reads, _last_sys_sound_at
         global mic_stream, _mic_device_index, _mic_device_name
         global _mic_native_rate, _mic_native_channels, _mic_chunk_frames
 
@@ -2127,8 +2131,12 @@ class MixedStream:
                         print(f">>> MIC SIGNAL DETECTED: amp={mic_amp}", flush=True)
                         _mic_ever_heard = True
                         _mic_quiet_reads = 0
+                        # A voice came through, so any earlier loss is over and a
+                        # later one gets its own full set of searches.
+                        _mic_autoswitch_attempts = 0
                     else:
                         _mic_quiet_reads += 1
+                    _mic_dead_reads = _mic_dead_reads + 1 if mic_amp <= MIC_DEAD_LEVEL else 0
 
                     # Four seconds of listening to a device that
                     # has never once produced signal. The user is
@@ -2137,11 +2145,22 @@ class MixedStream:
                     # Tried up to three times, each after another four
                     # quiet seconds: one probe can land in a pause between
                     # sentences and miss the working microphone entirely.
-                    if (not _mic_ever_heard
-                            and _mic_autoswitch_attempts < MIC_AUTOSWITCH_MAX_ATTEMPTS
-                            and _mic_quiet_reads >= MIC_QUIET_READS_BEFORE_SWITCH):
+                    #
+                    # A mic that worked and then produced nothing at all for ten
+                    # seconds is searched for again too: a headset unplugged or a
+                    # driver that stopped mid-interview used to leave the session
+                    # deaf until restart. A quiet room is never "nothing at all",
+                    # and the search only switches to a device that hears a
+                    # voice, so a mic that is fine but gated is kept.
+                    mic_lost = (not _mic_ever_heard and _mic_quiet_reads >= MIC_QUIET_READS_BEFORE_SWITCH) or                                (_mic_ever_heard and _mic_dead_reads >= MIC_DEAD_READS_BEFORE_RESEARCH)
+                    # A search holds up reading for a second or two, so it
+                    # waits while the interviewer's audio is playing rather
+                    # than lose their words to find the candidate's mic.
+                    if (mic_lost and _mic_autoswitch_attempts < MIC_AUTOSWITCH_MAX_ATTEMPTS
+                            and time.time() - _last_sys_sound_at > 2.0):
                         _mic_autoswitch_attempts += 1
                         _mic_quiet_reads = 0
+                        _mic_dead_reads = 0
                         print(">>> MIC is silent; asking the other inputs "
                               "whether they can hear you.", flush=True)
                         found = _find_a_microphone_that_hears(p, _mic_device_index)
@@ -2186,7 +2205,12 @@ class MixedStream:
                 else:
                     mic_data = SILENCE
             except Exception as me:
-                print(f">>> mic_stream.read error: {me}", flush=True)
+                # Counted as dead air, so a mic that another app has locked or a
+                # driver that has failed leads to a search instead of silence.
+                _mic_dead_reads += 1
+                _mic_quiet_reads += 1
+                if _mic_dead_reads % 50 == 1:
+                    print(f">>> mic_stream.read error: {me}", flush=True)
                 mic_data = SILENCE
             if sys_stream:
                 # System audio is BEST-EFFORT here — the mic (the user's
@@ -2221,6 +2245,8 @@ class MixedStream:
                     sys_data = (resample_to_16k_mono(raw, _sys_native_rate, _sys_native_channels, num_frames)
                                 if (_sys_native_rate != SAMPLE_RATE or _sys_native_channels != 1)
                                 else raw)
+                    if _signal_level(sys_data) > 400:
+                        _last_sys_sound_at = time.time()
                     data = mix_audio(mic_data, sys_data)
             else:
                 data = mic_data

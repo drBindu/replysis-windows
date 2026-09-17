@@ -16,6 +16,7 @@ namespace InterviewCopilot
         private const int VK_F8  = 0x77;   // F8  = Analyze the active screen (global)
         private const int VK_F9  = 0x78;   // F9  = Analyze primary screen only (global)
         private const int VK_F12 = 0x7B;
+        private const int VK_R   = 0x52;   // Ctrl+Alt+R = bring Replysis to the front
         private const int VK_F4  = 0x73;   // Ctrl+Shift+F4 = kill app (no tray, no taskbar)
 
         private IntPtr _hookId = IntPtr.Zero;
@@ -92,6 +93,17 @@ namespace InterviewCopilot
         private bool _f8Down = false;
         private bool _f9Down = false;
         private bool _f12Down = false;
+        private bool _bringToFrontDown = false;
+
+        /// <summary>
+        /// Ctrl+Alt+R from any app. In stealth mode the window has no taskbar button
+        /// and no Alt+Tab entry, so this is the way back to it once it is covered or
+        /// minimized. The key is passed on, not swallowed: on some layouts AltGr+R
+        /// types a character, and that must keep working.
+        /// </summary>
+        public Action? OnBringToFront { get; set; }
+
+        internal static bool BringToFrontChord(int vk, bool ctrlAltHeld) => vk == VK_R && ctrlAltHeld;
         private bool _killChordDown = false;
 
         public IntPtr OwnerWindowHandle { get; set; } = IntPtr.Zero;
@@ -211,6 +223,15 @@ namespace InterviewCopilot
                     return (IntPtr)1;
                 }
 
+                if (OnBringToFront != null && BringToFrontChord(vkCode, CtrlAltHeld()))
+                {
+                    if (!_bringToFrontDown)
+                    {
+                        _bringToFrontDown = true;
+                        OnBringToFront.Invoke();
+                    }
+                }
+
                 // F12 — toggle debug window (only when app is NOT focused)
                 if (vkCode == VK_F12 && !IsOwnerWindowForeground() && _onF12Pressed != null &&
                     DebugKeyAllowed(CtrlAltHeld()))
@@ -254,6 +275,7 @@ namespace InterviewCopilot
                 if (vkCode == VK_F8) _f8Down = false;
                 if (vkCode == VK_F9) _f9Down = false;
                 if (vkCode == VK_F12) _f12Down = false;
+                if (vkCode == VK_R) _bringToFrontDown = false;
                 if (vkCode == VK_F4) _killChordDown = false;
             }
 
