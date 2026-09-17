@@ -5785,7 +5785,7 @@ namespace InterviewCopilot
             try
             {
             string recordingId = _recordingSessionId;
-            bool hadActiveRecording = isRecording;
+            bool hadActiveRecording = isRecording && _savingSessionAudio;
             int previousSessionNumber = sessionNumber;
             bool previousSessionSaved = false;
             EndSession();
@@ -6625,7 +6625,7 @@ namespace InterviewCopilot
 
             _globalHotkey?.Dispose();
             _debugWindow?.ForceClose();
-            bool hadActiveRecording = isRecording;
+            bool hadActiveRecording = isRecording && _savingSessionAudio;
             string recordingId = _recordingSessionId;
             try { File.WriteAllText(Path.Combine(AppDataFolder, "shutdown.flag"), "1"); } catch { }
             EndSession();

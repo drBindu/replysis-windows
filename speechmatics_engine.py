@@ -770,13 +770,36 @@ def get_recording_id():
     return "unknown"
 
 
+# Recordings this engine started. Only save_recording() may mark those saved,
+# and only once the file is closed.
+_recording_ids_started = set()
+# Ids already marked, so the marker is written once, not on every audio cycle.
+_recording_ids_marked = set()
+
+
 def mark_recording_saved(recording_id):
     try:
         path = os.path.join(APP_DATA, f"recording_saved_{recording_id}.flag")
         with open(path, "w", encoding="utf-8") as f:
             f.write("1")
+        _recording_ids_marked.add(recording_id)
     except Exception as ex:
         print(f">>> Recording completion marker error: {ex}", flush=True)
+
+
+def mark_nothing_recorded(recording_id):
+    """Tell the app a session ended with no audio to save.
+
+    The app waits for this marker when a session ends, and a session can end
+    before a single frame is recorded (it started muted and stayed muted), so
+    without it the app sat out its full timeout. This used to call
+    mark_recording_saved on every 100 ms cycle, about 36,000 writes an hour,
+    and it could also mark a real recording saved while its background save
+    was still writing the file. A started recording is left to save_recording.
+    """
+    if recording_id in _recording_ids_started or recording_id in _recording_ids_marked:
+        return
+    mark_recording_saved(recording_id)
 
 
 def get_recording_session_number():
@@ -1971,9 +1994,8 @@ class MixedStream:
             except:
                 pass
             if not recording_requested:
-                stopped = stop_recording(shutdown_requested)
-                if not stopped:
-                    mark_recording_saved(get_recording_id())
+                if not stop_recording(shutdown_requested):
+                    mark_nothing_recorded(get_recording_id())
             if shutdown_requested and not recording_requested:
                 raise RuntimeError("Shutdown requested")
 
@@ -2157,13 +2179,13 @@ class MixedStream:
                 if not is_recording:
                     is_recording = True
                     active_recording_id = get_recording_id()
+                    _recording_ids_started.add(active_recording_id)
                     print(">>> Recording started", flush=True)
                 if len(recording_frames) < MAX_RECORDING_FRAMES:
                     recording_frames.append(data)
         else:
-            stopped = stop_recording(shutdown_requested)
-            if not stopped:
-                mark_recording_saved(get_recording_id())
+            if not stop_recording(shutdown_requested):
+                mark_nothing_recorded(get_recording_id())
 
         if shutdown_requested and not recording_requested:
             raise RuntimeError("Shutdown requested")

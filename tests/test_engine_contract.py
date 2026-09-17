@@ -57,6 +57,26 @@ check("--mode offers both, system and mic",
 # macOS cannot capture system audio in a helper process: it does not inherit
 # the app's screen-recording grant, so the OS returns silence rather than an
 # error. The Mac runs its own tap and writes to a FIFO instead.
+# -- Recording saved marker ---------------------------------------------------
+# The app protects a recording once this marker exists. Written before the
+# background save closes the file, it protected half a recording and left the
+# raw WAV behind. Written on every cycle, it cost 36,000 file writes an hour.
+_idle_calls = re.findall(r"if not stop_recording\(shutdown_requested\):\s*\n\s*(\w+)\(", SOURCE)
+check("audio loop never marks a recording saved",
+      len(_idle_calls) == 2 and all(c == "mark_nothing_recorded" for c in _idle_calls),
+      f"calls after stop_recording: {_idle_calls}")
+_nothing = re.search(r"def mark_nothing_recorded\(recording_id\):(.*?)\n\n\n", SOURCE, re.S)
+check("empty-session marker skips started recordings",
+      _nothing is not None and "_recording_ids_started" in _nothing.group(1)
+      and "_recording_ids_marked" in _nothing.group(1),
+      "writes once, never for a recording still saving")
+check("recording start is remembered",
+      "_recording_ids_started.add(active_recording_id)" in SOURCE)
+_save = re.search(r"def save_recording\(recording_id\):(.*?)\n\n\n", SOURCE, re.S)
+check("save_recording marks only after closing the file",
+      _save is not None and _save.group(1).find("wf.close()") < _save.group(1).find("mark_recording_saved("),
+      "marker follows close")
+
 check("--sysfifo exists", "--sysfifo" in SOURCE, "macOS has no other route to system audio")
 
 # ── Environment ──────────────────────────────────────────────────────────────

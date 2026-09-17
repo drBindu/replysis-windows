@@ -63,6 +63,26 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Recording saved marker written only when it is true (2026-09-17)
+
+Shared engine fix, found by a second external review.
+
+- The app waits for recording_saved_<id>.flag when a session ends, then encrypts
+  the WAV. The audio loop wrote that marker on every 100 ms cycle whenever no
+  recording was running: about 36,000 file writes an hour. Worse, the cycle after
+  a recording stopped wrote it while the background save was still writing the
+  file, so the app could encrypt half a recording and leave the raw WAV behind.
+- Now the loop calls mark_nothing_recorded(), which writes the marker once, and
+  never for a recording this engine started. Only save_recording() marks a real
+  recording saved, after closing the file. A session that ends before any audio
+  was recorded still gets its marker, so the app does not sit out its timeout.
+- Windows waits for the marker only when the session was saving audio
+  (isRecording && _savingSessionAudio), on New Session and on exit.
+- test_engine_contract.py checks all of this. Mac: take the shared engine, and
+  gate your own wait the same way if you have one.
+
+---
+
 ## Recordings off by default, screen keys switchable, F12 moved (2026-09-17)
 
 Owner's decisions after an external release review. Continuous screen capture
