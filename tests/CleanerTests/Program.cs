@@ -145,6 +145,9 @@ internal static class Program
         Console.WriteLine("\n15. What is X? sounds like the candidate, never claims a tool they lack");
         _failed += DefinitionVoiceTests.Run();
 
+        Console.WriteLine("\n16. Turns from real interviews reach the right answer path");
+        _failed += InterviewTurnTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

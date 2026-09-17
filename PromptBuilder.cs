@@ -227,7 +227,11 @@ namespace InterviewCopilot
         {
             "on the screen", "on my screen", "on your screen", "on screen",
             "look at this", "look at the screen", "have a look", "take a look",
-            "what do you see", "can you see", "do you see", "you can see",
+            // "do you see" and "can you see" were here, and "How do you see a role
+            // like this fitting into that path?" went to the screen reader in a
+            // real interview, which answered with template text. They are matched
+            // below only when they point at something, not at a role or a future.
+            "you can see",
             "sharing my screen", "share my screen", "shared my screen",
             "in front of you", "shown here", "displayed here", "up on the",
             "solve this", "fix this", "debug this", "explain this",
@@ -311,6 +315,12 @@ namespace InterviewCopilot
         private static readonly Regex NamesTheScreen =
             new(@"\b(?:my|your|the|this|that)\s+screens?\b", RegexOptions.Compiled);
 
+        private static readonly Regex SeesSomething = new(
+            @"\b(?:can|do|could) you see (?:this|that|it|what i|anything|my|the (?:code|error|output|diagram|question|page|window|chart|problem))\b" +
+            @"(?!\s+(?:role|position|job|team|company|opportunity|as|fitting|working|going|yourself))" +
+            @"|\bwhat do you see\b(?!\s+(?:yourself|as|in|for|when))",
+            RegexOptions.Compiled);
+
         public static bool RefersToScreen(string question)
         {
             if (string.IsNullOrWhiteSpace(question)) return false;
@@ -319,7 +329,7 @@ namespace InterviewCopilot
             foreach (string phrase in ScreenReferencePhrases)
                 if (q.Contains(phrase, StringComparison.Ordinal)) return true;
 
-            return NamesTheScreen.IsMatch(q);
+            return NamesTheScreen.IsMatch(q) || SeesSomething.IsMatch(q);
         }
 
         public static bool IsGreeting(string q)
@@ -560,6 +570,11 @@ namespace InterviewCopilot
             return !carriesOn.Any(tail.Contains);
         }
 
+        internal static bool IsWorkAuthorizationQuestion(string q) =>
+            Regex.IsMatch(q ?? "",
+                @"\b(stem opt|opt|cpt|ead|h-?1-?b|h 1 b|cap[- ]gap|cap extension|green card|i-?20|i-?983|sponsor(?:ship)?|visa|work authori[sz]ation|authori[sz]ed to work)\b",
+                RegexOptions.IgnoreCase);
+
         private static int PriorCandidateQuestionInvitations() =>
             History.Count(turn => IsCandidateQuestionInvitation(turn.Q));
 
@@ -683,6 +698,16 @@ namespace InterviewCopilot
             if (IsInterviewEndStatement(t))
                 return QuestionType.InterviewClosing;
 
+            // Once the candidate has been invited to ask questions, a long turn from
+            // the interviewer is their answer. A real one ("Then there is the trading
+            // impact side ... the bar is basically, does it move the needle enough?")
+            // was answered with a paragraph reciting it back.
+            if (PriorCandidateQuestionInvitations() > 0 &&
+                Regex.Matches(t, @"[\p{L}\p{N}']+").Count >= 45 &&
+                !t.TrimEnd().EndsWith("?") &&
+                !Regex.IsMatch(t, @"\b(your|yourself|tell me|walk me|can you|could you|would you|do you)\b"))
+                return QuestionType.ContextStatement;
+
             // Coding and task requests first. "I'm going to give you an exercise:
             // write a function..." starts like an introduction, and "For this next
             // exercise I want a function..." is long with no question mark; both
@@ -745,6 +770,34 @@ namespace InterviewCopilot
             if (Regex.IsMatch(t,
                     @"\b(can you think of|could you think of|can you recall|do you remember a|a specific (project|time|situation|example|case)|a time (when|where)|(project|situation|case) where)\b"))
                 return QuestionType.Behavioral;
+
+            // "Can you tell me about the RESTful services you built?" is a request.
+            // It was classed YesNo and answered in one or two sentences: in one real
+            // interview 14 of 31 turns opened "Can you tell me", "Can you describe"
+            // or "Can you please describe", and every one came back thin. The
+            // request is classified by what is asked for, without the polite prefix.
+            var politeRequest = Regex.Match(t,
+                @"^(?:so |and |okay |ok |now |alright )?(?:can|could|would|will) (?:you|u) (?:please )?(?=(?:tell|walk|describe|explain|talk|share|give|go over|go through|elaborate|expand|read|list|summari[sz]e|brief|take me|help me understand)\b)");
+            if (politeRequest.Success)
+            {
+                string rest = t[politeRequest.Length..];
+                if (Regex.IsMatch(rest, @"\b(your|ur) (?:past |previous |work |professional |overall )?(experience|background|resume|career|journey)\b(?! (?:with|in|on|using|of|at)\b)"))
+                    return QuestionType.Intro;
+                var inner = DetectType(rest);
+                return inner == QuestionType.YesNo ? QuestionType.General : inner;
+            }
+
+            // "How do you see a role like this fitting into that path?" and "Where do
+            // you see yourself in five years?" are about the candidate's direction,
+            // not a technical explanation.
+            if (Regex.IsMatch(t, @"\b(how|where) do (you|u) see\b"))
+                return QuestionType.General;
+
+            // Work authorization and visa questions. "what is cap extension?" (the
+            // H-1B cap-gap) was explained like a technical term, stating immigration
+            // rules as fact. These are answered from the profile only.
+            if (IsWorkAuthorizationQuestion(t))
+                return QuestionType.YesNo;
 
             if (Regex.IsMatch(t, @"^(are you|do you|can you|will you|have you|is your|would you|did you|are u|r u)"))
                 return QuestionType.YesNo;
@@ -813,7 +866,7 @@ namespace InterviewCopilot
 
             // "How do you handle a disagreement with a teammate?" matched "how do you"
             // in the technical rule below and was answered as a technical explanation.
-            if (Regex.IsMatch(t, @"\bhow do (you|u) (handle|deal with|manage|approach|respond to|react to|work through|resolve)\b.*\b(disagree|conflict|pressure|stress|criticism|feedback|deadline|difficult|failure|mistake|setback|ambiguity|priorit|change|stakeholder|teammate|coworker|co-worker|manager|boss|colleague)"))
+            if (Regex.IsMatch(t, @"\bhow do (you|u) (handle|deal with|manage|approach|respond to|react to|work through|resolve)\b.*\b(disagree|conflict|pressure|stress|criticism|feedback|deadline|difficult|failure|mistake|setback|ambiguity|priorit|change|stakeholder|teammate|coworker|co-worker|manager|boss|colleague|collaborat|researcher|research team|cross-functional|other teams)"))
                 return QuestionType.Situational;
 
             if (t.Contains("what would you do") || t.Contains("how would you handle") ||
@@ -1451,9 +1504,16 @@ namespace InterviewCopilot
                            "No long explanation.";
 
                 case QuestionType.YesNo:
-                    if (q.Contains("stem") || q.Contains("visa") || q.Contains("sponsorship"))
-                        return "2-3 short sentences in plain language. Example: " +
-                               "'Yeah I'm on STEM OPT, so no sponsorship needed for the next two years.'";
+                    // The example here used to read "no sponsorship needed for the next
+                    // two years", a fact about the candidate that nobody had given, and
+                    // the model repeated it. Asked "what is cap extension?", an answer
+                    // explained the rules and invented a 60-day grace period.
+                    if (IsWorkAuthorizationQuestion(q))
+                        return "1-2 short, plain sentences. Say only what the candidate's own profile says about their work status and " +
+                               "whether they need sponsorship now or later. Never explain immigration rules, timelines, grace periods or " +
+                               "eligibility, and never state a status or date the facts do not give. If they do not say, answer with the status " +
+                               "the facts do show and offer to confirm the exact details with HR. Never mention a profile, facts or information " +
+                               "you were given: this is spoken by the candidate about themselves.";
                     if (q.Contains("relocat"))
                         return "1 short sentence. Casual opener + Yes/No + openness.";
                     if (q.Contains("background") || q.Contains("drug"))
@@ -1550,6 +1610,9 @@ namespace InterviewCopilot
                            "Casual: 'honestly, I used to...' Mention steps + evidence of progress.";
 
                 case QuestionType.WhyRole:
+                    if (Regex.IsMatch(q, @"strength|why should we hire|what makes you|good fit|why you\b"))
+                        return "2 short spoken paragraphs, about 30-45 seconds. Name two real strengths that show in the verified facts, " +
+                               "each with one concrete proof from those facts. Never invent a number, project, or fact about the company.";
                     // A test with no company details given produced "your team is building
                     // end-to-end AI pipelines" and "you've invested in Kubernetes": facts about
                     // a company the model knew nothing about, read aloud to that company.
@@ -1567,6 +1630,12 @@ namespace InterviewCopilot
                            "otherwise stay with your approach and never invent an incident, teammate, project or outcome.";
 
                 case QuestionType.ContextStatement:
+                    // After the candidate's own questions, a real answer acknowledged the
+                    // interviewer and then asked yet another question, restarting the
+                    // loop the closing rules exist to end.
+                    if (PriorCandidateQuestionInvitations() > 0)
+                        return "1-2 SHORT conversational sentences: thank them for explaining and say briefly why it was useful to hear. " +
+                               "Do not ask another question, repeat their explanation, or launch into your own background.";
                     return "1-2 SHORT conversational sentences acknowledging what the interviewer shared. " +
                            "Do not repeat their explanation point by point, answer a question they did not ask, or launch into your own background.";
 
@@ -1691,7 +1760,13 @@ namespace InterviewCopilot
                 "Nothing in either part may be invented: no employer, percentage, " +
                 "metric, team size, salary or project name that is not in the " +
                 "verified facts. Where a figure belongs and none is known, write " +
-                "[your number] rather than choosing one.\n\n" +
+                "[your number] rather than choosing one. " +
+                // A real answer about distributed training named Horovod, "NCCL 2.14"
+                // and "four to sixteen GPUs" at an employer whose resume lists none of
+                // them. An interviewer who asks one follow-up on a tool the candidate
+                // never used ends the interview.
+                "Never say the candidate used a tool, library, version or cluster size " +
+                "that is not named in the verified facts; describe the approach instead.\n\n" +
                 contextNote +
                 BuildScreenContextNote() +
                 historyHint +

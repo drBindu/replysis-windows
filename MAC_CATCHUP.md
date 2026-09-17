@@ -63,6 +63,35 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Fixes from replaying two real interviews (sessions 411 and 413, 2026-09-16)
+
+Both sessions were replayed turn by turn through PromptBuilder with the real
+history, and the problem turns re-run against the live model.
+
+- "Can you tell me / describe / walk me through / please describe ..." was YesNo
+  and got 1-2 sentences: 14 of 31 turns in one interview. A polite request prefix
+  is now stripped and the rest classified; "your (past) experience/background/
+  resume" is Intro. Suite 16, InterviewTurnTests.
+- "How do you see a role like this fitting into that path?" matched the screen
+  phrase "do you see" and went to the screen reader, which replied with template
+  text ("SAY THIS ... [your previous company]"). "do you see"/"can you see" now
+  count only when they point at something ("this code", "my screen"), never at a
+  role, "yourself" or a future. "How/where do you see" is General.
+- Visa and work status ("what is cap extension?", H-1B, OPT, EAD, sponsorship)
+  is YesNo with a reminder to state only what the facts give, never explain rules
+  or timelines, never say "profile" aloud. The old example invented "no
+  sponsorship needed for the next two years".
+- "What are your strengths / why should we hire you" have their own format (two
+  strengths with proof from the facts) instead of "why this company".
+- Collaboration with researchers/cross-functional teams is Situational.
+- After the candidate's questions, a long interviewer turn (45+ words, no
+  closing question) is a ContextStatement, and that acknowledgement no longer
+  asks another question.
+- Every answer: never claim a tool, library, version or cluster size not named
+  in the facts (a real answer invented Horovod, NCCL 2.14, 4-to-16 GPUs).
+
+---
+
 ## Audit fixes on today's changes (2026-09-17)
 
 - Engine: static needs both >5% of samples at the rail AND a zero-crossing rate
