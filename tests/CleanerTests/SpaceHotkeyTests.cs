@@ -51,6 +51,24 @@ internal static class SpaceHotkeyTests
         Check(!GlobalHotkey.IsSpaceAToggle(t + 5_000, lastKey, true),
             "Ctrl, Shift or Win plus Space never toggles");
 
+        // Screen keys and the debug key
+        Check(GlobalHotkey.ScreenKeyAllowed(ctrlAltHeld: false, plainKeysEnabled: true),
+            "plain F8 reads the screen by default");
+        Check(!GlobalHotkey.ScreenKeyAllowed(ctrlAltHeld: false, plainKeysEnabled: false),
+            "plain F8 goes to the other app when screen keys are turned off");
+        Check(GlobalHotkey.ScreenKeyAllowed(ctrlAltHeld: true, plainKeysEnabled: false),
+            "Ctrl+Alt+F8 always reads the screen");
+        Check(!GlobalHotkey.DebugKeyAllowed(ctrlAltHeld: false),
+            "plain F12 is left to the browser and the IDE");
+        Check(GlobalHotkey.DebugKeyAllowed(ctrlAltHeld: true),
+            "Ctrl+Alt+F12 opens the debug window");
+
+        // Defaults a fresh install and an old config file both get
+        var defaults = new SettingsWindow.AppConfig();
+        Check(!defaults.SaveSessionAudio, "session audio is not saved unless turned on");
+        Check(defaults.ScreenKeysEverywhere, "screen keys work everywhere by default");
+        Check(defaults.WatchScreenEnabled, "continuous screen reading stays on by default");
+
         return failed;
     }
 }

@@ -63,7 +63,7 @@ namespace InterviewCopilot
 
             var header = new System.Windows.Controls.TextBlock
             {
-                Text = "SPACE KEY DEBUG LOG  (F12 to hide)",
+                Text = "SPACE KEY DEBUG LOG  (Ctrl+Alt+F12 to hide)",
                 Foreground = System.Windows.Media.Brushes.Cyan,
                 FontSize = 14,
                 FontWeight = FontWeights.Bold,
@@ -162,7 +162,7 @@ namespace InterviewCopilot
 
             Log("DEBUG", "Debug window started");
             Log("DEBUG", "Waiting for Space key events...");
-            Log("DEBUG", "Press F12 to hide/show this window");
+            Log("DEBUG", "Press Ctrl+Alt+F12 to hide/show this window");
             Log("DEBUG", "-----------------------------------");
         }
 

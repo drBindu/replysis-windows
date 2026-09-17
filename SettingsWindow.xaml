@@ -177,6 +177,46 @@
                     </Grid>
                 </Border>
 
+                <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                   Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Save session audio" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
+                            <TextBlock Text="Keeps an encrypted copy of each session's audio on this computer for 7 days. Nothing is uploaded. Off by default, and takes effect from your next session."
+                                       Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="2" x:Name="SaveAudioCheckBox"
+                                  Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,20">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="&#xE765;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                   Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Screen keys work in every app" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
+                            <TextBlock Text="F8 reads the window you are in, F9 your main screen, F7 a part you select, from any app. Turn this off if another app needs those keys, such as an IDE, and use Ctrl+Alt+F7, F8 or F9 instead."
+                                       Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="2" x:Name="ScreenKeysCheckBox"
+                                  Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    </Grid>
+                </Border>
+
                 <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,20">
                     <Grid>
                         <Grid.ColumnDefinitions>

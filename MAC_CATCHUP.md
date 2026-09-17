@@ -63,6 +63,32 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Recordings off by default, screen keys switchable, F12 moved (2026-09-17)
+
+Owner's decisions after an external release review. Continuous screen capture
+is intentional and was NOT changed: every 2s while listening, every 15s for 5
+minutes after mute, Read Screen and F8/F9 as before.
+
+- Session audio recordings: every session used to write record.flag, so the
+  engine recorded mixed audio for up to 90 minutes, kept it encrypted for 7
+  days, and nothing ever played it back (the Sessions panel only deletes it).
+  Now off by default behind a Settings switch, "Save session audio"
+  (AppConfig.SaveSessionAudio, default false; old config files load false). When
+  off, StartNewSessionAsync removes any stale record.flag. The status label says
+  LISTENING instead of RECORDING unless audio is actually being saved.
+- F7, F8, F9: plain keys still read the screen from any app by default. A new
+  switch, "Screen keys work in every app" (ScreenKeysEverywhere, default true),
+  hands those keys back to other apps when off (an IDE uses them for debugging),
+  and Ctrl+Alt+F7, F8 or F9 always work.
+- F12 opened a support debug window and swallowed F12 from every app, which is
+  browser DevTools and an IDE's go-to-definition. It is now Ctrl+Alt+F12 only
+  outside Replysis, and every "Press F12 for details" message says Ctrl+Alt+F12.
+- Ctrl+Alt chords can arrive as WM_SYSKEYDOWN, so the hook promotes those to a
+  normal press only when Ctrl is held too; Alt+Space and Alt+Tab stay untouched.
+- Tests in suite 14 cover the key rules and all three defaults.
+
+---
+
 ## Update check honesty, overlay height, CI runs the tests (2026-09-17)
 
 - Settings "check for updates" said "You are up to date" when the check FAILED:

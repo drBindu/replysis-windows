@@ -9,6 +9,8 @@ namespace InterviewCopilot
         private const int WH_KEYBOARD_LL = 13;
         private const int WM_KEYDOWN = 0x0100;
         private const int WM_KEYUP   = 0x0101;
+        private const int WM_SYSKEYDOWN = 0x0104;
+        private const int WM_SYSKEYUP   = 0x0105;
         private const int VK_SPACE = 0x20;
         private const int VK_F7  = 0x76;   // F7  = Drag a box around one part (global)
         private const int VK_F8  = 0x77;   // F8  = Analyze the active screen (global)
@@ -63,6 +65,29 @@ namespace InterviewCopilot
         /// </summary>
         internal static bool IsSpaceAToggle(long nowMs, long lastTypingKeyMs, bool modifierHeld) =>
             !modifierHeld && nowMs - lastTypingKeyMs >= TypingWindowMs;
+
+        /// <summary>
+        /// Whether plain F7, F8 and F9 read the screen from any app. On by default,
+        /// because reading the screen with F8 is how the product is used. Turning
+        /// it off in Settings hands those keys back to other apps, where an IDE
+        /// uses them for debugging, and Ctrl+Alt+F7, F8 or F9 read the screen instead.
+        /// Read when one of those keys is pressed, never on ordinary typing.
+        /// </summary>
+        public Func<bool> PlainScreenKeys { get; set; } = SettingsWindow.GetScreenKeysEverywhere;
+
+        /// <summary>A screen key counts with Ctrl+Alt held, or when plain keys are enabled.</summary>
+        internal static bool ScreenKeyAllowed(bool ctrlAltHeld, bool plainKeysEnabled) =>
+            ctrlAltHeld || plainKeysEnabled;
+
+        /// <summary>
+        /// The debug window is for support, not for users, and plain F12 belongs to
+        /// the browser's developer tools and an IDE's go-to-definition. It was
+        /// swallowed from every app while Replysis ran. Ctrl+Alt+F12 only now.
+        /// </summary>
+        internal static bool DebugKeyAllowed(bool ctrlAltHeld) => ctrlAltHeld;
+
+        private static bool CtrlAltHeld() =>
+            (GetAsyncKeyState(0x11) & 0x8000) != 0 && (GetAsyncKeyState(0x12) & 0x8000) != 0;
         private bool _f7Down = false;
         private bool _f8Down = false;
         private bool _f9Down = false;
@@ -123,8 +148,12 @@ namespace InterviewCopilot
 
             int vkCode = Marshal.ReadInt32(lParam);
             int flags  = Marshal.ReadInt32(lParam, 8);
-            bool isDown = wParam == (IntPtr)WM_KEYDOWN;
-            bool isUp   = wParam == (IntPtr)WM_KEYUP;
+            // A key pressed with Alt can arrive as a system key message. Promote it
+            // to a normal press only when Ctrl is held too, so the Ctrl+Alt screen
+            // and debug shortcuts work while Alt+Space and Alt+Tab stay untouched.
+            bool isDown = wParam == (IntPtr)WM_KEYDOWN ||
+                          (wParam == (IntPtr)WM_SYSKEYDOWN && CtrlAltHeld());
+            bool isUp   = wParam == (IntPtr)WM_KEYUP || wParam == (IntPtr)WM_SYSKEYUP;
 
             // Ignore synthetic key events entirely — e.g. dictation tools like Wispr Flow
             // "type" their transcribed text by simulating real keystrokes (spaces between
@@ -144,7 +173,8 @@ namespace InterviewCopilot
                 // window in front, which is the one place it cannot be during an
                 // interview, so the sharpest and fastest way to read a screen was
                 // effectively unreachable when it mattered.
-                if (vkCode == VK_F7 && !IsOwnerWindowForeground() && _onRegionAnalysisPressed != null)
+                if (vkCode == VK_F7 && !IsOwnerWindowForeground() && _onRegionAnalysisPressed != null &&
+                    ScreenKeyAllowed(CtrlAltHeld(), PlainScreenKeys()))
                 {
                     if (!_f7Down)
                     {
@@ -156,7 +186,8 @@ namespace InterviewCopilot
                 }
 
                 // F8 - Analyze the screen the user is working on
-                if (vkCode == VK_F8 && !IsOwnerWindowForeground() && _onScreenAnalysisPressed != null)
+                if (vkCode == VK_F8 && !IsOwnerWindowForeground() && _onScreenAnalysisPressed != null &&
+                    ScreenKeyAllowed(CtrlAltHeld(), PlainScreenKeys()))
                 {
                     if (!_f8Down)
                     {
@@ -168,7 +199,8 @@ namespace InterviewCopilot
                 }
 
                 // F9 — Analyze primary screen only
-                if (vkCode == VK_F9 && !IsOwnerWindowForeground() && _onPrimaryScreenAnalysisPressed != null)
+                if (vkCode == VK_F9 && !IsOwnerWindowForeground() && _onPrimaryScreenAnalysisPressed != null &&
+                    ScreenKeyAllowed(CtrlAltHeld(), PlainScreenKeys()))
                 {
                     if (!_f9Down)
                     {
@@ -180,7 +212,8 @@ namespace InterviewCopilot
                 }
 
                 // F12 — toggle debug window (only when app is NOT focused)
-                if (vkCode == VK_F12 && !IsOwnerWindowForeground() && _onF12Pressed != null)
+                if (vkCode == VK_F12 && !IsOwnerWindowForeground() && _onF12Pressed != null &&
+                    DebugKeyAllowed(CtrlAltHeld()))
                 {
                     if (!_f12Down)
                     {

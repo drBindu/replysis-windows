@@ -213,6 +213,9 @@ namespace InterviewCopilot
         private int sessionNumber = 1;
         private string sessionLogPath = "";
         private string _recordingSessionId = "";
+        // Whether this session's audio is being saved to disk. Read once per
+        // session rather than on every mic repaint.
+        private bool _savingSessionAudio;
 
         private GlobalHotkey? _globalHotkey;
         private DebugWindow? _debugWindow;
@@ -4042,7 +4045,14 @@ namespace InterviewCopilot
                 SecureDataProtector.WriteProtectedFile(sessionLogPath, header + "\n\n");
                 File.WriteAllText(RecordingIdPath, _recordingSessionId);
                 File.WriteAllText(RecordingSessionNumberPath, sessionNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                File.WriteAllText(Path.Combine(AppDataFolder, "record.flag"), "1");
+                // Record only when the user turned on Save session audio. It used to
+                // run for every session with nothing asking for it and nothing
+                // playing it back. The flag is removed otherwise, so one left by a
+                // crash cannot start a recording nobody asked for.
+                _savingSessionAudio = SettingsWindow.GetSaveSessionAudio();
+                string recordFlag = Path.Combine(AppDataFolder, "record.flag");
+                if (_savingSessionAudio) File.WriteAllText(recordFlag, "1");
+                else if (File.Exists(recordFlag)) File.Delete(recordFlag);
             }
             catch (Exception ex)
             {
@@ -4269,11 +4279,11 @@ namespace InterviewCopilot
                 MicBtn.ToolTip =
                     "The app cannot reach the speech service. This is usually a network "
                     + "that blocks it - a work, school, or shop network, or a VPN. "
-                    + "Try a phone hotspot. Press F12 for details.";
+                    + "Try a phone hotspot. Press Ctrl+Alt+F12 for details.";
             }
             else if (!_engineOnline) { c = Color.FromRgb(245, 178, 60); label = "CONNECTING"; }
             else if (isMuted) { c = Color.FromRgb(239, 68, 68); label = "MUTED"; }
-            else { c = Color.FromRgb(239, 68, 68); label = isRecording ? "RECORDING" : "READY"; }
+            else { c = Color.FromRgb(239, 68, 68); label = isRecording && _savingSessionAudio ? "RECORDING" : "LISTENING"; }
 
             var brush = new SolidColorBrush(c);
             MicIndicator.Fill = brush;
@@ -4610,7 +4620,7 @@ namespace InterviewCopilot
                                     || line.Contains("Input Device", StringComparison.OrdinalIgnoreCase)
                                         ? "No microphone found. Plug one in, or pick one in "
                                           + "Settings, then restart the audio service."
-                                        : "The speech engine could not start. Press F12 for details.";
+                                        : "The speech engine could not start. Press Ctrl+Alt+F12 for details.";
 
                                 _engineFatalReason = reason;
                                 _engineAuthFailed = true;   // stops the restart loop
@@ -5412,7 +5422,7 @@ namespace InterviewCopilot
             // debug log the user has no reason to open. Someone whose machine is
             // missing the speech engine just saw transcription silently not work.
             string detail = string.IsNullOrEmpty(_engineFatalReason)
-                ? "Speech transcription could not start. Press F12 for details."
+                ? "Speech transcription could not start. Press Ctrl+Alt+F12 for details."
                 : $"Speech transcription could not start. {_engineFatalReason}.";
 
             if (_isCameraMode && answerWindow != null)
@@ -6343,7 +6353,7 @@ namespace InterviewCopilot
             {
                 DebugWindow.Log("SCREEN_ERR", ex.Message);
                 RestoreWindows();
-                AiAnswerBox.Text = "Screen capture failed. Press F12 for details.";
+                AiAnswerBox.Text = "Screen capture failed. Press Ctrl+Alt+F12 for details.";
                 _isScreenAnalyzing = false;
                 StopThinkingUi();
                 return;

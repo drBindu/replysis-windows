@@ -85,6 +85,8 @@ namespace InterviewCopilot
             CloudSyncCheckBox.IsChecked = cfg.CloudSyncEnabled;
             StealthCheckBox.IsChecked   = cfg.StealthMode;
             WatchScreenCheckBox.IsChecked = cfg.WatchScreenEnabled;
+            SaveAudioCheckBox.IsChecked   = cfg.SaveSessionAudio;
+            ScreenKeysCheckBox.IsChecked  = cfg.ScreenKeysEverywhere;
 
             LoadLanguages(cfg.TranscriptLanguage);
 
@@ -435,6 +437,8 @@ namespace InterviewCopilot
                 CloudSyncEnabled  = CloudSyncCheckBox.IsChecked == true,
                 StealthMode       = StealthCheckBox.IsChecked == true,
                 WatchScreenEnabled = WatchScreenCheckBox.IsChecked == true,
+                SaveSessionAudio   = SaveAudioCheckBox.IsChecked == true,
+                ScreenKeysEverywhere = ScreenKeysCheckBox.IsChecked == true,
                 TranscriptLanguage = SelectedLanguageCode(),
                 // Carry the Sarvam key through — it's not an editable field here, so pull the
                 // stored value. Without this, saving Settings would wipe it (fresh AppConfig).
@@ -584,6 +588,13 @@ namespace InterviewCopilot
             /// when a question arrives that is actually about it.
             /// </summary>
             public bool   WatchScreenEnabled { get; set; } = true;
+            // Off by default. Every session used to be recorded to disk
+            // automatically, kept seven days and never played back. Audio of
+            // an interviewer is not something to keep without being asked.
+            // Config files written before this existed load it as false.
+            public bool   SaveSessionAudio   { get; set; } = false;
+            // Plain F7, F8 and F9 read the screen from any app unless turned off.
+            public bool   ScreenKeysEverywhere { get; set; } = true;
             // true  = system audio + mic (default)
             // false = system audio only  (mic never opened — fully invisible, no OS mic indicator)
             public bool   MicCaptureEnabled  { get; set; } = true;
@@ -726,6 +737,8 @@ namespace InterviewCopilot
 
         public static bool   GetMicCaptureEnabled() => LoadConfig().MicCaptureEnabled;
         public static bool   GetWatchScreenEnabled() => LoadConfig().WatchScreenEnabled;
+        public static bool   GetSaveSessionAudio()   => LoadConfig().SaveSessionAudio;
+        public static bool   GetScreenKeysEverywhere() => LoadConfig().ScreenKeysEverywhere;
 
         public static void SetWatchScreenEnabled(bool enabled)
         {
