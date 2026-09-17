@@ -50,6 +50,49 @@ internal static class InterviewTurnTests
         Check(T("And how do you see a role like this fitting into that path?") == PromptBuilder.QuestionType.General, "career direction is not a technical explanation");
         Check(T("What are your strengths?") == PromptBuilder.QuestionType.WhyRole, "strengths still detected");
 
+        // After the candidate has asked their question, every way of asking
+        // "anything else?" gets a short local reply, never another question.
+        string[] followUps =
+        {
+            "Anything else?", "Anything else you'd like to ask?", "Any other questions?", "Do you have any other questions for me?",
+            "Is there anything else you want to know?", "What else would you like to know about the role or the team?",
+            "Any more questions?", "Sure. Anything else?", "Okay, any other questions for us?", "Is there something else you'd like to ask me?",
+            "Do you have any more questions about the team", "Anything else I can answer for you?", "Any final questions?",
+            "Is there another angle on the role, the tech, or the team that you'd like me to focus on?", "Does that answer your question?",
+            "Did that help?", "Was that clear?", "Anything more?", "Do you want to ask anything else?", "Any follow-up questions?", "Any other thing you want to ask?",
+        };
+        void InPhase()
+        {
+            PromptBuilder.ClearHistory();
+            PromptBuilder.AddToHistory("Before we wrap up, is there anything you'd like to ask me about the role or the team?",
+                "What is the team's top priority for the next six months?");
+            PromptBuilder.AddToHistory("Mainly scaling the platform, measured by adoption and serving latency.", "Thanks, that is helpful to hear.");
+        }
+        foreach (string f in followUps)
+        {
+            InPhase();
+            bool local = PromptBuilder.TryGetClosingResponse(f, out string reply);
+            Check(local && !reply.Contains('?'), $"after the candidate's question, '{f}' gets a short reply with no new question");
+        }
+
+        // The replies do not repeat word for word
+        InPhase();
+        PromptBuilder.TryGetClosingResponse("Anything else?", out string first);
+        PromptBuilder.AddToHistory("Anything else?", first);
+        PromptBuilder.TryGetClosingResponse("Any more questions?", out string second);
+        Check(first != second, "two wrap-up replies in a row are not the same sentence");
+
+        // Before any invitation, these are ordinary turns
+        PromptBuilder.ClearHistory();
+        Check(!PromptBuilder.TryGetClosingResponse("Anything else?", out _), "'Anything else?' mid-interview is not a wrap-up");
+        Check(!PromptBuilder.TryGetClosingResponse("Did that help?", out _), "'Did that help?' mid-interview is not a wrap-up");
+        Check(!PromptBuilder.TryGetClosingResponse("Do you have any questions for me?", out _), "the first invitation still lets the candidate ask one question");
+        InPhase();
+        Check(!PromptBuilder.TryGetClosingResponse("Anything else? How would you scale the serving layer?", out _), "a real question after 'anything else' still gets answered");
+        Check(!PromptBuilder.TryGetClosingResponse("Any questions on the approach before you start coding?", out _), "questions about a coding task are not a wrap-up");
+        PromptBuilder.ClearHistory();
+        Check(PromptBuilder.DetectType("Any questions on the approach before you start coding?") != PromptBuilder.QuestionType.CandidateQuestions, "a coding-task check is not an invitation to ask about the role");
+
         PromptBuilder.ClearHistory();
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "interview turns: all passed" : $"interview turns: {failed} FAILED");

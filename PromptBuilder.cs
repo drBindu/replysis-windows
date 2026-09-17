@@ -509,6 +509,14 @@ namespace InterviewCopilot
             }
             Match angle = AnotherAngleOnRole.Match(t);
             if (angle.Success) end = Math.Max(end, angle.Index + angle.Length);
+            // The list above names exact phrases, and an interviewer's wording is
+            // never on it: tested against twenty ordinary ways of asking, it caught
+            // seven. "Any more questions?", "Any final questions?", "Do you want to
+            // ask anything else?" all reached the model, which asked yet another
+            // question, and a candidate who keeps asking questions on cue is the
+            // clearest sign that something is answering for them.
+            foreach (Match m in InvitationPattern.Matches(t))
+                end = Math.Max(end, m.Index + m.Length);
 
             return end >= 0 && !RequestFollows(t, end);
         }
@@ -575,6 +583,41 @@ namespace InterviewCopilot
                 @"\b(stem opt|opt|cpt|ead|h-?1-?b|h 1 b|cap[- ]gap|cap extension|green card|i-?20|i-?983|sponsor(?:ship)?|visa|work authori[sz]ation|authori[sz]ed to work)\b",
                 RegexOptions.IgnoreCase);
 
+        private static readonly Regex InvitationPattern = new(
+            // Not "any questions on the approach before you start coding?": that is
+            // about a task, and a wrap-up reply to it ends the exercise.
+            @"\bany (?:other |more |further |final |last |additional |follow[- ]?up )?questions?\b" +
+            @"(?![^?.!]*\b(?:approach|problem|task|exercise|code|coding|design|requirements?|solution|assignment|start|begin)\b)" +
+            @"|\bany (?:other )?thing (?:else )?(?:you|u) (?:want|like|would like|wanna) to (?:ask|know)\b" +
+            @"|\b(?:do|would|did) (?:you|u) (?:want|wanna|like|have anything) to ask\b" +
+            @"|\b(?:want|like) to ask (?:me |us )?(?:anything|something)\b" +
+            @"|\b(?:anything|something) (?:else )?(?:that )?(?:you|you'd|you would|u) (?:like|want|wanna|would like) to (?:ask|know)\b" +
+            @"|\bis there (?:anything|something) (?:else )?(?:you|you'd|you would|u)\b[^?.!]{0,30}\b(?:ask|know)\b" +
+            @"|\bquestions? for (?:me|us)\b",
+            RegexOptions.Compiled);
+
+        /// <summary>
+        /// Short follow-ups that only mean "any more questions?" once the candidate
+        /// has already been invited to ask: "Anything else?", "Did that help?".
+        /// Earlier in an interview "Anything else?" asks for more on the last
+        /// answer, so these are never matched on their own.
+        /// </summary>
+        private static readonly Regex CandidateQuestionFollowUp = new(
+            @"^(?:(?:ok|okay|sure|great|cool|alright|all right|perfect|good|yeah|yes|so|and|right|got it)[,.!]?\s+)*" +
+            @"(?:anything else|anything more|something else|is that all|is there anything else" +
+            @"|anything else i can (?:answer|help|clarify|tell)[^?.!]*" +
+            @"|did that help|does that help|was that clear|was that helpful|does that make sense|that make sense|did that make sense)" +
+            @"(?:\s+(?:for you|you want to know|you'd like to know|at all|then))?\s*[?.!]*\s*$",
+            RegexOptions.Compiled);
+
+        internal static bool IsCandidateQuestionFollowUp(string question) =>
+            CandidateQuestionFollowUp.IsMatch(Regex.Replace(question ?? "", @"\s+", " ").Trim().ToLowerInvariant());
+
+        private static bool InCandidateQuestionPhase() => PriorCandidateQuestionInvitations() > 0;
+
+        private static int PriorClosingTurns() =>
+            History.Count(turn => IsCandidateQuestionInvitation(turn.Q) || IsCandidateQuestionFollowUp(turn.Q));
+
         private static int PriorCandidateQuestionInvitations() =>
             History.Count(turn => IsCandidateQuestionInvitation(turn.Q));
 
@@ -588,14 +631,27 @@ namespace InterviewCopilot
         {
             response = "";
 
-            if (IsCandidateQuestionInvitation(question))
+            bool followUp = InCandidateQuestionPhase() && IsCandidateQuestionFollowUp(question);
+            if (IsCandidateQuestionInvitation(question) || followUp)
             {
-                int priorInvitations = PriorCandidateQuestionInvitations();
-                if (priorInvitations == 0) return false;
+                if (PriorCandidateQuestionInvitations() == 0) return false;
 
-                response = priorInvitations == 1
-                    ? "That answered what I wanted to know, thank you. I think that covers my questions."
-                    : "No, I'm all set. Thank you for walking me through it.";
+                // Varied, so the same sentence is never said twice in a row, and
+                // never a new question.
+                bool checkingItHelped = Regex.IsMatch(question.ToLowerInvariant(),
+                    @"\b(help|helpful|clear|make sense|answer your question|cover your question|level of detail|go deeper|more detail)\b");
+                int prior = PriorClosingTurns();
+                if (checkingItHelped)
+                    response = prior <= 1
+                        ? "Yes, that was really helpful, thank you. That covers my questions."
+                        : "Yes, it did, thank you. That's everything from me.";
+                else
+                    response = prior switch
+                    {
+                        <= 1 => "That answered what I wanted to know, thank you. I think that covers my questions.",
+                        2 => "No, I'm all set. Thank you for walking me through it.",
+                        _ => "No, that's everything from me. Thanks again for your time.",
+                    };
                 return true;
             }
 
@@ -694,6 +750,8 @@ namespace InterviewCopilot
             // "Do you have any questions?" otherwise becomes a yes/no answer, and
             // "want me to go deeper?" otherwise asks for yet another long answer.
             if (IsCandidateQuestionInvitation(t))
+                return QuestionType.CandidateQuestions;
+            if (InCandidateQuestionPhase() && IsCandidateQuestionFollowUp(t))
                 return QuestionType.CandidateQuestions;
             if (IsInterviewEndStatement(t))
                 return QuestionType.InterviewClosing;

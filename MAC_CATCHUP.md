@@ -63,6 +63,26 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## The candidate stops asking questions after the first one (2026-09-17)
+
+- Owner: when the interviewer keeps saying "anything else?", the app kept asking
+  new questions, which gives the copilot away.
+- The invitation detector was an exact-phrase list: of 20 ordinary wordings it
+  caught 7. "Any more questions?", "Any final questions?", "Do you want to ask
+  anything else?", "Anything else?" all reached the model, which asked again.
+- Now InvitationPattern (regex) catches the general forms, excluding "any
+  questions on the approach before you start coding?"; and once the candidate has
+  been invited, short follow-ups ("Anything else?", "Did that help?", "Was that
+  clear?") also count, but never before (mid-interview "Anything else?" asks for
+  more on the last answer).
+- The first invitation still asks ONE question; every later one gets a local reply
+  with no question, varied so no sentence repeats in a row, and "Did that help?"
+  gets "Yes, that was really helpful..." instead.
+- Tested: 20/20 wordings handled, 0 of 36 normal questions (with and without the
+  invitation earlier) wrongly closed. Suite 16.
+
+---
+
 ## Fixes from replaying two real interviews (sessions 411 and 413, 2026-09-16)
 
 Both sessions were replayed turn by turn through PromptBuilder with the real
