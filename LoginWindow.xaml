@@ -28,8 +28,8 @@
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button Click="CloseBtn_Click" Background="Transparent" BorderThickness="0"
-                                Foreground="#7F93AB" Cursor="Hand" Padding="7,3" ToolTip="Close">
+                        <Button Click="CloseBtn_Click" Style="{StaticResource PremiumIconButton}"
+                                ToolTip="Close">
                             <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="11"/>
                         </Button>
                     </StackPanel>
@@ -136,8 +136,9 @@
                                  KeyDown="Input_KeyDown"/>
                         <Button Grid.Column="1" x:Name="RevealPasswordBtn"
                                 Click="RevealPasswordBtn_Click"
-                                Background="Transparent" BorderThickness="0"
-                                Cursor="Hand" Padding="12,0" VerticalAlignment="Center"
+                                Style="{StaticResource PremiumIconButton}"
+                                Width="38" Height="34" Margin="0,0,4,0"
+                                VerticalAlignment="Center"
                                 ToolTip="Show password">
                             <TextBlock x:Name="RevealPasswordIcon" Text="&#xE7B3;"
                                        FontFamily="Segoe MDL2 Assets" FontSize="13"
@@ -160,7 +161,7 @@
                         Height="46" Cursor="Hand" Margin="0,0,0,16" FocusVisualStyle="{StaticResource KeyboardFocus}">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd" CornerRadius="10" Background="#1E9E63" BorderBrush="#34E08A" BorderThickness="1">
+                            <Border x:Name="Bd" CornerRadius="10" Background="{DynamicResource ScreenActionSurface}" BorderBrush="{DynamicResource ScreenActionStroke}" BorderThickness="1">
                                 <Grid>
                                     <TextBlock x:Name="BtnText" Text="Sign In"
                                                Foreground="White" FontSize="14"
@@ -178,11 +179,11 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#24B672"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ScreenActionHoverSurface}"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="Bd" Property="Background" Value="#16281F"/>
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#26364C"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -207,8 +208,8 @@
                         Height="46" Cursor="Hand" Margin="0,0,0,16" FocusVisualStyle="{StaticResource KeyboardFocus}">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="GoogleBd" CornerRadius="10" Background="#0B131F"
-                                    BorderBrush="#26364C" BorderThickness="1">
+                            <Border x:Name="GoogleBd" CornerRadius="10" Background="{DynamicResource ActionGraphiteSurface}"
+                                    BorderBrush="{DynamicResource ActionGraphiteStroke}" BorderThickness="1">
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
                                             VerticalAlignment="Center">
                                     <!-- The official mark, drawn as vectors. A red letter "G"
@@ -230,11 +231,11 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="GoogleBd" Property="Background" Value="#152337"/>
-                                    <Setter TargetName="GoogleBd" Property="BorderBrush" Value="#3A4D68"/>
+                                    <Setter TargetName="GoogleBd" Property="Background" Value="{DynamicResource GlassButtonHoverSurface}"/>
+                                    <Setter TargetName="GoogleBd" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="GoogleBd" Property="Background" Value="#0A0F18"/>
+                                    <Setter TargetName="GoogleBd" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
                                     <Setter TargetName="GoogleBtnText" Property="Foreground" Value="#4C5A6C"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>

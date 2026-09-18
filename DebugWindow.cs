@@ -75,11 +75,14 @@ namespace InterviewCopilot
             var copyButton = new System.Windows.Controls.Button
             {
                 Content = "Copy full log",
+                Style = (Style)Application.Current.FindResource("PremiumSecondaryButton"),
+                Height = 28,
+                MinWidth = 0,
                 Padding = new Thickness(10, 3, 10, 3),
-                Background = System.Windows.Media.Brushes.DarkSlateGray,
                 Foreground = System.Windows.Media.Brushes.White,
                 BorderThickness = new Thickness(0)
             };
+            copyButton.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "ActionGraphiteSurface");
             copyButton.Click += (s, e) =>
             {
                 try

@@ -29,6 +29,40 @@ namespace InterviewCopilot
     {
         /// <summary>The backdrop colour, shared by every window.</summary>
         private const byte R = 0x09, G = 0x0B, B = 0x12;
+        private static double? _buttonOpacity;
+
+        /// <summary>Button materials follow the backdrop preference; text never fades.</summary>
+        internal static void ApplyButtonMaterials(double storedOpacity)
+        {
+            var app = Application.Current;
+            if (app == null || _buttonOpacity == storedOpacity) return;
+            double backdrop = Math.Clamp((storedOpacity - 0.50) / 0.50, 0.06, 1.0);
+            double strength = 0.35 + 0.65 * backdrop;
+
+            void Set(string key, double alpha, byte red = 235, byte green = 242, byte blue = 255)
+            {
+                var brush = new SolidColorBrush(Color.FromArgb(
+                    (byte)Math.Round(255 * alpha * strength), red, green, blue));
+                brush.Freeze();
+                app.Resources[key] = brush;
+            }
+
+            Set("ScreenActionSurface", 0.20);
+            Set("ScreenActionStroke", 0.38);
+            Set("ScreenActionHoverSurface", 0.30);
+            Set("ActionSilverSurface", 0.20);
+            Set("ActionGraphiteSurface", 0.10);
+            Set("ActionGraphiteStroke", 0.24);
+            Set("GlassButtonHoverSurface", 0.22);
+            Set("GlassButtonPressedSurface", 0.07);
+            Set("GlassButtonHoverStroke", 0.50);
+            Set("GlassButtonDisabledSurface", 0.04);
+            Set("GlassButtonDangerSurface", 0.14, 248, 113, 113);
+            Set("GlassButtonDangerHoverSurface", 0.26, 248, 113, 113);
+            Set("GlassButtonDangerStroke", 0.38, 248, 113, 113);
+            Set("GlassButtonSelectedSurface", 0.20);
+            _buttonOpacity = storedOpacity;
+        }
 
         /// <summary>
         /// The backdrop brush for a stored opacity preference. Frozen, because
@@ -54,7 +88,9 @@ namespace InterviewCopilot
         {
             if (root == null) return;
             window.Opacity = 1.0;             // content stays crisp; only the backdrop fades
-            root.Background = BackdropFor(SettingsWindow.GetMainWindowOpacity());
+            double opacity = SettingsWindow.GetMainWindowOpacity();
+            root.Background = BackdropFor(opacity);
+            ApplyButtonMaterials(opacity);
         }
 
         /// <summary>
@@ -69,6 +105,7 @@ namespace InterviewCopilot
         internal static void ApplyToOpenWindows(double storedOpacity)
         {
             Brush backdrop = BackdropFor(storedOpacity);
+            ApplyButtonMaterials(storedOpacity);
 
             foreach (Window w in Application.Current?.Windows ?? new WindowCollection())
             {

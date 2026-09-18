@@ -31,9 +31,10 @@
                     <TextBlock Text="Usage and plan" Foreground="#FFFFFF" FontSize="21"
                                FontWeight="SemiBold" FontFamily="Segoe UI" Margin="0,4,0,0"/>
                 </StackPanel>
-                <Button Grid.Column="1" Click="CloseBtn_Click" Width="32" Height="32"
-                        Background="Transparent" BorderThickness="0" Foreground="#8FA0B5"
-                        FontSize="18" Cursor="Hand" Content="&#x2715;"/>
+                <Button Grid.Column="1" Click="CloseBtn_Click"
+                        Style="{StaticResource PremiumIconButton}"
+                        FontFamily="Segoe MDL2 Assets" FontSize="11"
+                        ToolTip="Close" Content="&#xE711;"/>
             </Grid>
 
             <Border Grid.Row="1" Margin="0,20,0,14" Background="#101D2D"
@@ -98,13 +99,10 @@
                     <ColumnDefinition Width="12"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Click="CloseBtn_Click" Height="43" Content="Close"
-                        Foreground="#C9D4E2" Background="#111E2F" BorderBrush="#2A3B52"
-                        BorderThickness="1" FontSize="12.5" FontWeight="SemiBold"
-                        FontFamily="Segoe UI" Cursor="Hand"/>
-                <Button Grid.Column="2" Click="PricingBtn_Click" Height="43" Content="View pricing"
-                        Foreground="#07140C" Background="#34E08A" BorderThickness="0"
-                        FontSize="12.5" FontWeight="Bold" FontFamily="Segoe UI" Cursor="Hand"/>
+                <Button Grid.Column="0" Click="CloseBtn_Click"
+                        Style="{StaticResource PremiumSecondaryButton}" Content="Close"/>
+                <Button Grid.Column="2" Click="PricingBtn_Click"
+                        Style="{StaticResource PremiumPrimaryButton}" Content="View pricing"/>
             </Grid>
         </Grid>
     </Border>

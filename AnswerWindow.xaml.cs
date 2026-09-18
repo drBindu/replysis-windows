@@ -302,7 +302,7 @@ namespace InterviewCopilot
                 AnalyzeBtn.ApplyTemplate();
 
                 if (AnalyzeBtn.Template?.FindName("AnalyzeBtnLabel", AnalyzeBtn) is not System.Windows.Controls.TextBlock label ||
-                    AnalyzeBtn.Template?.FindName("AnalyzeBtnIcon",  AnalyzeBtn) is not System.Windows.Controls.TextBlock icon)
+                    AnalyzeBtn.Template?.FindName("AnalyzeBtnIcon",  AnalyzeBtn) is not System.Windows.Shapes.Path icon)
                     return;
 
                 // The button reads the screen once; it is not a switch, so the
@@ -313,9 +313,10 @@ namespace InterviewCopilot
 
                 var brush = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
-                        watching ? "#34E08A" : "#AEEFCF"));
-                label.Foreground = brush;
-                icon.Foreground  = brush;
+                        watching ? "#EDF4FF" : "#A7B6C8"));
+                label.Foreground = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(0xF4, 0xF7, 0xFC));
+                icon.Stroke = brush;
             }
             catch
             {

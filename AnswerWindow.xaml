@@ -92,13 +92,10 @@
                     <!-- Spacer -->
                     <Grid Grid.Column="3"/>
 
-                    <!-- The same switch as the main window's pill. Compact used to
-                         carry a one-shot Analyze while the main window carried a
-                         watch toggle, so the two windows disagreed about what the
-                         one screen control does. F8 still takes a single shot from
-                         anywhere, which is what that button was for. -->
+                    <!-- The same screen action and surface palette as the main toolbar. -->
                     <Button Grid.Column="4"
                             x:Name="AnalyzeBtn"
+                            Style="{StaticResource ScreenActionButton}"
                             Click="AnalyzeBtn_Click"
                             ToolTip="Read the screen and answer from it. Same as F8."
                              Margin="0,0,10,0"
@@ -108,36 +105,51 @@
                             VerticalAlignment="Center">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
+                                <Border x:Name="ScreenSurface" CornerRadius="6"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        Padding="{TemplateBinding Padding}">
+                                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Border x:Name="AnalyzeBd"
-                                         CornerRadius="7"
-                                        Padding="8,4">
+                                        Width="14" Height="14" BorderThickness="0" Margin="0,0,6,0">
                                     <Border.Background>
-                                         <SolidColorBrush Color="#34E08A" Opacity="0.16"/>
+                                         <SolidColorBrush Color="Transparent" Opacity="0.16"/>
                                     </Border.Background>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="AnalyzeBtnIcon"
-                                                   Text="&#xE7F4;"
-                                                   Foreground="#84E7B6"
-                                                   FontSize="10"
-                                                   FontFamily="Segoe MDL2 Assets"
-                                                   Margin="0,0,5,0"
-                                                   VerticalAlignment="Center"/>
+                                        <Path x:Name="AnalyzeBtnIcon" Width="14" Height="14"
+                                              Data="M1,5 V1 H5 M9,1 H13 V5 M13,9 V13 H9 M5,13 H1 V9 M4,7 H10"
+                                              Stroke="#F4F7FC" StrokeThickness="1.5"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              VerticalAlignment="Center"/>
+                                </Border>
                                         <TextBlock x:Name="AnalyzeBtnLabel"
                                                    Text="Read screen"
-                                                   Foreground="#AEEFCF"
-                                                   FontSize="10"
+                                                   Foreground="{TemplateBinding Foreground}"
+                                                   FontSize="10.5"
                                                    FontWeight="SemiBold"
                                                    FontFamily="Segoe UI"
                                                    VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <TextBlock Text="F8" Foreground="#AAB7C9" FontSize="9" FontWeight="SemiBold"
+                                               Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                  </StackPanel>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="ScreenSurface" Property="Background" Value="{DynamicResource ScreenActionHoverSurface}"/>
+                                        <Setter TargetName="ScreenSurface" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
                                         <Setter TargetName="AnalyzeBd" Property="Background">
                                             <Setter.Value>
-                                                <SolidColorBrush Color="#34E08A" Opacity="0.32"/>
+                                                <SolidColorBrush Color="Transparent" Opacity="0.32"/>
                                             </Setter.Value>
                                         </Setter>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="ScreenSurface" Property="Background" Value="{DynamicResource GlassButtonPressedSurface}"/>
+                                        <Setter TargetName="ScreenSurface" Property="BorderBrush" Value="{DynamicResource ScreenActionStroke}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter TargetName="ScreenSurface" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
+                                        <Setter TargetName="ScreenSurface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -149,7 +161,7 @@
                             Content="&#xE711;"
                             FontFamily="Segoe MDL2 Assets"
                             FontSize="10"
-                            Padding="6,3"
+                            Width="30" Height="34" Padding="6,3"
                             Background="Transparent"
                             BorderThickness="0"
                             Cursor="Hand"
@@ -163,15 +175,17 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="CloseBd"
-                                        Background="Transparent"
-                                        CornerRadius="4"
+                                        Background="{DynamicResource ActionGraphiteSurface}"
+                                        BorderBrush="{DynamicResource ActionGraphiteStroke}" BorderThickness="1"
+                                        CornerRadius="6"
                                         Padding="{TemplateBinding Padding}">
                                     <ContentPresenter HorizontalAlignment="Center"
                                                       VerticalAlignment="Center"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="CloseBd" Property="Background" Value="#0d1a2e"/>
+                                        <Setter TargetName="CloseBd" Property="Background" Value="{DynamicResource GlassButtonDangerHoverSurface}"/>
+                                        <Setter TargetName="CloseBd" Property="BorderBrush" Value="{DynamicResource GlassButtonDangerStroke}"/>
                                         <Setter Property="Foreground" Value="#f85149"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>

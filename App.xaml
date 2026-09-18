@@ -32,6 +32,221 @@
             </Setter>
         </Style>
 
+        <!-- Screen actions share their surface palette in both window sizes. -->
+        <SolidColorBrush x:Key="ScreenActionSurface" Color="#1AEBF2FF"/>
+        <SolidColorBrush x:Key="ScreenActionStroke" Color="#31EBF2FF"/>
+        <SolidColorBrush x:Key="ScreenActionHoverSurface" Color="#27EBF2FF"/>
+        <SolidColorBrush x:Key="ActionGraphiteSurface" Color="#0DEBF2FF"/>
+        <SolidColorBrush x:Key="ActionGraphiteStroke" Color="#1FEBF2FF"/>
+        <SolidColorBrush x:Key="ActionSilverSurface" Color="#1AEBF2FF"/>
+        <SolidColorBrush x:Key="GlassButtonHoverSurface" Color="#1CEBF2FF"/>
+        <SolidColorBrush x:Key="GlassButtonPressedSurface" Color="#09EBF2FF"/>
+        <SolidColorBrush x:Key="GlassButtonHoverStroke" Color="#41EBF2FF"/>
+        <SolidColorBrush x:Key="GlassButtonDisabledSurface" Color="#05EBF2FF"/>
+        <SolidColorBrush x:Key="GlassButtonDangerSurface" Color="#12F87171"/>
+        <SolidColorBrush x:Key="GlassButtonDangerHoverSurface" Color="#22F87171"/>
+        <SolidColorBrush x:Key="GlassButtonDangerStroke" Color="#31F87171"/>
+        <SolidColorBrush x:Key="GlassButtonSelectedSurface" Color="#1AEBF2FF"/>
+
+        <Style x:Key="ScreenActionButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource ScreenActionSurface}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ScreenActionStroke}"/>
+            <Setter Property="Foreground" Value="#F4F7FC"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9,3"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ScreenActionHoverSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonPressedSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ScreenActionStroke}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#8E9EFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
+                                <Setter Property="Foreground" Value="#7F8A9A"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Shared dialog actions use the same silver and graphite palette as
+             the main workspace. Window surfaces retain their existing treatment. -->
+        <Style x:Key="PremiumPrimaryButton" TargetType="Button">
+            <Setter Property="Height" Value="42"/>
+            <Setter Property="MinWidth" Value="96"/>
+            <Setter Property="Padding" Value="18,0"/>
+            <Setter Property="Background" Value="{DynamicResource ActionSilverSurface}"/>
+            <Setter Property="Foreground" Value="#F4F7FC"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ScreenActionStroke}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource ScreenActionHoverSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonPressedSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
+                                <Setter Property="Foreground" Value="#7C8899"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PremiumSecondaryButton" TargetType="Button">
+            <Setter Property="Height" Value="42"/>
+            <Setter Property="MinWidth" Value="96"/>
+            <Setter Property="Padding" Value="18,0"/>
+            <Setter Property="Background" Value="{DynamicResource ActionGraphiteSurface}"/>
+            <Setter Property="Foreground" Value="#DDDDE3"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonHoverSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonPressedSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#B4C0D0"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
+                                <Setter Property="Foreground" Value="#536276"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PremiumIconButton" TargetType="Button">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="{DynamicResource ActionGraphiteSurface}"/>
+            <Setter Property="Foreground" Value="#BDBDC8"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonHoverSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonPressedSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
+                                <Setter Property="Foreground" Value="#4D5D70"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="ToolTip">
             <Setter Property="Background" Value="#E9141F31"/>
             <Setter Property="Foreground" Value="#EAF2FF"/>
@@ -218,11 +433,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonSurface" Property="Background" Value="#1E2B40"/>
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="{DynamicResource GlassButtonHoverSurface}"/>
                                 <Setter Property="Foreground" Value="#F4F7FB"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonSurface" Property="Background" Value="#142033"/>
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="{DynamicResource GlassButtonPressedSurface}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

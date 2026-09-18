@@ -63,6 +63,21 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Visual refresh of buttons and glass, version 1.0.21 (2026-09-18)
+
+- Made with ChatGPT, reviewed before commit. Visual only: shared button styles in
+  App.xaml (PremiumPrimaryButton, PremiumSecondaryButton, glass surfaces),
+  Glass.ApplyButtonMaterials so button fills follow the opacity slider while text
+  stays crisp, green accents replaced with neutral silver, "READ SCREEN" now
+  "Read screen" with a vector icon, AUTO/MANUAL selection uses the shared glass
+  surface. The Read screen and compact pills became real Buttons (Click with
+  RoutedEventArgs instead of MouseLeftButtonDown).
+- Not touched: screen capture timing, stealth, the pin, turn-taking, prompts.
+- Version bumped to 1.0.21 in InterviewCopilot.csproj and Package.appxmanifest.
+- Mac: optional; adopt the neutral palette if it should match.
+
+---
+
 ## Transcription must survive a long interview, and Auto must keep turns apart (2026-09-17)
 
 Found by running a 12-question mock interview through the real app, and by the

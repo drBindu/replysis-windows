@@ -50,7 +50,7 @@
                                         </LinearGradientBrush>
                                     </Setter.Value>
                                 </Setter>
-                                <Setter TargetName="Track" Property="BorderBrush" Value="#A5B4FC"/>
+                                <Setter TargetName="Track" Property="BorderBrush" Value="#84E7B6"/>
                                 <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
                                 <Setter TargetName="Thumb" Property="Margin" Value="0,0,3,0"/>
                             </Trigger>
@@ -85,10 +85,9 @@
                            FontWeight="SemiBold" FontFamily="Segoe UI"
                            VerticalAlignment="Center"/>
                 <Button Content="Done" Click="SaveBtn_Click"
+                        Style="{StaticResource PremiumPrimaryButton}"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Background="Transparent" BorderThickness="0"
-                        Foreground="#FFFFFF" FontSize="15" FontWeight="SemiBold"
-                        FontFamily="Segoe UI" Cursor="Hand" Padding="0"/>
+                        Height="34" MinWidth="72" Padding="16,0" FontSize="12"/>
             </Grid>
             <Border Grid.Row="1" Background="#18FFFFFF"/>
 
@@ -145,7 +144,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xEA18;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Stealth mode" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Hides the app from screen sharing, the taskbar and Alt-Tab. Test it in your meeting app first."
@@ -165,7 +164,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="17"
-                                   Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Answer from the shared screen" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Questions about your screen are answered from it. Questions about you are answered as usual. Press F8 to read the screen any time."
@@ -185,7 +184,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Save session audio" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Keeps an encrypted copy of each session's audio on this computer for 7 days. Nothing is uploaded. Off by default, and takes effect from your next session."
@@ -205,7 +204,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xE765;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Screen keys work in every app" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="F8 reads the window you are in, F9 your main screen, F7 a part you select, from any app. Turn this off if another app needs those keys, such as an IDE, and use Ctrl+Alt+F7, F8 or F9 instead."
@@ -225,7 +224,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xE753;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Foreground="#A5B4FC" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Back up session history" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Syncs questions, answers and a short part of your resume to your other signed-in devices."
@@ -323,15 +322,15 @@
                     </Grid>
                     <Button x:Name="SignInSettingsBtn" Content="Sign in for more credits"
                             Click="SignInSettingsBtn_Click"
-                            Background="Transparent" BorderThickness="0"
-                            Foreground="#FFFFFF" FontSize="12" FontFamily="Segoe UI"
-                            HorizontalAlignment="Left" Cursor="Hand" Padding="0,0,0,6"
+                            Style="{StaticResource PremiumSecondaryButton}"
+                            Height="36" MinWidth="0" Padding="14,0" Margin="0,0,0,8"
+                            HorizontalAlignment="Left"
                             Visibility="Collapsed"/>
                     <Button Content="Check for Updates..."
                             Click="CheckUpdatesBtn_Click"
-                            Background="Transparent" BorderThickness="0"
-                            Foreground="#FFFFFF" FontSize="12" FontFamily="Segoe UI"
-                            HorizontalAlignment="Left" Cursor="Hand" Padding="0"/>
+                            Style="{StaticResource PremiumSecondaryButton}"
+                            Height="36" MinWidth="0" Padding="14,0"
+                            HorizontalAlignment="Left"/>
                 </StackPanel>
 
                 </StackPanel>

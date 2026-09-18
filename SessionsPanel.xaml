@@ -34,10 +34,10 @@
             <SolidColorBrush x:Key="AccentSoft"   Color="#5EA9F5"/>
     
             <Style x:Key="GhostBtn" TargetType="Button">
-                <Setter Property="Background" Value="#172942"/>
+                <Setter Property="Background" Value="{DynamicResource ActionGraphiteSurface}"/>
                 <Setter Property="Foreground" Value="#CFE2FA"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="FontFamily" Value="Segoe UI"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
@@ -54,11 +54,11 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#2EFFFFFF"/>
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#55FFFFFF"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassButtonHoverSurface}"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#12FFFFFF"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassButtonPressedSurface}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -67,10 +67,10 @@
             </Style>
     
             <Style x:Key="DangerBtn" TargetType="Button">
-                <Setter Property="Background" Value="#2A1620"/>
+                <Setter Property="Background" Value="{DynamicResource GlassButtonDangerSurface}"/>
                 <Setter Property="Foreground" Value="#F8A3AC"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="BorderBrush" Value="#5E2733"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource GlassButtonDangerStroke}"/>
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="FontFamily" Value="Segoe UI"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
@@ -87,8 +87,8 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#4DF87171"/>
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#8A3A48"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassButtonDangerHoverSurface}"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource GlassButtonDangerStroke}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -196,8 +196,8 @@
                                     FocusVisualStyle="{StaticResource KeyboardFocus}">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border x:Name="CBd" Background="#14FFFFFF" CornerRadius="8"
-                                                BorderBrush="{StaticResource Line}" BorderThickness="1"
+                                        <Border x:Name="CBd" Background="{DynamicResource ActionGraphiteSurface}" CornerRadius="8"
+                                                BorderBrush="{DynamicResource ActionGraphiteStroke}" BorderThickness="1"
                                                 Padding="12,7">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock x:Name="CIcon" Text="&#xE72B;"
@@ -213,13 +213,13 @@
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="CBd" Property="Background" Value="#2634E08A"/>
-                                                <Setter TargetName="CBd" Property="BorderBrush" Value="#4D34E08A"/>
+                                                <Setter TargetName="CBd" Property="Background" Value="{DynamicResource GlassButtonHoverSurface}"/>
+                                                <Setter TargetName="CBd" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
                                                 <Setter TargetName="CIcon" Property="Foreground" Value="{StaticResource Accent}"/>
                                                 <Setter TargetName="CText" Property="Foreground" Value="#EAF1F8"/>
                                             </Trigger>
                                             <Trigger Property="IsPressed" Value="True">
-                                                <Setter TargetName="CBd" Property="Background" Value="#1A34E08A"/>
+                                                <Setter TargetName="CBd" Property="Background" Value="{DynamicResource GlassButtonPressedSurface}"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>

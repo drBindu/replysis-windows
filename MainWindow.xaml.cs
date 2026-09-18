@@ -996,11 +996,11 @@ namespace InterviewCopilot
             ApplyGlassOpacity(SettingsWindow.GetMainWindowOpacity());
         }
 
-        // Glass model: content (text, buttons, surfaces) stays fully opaque and crisp;
-        // ONLY the near-black backdrop fades. At 100% the backdrop is solid black; as the
-        // slider drops, the desktop shows through the glass. No flat "tint" over the text.
+        // Backdrop and button fills follow the shared glass setting; labels and icons
+        // remain crisp. Window opacity itself never fades the content.
         private void ApplyGlassOpacity(double op)
         {
+            Glass.ApplyButtonMaterials(op);
             this.Opacity = 1.0;
             // Map the stored 0.50-1.0 preference onto backdrop alpha 0-100% so the
             // slider percentage reads directly as glass darkness (25% slider = ~25%
@@ -1293,7 +1293,7 @@ namespace InterviewCopilot
             if (InAppAlert != null) InAppAlert.Visibility = Visibility.Collapsed;
         }
 
-        private void CompactOverlayPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private void CompactOverlayPill_Click(object sender, RoutedEventArgs e)
         {
             e.Handled = true;
             ProfileDropdownPopup.IsOpen = false;
@@ -1405,9 +1405,8 @@ namespace InterviewCopilot
             // Neutral, like every other control in the toolbar. The green dot and
             // glow it had were off the app's palette, which keeps colour for state
             // that needs attention rather than for decoration.
-            var onBg  = Brush("#22314A");
-            var onFg  = Brush("#F2F7FD");
-            var offFg = Brush("#7F8FA6");
+            var onFg  = Brush("#FAFAFC");
+            var offFg = Brush("#92929F");
 
             bool auto = _listeningMode == ListeningMode.Auto;
 
@@ -1416,9 +1415,11 @@ namespace InterviewCopilot
             ModeNoticeText.Visibility = Visibility.Collapsed;
             ModeSegments.ToolTip      = null;
 
-            SegAuto.Background       = auto ? onBg : Brushes.Transparent;
+            if (auto) SegAuto.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "GlassButtonSelectedSurface");
+            else SegAuto.Background = Brushes.Transparent;
             SegAutoText.Foreground   = auto ? onFg : offFg;
-            SegManual.Background     = auto ? Brushes.Transparent : onBg;
+            if (!auto) SegManual.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "GlassButtonSelectedSurface");
+            else SegManual.Background = Brushes.Transparent;
             SegManualText.Foreground = auto ? offFg : onFg;
         }
 
@@ -6303,8 +6304,11 @@ namespace InterviewCopilot
         }
 
         /// <summary>Reads the screen once, the same as F8 and the compact bar.</summary>
-        private void ReadScreenPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-            => _ = HandleScreenAnalysisAsync();
+        private void ReadScreenPill_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            _ = HandleScreenAnalysisAsync();
+        }
 
         /// <summary>
         /// Flips the watch preference and tells the compact bar, which shows it
@@ -6350,12 +6354,12 @@ namespace InterviewCopilot
             // colour says whether screen answers are armed. A control whose
             // label changes under the cursor is read as a switch, and this one
             // is not: pressing it reads the screen either way.
-            WatchScreenPillLabel.Text = "READ SCREEN";
+            WatchScreenPillLabel.Text = "Read screen";
 
             var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-                _watchScreenMode ? "#34E08A" : "#8FA3BA"));
-            WatchScreenPillLabel.Foreground = brush;
-            WatchScreenIcon.Foreground = brush;
+                _watchScreenMode ? "#EDF4FF" : "#A7B6C8"));
+            WatchScreenPillLabel.Foreground = Brushes.White;
+            WatchScreenIcon.Stroke = brush;
 
             answerWindow?.SetWatchScreenState(_watchScreenMode);
         }
