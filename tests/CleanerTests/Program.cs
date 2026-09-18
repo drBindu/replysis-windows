@@ -148,6 +148,9 @@ internal static class Program
         Console.WriteLine("\n16. Turns from real interviews reach the right answer path");
         _failed += InterviewTurnTests.Run();
 
+        Console.WriteLine("\n17. Auto mode keeps questions apart");
+        _failed += AutoTurnTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

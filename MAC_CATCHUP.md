@@ -63,6 +63,38 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Transcription must survive a long interview, and Auto must keep turns apart (2026-09-17)
+
+Found by running a 12-question mock interview through the real app, and by the
+owner's own session log.
+
+- CRITICAL: the temporary transcription token lasts an hour, and the engine holds
+  it for the life of the process. After an hour a real session lost Deepgram with
+  401, fell back to Speechmatics with the same stale key, was refused, printed
+  FATAL and stopped for good: silence for the rest of the interview, with the
+  question box empty and "firing AI (0 chars)" on every Space.
+  - The app now renews on the engine's own words (Refused with 401, API key
+    rejected, not_authorised, Not Authorized), not only on an exit code;
+  - renewal may happen as often as needed, not once per run;
+  - and a timer renews the token when under 8 minutes remain, while idle.
+  - Mac: same failure applies wherever a temporary key is passed once at start.
+- Auto mode turn-taking (AutoTurnRules.cs, tested in suite 17):
+  - a continuation must start within 4s of the last submission, so the next
+    question's opening words are not glued onto the previous question;
+  - spelled-out noise ("Capital m o t o g p f") is never a continuation;
+  - a corrected or re-delivered copy of the question just answered is not a new
+    question (recognition drops words: "do you have questions for me" came back
+    as "do you have for me" and was answered again);
+  - the question remembered is the one actually sent, not the shorter text the
+    decision was made on;
+  - a transcript that still opens with the answered question has it stripped, so
+    the interviewer's reply is judged on its own;
+  - "Can you tell me" and other bare request openings wait for the rest;
+  - "reading our answer back" now compares meaningful words only: it was
+    ignoring real questions that shared "you", "the", "to" and "work".
+
+---
+
 ## The candidate stops asking questions after the first one (2026-09-17)
 
 - Owner: when the interviewer keeps saying "anything else?", the app kept asking

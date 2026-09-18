@@ -169,6 +169,9 @@ namespace InterviewCopilot
 
         // The tail last joined on, so the same one cannot be joined on twice.
         private string _lastAutoSubmittedFragment = "";
+        // When words first appeared after the last Auto submission. A continuation
+        // starts right after it; the next question starts later. See AutoTurnRules.
+        private DateTime _autoFirstWordsAfterSubmitUtc = DateTime.MinValue;
 
         // The longest gap this speaker has left in the MIDDLE of the current turn.
         // Used to tell a slow talker's pause from the end of their question.
@@ -194,6 +197,10 @@ namespace InterviewCopilot
         private bool _engineStarting;
         private bool _engineRecoveryInProgress;
         private bool _engineTokenRefreshAttempted;
+        private DateTime _lastTokenRecoveryUtc = DateTime.MinValue;
+        // The question answered before the current one, so a transcript that still
+        // carries it can have it removed. See AutoTurnRules.StripAnsweredPrefix.
+        private string _previousAutoSubmittedQuestion = "";
         private int _engineRestartCount;
         private DateTime _nextEngineRestartUtc = DateTime.MinValue;
         // True once the Python engine reports "STATUS: ONLINE" (Speechmatics session
@@ -1515,6 +1522,7 @@ namespace InterviewCopilot
             {
                 _listeningMeterTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
                 _listeningMeterTimer.Tick += (_, _) => ListeningMeterTick();
+                _listeningMeterTimer.Tick += (_, _) => _ = RenewSttTokenBeforeItExpiresAsync();
             }
             _listeningMeterTimer.Start();
         }
@@ -1544,6 +1552,36 @@ namespace InterviewCopilot
             int minutes = ListeningBilling.MinutesOnTick(
                 _unreportedListeningSeconds, out _unreportedListeningSeconds);
             if (minutes > 0) _ = ReportListeningMinutesAsync(minutes);
+        }
+
+        /// <summary>
+        /// Replaces the transcription token before it expires.
+        ///
+        /// The token lasts an hour and the engine holds it for the life of the
+        /// process, so a long interview outlives it. Waiting for the failure costs
+        /// the seconds it takes to notice, refuse, fall back and restart, in the
+        /// middle of a question. Renewing early costs a restart nobody sees.
+        /// </summary>
+        private async Task RenewSttTokenBeforeItExpiresAsync()
+        {
+            try
+            {
+                if (_engineStarting || _engineRecoveryInProgress || isListening || isProcessing) return;
+                DateTime expiry = UserSession.SttKeyExpiresAtUtc;
+                if (expiry == DateTime.MinValue) return;
+                if (expiry - DateTime.UtcNow > TimeSpan.FromMinutes(8)) return;
+                if (DateTime.UtcNow - _lastTokenRecoveryUtc < TimeSpan.FromMinutes(5)) return;
+
+                _lastTokenRecoveryUtc = DateTime.UtcNow;
+                DebugWindow.Log("STT_KEY", "Token expires soon; renewing it before the next question.");
+                UserSession.InvalidateSpeechmaticsKey();
+                if (await UserSession.EnsureSpeechmaticsKeyAsync(DeviceIdentity.Current))
+                {
+                    _nextEngineRestartUtc = DateTime.MinValue;
+                    StartSpeechmaticsEngine();
+                }
+            }
+            catch (Exception ex) { DebugWindow.Log("STT_KEY", $"Early renewal skipped: {ex.Message}"); }
         }
 
         private void ListeningMeterTick()
@@ -2009,14 +2047,11 @@ namespace InterviewCopilot
             // reading is judged here.
             if (said.Length < 8) return false;
 
-            var onScreen = new HashSet<string>(Words(shown));
-            if (onScreen.Count < 20) return false;   // too little shown to compare against
+            // Meaningful words only. Counting "you", "the", "to" and "work" made
+            // a new question about work authorization look like reading back.
+            double share = AutoTurnRules.MeaningfulShareOnScreen(candidate, shown);
 
-            int echoed = said.Count(onScreen.Contains);
-            double share = (double)echoed / said.Length;
-
-            // Half. A follow-up that happens to reuse the subject sits well
-            // below this; a passage being read sits far above it.
+            // Over half of what they said, by meaning, is already on screen.
             return share >= 0.55;
         }
 
@@ -2037,6 +2072,17 @@ namespace InterviewCopilot
         {
             if (string.IsNullOrWhiteSpace(_lastAutoSubmittedQuestion)) return false;
             if (now - _lastAutoSubmitUtc > ContinuationWindow) return false;
+
+            // The next question, not the rest of this one: its first words came
+            // well after the last submission. Timing from the submission alone let
+            // "Before we wrap up," join onto "Why should we hire you".
+            if (!AutoTurnRules.StartedSoonEnoughToContinue(_lastAutoSubmitUtc, _autoFirstWordsAfterSubmitUtc))
+                return false;
+            if (AutoTurnRules.IsSpelledOutNoise(candidate)) return false;
+            // Already part of the question that was sent: recognition re-delivering
+            // its last words after the flush. Joining it on doubled the question
+            // ("...will you need and will you need sponsorship...").
+            if (AutoTurnRules.IsRevisionOf(candidate, _lastAutoSubmittedQuestion)) return false;
 
             // Anchored to the START of the chain, which a merge never moves.
             // This is the whole fix; everything below is a second opinion.
@@ -2102,8 +2148,11 @@ namespace InterviewCopilot
                 return;
 
             string question = transcript.Trim();
-            string candidateQuestion = PromptBuilder.NormalizeInterviewerQuestion(question);
             DateTime now = DateTime.UtcNow;
+            // Judge only what was said after the question already answered.
+            if (now - _lastAutoSubmitUtc < TimeSpan.FromSeconds(45))
+                question = AutoTurnRules.StripAnsweredPrefix(question, _lastAutoSubmittedQuestion);
+            string candidateQuestion = PromptBuilder.NormalizeInterviewerQuestion(question);
             bool isContinuation = LooksLikeContinuation(candidateQuestion, now);
             bool isCompleteQuestion = isContinuation ||
                                       IsLikelyCompleteAutomaticQuestion(candidateQuestion);
@@ -2122,10 +2171,12 @@ namespace InterviewCopilot
 
             bool isRecentDuplicate = isRepeatedFragment ||
                                      (!isContinuation &&
-                                      string.Equals(
-                                          candidateQuestion,
-                                          _lastAutoSubmittedQuestion,
-                                          StringComparison.OrdinalIgnoreCase) &&
+                                      (string.Equals(
+                                           candidateQuestion,
+                                           _lastAutoSubmittedQuestion,
+                                           StringComparison.OrdinalIgnoreCase) ||
+                                       // A corrected copy of the question just answered.
+                                       AutoTurnRules.IsRevisionOf(candidateQuestion, _lastAutoSubmittedQuestion)) &&
                                       now - _lastAutoSubmitUtc < TimeSpan.FromSeconds(12));
             if (!isCompleteQuestion || isRecentDuplicate)
             {
@@ -2200,6 +2251,7 @@ namespace InterviewCopilot
                 return;
 
             _autoTurnSubmitting = true;
+            _previousAutoSubmittedQuestion = _lastAutoSubmittedQuestion;
             _autoContinuationPrefix = isContinuation ? _lastAutoSubmittedQuestion : "";
             _lastAutoSubmittedFragment = isContinuation ? candidateQuestion : "";
             _lastAutoSubmittedQuestion = isContinuation
@@ -2326,6 +2378,11 @@ namespace InterviewCopilot
             // speaker is mid-air no matter what the engine punctuated.
             if (NeverEndsSentence.Contains(tail))
                 return punctuated ? TurnEnding.Unclear : TurnEnding.Unfinished;
+
+            // "Can you tell me" is how a request starts, not a request. Answered as
+            // soon as it paused, the rest of the question was lost.
+            if (AutoTurnRules.IsBareRequestOpener(trimmed))
+                return TurnEnding.Unfinished;
 
             // No full stop yet, and hanging on an auxiliary or a pronoun: still
             // going. Waiting costs nothing, because their next word submits it.
@@ -2587,6 +2644,16 @@ namespace InterviewCopilot
             // when listening restarted, so what arrived here is only "and full
             // time"; sent alone it would be answered as if that were the whole
             // question, which is how it read on screen before this existed.
+            // The flushed transcript can still open with the question already
+            // answered; send only what follows it.
+            if (source == "AUTO" && string.IsNullOrWhiteSpace(_autoContinuationPrefix) &&
+                !string.IsNullOrWhiteSpace(question) &&
+                DateTime.UtcNow - _lastAutoSubmitUtc < TimeSpan.FromSeconds(45))
+            {
+                string rest = AutoTurnRules.StripAnsweredPrefix(question, _previousAutoSubmittedQuestion);
+                if (!string.IsNullOrWhiteSpace(rest)) question = rest;
+            }
+
             if (source == "AUTO" && !string.IsNullOrWhiteSpace(_autoContinuationPrefix))
             {
                 if (!string.IsNullOrWhiteSpace(question))
@@ -2596,6 +2663,15 @@ namespace InterviewCopilot
 
             if (!string.IsNullOrWhiteSpace(question))
                 TranscriptTextBlock.Text = question;
+
+            // Remember what is actually being sent, not the shorter text the
+            // submission was decided on. Recognition often finishes the sentence
+            // during the flush ("Can you tell me about the restful" becomes "...the
+            // restful services you have built?"), and a late copy of that tail was
+            // then compared against the short version, did not match, and was
+            // answered a second time as a new question.
+            if (source == "AUTO" && !string.IsNullOrWhiteSpace(question))
+                _lastAutoSubmittedQuestion = PromptBuilder.NormalizeInterviewerQuestion(question);
             WritePauseFlag();   // final has landed — safe to pause the engine
             _waitedForWordsMs = _turnStopwatch?.ElapsedMilliseconds ?? 0;
             DebugWindow.Log("MIC", $"[{source}] firing AI ({question.Length} chars)");
@@ -4374,6 +4450,11 @@ namespace InterviewCopilot
                 string text = ReadLatestTxtSafe();
                 if (text != TranscriptTextBlock.Text)
                 {
+                    if (AutoModeEnabled && !string.IsNullOrWhiteSpace(text) &&
+                        string.IsNullOrWhiteSpace(TranscriptTextBlock.Text) &&
+                        _autoFirstWordsAfterSubmitUtc < _lastAutoSubmitUtc)
+                        _autoFirstWordsAfterSubmitUtc = DateTime.UtcNow;
+
                     TranscriptTextBlock.Text = text;
                     TranscriptHint.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Visible : Visibility.Collapsed;
                     TranscriptScroll.ScrollToBottom();
@@ -4616,6 +4697,23 @@ namespace InterviewCopilot
                             // Retrying is right for a dropped connection and
                             // wrong for a missing microphone. Nothing about
                             // waiting thirty seconds makes a device appear.
+                            // Expired credentials, recoverable. A real session died this
+                            // way after an hour: the Deepgram token expired, the
+                            // reconnect got 401, Speechmatics refused the stale key too,
+                            // and the engine printed FATAL and stopped for good. Nothing
+                            // was transcribed for the rest of the interview. The engine
+                            // only reports it; the app is what can fetch a new token.
+                            if (line.Contains("Refused with 401", StringComparison.Ordinal) ||
+                                line.Contains("API key rejected", StringComparison.OrdinalIgnoreCase) ||
+                                line.Contains("not_authorised", StringComparison.OrdinalIgnoreCase) ||
+                                line.Contains("Not Authorized", StringComparison.OrdinalIgnoreCase))
+                            {
+                                DebugWindow.Log("ENGINE", "Transcription credentials rejected; renewing the token.");
+                                _ = Dispatcher.BeginInvoke(new Action(() =>
+                                    _ = RecoverSpeechmaticsAuthenticationAsync()));
+                                continue;
+                            }
+
                             if (line.Contains("FATAL", StringComparison.Ordinal))
                             {
                                 string reason =
@@ -5378,7 +5476,10 @@ namespace InterviewCopilot
 
         private async Task RecoverSpeechmaticsAuthenticationAsync()
         {
+            // Once per run was enough for one expiry. An interview can outlive two.
             if (_engineRecoveryInProgress) return;
+            if (DateTime.UtcNow - _lastTokenRecoveryUtc < TimeSpan.FromMinutes(1)) return;
+            _lastTokenRecoveryUtc = DateTime.UtcNow;
             _engineRecoveryInProgress = true;
             _engineAuthFailed = true;
             try

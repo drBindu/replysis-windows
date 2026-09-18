@@ -87,6 +87,9 @@ namespace InterviewCopilot
         /// A message that contradicts the screen beside it is worse than none.
         /// </summary>
         public static bool SpeechmaticsOutOfListeningTime { get; private set; }
+        /// <summary>When the current transcription token stops working.</summary>
+        public static DateTime SttKeyExpiresAtUtc => _speechmaticsExpiresAtUtc;
+
         public static DateTime SpeechmaticsRetryAfterUtc
         {
             get { lock (_smKeyLock) return _speechmaticsRetryAfterUtc; }

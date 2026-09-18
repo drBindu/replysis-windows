@@ -101,6 +101,14 @@ check("a normal voice is not static", not _ns["_is_capture_noise"](_voice))
 check("a voice clipping briefly is not static", not _ns["_is_capture_noise"](_loud))
 _clipped = _struct.pack("<1600h", *[(32767 if (i // 40) % 2 == 0 else -32768) for i in range(1600)])
 check("a loud voice clipping hard is not static", not _ns["_is_capture_noise"](_clipped))
+# -- Credentials that expire mid-interview ------------------------------------
+# A real session died after an hour: the temporary token expired, the reconnect
+# got 401, Speechmatics refused the stale key too, and the engine stopped for
+# good. The app can only renew the token if the engine says why it failed.
+check("Deepgram 401 is reported as a refusal", ">>> [DEEPGRAM] Refused with" in SOURCE)
+check("a rejected key is reported before giving up", "API key rejected on ALL endpoints" in SOURCE)
+
+check("no mic search while words are arriving", "time.time() - _last_words_at > MIC_WORDS_QUIET_SECS" in SOURCE and SOURCE.count("_last_words_at = time.time()") == 2)
 check("the search never gives up for good", "MIC_RESEARCH_BACKOFF_SECS" in SOURCE and "search_allowed" in SOURCE)
 
 check("--sysfifo exists", "--sysfifo" in SOURCE, "macOS has no other route to system audio")
