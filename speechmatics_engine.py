@@ -981,6 +981,8 @@ _mic_noise_noted       = False  # static from the current mic already reported
 MIC_AUTOSWITCH_MAX_ATTEMPTS = 3   # per loss of signal; hearing a voice again resets it
 _mic_dead_reads         = 0      # consecutive reads with no signal at all (not a quiet room)
 _last_sys_sound_at      = 0.0    # when system audio last carried sound
+_last_words_at          = 0.0    # when speech recognition last produced words
+MIC_WORDS_QUIET_SECS    = 8.0    # no mic search while words arrived this recently
 _mic_last_search_at     = 0.0    # when the last microphone search ran
 MIC_RESEARCH_BACKOFF_SECS = 30.0 # after the first three, search again this often
 MIC_DEAD_LEVEL          = 8      # a working mic in a quiet room reads 25 to 150
@@ -1762,6 +1764,9 @@ def _load_extra_vocab():
 def _write_latest(text):
     """Atomically publish the current transcript to latest.txt (same contract as the
     Speechmatics path's nested _write)."""
+    global _last_words_at
+    if text and text.strip():
+        _last_words_at = time.time()
     try:
         tmp = LATEST_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
@@ -2174,8 +2179,14 @@ class MixedStream:
                     # leave the rest of the interview deaf.
                     search_allowed = (_mic_autoswitch_attempts < MIC_AUTOSWITCH_MAX_ATTEMPTS
                                       or time.time() - _mic_last_search_at >= MIC_RESEARCH_BACKOFF_SECS)
+                    # Never while words are arriving. On a real laptop a quiet
+                    # headset mic stayed under the loudness threshold while its
+                    # words were being transcribed; the search called it silent,
+                    # switched to the laptop mic, and no more words came through.
+                    # Words are the proof a microphone works, whatever its level.
                     if (mic_lost and search_allowed
-                            and time.time() - _last_sys_sound_at > 2.0):
+                            and time.time() - _last_sys_sound_at > 2.0
+                            and time.time() - _last_words_at > MIC_WORDS_QUIET_SECS):
                         _mic_autoswitch_attempts += 1
                         _mic_last_search_at = time.time()
                         _mic_quiet_reads = 0
@@ -2839,6 +2850,9 @@ async def main():
                         print(f">>> handle_partial error: {e}", flush=True)
 
                 def _write(text):
+                    global _last_words_at
+                    if text and text.strip():
+                        _last_words_at = time.time()
                     try:
                         tmp = LATEST_FILE + ".tmp"
                         with open(tmp, "w", encoding="utf-8") as f:
