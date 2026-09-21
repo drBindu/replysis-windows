@@ -22,7 +22,11 @@ namespace InterviewCopilot
         private static string BackendUrl => SettingsWindow.GetBackendUrl();
 
         // ── Tunable constants (change here, takes effect everywhere) ──────────
-        private const int    TranscriptPollMs        = 40;    // how often to read latest.txt
+        private const int    TranscriptPollMs        = 40;    // while listening: every word counts
+        // While nothing is being transcribed there is nothing to read, and reading
+        // an unchanged file 25 times a second is pure idle cost. The fast poll
+        // returns the moment listening starts, so no word arrives late.
+        private const int    TranscriptIdlePollMs    = 250;
         private const int    ThinkingAnimMs          = 800;   // thinking dot animation interval
         private const int    CreditRefreshMinutes    = 5;     // background credits refresh
         private const int    EngineMonitorSecs       = 3;     // how often to check engine health
@@ -3298,8 +3302,8 @@ namespace InterviewCopilot
 
         // Its own lifetime, shorter than the server's ninety seconds, so the app
         // gives up on an id before the server does rather than sending one that
-        // has just gone.
-        private static readonly TimeSpan PreparedShotIdMaxAge = TimeSpan.FromSeconds(60);
+        // has just gone. See ScreenShotRules for the three ages and why.
+        private static readonly TimeSpan PreparedShotIdMaxAge = ScreenShotRules.IdMaxAge;
 
         // What was last sent, so the same still screen is not sent again.
         private string _uploadedShotFingerprint = "";
@@ -3347,10 +3351,17 @@ namespace InterviewCopilot
                 string fingerprint = ScreenAnalyzer.LastCaptureSignature;
                 if (!string.IsNullOrEmpty(fingerprint)
                     && SignatureDistance(fingerprint, _uploadedShotFingerprint) < MinSignatureChange
-                    && !string.IsNullOrEmpty(_preparedShotId))
+                    && !string.IsNullOrEmpty(_preparedShotId)
+                    // An id is only as alive as the picture behind it. This used to
+                    // push the clock forward on every skipped upload, so the id
+                    // looked fresh for as long as the screen sat still while the
+                    // server deleted the image ninety seconds after the upload. A
+                    // problem statement read for two minutes - the case this whole
+                    // feature exists for - then sent a question pointing at nothing.
+                    // The clock now measures the upload, and an unchanged screen is
+                    // sent again before the id ages out.
+                    && ScreenShotRules.ShouldReuseUnchangedShot(DateTime.UtcNow - _preparedShotIdUtc))
                 {
-                    // Keep the existing id alive against its own clock.
-                    _preparedShotIdUtc = DateTime.UtcNow;
                     return;
                 }
 
@@ -4572,8 +4583,18 @@ namespace InterviewCopilot
             if (answerWindow != null) answerWindow.UpdateMicState(isListening, isProcessing);
         }
 
+        /// <summary>Poll fast while listening, slowly while idle.</summary>
+        private void ApplyTranscriptPollRate()
+        {
+            if (transcriptTimer == null) return;
+            int wanted = (isListening || isProcessing || _flushing) ? TranscriptPollMs : TranscriptIdlePollMs;
+            if ((int)transcriptTimer.Interval.TotalMilliseconds != wanted)
+                transcriptTimer.Interval = TimeSpan.FromMilliseconds(wanted);
+        }
+
         private void UpdateTranscript()
         {
+            ApplyTranscriptPollRate();
             // Auto mode continuously returns to listening after each answer. It uses the
             // existing transcript only; no microphone, engine or provider behavior changes.
             if (AutoModeEnabled && !isListening && !isProcessing && !_flushing)

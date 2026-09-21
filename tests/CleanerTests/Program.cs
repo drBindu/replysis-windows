@@ -154,6 +154,9 @@ internal static class Program
         Console.WriteLine("\n18. Interview hears the meeting, Practice hears you too");
         _failed += AudioSourceTests.Run();
 
+        Console.WriteLine("\n19. A prepared screenshot id never outlives the image");
+        _failed += ScreenShotTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

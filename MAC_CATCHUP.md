@@ -75,6 +75,30 @@ thing, a toolbar that fits only on a wide display is the same bug there.
 
 ---
 
+## A prepared screenshot id could outlive the image (2026-09-21, found on Mac)
+
+Reported from the Mac side, confirmed and fixed on Windows.
+
+- UploadPreparedShotAsync skips the upload while the screen has not changed,
+  which is right, but it also did `_preparedShotIdUtc = DateTime.UtcNow` on every
+  skip. The client clock therefore never aged, while the server deletes the
+  cached image 90s after the upload (STASHED_IMAGE_TTL_MS). A problem statement
+  read for minutes - the exact case the feature exists for - sent a question
+  carrying an id whose image was already gone.
+- Fixed: the clock now measures the upload. An unchanged screen is uploaded again
+  once the id passes 45s, so a fresh id always exists before the 60s client max
+  age and well inside the server's 90s. ScreenShotRules.cs holds the three ages;
+  suite 19 pins them in order (45 < 60 < 90).
+- Also from the Mac's notes: the 40ms transcript poll now drops to 250ms whenever
+  the app is not listening or answering, and returns to 40ms instantly. Measured
+  idle CPU 21.0% -> 19.4% of one core, so the poll was not the main cost.
+- OPEN, both platforms: the Windows app burns about 19% of one core while idle
+  and doing nothing. Thread sampling shows a single thread at 13%, not rendering
+  (minimising does not help) and not the engine (1.4% in its own process).
+  Worth profiling properly before release.
+
+---
+
 ## Interview / Practice: the audio source is a toolbar switch (2026-09-20)
 
 Owner: "everyone attends interviews in meetings, this is the main part". The
