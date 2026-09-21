@@ -63,6 +63,24 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## The header is two rows: title bar, then a control strip (2026-09-20)
+
+The single header row needed about 1,400px of controls inside a 980px window, so
+"Read screen" sat on top of "Practice" (owner's screenshot). Splitting the row is
+what makes it hold at any width, rather than dropping a control people need.
+
+- Row 1, 46px: logo, session timer, account avatar, pin, minimize, close.
+- Row 2, 62px: mic + status, [Auto | Manual : Interview | Practice] on the left,
+  Read screen and Compact on the right. Body moved to Grid.Row 2.
+- Words that repeat an icon are gone: the "Replysis AI" text (tooltip + window
+  title keep it), the F8 chip on Read screen (its tooltip lists F7/F8/F9), the
+  "Compact" label, and the account name beside the avatar (still in the menu).
+- Measured at the 980 default: the strip's left group ends well before the right
+  group starts, so nothing overlaps.
+- Mac: same two-row split if the Mac toolbar is crowded.
+
+---
+
 ## Interview / Practice: the audio source is a toolbar switch (2026-09-20)
 
 Owner: "everyone attends interviews in meetings, this is the main part". The
