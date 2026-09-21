@@ -271,10 +271,10 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="Use my microphone"
+                            <TextBlock Text="Practice mode: use my microphone"
                                        Foreground="White" FontSize="13" FontWeight="Bold"
                                        FontFamily="Segoe UI"/>
-                            <TextBlock Text="Turn off for real interviews, so your own voice is never taken as a question. Keep on to practice alone."
+                            <TextBlock Text="Same switch as Interview / Practice in the toolbar. Off (Interview) hears the meeting only, so your own answers are never taken as questions. On (Practice) also hears you, for practising alone."
                                        Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold"
                                        FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,4,0,0"/>
                         </StackPanel>

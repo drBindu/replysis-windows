@@ -156,6 +156,15 @@ namespace InterviewCopilot
         /// their microphone opened at all. See CaptureMode().
         /// </summary>
         private static bool MicrophoneInUse => SettingsWindow.GetMicCaptureEnabled();
+
+        // Interview / Practice. The same preference the Settings switch writes, so the
+        // two can never disagree. Practice means the microphone is open too.
+        private static bool PracticeAudioOn => SettingsWindow.GetMicCaptureEnabled();
+        private DispatcherTimer? _audioSourceWatchTimer;
+        private bool _interviewTipShown;
+        private bool _practiceTipShown;
+        private bool _audioSourceChangePending;
+        private Action? _inAppAlertAction;
         private bool _autoTurnSubmitting;
         private string _autoLastTranscript = "";
         private string _lastAutoRejectedTranscript = "";
@@ -290,6 +299,10 @@ namespace InterviewCopilot
                     try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
                     UpdateStealthBtn();
                     ApplyKeepOnTop();
+                    UpdateAudioSourceUi();
+                    _audioSourceWatchTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
+                    _audioSourceWatchTimer.Tick += (_, _) => CheckAudioSourceTip();
+                    _audioSourceWatchTimer.Start();
 
                     answerWindow = new AnswerWindow();
                     answerWindow.ShowInTaskbar = false;
@@ -1209,7 +1222,8 @@ namespace InterviewCopilot
         /// Keep the banner up until dismissed. Used for faults the user has to act
         /// on, which a timed banner would hide again before they had read it.
         /// </param>
-        internal void ShowInAppAlert(string title, string message, bool persist = false)
+        internal void ShowInAppAlert(string title, string message, bool persist = false,
+                                    string? actionLabel = null, Action? action = null)
         {
             // In compact overlay the main window is hidden, so the banner would
             // never be seen. The overlay is the visible surface there.
@@ -1223,6 +1237,13 @@ namespace InterviewCopilot
 
             InAppAlertTitle.Text = title;
             InAppAlertBody.Text = message;
+            if (InAppAlertAction != null)
+            {
+                InAppAlertAction.Content = actionLabel ?? "";
+                InAppAlertAction.Visibility = string.IsNullOrWhiteSpace(actionLabel) || action == null
+                    ? Visibility.Collapsed : Visibility.Visible;
+            }
+            _inAppAlertAction = action;
             InAppAlertBody.Visibility = string.IsNullOrWhiteSpace(message)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
@@ -1299,6 +1320,133 @@ namespace InterviewCopilot
             ProfileDropdownPopup.IsOpen = false;
             SavedResumesPopup.IsOpen = false;
             CameraMode_Click(sender, new RoutedEventArgs());
+        }
+
+        private void InAppAlertAction_Click(object sender, RoutedEventArgs e)
+        {
+            var act = _inAppAlertAction;
+            _inAppAlertAction = null;
+            if (InAppAlert != null) InAppAlert.Visibility = Visibility.Collapsed;
+            act?.Invoke();
+        }
+
+        // ── Interview / Practice ────────────────────────────────────────────────
+        private void SegInterview_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            SelectAudioSource(practice: false);
+        }
+
+        private void SegPractice_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            SelectAudioSource(practice: true);
+        }
+
+        /// <summary>
+        /// Switches between hearing the meeting only and hearing the meeting plus the
+        /// microphone. The engine is told by restarting it, which takes about a second,
+        /// so it waits while a question is being listened to rather than cutting it off.
+        /// </summary>
+        private void SelectAudioSource(bool practice)
+        {
+            if (PracticeAudioOn == practice) return;
+            try
+            {
+                var cfg = SettingsWindow.LoadConfig();
+                cfg.MicCaptureEnabled = practice;
+                SettingsWindow.SaveConfig(cfg);
+            }
+            catch (Exception ex) { DebugWindow.Log("AUDIO", $"persist failed: {ex.Message}"); }
+
+            UpdateAudioSourceUi();
+            DebugWindow.Log("AUDIO", practice
+                ? "Practice: hears the meeting and the microphone"
+                : "Interview: hears the meeting only");
+
+            if (isListening || isProcessing)
+            {
+                _audioSourceChangePending = true;
+                ShowListeningModeNotice(practice
+                    ? "Practice starts after this question"
+                    : "Interview starts after this question");
+                return;
+            }
+            _audioSourceChangePending = false;
+            StartSpeechmaticsEngine();
+        }
+
+        /// <summary>Applies a switch that was asked for mid-question, once it is over.</summary>
+        private void ApplyPendingAudioSourceChange()
+        {
+            if (!_audioSourceChangePending || isListening || isProcessing) return;
+            _audioSourceChangePending = false;
+            StartSpeechmaticsEngine();
+        }
+
+        private void UpdateAudioSourceUi()
+        {
+            if (SegInterview == null || SegPractice == null) return;
+
+            bool practice = PracticeAudioOn;
+            static SolidColorBrush Tone(string hex) =>
+                new((Color)ColorConverter.ConvertFromString(hex));
+            var onFg = Tone("#FAFAFC");
+            var offFg = Tone("#92929F");
+
+            if (practice) SegPractice.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "GlassButtonSelectedSurface");
+            else SegPractice.Background = Brushes.Transparent;
+            if (!practice) SegInterview.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "GlassButtonSelectedSurface");
+            else SegInterview.Background = Brushes.Transparent;
+
+            SegInterviewText.Foreground = practice ? offFg : onFg;
+            SegPracticeText.Foreground = practice ? onFg : offFg;
+            SegInterviewIcon.Foreground = practice ? offFg : onFg;
+            SegPracticeIcon.Foreground = practice ? onFg : offFg;
+            if (ModeSegments != null) ModeSegments.ToolTip = AudioSourceRules.HearingLine(practice);
+        }
+
+        /// <summary>
+        /// Says something only when the setting is about to cost the user an
+        /// interview: the microphone is open with a meeting app running, or the app
+        /// has been listening to silence for minutes with no meeting anywhere.
+        /// </summary>
+        private void CheckAudioSourceTip()
+        {
+            try
+            {
+                bool practice = PracticeAudioOn;
+                bool meeting = AudioSourceRules.MeetingAppRunning();
+
+                if (AudioSourceRules.ShouldSuggestInterview(practice, meeting, _interviewTipShown))
+                {
+                    _interviewTipShown = true;
+                    ShowInAppAlert(
+                        "In a real interview?",
+                        "Replysis can hear your microphone, so your own answers can be taken as new questions. "
+                        + "Interview hears the meeting only.",
+                        persist: true,
+                        actionLabel: "Switch to Interview",
+                        action: () => SelectAudioSource(practice: false));
+                    return;
+                }
+
+                TimeSpan quiet = _lastWordsReceivedUtc == DateTime.MinValue
+                    ? TimeSpan.Zero
+                    : DateTime.UtcNow - _lastWordsReceivedUtc;
+                if (AudioSourceRules.ShouldSuggestPractice(!practice, isListening, meeting, quiet, _practiceTipShown))
+                {
+                    _practiceTipShown = true;
+                    ShowInAppAlert(
+                        "Practising on your own?",
+                        "Interview hears the meeting only, so nothing you say is picked up. "
+                        + "Practice hears your microphone too.",
+                        persist: true,
+                        actionLabel: "Switch to Practice",
+                        action: () => SelectAudioSource(practice: true));
+                }
+            }
+            catch (Exception ex) { DebugWindow.Log("AUDIO", $"tip check failed: {ex.Message}"); }
         }
 
         private void SegAuto_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -2552,6 +2700,8 @@ namespace InterviewCopilot
             _aiCts = new System.Threading.CancellationTokenSource();
             var ct = _aiCts.Token;
             DebugWindow.Log("MIC", $"[{source}] MUTED — flushing final transcript");
+            _ = Dispatcher.BeginInvoke(new Action(ApplyPendingAudioSourceChange),
+                                       System.Windows.Threading.DispatcherPriority.Background);
             UpdateMicUi();
 
             // Stop capturing NEW audio, but do NOT set pause.flag yet: Speechmatics runs
@@ -5710,6 +5860,7 @@ namespace InterviewCopilot
                 // The session type may have changed in there, and it is what the
                 // pill and popup describe.
                 UpdateListeningModeUi();
+                UpdateAudioSourceUi();
                 ApplyMainWindowOpacity();
                 // Re-apply stealth in case it was changed in Settings. This must reach
                 // the overlay too, not just the main window.

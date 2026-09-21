@@ -151,6 +151,9 @@ internal static class Program
         Console.WriteLine("\n17. Auto mode keeps questions apart");
         _failed += AutoTurnTests.Run();
 
+        Console.WriteLine("\n18. Interview hears the meeting, Practice hears you too");
+        _failed += AudioSourceTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

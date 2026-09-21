@@ -601,7 +601,11 @@ namespace InterviewCopilot
             public bool   KeepOnTop          { get; set; } = true;
             // true  = system audio + mic (default)
             // false = system audio only  (mic never opened — fully invisible, no OS mic indicator)
-            public bool   MicCaptureEnabled  { get; set; } = true;
+            // Interview by default: most sessions are real interviews in a meeting,
+            // and with the microphone open the app hears the candidate's own answers
+            // and takes them as new questions. Practice turns it on. Anyone who has
+            // already chosen keeps their choice, because their config file has the key.
+            public bool   MicCaptureEnabled  { get; set; } = false;
             // Chosen microphone's PyAudio device index. -1 = use the Windows default input.
             // Persisted so the user's mic choice survives app restarts instead of silently
             // reverting to whatever Windows currently calls the default device.

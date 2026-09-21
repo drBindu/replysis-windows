@@ -459,6 +459,7 @@
                                     BorderThickness="1" CornerRadius="6" Padding="3"
                                     VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <!-- Group 1: when to answer. Group 2, past the hairline: what to hear. -->
                                     <Border x:Name="SegAuto" CornerRadius="4" Padding="12,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegAuto_Click"
                                             ToolTip="Auto. Answers as soon as the question ends.">
@@ -471,6 +472,35 @@
                                         <TextBlock x:Name="SegManualText" Text="Manual" FontSize="10.5" FontWeight="SemiBold"
                                                    Style="{StaticResource ToolbarPillLabel}"/>
                                     </Border>
+                                    <!-- What the app listens to. This was a checkbox in Settings
+                                         called "microphone", and people left it on in real interviews,
+                                         so the app heard the candidate's own answers and took them as
+                                         new questions. Named for the situation, beside the mode it
+                                         belongs with, and read before the call starts. -->
+                                    <Border x:Name="AudioSegments" Width="1" Height="18" Margin="6,0,6,0"
+                                            Background="{DynamicResource ActionGraphiteStroke}"
+                                            VerticalAlignment="Center"/>
+                                    <Border x:Name="SegInterview" CornerRadius="4" Padding="10,5" Cursor="Hand"
+                                            MouseLeftButtonDown="SegInterview_Click"
+                                            ToolTip="Interview. Hears the meeting only, so your own answers are never taken as questions. Use this for real interviews in Zoom, Meet or Teams.">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock x:Name="SegInterviewIcon" Text="&#xE7F5;" FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="SegInterviewText" Text="Interview" FontSize="10.5" FontWeight="SemiBold"
+                                                       Style="{StaticResource ToolbarPillLabel}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border x:Name="SegPractice" CornerRadius="4" Padding="10,5" Cursor="Hand"
+                                            MouseLeftButtonDown="SegPractice_Click"
+                                            ToolTip="Practice. Hears the meeting and your microphone, for practising on your own or with someone in the room.">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock x:Name="SegPracticeIcon" Text="&#xE720;" FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="SegPracticeText" Text="Practice" FontSize="10.5" FontWeight="SemiBold"
+                                                       Style="{StaticResource ToolbarPillLabel}"/>
+                                        </StackPanel>
+                                    </Border>
+
                                     <!-- Status messages stand in for the switch for a few seconds, the
                                          way they replaced the old pill's label. A tooltip is not a
                                          substitute: nobody hovers it. See ShowListeningModeNotice. -->
@@ -480,6 +510,7 @@
                                                Margin="10,5,10,5"/>
                                 </StackPanel>
                             </Border>
+
                         </StackPanel>
 
                         <!-- Right controls -->
@@ -1602,11 +1633,16 @@
                                    FontSize="11.5" FontFamily="Segoe UI" TextWrapping="Wrap"
                                    Margin="0,4,0,0"/>
                     </StackPanel>
-                    <Button Grid.Column="2" Style="{StaticResource GhostBtn}" Padding="7,2"
-                            Margin="12,0,0,0" VerticalAlignment="Top"
-                            Click="InAppAlertDismiss_Click" ToolTip="Dismiss">
-                        <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="10"/>
-                    </Button>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                        <Button x:Name="InAppAlertAction" Visibility="Collapsed"
+                                Style="{StaticResource PrimaryActionBtn}" Padding="12,4"
+                                Margin="12,0,0,0" Click="InAppAlertAction_Click"/>
+                        <Button Style="{StaticResource GhostBtn}" Padding="7,2"
+                                Margin="8,0,0,0" VerticalAlignment="Top"
+                                Click="InAppAlertDismiss_Click" ToolTip="Dismiss">
+                            <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="10"/>
+                        </Button>
+                    </StackPanel>
                 </Grid>
             </Border>
 

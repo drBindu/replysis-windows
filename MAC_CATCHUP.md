@@ -63,6 +63,36 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## Interview / Practice: the audio source is a toolbar switch (2026-09-20)
+
+Owner: "everyone attends interviews in meetings, this is the main part". The
+microphone choice was a Settings checkbox, people left it on in real interviews,
+and the app then heard the candidate's own answers and took them as questions.
+
+- One toolbar control now holds both choices, separated by a hairline:
+  [Auto | Manual] : [Interview | Practice].
+  - Interview: meeting audio only (engine --mode system). Your voice is never heard.
+  - Practice: meeting audio + microphone (--mode both), for practising alone.
+- Named for the situation, not the hardware. Tooltip on the group says what is
+  being heard ("Hearing the meeting only" / "... and your microphone").
+- Same preference as the Settings switch (AppConfig.MicCaptureEnabled), so they
+  cannot disagree; Settings text now names Interview / Practice too.
+- **Default for new installs is Interview** (MicCaptureEnabled now false).
+  Existing users keep their saved choice.
+- Switching restarts the engine (~1s). Asked for mid-question, it waits and lands
+  when the question is done (ApplyPendingAudioSourceChange).
+- Two tips, each shown at most once per run, each one click to act on (the
+  in-app alert can now carry an action button):
+  - Practice + a meeting app running (Zoom, Teams, Webex...) -> "In a real
+    interview?" with "Switch to Interview".
+  - Interview + listening + no meeting app + nothing heard for 3 minutes ->
+    "Practising on your own?" with "Switch to Practice". This is the Google Meet
+    case too, since a browser tab cannot be detected.
+- Rules in AudioSourceRules.cs, tested in suite 18 (AudioSourceTests).
+- Mac: same control, same names, same default.
+
+---
+
 ## Visual refresh of buttons and glass, version 1.0.21 (2026-09-18)
 
 - Made with ChatGPT, reviewed before commit. Visual only: shared button styles in
