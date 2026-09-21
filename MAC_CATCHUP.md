@@ -63,6 +63,18 @@ this applies to Mac as soon as it takes the shared engine.
 
 ---
 
+## One header row, and the window opens wide enough for it (2026-09-20)
+
+The row of controls needs about 1,180 logical pixels and the window opened at
+980, so "Read screen" was drawn over "Practice". A two-row header fixed it but
+the owner preferred the single row with full labels, so the row stayed and the
+window grew: opens at 1240, minimum 1180 (was 980 / 820, DefaultMainWindowWidth
+880 -> 1240). Measured afterwards: the listening group ends at 1122 and Read
+screen starts at 1391 (physical pixels at 150% scaling). Mac: check the same
+thing, a toolbar that fits only on a wide display is the same bug there.
+
+---
+
 ## Interview / Practice: the audio source is a toolbar switch (2026-09-20)
 
 Owner: "everyone attends interviews in meetings, this is the main part". The
