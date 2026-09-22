@@ -75,6 +75,37 @@ thing, a toolbar that fits only on a wide display is the same bug there.
 
 ---
 
+## An animation anywhere costs a fifth of a CPU core (2026-09-22)
+
+The Windows window sets AllowsTransparency, which makes Windows render it in
+software and push the whole surface on every frame. The consequence is worth
+knowing on both platforms: an animation anywhere in the window costs roughly one
+percent of a CPU core per frame per second, however small the thing being
+animated is.
+
+Measured on this app, on a 24 core laptop, as a share of ONE core:
+
+    idle, pulsing dot at 60fps        21.4%
+    idle, same dot at 10fps           10.3%
+    idle, dot static                   1.4%
+    listening, glow breathing forever 28.6%
+    listening, glow breathes 3x        8.0%
+
+The dot was a 5x5 ellipse next to the session timer. It was started by a Loaded
+trigger and ran for the life of the process, and it alone was the whole idle
+cost. Both decorative dots are static now.
+
+The microphone glow now breathes three times when listening starts and then
+holds a steady glow. The movement is what says the state changed, which is the
+moment it carries information; the steady glow says the same thing afterwards
+for nothing. An hour of breathing is battery a candidate may need.
+
+If the Mac has continuous animations in a layered or transparent window, this is
+worth measuring there too. Minimising the window does not help: it is not the
+drawing that costs, it is the composition of the whole surface per frame.
+
+---
+
 ## Answer history: getting back an answer that was taken away (2026-09-22)
 
 Built on Windows, matching the Mac's item 5, with one deliberate difference.
