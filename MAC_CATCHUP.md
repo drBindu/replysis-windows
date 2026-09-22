@@ -75,6 +75,40 @@ thing, a toolbar that fits only on a wide display is the same bug there.
 
 ---
 
+## Answer history: getting back an answer that was taken away (2026-09-22)
+
+Built on Windows, matching the Mac's item 5, with one deliberate difference.
+
+The case, in the owner's words: the answer changes, or it moves to the next
+question because of a random voice, and the candidate wants the previous answer
+at that instant. Ctrl+Alt+Left and Ctrl+Alt+Right step through this session's
+answers, there is a "3 of 7" counter beside the Thinking line whose own button
+jumps back to the newest, and everything comes from memory: no API call, no
+credit spent, nothing to wait for.
+
+The difference from the Mac, and please match it: while the user is reading an
+older answer, a new answer does NOT take the screen. It is recorded, the counter
+grows, and a badge says "2 new answers". Following the newest resumes by itself
+when they step forward to it. Showing each new answer immediately is right when
+nobody is browsing and wrong when they are, because it recreates the exact
+problem the feature exists to solve, one second later.
+
+Cap is 60, and dropping the oldest never slides the screen onto a different
+answer. Clearing the conversation and starting a new session both clear it, so
+the arrows can never reach into a previous interview.
+
+New file AnswerHistory.cs holds all of it; suite 21 has 31 cases.
+
+A live run through the real app found something the unit tests could not: starting
+to listen cleared the answer box, so the moment the interviewer began the next
+question the recovered answer was wiped. Fixed. The run now reads, in order:
+3 of 3, then 1 of 3 after stepping back with the first answer restored, then
+1 of 4 with "3 new answers" and the SAME answer still on screen, then 4 of 4
+after pressing the counter. The log line "Answer 4 kept without taking the
+screen: the user is reading 1" is the one to look for.
+
+---
+
 ## The Microsoft Store is now the primary Windows channel (2026-09-22)
 
 The owner reversed the plan: the Store is the recommended Windows download and

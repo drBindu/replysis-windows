@@ -397,6 +397,8 @@ namespace InterviewCopilot
                         );
                         _globalHotkey.OwnerWindowHandle = mainHwnd;
                         _globalHotkey.OnBringToFront = () => Dispatcher.BeginInvoke(() => BringToFront());
+                        _globalHotkey.OnPreviousAnswer = () => Dispatcher.BeginInvoke(GoToPreviousAnswer);
+                        _globalHotkey.OnNextAnswer = () => Dispatcher.BeginInvoke(GoToNextAnswer);
                         // Cleanup is deliberately left to OnClosed rather than an
                         // app-lifetime event. A DispatcherUnhandledException handler
                         // would fire for recoverable errors and kill the Space hotkey
@@ -2661,7 +2663,13 @@ namespace InterviewCopilot
                 // Manual listening starts a fresh visual turn. Auto modes resume listening
                 // immediately after an answer, so keep that answer visible until the next
                 // answer actually begins instead of flashing it and clearing it at once.
-                if (source != "AUTO")
+                //
+                // Not while the user is reading an older answer, though. Found in a
+                // live run: they had stepped back to the answer that was taken from
+                // them, the interviewer started the next question, and the moment
+                // listening began the screen went blank underneath them. Going back
+                // is worth nothing if the next sentence anybody speaks wipes it.
+                if (source != "AUTO" && !BrowsingOlderAnswer)
                 {
                     ClearAnswer();
                     if (answerWindow != null) answerWindow.UpdateAnswer("");
@@ -2993,8 +3001,11 @@ namespace InterviewCopilot
                 // appears in the Interviewer transcript, so we don't repeat a "Q:" label
                 // here, and each new question replaces the previous answer instead of
                 // stacking old ones underneath.
-                ClearAnswer();
-                if (answerWindow != null) { answerWindow.UpdateAnswer(""); answerWindow.UpdateQuestion(q); }
+                if (!BrowsingOlderAnswer)
+                {
+                    ClearAnswer();
+                    if (answerWindow != null) { answerWindow.UpdateAnswer(""); answerWindow.UpdateQuestion(q); }
+                }
 
                 int tokenCount = 0;
 
@@ -3016,7 +3027,8 @@ namespace InterviewCopilot
                     // Paint the first token immediately. After that, repaint every two
                     // tokens (or on a newline) to keep the stream smooth without
                     // thrashing the UI thread.
-                    if (tokenCount == 1 || tokenCount % 2 == 0 || token.Contains('\n'))
+                    if ((tokenCount == 1 || tokenCount % 2 == 0 || token.Contains('\n'))
+                        && !BrowsingOlderAnswer)
                     {
                         string soFar = CleanAiOutput(streamedAnswer.ToString());
                         ShowAnswer(soFar, scrollToEnd: true);
@@ -3027,9 +3039,22 @@ namespace InterviewCopilot
                 string final = CleanAiOutput(streamedAnswer.ToString());
                 if (string.IsNullOrWhiteSpace(final))
                     throw new BackendRequestException("No answer was returned. Please try again.");
-                ShowAnswer(final, scrollToEnd: false);
-                AiAnswerBox.ScrollToHome();   // land at the top so the answer reads from the start
-                if (answerWindow != null) { answerWindow.UpdateAnswer(final); answerWindow.UpdateQuestion(q); }
+                // Kept whatever happens next, so it can be returned to. Whether it
+                // also goes on screen is the history's decision, not this code's:
+                // someone reading an older answer keeps reading it.
+                bool showNow = _answers.Append(q, final);
+                if (showNow)
+                {
+                    ShowAnswer(final, scrollToEnd: false);
+                    AiAnswerBox.ScrollToHome();   // land at the top so the answer reads from the start
+                    if (answerWindow != null) { answerWindow.UpdateAnswer(final); answerWindow.UpdateQuestion(q); }
+                }
+                else
+                {
+                    DebugWindow.Log("HISTORY",
+                        $"Answer {_answers.Count} kept without taking the screen: the user is reading {_answers.Position}");
+                }
+                UpdateHistoryNav();
                 PromptBuilder.AddToHistory(q, final);
                 AppendToSessionLog(q, final);
                 DebugWindow.Log("AI", $"Done — {tokenCount} tokens");
@@ -5955,10 +5980,80 @@ namespace InterviewCopilot
             StarBadge.Visibility = Visibility.Collapsed;
             if (answerWindow != null) { answerWindow.UpdateAnswer(""); answerWindow.UpdateQuestion(""); }
             PromptBuilder.ClearHistory();
+            // The arrows must never offer answers from a conversation the user
+            // has deliberately ended.
+            _answers.Clear();
+            UpdateHistoryNav();
             try { File.WriteAllText(Path.Combine(AppDataFolder, "latest.txt"), ""); } catch { }
         }
 
         private bool _lastAnswerEmpty = true;
+
+        // ══════════════════════════════════════════════════════════════════════
+        // THE ANSWERS ALREADY GIVEN
+        //
+        // An interview is live and the screen can be taken away in a second: a
+        // cough, a colleague's sentence in the background, a transcript that
+        // catches it, and the answer being read is replaced by an answer to a
+        // question nobody asked. Ctrl+Alt+Left brings it back instantly, from
+        // memory, with no question spent and no network call, because the moment
+        // it is needed is the moment there is no time.
+        // ══════════════════════════════════════════════════════════════════════
+        private readonly AnswerHistory _answers = new();
+
+        /// <summary>
+        /// True while the screen belongs to the user rather than to the next
+        /// answer. Checked before anything paints the answer box, so a reply
+        /// arriving mid-read does not snap them away from what they are reading.
+        /// </summary>
+        private bool BrowsingOlderAnswer => !_answers.IsFollowingNewest;
+
+        private void ShowFromHistory(AnswerHistory.Entry? entry)
+        {
+            if (entry == null) return;
+
+            ShowAnswer(entry.Value.Answer, scrollToEnd: false);
+            AiAnswerBox.ScrollToHome();
+            if (answerWindow != null)
+            {
+                answerWindow.UpdateAnswer(entry.Value.Answer);
+                answerWindow.UpdateQuestion(entry.Value.Question);
+            }
+            UpdateHistoryNav();
+        }
+
+        /// <summary>
+        /// Keeps the counter honest: hidden until there is a second answer,
+        /// arrows disabled at each end, and a count of what arrived while the
+        /// user was reading something older.
+        /// </summary>
+        private void UpdateHistoryNav()
+        {
+            if (HistoryNav == null) return;
+
+            bool worthShowing = _answers.Count > 1;
+            HistoryNav.Visibility = worthShowing ? Visibility.Visible : Visibility.Collapsed;
+            if (!worthShowing) return;
+
+            HistoryLabel.Text = _answers.Label();
+            HistoryBackBtn.IsEnabled = _answers.CanGoBack;
+            HistoryForwardBtn.IsEnabled = _answers.CanGoForward;
+
+            int waiting = _answers.NewerWaiting;
+            HistoryNewerBadge.Visibility = waiting > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (waiting > 0) HistoryNewerText.Text = waiting == 1 ? "1 new answer" : $"{waiting} new answers";
+        }
+
+        private void HistoryBackBtn_Click(object sender, RoutedEventArgs e) => GoToPreviousAnswer();
+
+        private void HistoryForwardBtn_Click(object sender, RoutedEventArgs e) => GoToNextAnswer();
+
+        private void HistoryLabelBtn_Click(object sender, RoutedEventArgs e) =>
+            ShowFromHistory(_answers.JumpToNewest());
+
+        private void GoToPreviousAnswer() => ShowFromHistory(_answers.Back());
+
+        private void GoToNextAnswer() => ShowFromHistory(_answers.Forward());
         // ══════════════════════════════════════════════════════════════════════
         // THE ANSWER, AND THE CODE, SHOWN SEPARATELY
         //
@@ -6167,6 +6262,10 @@ namespace InterviewCopilot
             TranscriptTextBlock.Text = "";
             TranscriptHint.Visibility = Visibility.Visible;
             ClearAnswer();
+            // A new session is a new interview. The arrows must not reach back into
+            // the last one.
+            _answers.Clear();
+            UpdateHistoryNav();
             StarBadge.Visibility = Visibility.Collapsed;
             if (answerWindow != null) { answerWindow.UpdateAnswer(""); answerWindow.UpdateQuestion(""); }
             await StartNewSessionAsync();

@@ -160,6 +160,9 @@ internal static class Program
         Console.WriteLine("\n20. A Store update never interrupts a running session");
         _failed += StoreUpdateTests.Run();
 
+        Console.WriteLine("\n21. An answer taken away can always be got back");
+        _failed += AnswerHistoryTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

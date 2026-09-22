@@ -1099,6 +1099,37 @@
                                         <Border Style="{StaticResource KeyCap}" Margin="18,0,0,0"><TextBlock Text="F9" Style="{StaticResource KeyCapText}"/></Border>
                                         <TextBlock Text="Read main screen" Style="{StaticResource KeyCapLabel}"/>
                                     </StackPanel>
+
+                                    <!-- Walking back through this session's answers.
+                                         Hidden until there is a second answer to move
+                                         between, so it never appears as a control with
+                                         nothing behind it. -->
+                                    <StackPanel x:Name="HistoryNav" Orientation="Horizontal"
+                                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                Visibility="Collapsed">
+                                        <Border x:Name="HistoryNewerBadge" Background="#1A34E08A"
+                                                BorderBrush="#3334E08A" BorderThickness="1"
+                                                CornerRadius="9" Padding="7,1" Margin="0,0,8,0"
+                                                Visibility="Collapsed">
+                                            <TextBlock x:Name="HistoryNewerText" Foreground="#34E08A"
+                                                       FontSize="10" FontFamily="Segoe UI" FontWeight="SemiBold"/>
+                                        </Border>
+                                        <Button x:Name="HistoryBackBtn" Style="{StaticResource QuietActionBtn}"
+                                                Click="HistoryBackBtn_Click" Padding="8,3"
+                                                ToolTip="Previous answer (Ctrl+Alt+Left)">
+                                            <TextBlock Text="&#xE76B;" FontFamily="Segoe MDL2 Assets" FontSize="9"/>
+                                        </Button>
+                                        <Button x:Name="HistoryLabelBtn" Style="{StaticResource QuietActionBtn}"
+                                                Click="HistoryLabelBtn_Click" Padding="9,3" Margin="4,0"
+                                                ToolTip="Back to the newest answer">
+                                            <TextBlock x:Name="HistoryLabel" FontSize="11" FontFamily="Segoe UI"/>
+                                        </Button>
+                                        <Button x:Name="HistoryForwardBtn" Style="{StaticResource QuietActionBtn}"
+                                                Click="HistoryForwardBtn_Click" Padding="8,3"
+                                                ToolTip="Next answer (Ctrl+Alt+Right)">
+                                            <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="9"/>
+                                        </Button>
+                                    </StackPanel>
                                 </Grid>
 
                                 <ScrollViewer Grid.Row="2" Padding="16,12,16,14">

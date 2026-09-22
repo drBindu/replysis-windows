@@ -17,6 +17,8 @@ namespace InterviewCopilot
         private const int VK_F9  = 0x78;   // F9  = Analyze primary screen only (global)
         private const int VK_F12 = 0x7B;
         private const int VK_R   = 0x52;   // Ctrl+Alt+R = bring Replysis to the front
+        private const int VK_LEFT  = 0x25; // Ctrl+Alt+Left  = the previous answer
+        private const int VK_RIGHT = 0x27; // Ctrl+Alt+Right = the next answer
         private const int VK_F4  = 0x73;   // Ctrl+Shift+F4 = kill app (no tray, no taskbar)
 
         private IntPtr _hookId = IntPtr.Zero;
@@ -104,6 +106,32 @@ namespace InterviewCopilot
         public Action? OnBringToFront { get; set; }
 
         internal static bool BringToFrontChord(int vk, bool ctrlAltHeld) => vk == VK_R && ctrlAltHeld;
+
+        /// <summary>
+        /// Ctrl+Alt+Left and Ctrl+Alt+Right walk back and forward through the
+        /// answers given in this session.
+        ///
+        /// System wide, like everything else here, because the meeting window
+        /// has focus during an interview and Replysis does not. The moment this
+        /// is needed is the moment an answer was replaced by one to a question
+        /// nobody asked, which is not a moment to be clicking between windows.
+        ///
+        /// The keys are passed on rather than swallowed: Ctrl+Alt+Left rotates
+        /// the screen on some Intel graphics setups and moves the caret by word
+        /// in some editors, and breaking either would be a poor trade.
+        /// </summary>
+        internal static bool PreviousAnswerChord(int vk, bool ctrlAltHeld) => vk == VK_LEFT && ctrlAltHeld;
+
+        internal static bool NextAnswerChord(int vk, bool ctrlAltHeld) => vk == VK_RIGHT && ctrlAltHeld;
+
+        private bool _prevAnswerDown = false;
+        private bool _nextAnswerDown = false;
+
+        /// <summary>Called when Ctrl+Alt+Left is pressed anywhere.</summary>
+        public Action? OnPreviousAnswer { get; set; }
+
+        /// <summary>Called when Ctrl+Alt+Right is pressed anywhere.</summary>
+        public Action? OnNextAnswer { get; set; }
         private bool _killChordDown = false;
 
         public IntPtr OwnerWindowHandle { get; set; } = IntPtr.Zero;
@@ -232,6 +260,24 @@ namespace InterviewCopilot
                     }
                 }
 
+                if (OnPreviousAnswer != null && PreviousAnswerChord(vkCode, CtrlAltHeld()))
+                {
+                    if (!_prevAnswerDown)
+                    {
+                        _prevAnswerDown = true;
+                        OnPreviousAnswer.Invoke();
+                    }
+                }
+
+                if (OnNextAnswer != null && NextAnswerChord(vkCode, CtrlAltHeld()))
+                {
+                    if (!_nextAnswerDown)
+                    {
+                        _nextAnswerDown = true;
+                        OnNextAnswer.Invoke();
+                    }
+                }
+
                 // F12 — toggle debug window (only when app is NOT focused)
                 if (vkCode == VK_F12 && !IsOwnerWindowForeground() && _onF12Pressed != null &&
                     DebugKeyAllowed(CtrlAltHeld()))
@@ -276,6 +322,8 @@ namespace InterviewCopilot
                 if (vkCode == VK_F9) _f9Down = false;
                 if (vkCode == VK_F12) _f12Down = false;
                 if (vkCode == VK_R) _bringToFrontDown = false;
+                if (vkCode == VK_LEFT)  _prevAnswerDown = false;
+                if (vkCode == VK_RIGHT) _nextAnswerDown = false;
                 if (vkCode == VK_F4) _killChordDown = false;
             }
 
