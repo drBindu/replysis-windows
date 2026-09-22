@@ -16,6 +16,47 @@ namespace InterviewCopilot
             "InterviewCopilot", "debug.log");
         private static readonly object _fileLock = new object();
         private static bool _logDirReady;
+
+        /// <summary>
+        /// The log from the launch before this one, kept rather than destroyed.
+        /// </summary>
+        private static string PreviousLogPath => Path.Combine(
+            Path.GetDirectoryName(LogFilePath)!, "debug.prev.log");
+
+        /// <summary>
+        /// Starts a fresh log for this run and keeps the last one beside it.
+        ///
+        /// Two things were wrong with clearing the file in the window's
+        /// constructor. The smaller one: the update gate runs before any window
+        /// exists, so everything it logged was erased a moment later, and a user
+        /// who saw the update screen misbehave would hand over a log with no
+        /// trace of it.
+        ///
+        /// The larger one: relaunching destroyed the evidence of the run before.
+        /// The question that matters most about this app is why a copy that was
+        /// open during an interview is not open any more, and the only place that
+        /// could answer it was wiped by the act of opening it again to look.
+        ///
+        /// Runs in a static constructor so it happens once, on the first line
+        /// logged, whoever logs it.
+        /// </summary>
+        static DebugWindow()
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
+                if (File.Exists(LogFilePath))
+                {
+                    try { File.Delete(PreviousLogPath); } catch { }
+                    File.Move(LogFilePath, PreviousLogPath);
+                }
+                _logDirReady = true;
+            }
+            catch
+            {
+                // A log that cannot be rotated is not a reason to fail a launch.
+            }
+        }
         private static volatile DebugWindow? _instance;
         private readonly List<string> _logs = new List<string>();
         private readonly DispatcherTimer _refreshTimer;
@@ -134,12 +175,10 @@ namespace InterviewCopilot
 
             _instance = this;
 
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
-                File.WriteAllText(LogFilePath, "");   // fresh file each app launch
-            }
-            catch { }
+            // The file is rotated in the static constructor, before the first
+            // line of the run is written. Clearing it here used to throw away
+            // everything logged before this window existed, which is now the
+            // whole of the update gate.
 
             _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _refreshTimer.Tick += (s, e) =>

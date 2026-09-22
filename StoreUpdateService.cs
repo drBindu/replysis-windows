@@ -134,7 +134,13 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                DebugWindow.Log("UPDATE", $"Store check failed: {ex.GetType().Name}: {ex.Message}");
+                // The HRESULT is named because the message is routinely empty.
+                // A copy that is packaged but not installed from the Store, which
+                // is every developer build and every sideload, fails here with
+                // nothing to read, and without the number there is no way to tell
+                // that apart from a real fault on a customer's machine.
+                DebugWindow.Log("UPDATE",
+                    $"Store check failed: {ex.GetType().Name} 0x{ex.HResult:X8} {ex.Message}".TrimEnd());
                 return LaunchCheck.Clear;
             }
         }
@@ -210,8 +216,17 @@ namespace InterviewCopilot
                 _context = StoreContext.GetDefault();
                 if (ownerWindow != IntPtr.Zero)
                 {
-                    var init = (IInitializeWithWindow)(object)_context;
-                    init.Initialize(ownerWindow);
+                    // Through the interop helper, not a cast.
+                    //
+                    // A hand-declared [ComImport] IInitializeWithWindow and a
+                    // cast is the pattern every sample from the C++/WRL era
+                    // shows, and under CsWinRT it throws: StoreContext is a
+                    // projected .NET class, not a COM callable wrapper, so the
+                    // cast is invalid. It failed every check with
+                    // InvalidCastException, which the catch below turned into
+                    // "carry on" - a mandatory update would never have been
+                    // shown to anybody, and nothing would have looked wrong.
+                    WinRT.Interop.InitializeWithWindow.Initialize(_context, ownerWindow);
                 }
             }
             return _context;
@@ -237,13 +252,6 @@ namespace InterviewCopilot
         }
 
         // ── WinRT plumbing ───────────────────────────────────────────────────
-
-        [ComImport, Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1"),
-         InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IInitializeWithWindow
-        {
-            void Initialize(IntPtr hwnd);
-        }
 
         /// <summary>
         /// Turns the Store's progress-reporting async operation into a plain

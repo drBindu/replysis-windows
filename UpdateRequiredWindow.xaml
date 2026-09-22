@@ -30,7 +30,7 @@
 
             <TextBlock x:Name="BodyText" Foreground="#C3D0E0" FontSize="13"
                        FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,10,0,0"
-                       Text="This version can no longer connect to Replysis. Installing the update takes about a minute and keeps your sessions and settings."/>
+                       Text="This version is out of date. Updating takes about a minute and keeps your sessions, resume and settings exactly as they are."/>
 
             <!-- The bar only appears once an install is actually running. An
                  empty progress bar sitting under a button reads as a hang. -->
