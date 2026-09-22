@@ -37,3 +37,5 @@ engine-dist/
 build/
 publish_test/
 
+# Working documents that belong to the business, not to a public repo.
+replysis-marketing-brief.md
