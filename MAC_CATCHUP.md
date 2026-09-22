@@ -75,6 +75,28 @@ thing, a toolbar that fits only on a wide display is the same bug there.
 
 ---
 
+## Deaf-but-alive engine, and audio recorded while disconnected (2026-09-22, from the Mac's report)
+
+Answering the Mac's two questions: Windows had both problems.
+
+- **Deaf but alive.** Windows does detect it (SpeechHealth: speech heard, no words,
+  engine still ONLINE) but only showed "Not transcribing. Restart the app." and
+  waited for the user. Mid-interview that is not a recovery. It now restarts the
+  engine itself, at most once a minute, showing "Reconnecting speech". A monitor
+  that only restarts dead processes never sees this, on either platform.
+- **Garbage answers after a reconnect.** BufferedMixedStream is created once per
+  run_deepgram call and kept across reconnects, so after a drop it held every
+  chunk recorded while disconnected and the new session transcribed all of it.
+  New drop_stale() keeps the newest 15 chunks (1.5s) and throws the rest away;
+  it runs on every session after the first, so the opening handshake still keeps
+  speech. Simulated with 20s buffered: 18.5s dropped, newest 1.5s kept, short
+  buffers untouched. Engine backoff for reference: Deepgram 1->8s, Speechmatics
+  3->30s (no 60s wait on this side).
+- Tests: test_engine_contract.py covers drop_stale, the first-session exception
+  and the 15-chunk window.
+
+---
+
 ## A prepared screenshot id could outlive the image (2026-09-21, found on Mac)
 
 Reported from the Mac side, confirmed and fixed on Windows.

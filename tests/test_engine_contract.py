@@ -108,6 +108,14 @@ check("a loud voice clipping hard is not static", not _ns["_is_capture_noise"](_
 check("Deepgram 401 is reported as a refusal", ">>> [DEEPGRAM] Refused with" in SOURCE)
 check("a rejected key is reported before giving up", "API key rejected on ALL endpoints" in SOURCE)
 
+# -- Audio recorded while disconnected ----------------------------------------
+# The prebuffer keeps speech spoken during the opening handshake. After a drop
+# it also held every chunk recorded while there was nobody to send them to, and
+# the reconnected session transcribed all of it: words from audio nobody heard.
+check("stale audio is dropped on reconnect", "def drop_stale" in SOURCE and "buffered.drop_stale()" in SOURCE)
+check("the first session keeps its prebuffer", "if sessions_opened:" in SOURCE)
+check("about a second and a half is kept", "KEEP_ON_RECONNECT = 15" in SOURCE)
+
 check("no mic search while words are arriving", "time.time() - _last_words_at > MIC_WORDS_QUIET_SECS" in SOURCE and SOURCE.count("_last_words_at = time.time()") == 2)
 check("the search never gives up for good", "MIC_RESEARCH_BACKOFF_SECS" in SOURCE and "search_allowed" in SOURCE)
 

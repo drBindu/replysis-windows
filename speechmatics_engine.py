@@ -2329,6 +2329,28 @@ class BufferedMixedStream:
         )
         self._thread.start()
 
+    # Chunks are 100 ms, so fifteen of them is the last second and a half: enough
+    # that a word being spoken as the connection returns survives, little enough
+    # that nothing older is transcribed.
+    KEEP_ON_RECONNECT = 15
+
+    def drop_stale(self):
+        """Throw away audio captured while there was nobody to send it to.
+
+        The prebuffer exists so speech during the opening handshake is not lost.
+        After a drop - a laptop waking, a network blip - the same buffer holds
+        every chunk recorded while disconnected, and the reconnected session
+        transcribed all of it: words assembled from audio nobody could hear,
+        answered as if the interviewer had just said them.
+        """
+        with self._condition:
+            dropped = max(0, len(self._chunks) - self.KEEP_ON_RECONNECT)
+            for _ in range(dropped):
+                self._chunks.popleft()
+        if dropped:
+            print(f">>> Dropped {dropped * 100}ms of audio recorded while disconnected.", flush=True)
+        return dropped
+
     def _capture_loop(self):
         while not self._stopped.is_set():
             try:
@@ -2535,6 +2557,7 @@ async def run_deepgram() -> str:
 
     failures = 0
     reconnect_delay = 1
+    sessions_opened = 0   # counts across reconnects, so only the first keeps its prebuffer
 
     while True:
         if os.path.exists(SHUTDOWN_FLAG):
@@ -2554,6 +2577,11 @@ async def run_deepgram() -> str:
             print(">>> [DEEPGRAM] Connecting...", flush=True)
             async with websockets.connect(url, additional_headers=headers, max_size=None,
                                           open_timeout=8, ping_interval=20) as ws:
+                # A reconnect starts from what is being said now, not from
+                # everything recorded while the connection was gone.
+                if sessions_opened:
+                    buffered.drop_stale()
+                sessions_opened += 1
                 print(">>> STATUS: ONLINE ✓", flush=True)
                 online = True
                 session_started = time.monotonic()

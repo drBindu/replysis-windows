@@ -211,6 +211,7 @@ namespace InterviewCopilot
         private bool _engineRecoveryInProgress;
         private bool _engineTokenRefreshAttempted;
         private DateTime _lastTokenRecoveryUtc = DateTime.MinValue;
+        private DateTime _lastDeafnessRestartUtc = DateTime.MinValue;
         // The question answered before the current one, so a transcript that still
         // carries it can have it removed. See AutoTurnRules.StripAnsweredPrefix.
         private string _previousAutoSubmittedQuestion = "";
@@ -1833,7 +1834,24 @@ namespace InterviewCopilot
             DebugWindow.Log("ENGINE",
                 $"Hearing speech but no words for {silentSeconds}s — "
                 + "transcription appears to have stopped while the engine still reports online.");
-            ShowListeningModeNotice("Not transcribing. Restart the app.");
+
+            // Telling somebody mid-interview to restart the app is not a recovery.
+            // A process that is alive but deaf looks healthy to a monitor that only
+            // restarts dead ones, so the app restarts it here: the socket survived
+            // a sleep or a network drop and is holding a connection that carries
+            // nothing. One restart per minute at most, so a genuinely quiet room
+            // cannot turn into a restart loop.
+            if (DateTime.UtcNow - _lastDeafnessRestartUtc > TimeSpan.FromMinutes(1))
+            {
+                _lastDeafnessRestartUtc = DateTime.UtcNow;
+                ShowListeningModeNotice("Reconnecting speech");
+                _nextEngineRestartUtc = DateTime.MinValue;
+                StartSpeechmaticsEngine();
+            }
+            else
+            {
+                ShowListeningModeNotice("Not transcribing. Restart the app.");
+            }
         }
 
         /// <summary>
