@@ -3977,7 +3977,6 @@ namespace InterviewCopilot
             PromptBuilder.SetContext(_liveHints, _companyName, _jobDescription);
             string resumeFacts = ResumeParser.ExtractFacts(resume);
             var messages = PromptBuilder.BuildMessages(resumeFacts, question, AutoModeEnabled);
-            var provider = SettingsWindow.IsGroq() ? "groq" : "openai";
 
             // The raw resume is no longer sent at all.
             //
@@ -3991,7 +3990,12 @@ namespace InterviewCopilot
             // Auto mode had already stopped sending it for exactly this reason.
             // Manual mode, which is the default, kept paying for it every time.
             string transportResume = string.Empty;
-            var payload = new { question, resume = transportResume, provider, messages };
+            // No provider field. The backend chooses Cerebras and falls back to
+            // Gemini; the field it still accepts is, in its own words, a label
+            // that selects nothing, and this client was sending "groq" for
+            // answers Cerebras wrote. Omitted rather than blanked: the server
+            // reads it with textOrEmpty, so absent becomes its own default.
+            var payload = new { question, resume = transportResume, messages };
             string payloadJson = JsonSerializer.Serialize(payload);
             DebugWindow.Log("AI", $"Request prepared: {messages.Count} messages, {Encoding.UTF8.GetByteCount(payloadJson)} bytes");
             // An hour-old token is rejected, and the 401 handler treats that as a

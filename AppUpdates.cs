@@ -89,14 +89,14 @@ namespace InterviewCopilot
 
             try
             {
-                // Off-screen until we know there is something to say. Showing and
-                // then hiding a window flashes; this does not.
-                gate.Opacity = 0;
-                gate.ShowInTaskbar = false;
-                gate.Show();
+                // The handle is created without showing the window. Showing an
+                // invisible one would take the keyboard focus for the length of
+                // the check, and a launch that swallows the first thing someone
+                // types is its own bug.
+                IntPtr handle = gate.Handle;
 
                 StoreUpdateService.LaunchCheck result =
-                    await StoreUpdateService.CheckAtLaunchAsync(gate.Handle, mainWindowShown: false);
+                    await StoreUpdateService.CheckAtLaunchAsync(handle, mainWindowShown: false);
 
                 if (result != StoreUpdateService.LaunchCheck.MandatoryWaiting)
                 {
@@ -105,8 +105,7 @@ namespace InterviewCopilot
                 }
 
                 gate.ShowVersion(StoreUpdateService.PendingVersion);
-                gate.Opacity = 1;
-                gate.ShowInTaskbar = true;
+                gate.Show();
                 gate.Activate();
 
                 // Blocks here until the user updates, continues, or closes.

@@ -1407,18 +1407,25 @@ namespace InterviewCopilot
             string prompt = plainly
                 ? BuildPlainPrompt(spokenQuestion)
                 : BuildScreenPrompt(resumeContext, spokenQuestion);
-            string provider = GetProvider();
+            // The provider is no longer named here. It was a client-side choice
+            // once; the backend now picks Cerebras and falls back to Gemini, and
+            // the field it still accepts is, in its own words, a label that
+            // selects nothing. Sending "groq" for a request Cerebras answers was
+            // a lie in the logs and a thing to update the app to change.
+            //
+            // Safe to omit rather than send blank: the field is read with
+            // textOrEmpty, so absent becomes "" and then the server's own
+            // default. Checked against the live controller before removing it.
 
             // When the picture went up before the question, send the id instead.
             // The bytes are still carried on the fallback path, and on a retry,
             // because an id is spent the moment the server hands it back.
             string payloadJson = preparedImageIds is { Count: > 0 }
-                ? JsonSerializer.Serialize(new { imageIds = preparedImageIds, prompt, provider })
+                ? JsonSerializer.Serialize(new { imageIds = preparedImageIds, prompt })
                 : JsonSerializer.Serialize(new
                   {
                       image = Convert.ToBase64String(imageBytes),
-                      prompt,
-                      provider
+                      prompt
                   });
 
             // â”€â”€ Send request via helper (never throws) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

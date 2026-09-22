@@ -89,13 +89,29 @@ namespace InterviewCopilot
                 return;
             }
 
-            var window = new MainWindow();
-            MainWindow = window;
-            window.Show();
+            try
+            {
+                var window = new MainWindow();
+                MainWindow = window;
+                window.Show();
 
-            // Back to the ordinary rule now that there is something on screen:
-            // closing the app's windows closes the app.
-            ShutdownMode = ShutdownMode.OnLastWindowClose;
+                // Back to the ordinary rule now that there is something on screen:
+                // closing the app's windows closes the app.
+                ShutdownMode = ShutdownMode.OnLastWindowClose;
+            }
+            catch (Exception ex)
+            {
+                // Nothing above this catches it. The window is created from an
+                // async continuation rather than by the framework, so a throw here
+                // would be an unobserved task exception, and with the shutdown rule
+                // still set to explicit the process would sit alive with no window
+                // and no way out but Task Manager. Say what happened and leave.
+                LogCrash("STARTUP", ex);
+                MessageBox.Show(
+                    "Replysis could not start.\n\n" + ex.Message,
+                    "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Error);
+                Shutdown();
+            }
         }
 
         /// <summary>
