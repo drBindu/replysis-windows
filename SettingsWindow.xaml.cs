@@ -260,6 +260,29 @@ namespace InterviewCopilot
 
             string current = InstalledVersion();
 
+            // A Store install is updated by the Store, and deliberately not from
+            // here: an update swaps the package and closes the app to do it, so
+            // offering it from a window the user opened mid-session is exactly
+            // the interruption this product cannot afford. The check that can
+            // act runs at launch, before anybody is using anything.
+            if (AppUpdates.Current == AppUpdates.Channel.Store)
+            {
+                try
+                {
+                    MessageBox.Show(this,
+                        $"Replysis {AppUpdates.CurrentVersion} is installed.\n\n" +
+                        "Updates are installed by the Microsoft Store, and a required " +
+                        "update is offered the next time you open Replysis. Nothing " +
+                        "will interrupt you while the app is open.",
+                        "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                finally
+                {
+                    if (btn != null) { btn.IsEnabled = true; btn.Content = "Check for Updates..."; }
+                }
+                return;
+            }
+
             // An installed copy updates itself, so the button downloads the new
             // version rather than pointing the user at a website and leaving them
             // to reinstall by hand.

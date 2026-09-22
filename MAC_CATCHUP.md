@@ -75,6 +75,52 @@ thing, a toolbar that fits only on a wide display is the same bug there.
 
 ---
 
+## The Microsoft Store is now the primary Windows channel (2026-09-22)
+
+The owner reversed the plan: the Store is the recommended Windows download and
+the signed .exe is deferred until Azure Artifact Signing works. His reasoning is
+SmartScreen - a brand new publisher's direct download shows "Windows protected
+your PC", and a fresh certificate does not clear that immediately because
+reputation has to build.
+
+What that changed here, and the rule the Mac should match if it ever ships
+through an app store:
+
+- A Store package update closes the app to install. So the check happens once,
+  at launch, before the main window is created, and never again for the life of
+  the process. A user who opened Replysis at 9 AM and is still in it at 8 PM is
+  left completely alone, whatever was published at lunchtime. No popup, no
+  restart, no close.
+- Only an update Microsoft marks mandatory in Partner Center blocks a launch.
+  An ordinary one is left to the Store's own background service, which installs
+  it while the app is closed.
+- The gate is never a locked door: a Store that is unreachable, a check that
+  times out (8s) or an install that fails all let the user straight into the
+  app with the version they have. Being a version behind beats being locked out
+  ten minutes before an interview.
+- The channel is decided at runtime from the package identity, not at compile
+  time, so one binary behaves correctly whichever way it was installed. Velopack
+  is never entered on a Store install.
+
+New files: StoreUpdateRules.cs (the rules, testable with no Store, no network),
+StoreUpdateService.cs (the WinRT calls), AppUpdates.cs (the one place that knows
+which channel this copy is on), UpdateRequiredWindow.xaml (the branded gate).
+Suite 20 covers the rules.
+
+Two things worth knowing before touching this:
+- MainWindow is no longer created by App.xaml's StartupUri. It is created after
+  the gate, which is the only way to have a moment before the window exists.
+  ShutdownMode is OnExplicitShutdown until it is shown, or the app would exit in
+  the gap where no window is open.
+- The app project moved to net8.0-windows10.0.19041.0 for the Store projections.
+  SupportedOSPlatformVersion stays at 10.0.17763.0, so the supported floor did
+  not move. The test project had to follow or it cannot reference the app.
+
+Verified unpackaged: app builds, starts, main window opens, 20 suites pass. The
+Store path itself can only be proved by a build installed from the Store.
+
+---
+
 ## Turn-taking measured against the Mac's burst test (2026-09-22)
 
 The Mac's (a) was a real hole here: a tail beginning with "and" was merged even

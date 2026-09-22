@@ -2,7 +2,12 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- The Windows 10 flavour of the TFM, not for a new minimum but for the
+         Windows.Services.Store projections: the Store update check at launch
+         cannot be written without them. SupportedOSPlatformVersion keeps the
+         actual floor where it was, matching the appxmanifest. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <PlatformTarget>x64</PlatformTarget>

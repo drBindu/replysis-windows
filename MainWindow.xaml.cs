@@ -1287,7 +1287,7 @@ namespace InterviewCopilot
 
                 if (UpdateService.IsManaged)
                 {
-                    string? staged = await UpdateService.CheckAndStageAsync();
+                    string? staged = await AppUpdates.CheckAndStageAsync();
                     if (string.IsNullOrEmpty(staged)) return;
 
                     await Dispatcher.InvokeAsync(() =>

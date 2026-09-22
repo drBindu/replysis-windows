@@ -42,11 +42,67 @@ namespace InterviewCopilot
                 return;
             }
 
+            // Nothing is allowed to end the process while there is no window on
+            // screen. The launch gate closes its own window before the main one
+            // is created, and with the default rule that moment - zero windows
+            // open - would shut the app down before it ever started.
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
             // The main window restores the saved Firebase session before requesting a
             // transcription credential. Do not prefetch here: doing so treats a returning
             // Pro user as a guest for a few milliseconds and can create a false 402 retry.
             base.OnStartup(e);
+
+            // The main window used to be created by StartupUri, which gave no
+            // moment in which to ask the Store anything. It is created below
+            // instead, after the gate, because a mandatory update can only be
+            // installed while nobody is using the app.
+            _ = OpenMainWindowAsync();
         }
+
+        /// <summary>
+        /// Runs the update gate, then opens the app.
+        ///
+        /// The gate is a launch-time event and nothing else: once the main
+        /// window is up, no update may take the app away from the person using
+        /// it. They may be nine hours into a working day with an interview in
+        /// ten minutes, and a release published at lunchtime is not a reason to
+        /// interrupt that.
+        /// </summary>
+        private async Task OpenMainWindowAsync()
+        {
+            bool proceed = true;
+
+            try
+            {
+                proceed = await AppUpdates.RunLaunchGateAsync();
+            }
+            catch (Exception ex)
+            {
+                // A gate that throws must not be a gate that locks.
+                LogCrash("UPDATE-GATE", ex);
+            }
+
+            if (!proceed)
+            {
+                Shutdown();
+                return;
+            }
+
+            var window = new MainWindow();
+            MainWindow = window;
+            window.Show();
+
+            // Back to the ordinary rule now that there is something on screen:
+            // closing the app's windows closes the app.
+            ShutdownMode = ShutdownMode.OnLastWindowClose;
+        }
+
+        /// <summary>
+        /// Present only because App.xaml needs a Startup handler to replace the
+        /// StartupUri it used to carry. The work is in OnStartup.
+        /// </summary>
+        private void OnStartupHook(object sender, StartupEventArgs e) { }
 
         // ── UI thread ────────────────────────────────────────────────────────
         // Only faults we can name are swallowed. Treating every exception as
@@ -202,7 +258,7 @@ namespace InterviewCopilot
             // in, so the new version is simply there the next time Replysis opens.
             // Doing it here rather than mid-session is the whole point: an update
             // can never take the app away from someone during an interview.
-            UpdateService.ApplyOnExit();
+            AppUpdates.ApplyOnExit();
 
             base.OnExit(e);
         }

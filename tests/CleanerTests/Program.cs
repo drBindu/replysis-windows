@@ -157,6 +157,9 @@ internal static class Program
         Console.WriteLine("\n19. A prepared screenshot id never outlives the image");
         _failed += ScreenShotTests.Run();
 
+        Console.WriteLine("\n20. A Store update never interrupts a running session");
+        _failed += StoreUpdateTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;
