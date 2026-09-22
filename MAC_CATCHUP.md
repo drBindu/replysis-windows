@@ -75,6 +75,32 @@ thing, a toolbar that fits only on a wide display is the same bug there.
 
 ---
 
+## Turn-taking measured against the Mac's burst test (2026-09-22)
+
+The Mac's (a) was a real hole here: a tail beginning with "and" was merged even
+when it asked about something new, so three questions could become one answer.
+AutoTurnRules.AsksItsOwnQuestion() now ends the merge for any tail that opens in
+interrogative form with a subject of its own, while a tail that points back
+("and where have you used it?", "with an example") still merges. Suite 17.
+
+Measured on Windows by feeding latest.txt the way the engine does (spoken tests
+are useless on this laptop: the default output is a TV that is off, so the app
+hears only room noise - itself worth noting, a default output that does not
+respond to loopback leaves the app deaf):
+- 8 questions, 2s apart: 8 answered, 0 merges.
+- 8 questions, 0.5s apart: 7 answered, 0 merges.
+- "What is garbage collection?" then "And what is a memory leak?" 1.2s later:
+  answered separately. Then "and where have you used it?" merged and re-answered
+  the whole question, which is the behaviour the Mac describes.
+- Several finished questions with no pause: the answered part is stripped and the
+  newest question is answered (StripAnsweredPrefix), matching the Mac's (b).
+- The merge window was already 4s here, measured from when the new speech started,
+  which is what the Mac moved to.
+- The "waiting for a complete question" log now carries the text it judged, so the
+  next person can tell a half-spoken sentence from a misread transcript.
+
+---
+
 ## Deaf-but-alive engine, and audio recorded while disconnected (2026-09-22, from the Mac's report)
 
 Answering the Mac's two questions: Windows had both problems.

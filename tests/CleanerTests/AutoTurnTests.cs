@@ -46,6 +46,15 @@ internal static class AutoTurnTests
         Check(AutoTurnRules.StripAnsweredPrefix("What is Java?", "What is Java?") == "What is Java?",
               "the same question with nothing after it is left alone");
 
+        // A tail that asks about something new is its own turn, even after "and"
+        Check(AutoTurnRules.AsksItsOwnQuestion("And what is a memory leak?"), "'And what is a memory leak' is a new question");
+        Check(AutoTurnRules.AsksItsOwnQuestion("what is garbage collection"), "a bare new question is a new question");
+        Check(AutoTurnRules.AsksItsOwnQuestion("So how does a thread pool work?"), "'So how does...' is a new question");
+        Check(!AutoTurnRules.AsksItsOwnQuestion("and where have you used it?"), "pointing back at it is an addition");
+        Check(!AutoTurnRules.AsksItsOwnQuestion("with an example from Spring"), "an added constraint is an addition");
+        Check(!AutoTurnRules.AsksItsOwnQuestion("or full time"), "a list of options is an addition");
+        Check(!AutoTurnRules.AsksItsOwnQuestion("and that one too"), "'that one' points back");
+
         // A request's opening is not the request
         Check(AutoTurnRules.IsBareRequestOpener("Can you tell me"), "'Can you tell me' waits for the rest");
         Check(AutoTurnRules.IsBareRequestOpener("Could you walk me through"), "'Could you walk me through' waits");

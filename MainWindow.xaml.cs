@@ -2296,6 +2296,12 @@ namespace InterviewCopilot
                                  QuestionStarters.Contains(words[0]) ||
                                  InterviewCommands.Contains(words[0]);
 
+            // A tail that asks about something new is a new turn, even when it opens
+            // with "and". Merging those answered three questions as one, and charged
+            // for each merge. Reported from the Mac, where eight questions asked two
+            // seconds apart left five unanswered.
+            if (AutoTurnRules.AsksItsOwnQuestion(candidate)) return false;
+
             return ContinuationOpeners.Contains(words[0]) || !asksSomething;
         }
 
@@ -2355,7 +2361,11 @@ namespace InterviewCopilot
                     !string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
                 {
                     _lastAutoRejectedTranscript = question;
-                    DebugWindow.Log("AUTO", $"Waiting for a complete question ({question.Length} chars). No AI request sent.");
+                    // The text matters as much as the length: "incomplete" covers a
+                    // half-spoken sentence and a transcript the classifier read wrongly,
+                    // and the log could not tell them apart.
+                    string shown = candidateQuestion.Length > 90 ? candidateQuestion[..90] + "…" : candidateQuestion;
+                    DebugWindow.Log("AUTO", $"Waiting for a complete question ({question.Length} chars): \"{shown}\"");
                 }
                 return;
             }

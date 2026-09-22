@@ -87,6 +87,29 @@ namespace InterviewCopilot
         }
 
         /// <summary>
+        /// True when a tail is a new question with a subject of its own, however it
+        /// begins. "And what is a memory leak?" opens with a joining word but asks
+        /// about something new, and merging it answered three questions as one.
+        ///
+        /// A tail that points back at what was just asked - "and where have you used
+        /// it?", "with an example" - is a genuine addition, and still merges.
+        /// </summary>
+        internal static bool AsksItsOwnQuestion(string tail)
+        {
+            string q = Regex.Replace((tail ?? "").Trim().ToLowerInvariant(),
+                @"^(?:and|or|but|also|plus|so|then|okay|ok)\s+", "");
+            if (q.Length == 0) return false;
+
+            // Pointing back: the subject is the question before, not a new one.
+            if (Regex.IsMatch(q, @"\b(it|that|this|them|those|these|there|the same)\b")) return false;
+
+            // Interrogative opening with a word of its own after it.
+            return Regex.IsMatch(q,
+                @"^(?:what|what's|whats|how|why|which|when|where|who|whose|can you|could you|do you|does|did|is|are|tell me about|explain|describe|define)\b" +
+                @"[^?]*\b[a-z]{3,}\b");
+        }
+
+        /// <summary>
         /// Removes the question already answered from the front of a transcript and
         /// returns what was said after it. Recognition re-delivers the last sentence
         /// with the next words attached: "Before we wrap up, do you have any questions
