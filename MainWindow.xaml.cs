@@ -5869,7 +5869,11 @@ namespace InterviewCopilot
             }
             return IntPtr.Zero;
         }
-        private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
+        private void CloseBtn_Click(object sender, RoutedEventArgs e)
+        {
+            DebugWindow.Log("EXIT", "Close button pressed");
+            Close();
+        }
         private void MinimizeBtn_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
         // ── Pin: keep the window in front of other apps ─────────────────────────
@@ -7050,6 +7054,55 @@ namespace InterviewCopilot
             if (_debugWindow == null) return;
             if (_debugWindow.IsVisible) _debugWindow.Hide();
             else { _debugWindow.Show(); _debugWindow.Activate(); }
+        }
+
+        /// <summary>
+        /// The last chance to stop an exit, and the place every exit is named.
+        ///
+        /// Both platforms found the same hole. The Mac was found not running with
+        /// nothing in the log; so was this app, twice. The Mac added logging and
+        /// it named the cause within minutes, one of which was its close button
+        /// calling terminate outright. Ours did the same: the cross ended the
+        /// process, mid-interview, on one mis-click, with no prompt and no trace.
+        ///
+        /// So a close while the app is actually working now asks first. Only
+        /// then: an idle window closes as it always did, because a confirmation
+        /// nobody needs is how people learn to click through confirmations they
+        /// do need.
+        ///
+        /// The kill chord, Ctrl+Shift+F4, deliberately does not ask. It exists
+        /// for the case where the window is hidden and there is no taskbar button
+        /// to reach, and a prompt would defeat the one thing it is for. It writes
+        /// its own line to the log, which now survives the next launch.
+        /// </summary>
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            base.OnClosing(e);
+
+            bool working = isListening || isProcessing;
+            if (!working)
+            {
+                DebugWindow.Log("EXIT", "Closing while idle");
+                return;
+            }
+
+            var answer = MessageBox.Show(
+                this,
+                "Replysis is still listening.\n\nClose it anyway? The session is saved either way.",
+                "Replysis AI",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+            if (answer == MessageBoxResult.No)
+            {
+                e.Cancel = true;
+                DebugWindow.Log("EXIT", "Close cancelled: the user kept the session running");
+                return;
+            }
+
+            DebugWindow.Log("EXIT",
+                $"Closing while working (listening={isListening}, answering={isProcessing}), confirmed by the user");
         }
 
         protected override void OnClosed(EventArgs e)

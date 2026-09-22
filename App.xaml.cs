@@ -261,6 +261,12 @@ namespace InterviewCopilot
 
         protected override void OnExit(ExitEventArgs e)
         {
+            // The last line of the run, and the one that answers "why is it not
+            // open any more". Written first, before any teardown can throw and
+            // take the answer with it. The log survives the next launch now, so
+            // this is readable after the fact rather than only in the moment.
+            DebugWindow.Log("EXIT", $"Process exiting, code {e.ApplicationExitCode}");
+
             DispatcherUnhandledException -= OnDispatcherUnhandledException;
             TaskScheduler.UnobservedTaskException -= OnUnobservedTaskException;
             AppDomain.CurrentDomain.UnhandledException -= OnAppDomainUnhandledException;

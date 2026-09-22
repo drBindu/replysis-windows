@@ -75,6 +75,38 @@ thing, a toolbar that fits only on a wide display is the same bug there.
 
 ---
 
+## Why the app was not running any more (2026-09-22, with the Mac)
+
+Both platforms had the same symptom: found not running, nothing in the log. The
+Mac added terminate logging and it named the cause within minutes. Windows now
+does the same, and the log survives the next launch, so the answer is readable
+after the fact instead of only in the moment.
+
+The Mac found its close button called terminate outright, so one mis-click ended
+the app mid-interview. Ours did exactly the same: the cross called Close() with
+no prompt and no trace.
+
+What changed here:
+
+- Closing while the app is listening or answering asks first. Closing an idle
+  window still closes it immediately, because a confirmation nobody needs is how
+  people learn to click through the ones they do need.
+- Every exit is named: which button was pressed, whether the close was
+  cancelled, what the app was doing, and the process exit code.
+
+Verified by driving the real app: with the app listening, the cross raises a
+dialog that is the foreground window and stays open; No keeps the app running;
+Yes closes it and logs "Closing while working (listening=True, answering=False),
+confirmed by the user".
+
+Ctrl+Shift+F4 deliberately still does NOT ask. It exists for the case where the
+window is hidden and there is no taskbar button to reach - somebody walks in and
+it has to be gone now - and a prompt would defeat the one thing it is for. It
+writes its own log line, which is what was missing before. The Mac has the same
+chord and takes the opposite view; this is the owner's call, not ours.
+
+---
+
 ## An animation anywhere costs a fifth of a CPU core (2026-09-22)
 
 The Windows window sets AllowsTransparency, which makes Windows render it in
