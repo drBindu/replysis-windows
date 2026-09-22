@@ -1,6 +1,8 @@
 # Build output
 bin/
 obj/
+# The style check builds into its own folder, which bin/ does not match.
+bin-style-check/
 
 # MSIX packaging output. The directory Visual Studio actually writes is
 # AppPackages/ â€” the old AppxPackages/ rule never matched anything.
