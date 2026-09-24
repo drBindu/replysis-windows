@@ -978,6 +978,11 @@ namespace InterviewCopilot
                 - Everything that is not code stays short. They are reading this while
                   another person is talking to them.
 
+                Every answer ends with a SAY THIS line: one or two sentences, first
+                person, ready to speak out loud with no editing. It is the one thing
+                they can use in the next three seconds while someone is looking at
+                them, so it is never optional, whatever is on the screen.
+
                 Match the shape of your answer to what is on the screen.
 
                 A coding or algorithm problem:
@@ -1005,6 +1010,8 @@ namespace InterviewCopilot
                 WHY
                 One line for why it is right. One line for why the closest wrong option
                 is wrong.
+                SAY THIS
+                One sentence they can say out loud, giving the answer and the reason.
 
                 A system design or architecture diagram:
                 SCOPE
@@ -1028,6 +1035,8 @@ namespace InterviewCopilot
                 One line.
                 DO THIS
                 The single most useful next step.
+                SAY THIS
+                One sentence they can say out loud right now.
 
                 After the answer, and always, add one final section:
 
