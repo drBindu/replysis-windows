@@ -156,6 +156,13 @@
                     </Grid>
                 </Border>
 
+                <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,8">
+                    <StackPanel>
+                        <CheckBox x:Name="SystemProxyCheckBox" Content="Use the Windows system proxy" Foreground="White"/>
+                        <TextBlock Text="For networks that require a proxy. Restart Replysis after changing this. Speech-provider connections may need separate network approval."
+                                   Foreground="#7E90A8" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                    </StackPanel>
+                </Border>
                 <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,20">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -186,7 +193,7 @@
                         <TextBlock Grid.Column="0" Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="16"
                                    Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="Save session audio" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
+                            <TextBlock Text="Save session audio (up to 90 minutes)" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Keeps an encrypted copy of each session's audio on this computer for 7 days. Nothing is uploaded. Off by default, and takes effect from your next session."
                                        Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -196,6 +203,21 @@
                     </Grid>
                 </Border>
 
+                <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Plain Space works in every app" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                            <TextBlock Text="Off is safer for typing. Use Ctrl+Alt+Space in other apps to toggle manual listening. Space still works in Replysis. Enabling this can toggle listening after a pause while typing."
+                                       Foreground="#7E90A8" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" x:Name="PlainSpaceCheckBox" Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Center" Margin="10,0,0,0" AutomationProperties.Name="Plain Space works in every app"/>
+                    </Grid>
+                </Border>
                 <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,20">
                     <Grid>
                         <Grid.ColumnDefinitions>

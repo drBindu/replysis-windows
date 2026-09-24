@@ -25,6 +25,25 @@ namespace InterviewCopilot
         private List<SessionInfo> _sessions = new();
         private SessionInfo? _selectedSession;
         private readonly System.Threading.CancellationTokenSource _cts = new();
+        private long _loadGeneration;
+        private long _identityGeneration = -1;
+
+        public void ResetForIdentityChange()
+        {
+            long identity = UserSession.Identity.Current;
+            if (_identityGeneration == identity) return;
+            _identityGeneration = identity;
+            _loadGeneration++;
+            _sessions.Clear();
+            SessionsList.Items.Clear();
+            _selectedSession = null;
+            TranscriptPanel.Children.Clear();
+            TranscriptScroll.Visibility = Visibility.Collapsed;
+            DetailHeader.Visibility = Visibility.Collapsed;
+            DeleteBtn.Visibility = Visibility.Collapsed;
+            NoSelectionState.Visibility = Visibility.Visible;
+            ShowEmptyState();
+        }
 
         /// <summary>Raised when the user closes the panel.</summary>
         public event Action? CloseRequested;
@@ -43,6 +62,8 @@ namespace InterviewCopilot
         /// </summary>
         public void Open()
         {
+            ResetForIdentityChange();
+            _loadGeneration++;
             LoadSessions();
             _ = FetchCloudSessionsAsync();
         }
@@ -115,6 +136,10 @@ namespace InterviewCopilot
         private async Task FetchCloudSessionsAsync()
         {
             if (!UserSession.IsLoggedIn) return;
+            long identity = UserSession.Identity.Current;
+            long load = _loadGeneration;
+            bool IsCurrent() => !_cts.IsCancellationRequested &&
+                load == _loadGeneration && UserSession.Identity.IsCurrent(identity);
             try
             {
                 Dispatcher.Invoke(() =>
@@ -126,6 +151,7 @@ namespace InterviewCopilot
 
                 if (UserSession.IsTokenExpired())
                     await UserSession.TryRefreshAsync();
+                if (!IsCurrent()) return;
 
                 string token = UserSession.IdToken;
                 if (string.IsNullOrEmpty(token)) return;
@@ -153,10 +179,11 @@ namespace InterviewCopilot
                 }
 
                 if (cloudSessions.Count == 0) return;
-                if (_cts.IsCancellationRequested) return;
+                if (!IsCurrent()) return;
 
                 Dispatcher.Invoke(() =>
                 {
+                    if (!IsCurrent()) return;
                     foreach (var cs in cloudSessions)
                     {
                         if (!_sessions.Any(existing => SessionsMatch(existing, cs)))
@@ -186,7 +213,7 @@ namespace InterviewCopilot
             }
             finally
             {
-                if (!_cts.IsCancellationRequested)
+                if (IsCurrent())
                     Dispatcher.Invoke(() => SubtitleLabel.Text = _sessions.Count == 0
                         ? "No sessions yet"
                         : $"{_sessions.Count} session{(_sessions.Count != 1 ? "s" : "")} recorded");
@@ -672,8 +699,8 @@ namespace InterviewCopilot
             if (_selectedSession == null || _selectedSession.IsCloud) return;
 
             var result = MessageBox.Show(Window.GetWindow(this),
-                $"Delete \"{_selectedSession.DisplayTitle}\" ({_selectedSession.DisplayDate})?\n\nThis cannot be undone.",
-                "Delete Session", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                $"Delete the local copy of \"{_selectedSession.DisplayTitle}\" ({_selectedSession.DisplayDate})?\n\nThis removes this device's transcript and audio. Any cloud backup is kept and may appear again in this list. Local deletion cannot be undone.",
+                "Delete Local Copy", MessageBoxButton.YesNo, MessageBoxImage.Warning);
 
             if (result != MessageBoxResult.Yes) return;
 

@@ -60,7 +60,7 @@ namespace InterviewCopilot
         }
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
-        private static extern long GetCurrentPackageFullName(ref int packageFullNameLength,
+        private static extern int GetCurrentPackageFullName(ref int packageFullNameLength,
                                                              System.Text.StringBuilder? packageFullName);
 
         /// <summary>What the launch check found.</summary>
@@ -213,7 +213,7 @@ namespace InterviewCopilot
         {
             if (_context == null)
             {
-                _context = StoreContext.GetDefault();
+                StoreContext context = StoreContext.GetDefault();
                 if (ownerWindow != IntPtr.Zero)
                 {
                     // Through the interop helper, not a cast.
@@ -226,8 +226,9 @@ namespace InterviewCopilot
                     // InvalidCastException, which the catch below turned into
                     // "carry on" - a mandatory update would never have been
                     // shown to anybody, and nothing would have looked wrong.
-                    WinRT.Interop.InitializeWithWindow.Initialize(_context, ownerWindow);
+                    WinRT.Interop.InitializeWithWindow.Initialize(context, ownerWindow);
                 }
+                _context = context;
             }
             return _context;
         }

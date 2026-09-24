@@ -27,7 +27,13 @@ env:
   REPO_URL: https://github.com/drBindu/replysis-windows
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify-windows.yml
+    permissions:
+      contents: read
+
   release:
+    needs: verify
     runs-on: windows-latest
 
     steps:

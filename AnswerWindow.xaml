@@ -78,7 +78,7 @@
                     <!-- Idle hint, hidden while listening or thinking -->
                     <TextBlock Grid.Column="2"
                                x:Name="IdleHintLabel"
-                               Text="Press Space to listen"
+                               Text="Ctrl+Alt+Space to listen"
                                Margin="8,0,0,0"
                                FontSize="10"
                                FontWeight="SemiBold"

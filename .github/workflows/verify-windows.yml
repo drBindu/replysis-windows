@@ -1,6 +1,7 @@
 name: Verify Windows App
 
 on:
+  workflow_call:
   pull_request:
   push:
     branches: [main]
@@ -31,3 +32,7 @@ jobs:
         run: python tests/test_engine_contract.py
       - name: Output pipeline tests
         run: python tests/verify_output_pipeline.py
+      - name: Recording failure and duration tests
+        run: python tests/test_recording.py
+      - name: Store version stamping tests
+        run: python tests/test_store_packaging.py

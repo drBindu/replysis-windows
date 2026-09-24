@@ -163,6 +163,12 @@ internal static class Program
         Console.WriteLine("\n21. An answer taken away can always be got back");
         _failed += AnswerHistoryTests.Run();
 
+        Console.WriteLine("\n22. Account changes, ordered saves, safe shortcuts and stalled streams");
+        _failed += ReliabilityTests.Run();
+
+        Console.WriteLine("\n23. Resume bounds, OAuth callbacks and small-screen safety");
+        _failed += AuditHardeningTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

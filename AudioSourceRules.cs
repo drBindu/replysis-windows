@@ -60,6 +60,13 @@ namespace InterviewCopilot
         /// </summary>
         internal static readonly TimeSpan QuietBeforePracticeTip = TimeSpan.FromMinutes(3);
 
+        internal static TimeSpan QuietDuration(DateTime now, DateTime listeningStarted, DateTime lastWords)
+        {
+            if (listeningStarted == DateTime.MinValue) return TimeSpan.Zero;
+            DateTime since = lastWords > listeningStarted ? lastWords : listeningStarted;
+            return now > since ? now - since : TimeSpan.Zero;
+        }
+
         internal static bool ShouldSuggestPractice(bool interviewOn, bool listening, bool meetingAppRunning,
                                                    TimeSpan quietFor, bool alreadySuggested) =>
             interviewOn && listening && !meetingAppRunning && !alreadySuggested &&

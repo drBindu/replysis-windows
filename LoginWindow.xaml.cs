@@ -20,6 +20,9 @@ namespace InterviewCopilot
         private static string FirebaseApiKey => SettingsWindow.GetFirebaseApiKey();
 
         private static HttpClient _http => SharedHttpClient.HttpShort;
+        private readonly CancellationTokenSource _windowLifetime = new();
+        private readonly CancellationToken _windowToken;
+        private bool _authBusy;
 
         // Result — set when login succeeds
         public bool LoginSuccess { get; private set; } = false;
@@ -33,7 +36,15 @@ namespace InterviewCopilot
 
         public LoginWindow()
         {
+            _windowToken = _windowLifetime.Token;
             InitializeComponent();
+            Closed += (_, _) =>
+            {
+                _windowLifetime.Cancel();
+                _windowLifetime.Dispose();
+                PasswordBox.Clear();
+                PasswordPlainBox.Clear();
+            };
             // Same glass as the main window, from the same stored setting.
             // Every window painted its own solid near-black before this, so
             // opening one dropped an opaque slab on top of a translucent app.
@@ -62,6 +73,7 @@ namespace InterviewCopilot
 
         private async Task DoSignIn()
         {
+            if (_authBusy || _windowToken.IsCancellationRequested) return;
             string email    = EmailBox.Text.Trim();
             string password = CurrentPassword;
 
@@ -90,7 +102,7 @@ namespace InterviewCopilot
                 request.Content = new StringContent(
                     JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-                using var res = await _http.SendAsync(request);
+                using var res = await _http.SendAsync(request, _windowToken);
                 string body = await res.Content.ReadAsStringAsync();
 
                 using var doc = JsonDocument.Parse(body);
@@ -128,20 +140,7 @@ namespace InterviewCopilot
                 if (string.IsNullOrEmpty(UserName) || UserName == UserEmail)
                     UserName = email.Contains('@') ? email.Split('@')[0] : email; // guard: no crash on malformed email
 
-                // Save email for next time
-                var cfg = SettingsWindow.LoadConfig();
-                cfg.CoopilotEmail = UserEmail;
-                SettingsWindow.SaveConfig(cfg);
-
-                // Save token to session
-                UserSession.SetSession(IdToken, UserEmail, UserName, UserId, refreshToken);
-
-                ShowSuccess($"Welcome back, {UserName}!");
-                await Task.Delay(800);
-                if (!IsLoaded) return;
-
-                LoginSuccess = true;
-                this.Close();
+                await CompleteSignIn(IdToken, refreshToken, UserEmail, UserName, UserId);
             }
             catch (Exception ex)
             {
@@ -156,6 +155,7 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════
         private async void ForgotLink_Click(object sender, RoutedEventArgs e)
         {
+            if (_authBusy || _windowToken.IsCancellationRequested) return;
             string email = EmailBox.Text.Trim();
             if (string.IsNullOrEmpty(email))
             {
@@ -175,7 +175,7 @@ namespace InterviewCopilot
                 request.Content = new StringContent(
                     JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-                using var res = await _http.SendAsync(request);
+                using var res = await _http.SendAsync(request, _windowToken);
 
                 if (res.IsSuccessStatusCode)
                     ShowSuccess($"Password reset email sent to {email}");
@@ -210,6 +210,7 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════
         private async void GoogleSignIn_Click(object sender, RoutedEventArgs e)
         {
+            if (_authBusy || _windowToken.IsCancellationRequested) return;
             SetLoading(true);
             HideError();
             try { await DoGoogleSignIn(); }
@@ -281,45 +282,20 @@ namespace InterviewCopilot
 
             // 4. Accept redirect (120s timeout)
             string? code = null;
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(_windowToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(120));
             try
             {
                 using var client = await tcpListener.AcceptTcpClientAsync(cts.Token);
                 DebugWindow.Log("GOOGLE", "S4 callback connection accepted");
                 using var stream = client.GetStream();
 
-                // Read until we have the full HTTP header block (handles Chrome's long headers)
-                var sbReq = new StringBuilder();
-                byte[] buf = new byte[4096];
-                do
-                {
-                    int read = await stream.ReadAsync(buf, 0, buf.Length, cts.Token);
-                    if (read == 0) break;
-                    sbReq.Append(Encoding.UTF8.GetString(buf, 0, read));
-                } while (!sbReq.ToString().Contains("\r\n\r\n") && !sbReq.ToString().Contains("\n\n"));
-                string req = sbReq.ToString();
-
-                // Parse first HTTP line: "GET /?code=...&state=... HTTP/1.1"
-                string firstLine = req.Split('\n')[0];
-                string qs = firstLine.Contains('?')
-                    ? firstLine.Split('?')[1].Split(' ')[0]
-                    : "";
-
-                var qd = ParseQs(qs);
-                qd.TryGetValue("code",  out code);
-                qd.TryGetValue("state", out string? returnedState);
-
-                // Never log the authorization code or the raw query, only shape.
-                bool stateMatched = returnedState == state;
-                bool hasCode      = !string.IsNullOrEmpty(code);
-                qd.TryGetValue("error", out string? oauthError);
-                DebugWindow.Log("GOOGLE",
-                    $"S5 callback parsed stateMatch={stateMatched} hasCode={hasCode} " +
-                    $"codeLen={(code?.Length ?? 0)} googleError={(string.IsNullOrEmpty(oauthError) ? "none" : oauthError)}");
-
-                bool ok = stateMatched && hasCode;
+                string req = await OAuthCallbackReader.ReadAsync(stream, cts.Token);
+                bool ok = OAuthCallbackReader.TryGetCode(req, state, out string returnedCode);
+                code = ok ? returnedCode : null;
+                DebugWindow.Log("GOOGLE", $"S5 callback accepted={ok}; callback values omitted.");
                 string html = ok
-                    ? "<html><body style='background:#0d1117;color:#4ade80;font-family:sans-serif;text-align:center;padding:60px'><h2>&#10003; Signed in! You can close this tab.</h2></body></html>"
+                    ? "<html><body style='background:#0d1117;color:#4ade80;font-family:sans-serif;text-align:center;padding:60px'><h2>Return to Replysis to finish signing in. You can close this tab.</h2></body></html>"
                     : "<html><body style='background:#0d1117;color:#ef4444;font-family:sans-serif;text-align:center;padding:60px'><h2>Sign-in failed. Please close this tab and try again.</h2></body></html>";
                 // Content-Length counts bytes, not characters. Both bodies above
                 // are ASCII today — the tick is written as an entity — so the two
@@ -331,8 +307,8 @@ namespace InterviewCopilot
                 byte[] headerBytes = Encoding.ASCII.GetBytes(
                     "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
                     + $"Content-Length: {bodyBytes.Length}\r\nConnection: close\r\n\r\n");
-                await stream.WriteAsync(headerBytes, 0, headerBytes.Length);
-                await stream.WriteAsync(bodyBytes, 0, bodyBytes.Length);
+                await stream.WriteAsync(headerBytes, 0, headerBytes.Length, cts.Token);
+                await stream.WriteAsync(bodyBytes, 0, bodyBytes.Length, cts.Token);
 
                 if (!ok)
                 {
@@ -376,7 +352,7 @@ namespace InterviewCopilot
                 exchReq.Content = new StringContent(
                     JsonSerializer.Serialize(exchPayload), Encoding.UTF8, "application/json");
 
-                using var exchRes = await SharedHttpClient.Http.SendAsync(exchReq);
+                using var exchRes = await SharedHttpClient.Http.SendAsync(exchReq, _windowToken);
                 exchStatus = exchRes.StatusCode;
                 exchBody   = await exchRes.Content.ReadAsStringAsync();
                 DebugWindow.Log("GOOGLE", $"S6 exchange HTTP {(int)exchStatus} bodyLen={exchBody.Length}");
@@ -447,7 +423,7 @@ namespace InterviewCopilot
             req.Content = new StringContent(
                 JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-            using var res  = await _http.SendAsync(req);
+            using var res  = await _http.SendAsync(req, _windowToken);
             string    body = await res.Content.ReadAsStringAsync();
 
             if (!res.IsSuccessStatusCode)
@@ -478,7 +454,13 @@ namespace InterviewCopilot
 
         private async Task CompleteSignIn(string idToken, string refreshToken, string email, string name, string uid, string photoUrl = "")
         {
+            _windowToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(idToken) || string.IsNullOrWhiteSpace(uid) || string.IsNullOrWhiteSpace(email))
+                throw new InvalidOperationException("The sign-in response is missing account information.");
             UserSession.SetSession(idToken, email, name, uid, refreshToken, photoUrl);
+            // A manual close during the welcome animation must still report a
+            // completed login to the owner, since the session is already saved.
+            LoginSuccess = true;
             DebugWindow.Log("GOOGLE",
                 $"S9 SetSession done isLoggedIn={UserSession.IsLoggedIn} hasUid={!string.IsNullOrEmpty(uid)}");
 
@@ -501,7 +483,7 @@ namespace InterviewCopilot
             }
 
             ShowSuccess($"Welcome, {name}!");
-            await Task.Delay(800);
+            await Task.Delay(800, _windowToken);
             if (!IsLoaded) return;
             LoginSuccess = true;
             DebugWindow.Log("GOOGLE", "S10 success, closing login window");
@@ -542,20 +524,6 @@ namespace InterviewCopilot
             return Convert.ToBase64String(hash).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
 
-        private static Dictionary<string, string> ParseQs(string qs)
-        {
-            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var pair in qs.Split('&', StringSplitOptions.RemoveEmptyEntries))
-            {
-                int eq = pair.IndexOf('=');
-                if (eq < 0) continue;
-                string k = Uri.UnescapeDataString(pair[..eq]);
-                string v = Uri.UnescapeDataString(pair[(eq + 1)..].Replace('+', ' '));
-                dict[k] = v;
-            }
-            return dict;
-        }
-
         private static string GetStr(JsonDocument doc, string key) =>
             doc.RootElement.TryGetProperty(key, out var p) ? p.GetString() ?? "" : "";
 
@@ -564,6 +532,8 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════
         private void SetLoading(bool loading)
         {
+            _authBusy = loading;
+            if (_windowToken.IsCancellationRequested) return;
             SignInBtn.IsEnabled       = !loading;
             GoogleSignInBtn.IsEnabled = !loading;
             EmailBox.IsEnabled        = !loading;
@@ -586,6 +556,7 @@ namespace InterviewCopilot
 
         private void ShowError(string msg)
         {
+            if (_windowToken.IsCancellationRequested) return;
             ErrorText.Text        = msg;
             ErrorBanner.Visibility  = Visibility.Visible;
             SuccessBanner.Visibility = Visibility.Collapsed;
@@ -593,6 +564,7 @@ namespace InterviewCopilot
 
         private void ShowSuccess(string msg)
         {
+            if (_windowToken.IsCancellationRequested) return;
             SuccessText.Text       = msg;
             SuccessBanner.Visibility = Visibility.Visible;
             ErrorBanner.Visibility  = Visibility.Collapsed;

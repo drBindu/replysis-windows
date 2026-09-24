@@ -324,7 +324,7 @@
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                     <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="12"
                                                Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Delete session" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Delete local copy" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                         </Grid>

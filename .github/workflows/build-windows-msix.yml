@@ -21,7 +21,13 @@ permissions:
   contents: write
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify-windows.yml
+    permissions:
+      contents: read
+
   build:
+    needs: verify
     runs-on: windows-latest
 
     steps:
@@ -120,6 +126,8 @@ jobs:
       # ── Version ────────────────────────────────────────────────────────────
       - name: Set version
         shell: powershell
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
           # The version is given, not counted.
           #
@@ -132,7 +140,7 @@ jobs:
           #
           # Rejected at the door rather than at submission, which is the slow
           # place to find out.
-          $v = "${{ inputs.version }}"
+          $v = $env:REQUESTED_VERSION
           if ($v -notmatch '^\d+\.\d+\.\d+$') {
             throw "Version must look like 1.0.14, got '$v'"
           }
@@ -140,13 +148,10 @@ jobs:
           echo "APP_VERSION=$version" >> $env:GITHUB_ENV
           echo "Version: $version"
 
-      - name: Update version in Package.appxmanifest
+      - name: Stamp package and application versions
         shell: powershell
         run: |
-          $path     = "InterviewCopilotPackager\Package.appxmanifest"
-          $content  = Get-Content $path -Raw
-          $content  = $content -replace 'Version="\d+\.\d+\.\d+\.\d+"', "Version=`"${{ env.APP_VERSION }}`""
-          Set-Content $path $content -Encoding UTF8
+          & tools\set-store-version.ps1 -Version $env:APP_VERSION
 
       # ── Build ──────────────────────────────────────────────────────────────
       - name: Build the MSIX bundle
@@ -172,6 +177,7 @@ jobs:
             $args += "/p:AppxPackageSigningEnabled=false"
           }
           msbuild @args
+          if ($LASTEXITCODE -ne 0) { throw "MSIX build failed ($LASTEXITCODE)." }
 
       # ── Package ────────────────────────────────────────────────────────────
       - name: Rename bundle to clean name

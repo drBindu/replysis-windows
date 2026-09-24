@@ -35,6 +35,7 @@ namespace InterviewCopilot
 
         // ── Refresh token concurrency guard — prevents double-POST on simultaneous expiry ──
         private static readonly SemaphoreSlim _refreshSem = new(1, 1);
+        internal static readonly OperationEpoch Identity = new();
 
         // ── Guest session flag ──
         // True when the user is using the app without signing in.
@@ -404,6 +405,8 @@ namespace InterviewCopilot
         // ── Set session after login ──
         public static void SetSession(string idToken, string email, string name, string userId, string refreshToken = "", string photoUrl = "")
         {
+            Identity.Advance(() =>
+            {
             InvalidateSpeechmaticsKey();
             IdToken        = idToken;
             RefreshToken   = refreshToken;
@@ -413,11 +416,14 @@ namespace InterviewCopilot
             PhotoUrl       = photoUrl ?? "";
             IsGuestSession = false;  // clear guest flag on real login
             SaveToDisk();
+            });
         }
 
         // ── Clear on logout ──
         public static void Clear()
         {
+            Identity.Advance(() =>
+            {
             IdToken          = "";
             RefreshToken     = "";
             Email            = "";
@@ -439,6 +445,7 @@ namespace InterviewCopilot
             IsGuestSession   = false;
             _savedAt         = DateTime.MinValue;
             try { if (File.Exists(SessionPath)) File.Delete(SessionPath); } catch (Exception ex) { DebugWindow.Log("SESSION", $"Delete session file failed: {ex.Message}"); }
+            });
         }
 
         // ── Persist session so user stays logged in between app restarts ──
@@ -587,19 +594,22 @@ namespace InterviewCopilot
         /// </summary>
         public static async Task<bool> TryRefreshAsync(bool force = false)
         {
+            long identity = Identity.Current;
             if (string.IsNullOrEmpty(RefreshToken)) return false;
             if (!force && !IsTokenExpired()) return true;
             await _refreshSem.WaitAsync();
             try
             {
                 // Re-check after acquiring: a concurrent caller may have already refreshed
+                var snapshot = Identity.Capture(() => RefreshToken);
+                if (snapshot.Generation != identity || string.IsNullOrEmpty(snapshot.Value)) return false;
                 if (!force && !IsTokenExpired()) return true;
 
                 string url = $"https://securetoken.googleapis.com/v1/token?key={FirebaseApiKey}";
                 using var content = new System.Net.Http.FormUrlEncodedContent(new[]
                 {
                     new System.Collections.Generic.KeyValuePair<string,string>("grant_type",    "refresh_token"),
-                    new System.Collections.Generic.KeyValuePair<string,string>("refresh_token", RefreshToken),
+                    new System.Collections.Generic.KeyValuePair<string,string>("refresh_token", snapshot.Value),
                 });
                 using var res = await _http.PostAsync(url, content);
                 string body = await res.Content.ReadAsStringAsync();
@@ -617,11 +627,12 @@ namespace InterviewCopilot
                 string newRefresh  = doc.RootElement.TryGetProperty("refresh_token", out var rt) ? rt.GetString() ?? "" : "";
                 if (string.IsNullOrEmpty(newIdToken)) return false;
 
-                IdToken = newIdToken;
-                if (!string.IsNullOrEmpty(newRefresh))
-                    RefreshToken = newRefresh;
-                SaveToDisk();
-                return true;
+                return Identity.TryApply(identity, () =>
+                {
+                    IdToken = newIdToken;
+                    if (!string.IsNullOrEmpty(newRefresh)) RefreshToken = newRefresh;
+                    SaveToDisk();
+                });
             }
             catch (Exception ex)
             {

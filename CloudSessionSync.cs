@@ -51,6 +51,7 @@ namespace InterviewCopilot
         public static async Task SyncTurnAsync(string q, string a, string resume, int durationSecs)
         {
             if (!UserSession.IsLoggedIn || !SettingsWindow.IsCloudSyncEnabled()) return;
+            long identity = UserSession.Identity.Current;
 
             long requestedGeneration;
             lock (StateLock)
@@ -60,6 +61,7 @@ namespace InterviewCopilot
 
             try
             {
+                if (!UserSession.Identity.IsCurrent(identity)) return;
                 if (!UserSession.IsLoggedIn || !SettingsWindow.IsCloudSyncEnabled()) return;
 
                 long sessionGeneration;
@@ -86,7 +88,8 @@ namespace InterviewCopilot
                     return;
 
                 string token = UserSession.IdToken;
-                if (string.IsNullOrEmpty(token) || UserSession.UserId != userId) return;
+                if (string.IsNullOrEmpty(token) || UserSession.UserId != userId ||
+                    !UserSession.Identity.IsCurrent(identity)) return;
 
                 // Truncate resume to 300 chars, matching what the server stores
                 string resumeSnippet = (resume ?? "").Length > 300
@@ -130,7 +133,8 @@ namespace InterviewCopilot
                     {
                         lock (StateLock)
                         {
-                            if (sessionGeneration == _sessionGeneration && _cloudSessionId == null)
+                            if (sessionGeneration == _sessionGeneration && _cloudSessionId == null &&
+                                UserSession.Identity.IsCurrent(identity))
                                 _cloudSessionId = sid.GetString();
                         }
                     }

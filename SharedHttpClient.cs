@@ -5,11 +5,11 @@ namespace InterviewCopilot
 {
     internal static class SharedHttpClient
     {
-        // UseProxy = false skips Windows WPAD proxy auto-detection, which can hang
-        // for 10–30 seconds on networks without a PAC file.
+        // Direct by default to avoid WPAD delays. Managed networks can opt into
+        // the system proxy in Settings; clients are recreated on app restart.
         private static SocketsHttpHandler MakeHandler() => new SocketsHttpHandler
         {
-            UseProxy = false,
+            UseProxy = SettingsWindow.LoadConfig().UseSystemProxy,
             PooledConnectionLifetime = TimeSpan.FromMinutes(5)
         };
 

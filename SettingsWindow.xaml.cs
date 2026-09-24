@@ -87,6 +87,8 @@ namespace InterviewCopilot
             WatchScreenCheckBox.IsChecked = cfg.WatchScreenEnabled;
             SaveAudioCheckBox.IsChecked   = cfg.SaveSessionAudio;
             ScreenKeysCheckBox.IsChecked  = cfg.ScreenKeysEverywhere;
+            PlainSpaceCheckBox.IsChecked = cfg.PlainSpaceEverywhere;
+            SystemProxyCheckBox.IsChecked = cfg.UseSystemProxy;
 
             LoadLanguages(cfg.TranscriptLanguage);
 
@@ -462,6 +464,8 @@ namespace InterviewCopilot
                 WatchScreenEnabled = WatchScreenCheckBox.IsChecked == true,
                 SaveSessionAudio   = SaveAudioCheckBox.IsChecked == true,
                 ScreenKeysEverywhere = ScreenKeysCheckBox.IsChecked == true,
+                PlainSpaceEverywhere = PlainSpaceCheckBox.IsChecked == true,
+                UseSystemProxy = SystemProxyCheckBox.IsChecked == true,
                 TranscriptLanguage = SelectedLanguageCode(),
                 // Carry the Sarvam key through — it's not an editable field here, so pull the
                 // stored value. Without this, saving Settings would wipe it (fresh AppConfig).
@@ -641,6 +645,8 @@ namespace InterviewCopilot
             // Cloud backups contain interview transcript content. Keep them off
             // until the signed-in user explicitly opts in from Settings.
             public bool   CloudSyncEnabled   { get; set; } = false;
+            public bool PlainSpaceEverywhere { get; set; } = false;
+            public bool UseSystemProxy { get; set; } = false;
             // Stealth = exclude from screen capture + hide from taskbar/Alt-Tab.
             // On by default so the window is invisible to recorders out of the box.
             public bool   StealthMode        { get; set; } = true;

@@ -70,8 +70,8 @@ namespace InterviewCopilot
 
             // Clamp to work area — same as Mac: max(minX, min(newX, maxX - w))
             var wa = SystemParameters.WorkArea;
-            this.Left = Math.Clamp(this.Left + dxPx * sx, wa.Left, wa.Right  - this.ActualWidth);
-            this.Top  = Math.Clamp(this.Top  + dyPx * sy, wa.Top,  wa.Bottom - this.ActualHeight);
+            this.Left = WindowBounds.ClampPosition(this.Left + dxPx * sx, wa.Left, wa.Right, this.ActualWidth);
+            this.Top  = WindowBounds.ClampPosition(this.Top  + dyPx * sy, wa.Top, wa.Bottom, this.ActualHeight);
         }
 
         private void DragHandle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)

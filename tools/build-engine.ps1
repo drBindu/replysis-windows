@@ -20,11 +20,14 @@ $python = Join-Path $venv "Scripts\python.exe"
 if (-not (Test-Path $python)) {
     Write-Host "Creating build virtual environment..."
     py -3 -m venv $venv
+    if ($LASTEXITCODE -ne 0) { throw 'Could not create the engine build environment.' }
 }
 
 Write-Host "Installing engine dependencies..."
 & $python -m pip install --quiet --upgrade pip
+if ($LASTEXITCODE -ne 0) { throw 'Could not prepare pip.' }
 & $python -m pip install --quiet -r requirements.txt pyinstaller
+if ($LASTEXITCODE -ne 0) { throw 'Engine dependencies could not be installed.' }
 
 # ── Stamp the source this engine was built from ──────────────────────────────
 #
@@ -127,6 +130,7 @@ Write-Host "Building engine..."
     --workpath (Join-Path $root "build\pyinstaller") `
     --specpath (Join-Path $root "build\pyinstaller") `
     (Join-Path $root "speechmatics_engine.py")
+if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed. A previously built executable must not be shipped.' }
 
 $exe = Join-Path $root "engine-dist\speechmatics_engine\speechmatics_engine.exe"
 if (-not (Test-Path $exe)) { throw "Engine build produced no executable." }

@@ -168,6 +168,7 @@ namespace InterviewCopilot
         private bool _interviewTipShown;
         private bool _practiceTipShown;
         private bool _audioSourceChangePending;
+        private DateTime _audioListeningStartedUtc = DateTime.MinValue;
         private Action? _inAppAlertAction;
         private bool _autoTurnSubmitting;
         private string _autoLastTranscript = "";
@@ -396,6 +397,7 @@ namespace InterviewCopilot
                             })
                         );
                         _globalHotkey.OwnerWindowHandle = mainHwnd;
+                        _globalHotkey.PlainSpaceEverywhere = SettingsWindow.LoadConfig().PlainSpaceEverywhere;
                         _globalHotkey.OnBringToFront = () => Dispatcher.BeginInvoke(() => BringToFront());
                         _globalHotkey.OnPreviousAnswer = () => Dispatcher.BeginInvoke(GoToPreviousAnswer);
                         _globalHotkey.OnNextAnswer = () => Dispatcher.BeginInvoke(GoToNextAnswer);
@@ -756,8 +758,31 @@ namespace InterviewCopilot
             }
         }
 
+        private long _answerIdentityGeneration = -1;
+        private void CancelAnswerAfterIdentityChange()
+        {
+            long identity = UserSession.Identity.Current;
+            if (identity == _answerIdentityGeneration) return;
+            _answerIdentityGeneration = identity;
+            ResetScreenSession();
+            _ = CloudSessionSync.ResetSessionAsync();
+            try { _aiCts?.Cancel(); } catch { }
+            _aiCts = null;
+            _flushing = false;
+            StopThinkingUi();
+            _answers.Clear();
+            UpdateHistoryNav();
+            ClearAnswer();
+            TranscriptTextBlock.Text = "";
+            TranscriptHint.Visibility = Visibility.Visible;
+            answerWindow?.UpdateAnswer("");
+            answerWindow?.UpdateQuestion("");
+        }
+
         private void UpdateProfileUI()
         {
+            CancelAnswerAfterIdentityChange();
+            SessionsPanelHost?.ResetForIdentityChange();
             // Header profile badge — always visible
             ProfileBadge.Visibility    = Visibility.Visible;
             SignInHeaderBtn.Visibility = Visibility.Collapsed;
@@ -822,6 +847,8 @@ namespace InterviewCopilot
 
         private void SetLoggedOutUI()
         {
+            CancelAnswerAfterIdentityChange();
+            SessionsPanelHost?.ResetForIdentityChange();
             // Header — show guest profile badge (no separate Sign In button)
             ProfileBadge.Visibility    = Visibility.Visible;
             SignInHeaderBtn.Visibility = Visibility.Collapsed;
@@ -1438,9 +1465,8 @@ namespace InterviewCopilot
                     return;
                 }
 
-                TimeSpan quiet = _lastWordsReceivedUtc == DateTime.MinValue
-                    ? TimeSpan.Zero
-                    : DateTime.UtcNow - _lastWordsReceivedUtc;
+                TimeSpan quiet = AudioSourceRules.QuietDuration(DateTime.UtcNow,
+                    _audioListeningStartedUtc, _lastWordsReceivedUtc);
                 if (AudioSourceRules.ShouldSuggestPractice(!practice, isListening, meeting, quiet, _practiceTipShown))
                 {
                     _practiceTipShown = true;
@@ -2363,11 +2389,8 @@ namespace InterviewCopilot
                     !string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
                 {
                     _lastAutoRejectedTranscript = question;
-                    // The text matters as much as the length: "incomplete" covers a
-                    // half-spoken sentence and a transcript the classifier read wrongly,
-                    // and the log could not tell them apart.
-                    string shown = candidateQuestion.Length > 90 ? candidateQuestion[..90] + "…" : candidateQuestion;
-                    DebugWindow.Log("AUTO", $"Waiting for a complete question ({question.Length} chars): \"{shown}\"");
+                    // Keep diagnostic shape information, not private interview text.
+                    DebugWindow.Log("AUTO", $"Waiting for a complete question ({question.Length} chars); transcript omitted.");
                 }
                 return;
             }
@@ -2457,7 +2480,7 @@ namespace InterviewCopilot
             if (isContinuation)
                 DebugWindow.Log("AUTO",
                     $"Continuation {_continuationCount}/{MaxContinuations} heard; re-answering "
-                    + $"the whole question: {_lastAutoSubmittedQuestion}");
+                    + $"the whole question ({_lastAutoSubmittedQuestion.Length} chars); transcript omitted.");
             DebugWindow.Log("AUTO", $"{ending} ending, stable for {requiredSilenceMs}ms; submitting {candidateQuestion.Length} normalized characters.");
             HandleSpaceUp("AUTO");
         }
@@ -2651,6 +2674,7 @@ namespace InterviewCopilot
                 _listeningInitiator = source;
                 _listeningStartTicks = Environment.TickCount64;
                 isMuted = false; isListening = true;
+                _audioListeningStartedUtc = DateTime.UtcNow;
                 SetResumePanelCollapsed(true, animate: true);
                 string latestPath = Path.Combine(AppDataFolder, "latest.txt");
                 try { File.Delete(latestPath); } catch { }
@@ -2924,7 +2948,9 @@ namespace InterviewCopilot
             if (source != "BUTTON" && IsTypingInTextField()) return;
             DebugWindow.Log("MIC", $"[{source}] interrupt — cancelling, back to listening");
             try { _aiCts?.Cancel(); } catch { }
+            _aiCts = null; // The cancelled task no longer owns the display.
             isProcessing = false;
+            _isScreenAnalyzing = false;
             _flushing = false;
             thinkingTimer?.Stop();
             ThinkingPanel.Visibility = Visibility.Collapsed;
@@ -2960,6 +2986,7 @@ namespace InterviewCopilot
 
             // Outer try/catch wraps the ENTIRE method body — including setup awaits —
             // so no exception can ever escape this Task unobserved.
+            var requestOwner = _aiCts;
             string q = "";
             var streamedAnswer = new StringBuilder();
             try
@@ -2974,6 +3001,7 @@ namespace InterviewCopilot
                 var answerTimer = System.Diagnostics.Stopwatch.StartNew();
 
                 if (UserSession.IsLoggedIn) await UserSession.TryRefreshAsync();
+                aiCt.ThrowIfCancellationRequested();
 
                 // Block once credits have been fetched and confirmed exhausted.
                 // _creditsFetched prevents false-blocking before the first backend response.
@@ -3036,6 +3064,7 @@ namespace InterviewCopilot
                     }
                 }
 
+                aiCt.ThrowIfCancellationRequested();
                 string final = CleanAiOutput(streamedAnswer.ToString());
                 if (string.IsNullOrWhiteSpace(final))
                     throw new BackendRequestException("No answer was returned. Please try again.");
@@ -3072,6 +3101,7 @@ namespace InterviewCopilot
             }
             catch (BackendRequestException ex)
             {
+                if (aiCt.IsCancellationRequested || !ReferenceEquals(_aiCts, requestOwner)) return;
                 DebugWindow.Log("AI_ERR", ex.Message);
                 string partial = CleanAiOutput(streamedAnswer.ToString());
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(partial)
@@ -3083,6 +3113,7 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
+                if (aiCt.IsCancellationRequested || !ReferenceEquals(_aiCts, requestOwner)) return;
                 // The type and the inner exception, not just the message. A
                 // message alone cannot distinguish a dropped socket from a
                 // rejected payload from a bug in our own capture path, and those
@@ -3116,8 +3147,11 @@ namespace InterviewCopilot
                 // Only tear down the thinking UI if THIS answer is still the active one.
                 // If the user already interrupted and started a new listening session,
                 // leave that state alone so we don't stomp the live mic UI.
-                if (!isListening) StopThinkingUi();
-                else { isProcessing = false; }
+                if (ReferenceEquals(_aiCts, requestOwner))
+                {
+                    if (!isListening) StopThinkingUi();
+                    else isProcessing = false;
+                }
             }
         }
 
@@ -3166,6 +3200,23 @@ namespace InterviewCopilot
 
         private DispatcherTimer? _preparedShotTimer;
         private byte[]? _preparedShot;
+        private long _screenSessionGeneration;
+
+        private void ResetScreenSession()
+        {
+            _screenSessionGeneration++;
+            _preparedShot = null;
+            _preparedShotUtc = DateTime.MinValue;
+            _preparedShotId = "";
+            _preparedShotIdUtc = DateTime.MinValue;
+            _recentShotIds.Clear();
+            _uploadedShotFingerprint = "";
+            _lastKeptSignature = "";
+            _rescanQuestion = "";
+            _rescanArmedUtc = DateTime.MinValue;
+            _screenFollowUpsLeft = 0;
+            ScreenAnalyzer.ClearContext();
+        }
         private DateTime _preparedShotUtc = DateTime.MinValue;
         private volatile bool _preparingShot;
 
@@ -3223,8 +3274,7 @@ namespace InterviewCopilot
         private void StopPreparedShots()
         {
             _preparedShotTimer?.Stop();
-            _preparedShot = null;
-            _preparedShotUtc = DateTime.MinValue;
+            ResetScreenSession();
         }
 
         private async Task PrepareShotAsync()
@@ -3232,7 +3282,7 @@ namespace InterviewCopilot
             // Never while an answer is being produced: the capture would fight the
             // request for the network, and cloaking our own windows mid-answer is
             // visible to the user.
-            if (!_watchScreenMode || _preparingShot || isProcessing || _isScreenAnalyzing) return;
+            if (_windowClosed || !_watchScreenMode || _preparingShot || isProcessing || _isScreenAnalyzing) return;
 
             // And never when no interview is happening.
             //
@@ -3277,14 +3327,16 @@ namespace InterviewCopilot
             }
 
             _preparingShot = true;
+            long screenSession = _screenSessionGeneration;
             try
             {
                 byte[]? shot = await CaptureScreenUnseenAsync();
+                if (_windowClosed || screenSession != _screenSessionGeneration) return;
                 if (shot != null && shot.Length > 0)
                 {
                     _preparedShot = shot;
                     _preparedShotUtc = DateTime.UtcNow;
-                    await UploadPreparedShotAsync(shot);
+                    await UploadPreparedShotAsync(shot, screenSession);
                 }
             }
             catch { /* a missed prepared shot just means capturing on demand */ }
@@ -3372,7 +3424,7 @@ namespace InterviewCopilot
             return differing;
         }
 
-        private async Task UploadPreparedShotAsync(byte[] shot)
+        private async Task UploadPreparedShotAsync(byte[] shot, long screenSession)
         {
             try
             {
@@ -3429,6 +3481,7 @@ namespace InterviewCopilot
                     System.Text.Encoding.UTF8, "application/json");
 
                 using var res = await _creditsClient.SendAsync(req);
+                if (_windowClosed || screenSession != _screenSessionGeneration) return;
                 if (!res.IsSuccessStatusCode)
                 {
                     // Not worth a word to the user: the next question simply
@@ -3440,6 +3493,7 @@ namespace InterviewCopilot
                 }
 
                 using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+                if (_windowClosed || screenSession != _screenSessionGeneration) return;
                 _preparedShotId = doc.RootElement.TryGetProperty("imageId", out var id)
                     ? id.GetString() ?? "" : "";
                 _preparedShotIdUtc = DateTime.UtcNow;
@@ -3479,7 +3533,7 @@ namespace InterviewCopilot
             catch (Exception ex)
             {
                 DebugWindow.Log("SCREEN", $"Early upload failed: {ex.Message}");
-                _preparedShotId = "";
+                if (screenSession == _screenSessionGeneration) _preparedShotId = "";
             }
         }
 
@@ -4077,9 +4131,8 @@ namespace InterviewCopilot
             using var stream = await res.Content.ReadAsStreamAsync(ct);
             using var reader = new StreamReader(stream);
 
-            while (!reader.EndOfStream && !ct.IsCancellationRequested)
+            await foreach (string line in StreamLines.ReadAsync(reader, ct))
             {
-                string? line = await reader.ReadLineAsync(ct);
                 if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("data: ")) continue;
                 string data = line["data: ".Length..];
                 if (data == "[DONE]") yield break;
@@ -4329,6 +4382,18 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         private async Task StartNewSessionAsync()
         {
+            ResetScreenSession();
+            // Deduplication and continuation state belongs to one interview only.
+            _lastAutoSubmittedQuestion = "";
+            _previousAutoSubmittedQuestion = "";
+            _lastAutoRejectedTranscript = "";
+            _lastAutoSubmittedFragment = "";
+            _autoContinuationPrefix = "";
+            _lastAutoSubmitUtc = DateTime.MinValue;
+            _autoFirstWordsAfterSubmitUtc = DateTime.MinValue;
+            _continuationChainStartedUtc = DateTime.MinValue;
+            _continuationCount = 0;
+            ResetAutoTurnDetection();
             await CloudSessionSync.ResetSessionAsync();
             // Find next available session number
             while (File.Exists(Path.Combine(AppDataFolder, "interview_" + sessionNumber + ".txt")))
@@ -4395,26 +4460,24 @@ namespace InterviewCopilot
         /// decrypting and re-encrypting the entire transcript before it could
         /// repaint, during the interview it was recording.
         ///
-        /// The gate keeps turns in order now that they no longer run on the one
-        /// thread that used to guarantee it.
+        /// Queue insertion happens on the UI thread; the same worker writes
+        /// answers and the final duration marker, and is drained on shutdown.
         /// </summary>
-        private static readonly SemaphoreSlim _sessionLogGate = new(1, 1);
+        private static readonly OrderedSessionWriter _sessionWriter = new();
 
         private void AppendToSessionLog(string q, string a)
         {
             string path = sessionLogPath;
             if (!string.IsNullOrEmpty(path))
             {
-                _ = Task.Run(async () =>
+                _ = _sessionWriter.Enqueue(() =>
                 {
-                    await _sessionLogGate.WaitAsync().ConfigureAwait(false);
                     try
                     {
                         string content = SecureDataProtector.ReadProtectedFile(path);
                         SecureDataProtector.WriteProtectedFile(path, content + $"Q: {q}\nA: {a}\n\n");
                     }
                     catch (Exception ex) { DebugWindow.Log("SESSION", $"Log write failed: {ex.Message}"); }
-                    finally { _sessionLogGate.Release(); }
                 });
             }
             _ = CloudSessionSync.SyncTurnAsync(q, a, ResumeTextBox.Text, _sessionSeconds);
@@ -4422,6 +4485,7 @@ namespace InterviewCopilot
 
         private void EndSession()
         {
+            ResetScreenSession();
             try
             {
                 string f = Path.Combine(AppDataFolder, "record.flag");
@@ -4437,14 +4501,19 @@ namespace InterviewCopilot
             // Written as a trailing line, so session files from older builds stay readable.
             if (!string.IsNullOrEmpty(sessionLogPath) && _sessionSeconds > 0)
             {
-                try
+                string completedPath = sessionLogPath;
+                int completedSeconds = _sessionSeconds;
+                _ = _sessionWriter.Enqueue(() =>
                 {
-                    string content = SecureDataProtector.ReadProtectedFile(sessionLogPath);
-                    if (!content.Contains(SessionDurationTag))
-                        SecureDataProtector.WriteProtectedFile(
-                            sessionLogPath, content + SessionDurationTag + " " + _sessionSeconds + "\n");
-                }
-                catch (Exception ex) { DebugWindow.Log("SESSION", $"Could not record duration: {ex.Message}"); }
+                    try
+                    {
+                        string content = SecureDataProtector.ReadProtectedFile(completedPath);
+                        if (!content.Contains(SessionDurationTag))
+                            SecureDataProtector.WriteProtectedFile(
+                                completedPath, content + SessionDurationTag + " " + completedSeconds + "\n");
+                    }
+                    catch (Exception ex) { DebugWindow.Log("SESSION", $"Could not record duration: {ex.Message}"); }
+                });
             }
 
             sessionLogPath = "";
@@ -5950,6 +6019,8 @@ namespace InterviewCopilot
             if (sw.SignInRequested) { SignInHeaderBtn_Click(sender, e); return; }
             if (sw.SettingsChanged)
             {
+                if (_globalHotkey != null)
+                    _globalHotkey.PlainSpaceEverywhere = SettingsWindow.LoadConfig().PlainSpaceEverywhere;
                 if (sw.SelectedDeviceIndex >= 0) _audioDeviceId = sw.SelectedDeviceIndex;
                 StartSpeechmaticsEngine();
                 // The session type may have changed in there, and it is what the
@@ -6295,6 +6366,8 @@ namespace InterviewCopilot
                 AiAnswerBox.Text = "We could not start a new session. Please try again.";
             else if (previousSessionSaved)
                 AiAnswerBox.Text = $"Session {previousSessionNumber} saved. You are now in session {sessionNumber}, with your resume and role still loaded.";
+            else if (hadActiveRecording)
+                AiAnswerBox.Text = $"Session {sessionNumber} started. The previous audio recording could not be confirmed saved. Check disk space and permissions. Transcript saving is separate from audio.";
             else
                 AiAnswerBox.Text = $"Session {sessionNumber} started. Your resume and role are still loaded.";
             }
@@ -6370,8 +6443,14 @@ namespace InterviewCopilot
             }
         }
 
-        private void LoadResumeFromFile(string filePath)
+        private bool _resumeImportInProgress;
+        private bool _windowClosed;
+        private async void LoadResumeFromFile(string filePath)
         {
+            if (_resumeImportInProgress || _windowClosed) return;
+            _resumeImportInProgress = true;
+            long identity = UserSession.Identity.Current;
+            string originalText = ResumeTextBox.Text;
             try
             {
                 var fileInfo = new FileInfo(filePath);
@@ -6383,13 +6462,19 @@ namespace InterviewCopilot
                 }
 
                 string ext = Path.GetExtension(filePath).ToLowerInvariant();
-                string text = ext switch
+                string text = await Task.Run(() => ext switch
                 {
                     ".txt"  => System.Text.Encoding.UTF8.GetString(ReadFileShared(filePath)),
                     ".docx" => ExtractDocxText(filePath),
                     ".pdf"  => ExtractPdfText(filePath),
                     _       => null!
-                };
+                });
+                if (_windowClosed || !UserSession.Identity.IsCurrent(identity)) return;
+                if (isListening || isProcessing || ResumeTextBox.Text != originalText)
+                {
+                    ShowInAppAlert("Resume not changed", "Listening started or your resume changed while the file was being read. Try importing again when you are ready.");
+                    return;
+                }
 
                 if (text == null)
                 {
@@ -6425,8 +6510,10 @@ namespace InterviewCopilot
             catch (Exception ex)
             {
                 DebugWindow.Log("RESUME", $"File load failed: {ex.Message}");
+                if (_windowClosed || !UserSession.Identity.IsCurrent(identity)) return;
                 MessageBox.Show(this, $"Could not load file: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+            finally { _resumeImportInProgress = false; }
         }
 
         private void CollapseResumeForAsk()
@@ -6477,17 +6564,16 @@ namespace InterviewCopilot
         /// </summary>
         private static byte[] ReadFileShared(string filePath)
         {
-            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read,
-                                          FileShare.ReadWrite | FileShare.Delete);
-            using var ms = new MemoryStream();
-            fs.CopyTo(ms);
-            return ms.ToArray();
+            return ResumeFileSafety.ReadFile(filePath);
         }
 
         private static string ExtractDocxText(string filePath)
         {
-            using var stream = new MemoryStream(ReadFileShared(filePath));
-            using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(stream, false);
+            byte[] bytes = ReadFileShared(filePath);
+            ResumeFileSafety.ValidateDocx(bytes);
+            using var stream = new MemoryStream(bytes);
+            using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(stream, false,
+                new DocumentFormat.OpenXml.Packaging.OpenSettings { MaxCharactersInPart = 2_000_000 });
             var body = doc.MainDocumentPart?.Document?.Body;
             if (body == null) return "";
 
@@ -6767,6 +6853,10 @@ namespace InterviewCopilot
 
             _isScreenAnalyzing = true;
             isProcessing       = true;
+            try { _aiCts?.Cancel(); } catch { }
+            using var screenOwner = new CancellationTokenSource();
+            _aiCts = screenOwner;
+            var screenCt = screenOwner.Token;
             UpdateMicUi();
 
             // ── Phase 1: scanning state ───────────────────────────────────────
@@ -6845,6 +6935,7 @@ namespace InterviewCopilot
             {
                 DebugWindow.Log("SCREEN_ERR", ex.Message);
                 RestoreWindows();
+                if (screenCt.IsCancellationRequested || !ReferenceEquals(_aiCts, screenOwner)) return;
                 AiAnswerBox.Text = "Screen capture failed. Press Ctrl+Alt+F12 for details.";
                 _isScreenAnalyzing = false;
                 StopThinkingUi();
@@ -6854,6 +6945,7 @@ namespace InterviewCopilot
             // Undo whatever was needed to keep us out of the shot. When the capture
             // flag did the work this is a no-op the user never saw.
             RestoreWindows();
+            if (screenCt.IsCancellationRequested || !ReferenceEquals(_aiCts, screenOwner)) return;
 
             // Clear overlay content so user sees a clean state while analysis streams in
             if (_isCameraMode && answerWindow != null)
@@ -6898,8 +6990,9 @@ namespace InterviewCopilot
             {
                 try
                 {
-                    await foreach (var token in ScreenAnalyzer.AnalyzeStreamAsync(imageBytes, resumeCtx))
+                    await foreach (var token in ScreenAnalyzer.AnalyzeStreamAsync(imageBytes, resumeCtx, ct: screenCt))
                     {
+                        screenCt.ThrowIfCancellationRequested();
                         sb.Append(token);
                         tokenCount++;
 
@@ -6923,6 +7016,7 @@ namespace InterviewCopilot
                 }
                 catch (Exception ex)
                 {
+                    if (screenCt.IsCancellationRequested || !ReferenceEquals(_aiCts, screenOwner)) return;
                     DebugWindow.Log("SCREEN_ERR", $"Stream failed: {ex.Message}");
                     AiAnswerBox.Text = ex.Message;
                     if (_isCameraMode && answerWindow != null)
@@ -6934,6 +7028,7 @@ namespace InterviewCopilot
                 // ── Phase 4: post-process + finalise display ──────────────────────
                 // PostProcess normalises section headers, removes stray markdown,
                 // and collapses excess blank lines — runs instantly on the final string.
+                if (screenCt.IsCancellationRequested || !ReferenceEquals(_aiCts, screenOwner)) return;
                 string finalResult = ScreenAnalyzer.PostProcess(sb.ToString());
                 if (string.IsNullOrWhiteSpace(finalResult))
                 {
@@ -6979,8 +7074,7 @@ namespace InterviewCopilot
             }
             finally
             {
-                _isScreenAnalyzing = false;
-                StopThinkingUi();
+                if (ReferenceEquals(_aiCts, screenOwner)) StopThinkingUi();
             }
         }
 
@@ -7079,7 +7173,7 @@ namespace InterviewCopilot
         {
             base.OnClosing(e);
 
-            bool working = isListening || isProcessing;
+            bool working = isListening || isProcessing || _flushing || _isScreenAnalyzing;
             if (!working)
             {
                 DebugWindow.Log("EXIT", "Closing while idle");
@@ -7088,7 +7182,7 @@ namespace InterviewCopilot
 
             var answer = MessageBox.Show(
                 this,
-                "Replysis is still listening.\n\nClose it anyway? The session is saved either way.",
+                "Replysis is still working.\n\nClose it anyway? Any unfinished answer will stop. Completed answers are saved locally when storage is available.",
                 "Replysis AI",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
@@ -7107,6 +7201,9 @@ namespace InterviewCopilot
 
         protected override void OnClosed(EventArgs e)
         {
+            _windowClosed = true;
+            try { _aiCts?.Cancel(); } catch { }
+            _aiCts = null;
             // Stop all timers first so no callbacks fire during teardown
             transcriptTimer?.Stop();
             thinkingTimer?.Stop();
@@ -7115,6 +7212,7 @@ namespace InterviewCopilot
             _engineMonitorTimer?.Stop();
             _sessionTimer?.Stop();
             _autoModeNoticeTimer?.Stop();
+            _audioSourceWatchTimer?.Stop();
             _listeningMeterTimer?.Stop();
             _preparedShotTimer?.Stop();
 
@@ -7171,6 +7269,8 @@ namespace InterviewCopilot
             try { File.WriteAllText(Path.Combine(AppDataFolder, "shutdown.flag"), "1"); } catch { }
             EndSession();
             PresenceTracker.Stop();
+            if (!_sessionWriter.Drain(TimeSpan.FromSeconds(5)))
+                DebugWindow.Log("SESSION", "Session writes did not finish within the shutdown deadline.");
 
             // Let the engine finish writing the current recording before killing it.
             // This used to be fire-and-forget running alongside the kill below, which
@@ -7206,16 +7306,21 @@ namespace InterviewCopilot
 
         private async Task<bool> WaitForRecordingSaveAsync(string recordingId, int timeoutMs)
         {
-            if (string.IsNullOrWhiteSpace(recordingId) || speechmaticsProcess == null) return true;
+            if (string.IsNullOrWhiteSpace(recordingId)) return false;
 
             string path = RecordingSavedPath(recordingId);
             var started = Stopwatch.StartNew();
             while (started.ElapsedMilliseconds < timeoutMs)
             {
+                if (File.Exists(Path.Combine(AppDataFolder, $"recording_failed_{recordingId}.flag")))
+                {
+                    DebugWindow.Log("SESSION", "Audio recording could not be saved. Check disk space and permissions.");
+                    return false;
+                }
                 if (File.Exists(path)) return true;
                 try
                 {
-                    if (speechmaticsProcess.HasExited) return false;
+                    if (speechmaticsProcess == null || speechmaticsProcess.HasExited) return false;
                 }
                 catch
                 {

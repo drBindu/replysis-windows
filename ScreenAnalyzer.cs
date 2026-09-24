@@ -129,6 +129,13 @@ namespace InterviewCopilot
         /// worse than admitting nothing was seen.
         /// </summary>
         public static DateTime LastScreenContextUtc { get; private set; } = DateTime.MinValue;
+        private static long _contextGeneration;
+        internal static void ClearContext()
+        {
+            System.Threading.Interlocked.Increment(ref _contextGeneration);
+            LastScreenContext = "";
+            LastScreenContextUtc = DateTime.MinValue;
+        }
 
         /// <summary>
         /// What the last capture was pointed at, for showing above the answer.
@@ -1446,15 +1453,15 @@ namespace InterviewCopilot
             // â”€â”€ Stream SSE tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             // yield inside try-finally is legal; only try-catch is forbidden.
             var accumulated = new StringBuilder();
+            long contextGeneration = System.Threading.Volatile.Read(ref _contextGeneration);
             int responseLength = 0;
             try
             {
                 using var stream = await res.Content.ReadAsStreamAsync(ct);
                 using var reader = new StreamReader(stream);
 
-                while (!reader.EndOfStream && !ct.IsCancellationRequested)
+                await foreach (string line in StreamLines.ReadAsync(reader, ct))
                 {
-                    string? line = await reader.ReadLineAsync(ct);
                     if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("data: ")) continue;
                     string data = line["data: ".Length..];
                     if (data == "[DONE]") break;
@@ -1485,7 +1492,8 @@ namespace InterviewCopilot
             {
                 // Always update context so follow-up voice questions work
                 string full = CleanContent(accumulated.ToString());
-                if (!string.IsNullOrWhiteSpace(full))
+                if (!ct.IsCancellationRequested && contextGeneration == System.Threading.Volatile.Read(ref _contextGeneration)
+                    && !string.IsNullOrWhiteSpace(full))
                 {
                     LastScreenContext    = full;
                     LastScreenContextUtc = DateTime.UtcNow;

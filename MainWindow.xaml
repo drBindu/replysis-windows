@@ -468,7 +468,7 @@
                                     </Border>
                                     <Border x:Name="SegManual" CornerRadius="4" Padding="12,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegManual_Click"
-                                            ToolTip="Manual. Press Space to listen, and again to answer. Most accurate, because you decide when the question ends.">
+                                            ToolTip="Manual. Press Space in Replysis, or Ctrl+Alt+Space in another app, to listen and again to answer.">
                                         <TextBlock x:Name="SegManualText" Text="Manual" FontSize="10.5" FontWeight="SemiBold"
                                                    Style="{StaticResource ToolbarPillLabel}"/>
                                     </Border>
@@ -1771,7 +1771,7 @@
                                                Foreground="#C6D4E8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                                 <StackPanel Grid.Column="1">
-                                    <TextBlock Text="Then press SPACE for an instant answer" Foreground="#EAF1F8"
+                                    <TextBlock Text="Use SPACE here, Ctrl+Alt+Space in other apps" Foreground="#EAF1F8"
                                                FontSize="13.5" FontWeight="Bold" FontFamily="Segoe UI"/>
                                     <TextBlock Text="Press once to listen, again to answer. Works from any app."
                                                Foreground="#93A9C4" FontSize="11.5" FontWeight="SemiBold"

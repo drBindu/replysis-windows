@@ -790,7 +790,7 @@ recording_frames = []
 is_recording     = False
 active_recording_id = ""
 record_lock      = threading.Lock()
-MAX_RECORDING_FRAMES = int(90 * 60 * 16000 / 4096)  # 90-minute cap — prevents unbounded growth if C# crashes
+MAX_RECORDING_SECONDS = 90 * 60
 
 def get_recording_id():
     try:
@@ -851,6 +851,7 @@ def save_recording(recording_id):
         recording_frames = []
 
     wf = None
+    saved = False
     try:
         if frames_to_save:
             session_number = get_recording_session_number()
@@ -864,7 +865,10 @@ def save_recording(recording_id):
             wf.setsampwidth(2)
             wf.setframerate(16000)
             wf.writeframes(b''.join(frames_to_save))
+            wf.close()
+            wf = None
             print(f">>> Recording saved: {filename}", flush=True)
+        saved = True
     except Exception as ex:
         print(f">>> Save error: {ex}", flush=True)
     finally:
@@ -873,7 +877,14 @@ def save_recording(recording_id):
                 wf.close()
             except Exception:
                 pass
-        mark_recording_saved(recording_id)
+        if saved:
+            mark_recording_saved(recording_id)
+        else:
+            try:
+                with open(os.path.join(APP_DATA, f"recording_failed_{recording_id}.flag"), "w", encoding="utf-8") as marker:
+                    marker.write("1")
+            except OSError:
+                pass
 
 
 def stop_recording(save_synchronously):
@@ -896,6 +907,7 @@ def stop_recording(save_synchronously):
 CHUNK_FRAMES = 1600   # 100 ms at 16 kHz — smaller chunks = lower end-to-end latency
 CHUNK_SECONDS = 0.1   # one chunk of wall time; paces the loop when muted
 SAMPLE_RATE  = 16000
+MAX_RECORDING_FRAMES = MAX_RECORDING_SECONDS * SAMPLE_RATE // CHUNK_FRAMES
 
 def write_devices_file(pa):
     """Write all input devices to devices.txt so the C# Settings window can populate its combo box."""

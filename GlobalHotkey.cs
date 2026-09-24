@@ -69,6 +69,11 @@ namespace InterviewCopilot
         internal static bool IsSpaceAToggle(long nowMs, long lastTypingKeyMs, bool modifierHeld) =>
             !modifierHeld && nowMs - lastTypingKeyMs >= TypingWindowMs;
 
+        public bool PlainSpaceEverywhere { get; set; }
+        internal static bool ListeningShortcutAllowed(long now, long lastTyped, bool modifiers,
+            bool explicitChord, bool ownerForeground, bool plainEverywhere) =>
+            explicitChord || ((ownerForeground || plainEverywhere) && IsSpaceAToggle(now, lastTyped, modifiers));
+
         /// <summary>
         /// Whether plain F7, F8 and F9 read the screen from any app. On by default,
         /// because reading the screen with F8 is how the product is used. Turning
@@ -339,7 +344,12 @@ namespace InterviewCopilot
                         (GetAsyncKeyState(0x5C) & 0x8000) != 0;     // right Windows key
                     long now = Environment.TickCount64;
 
-                    if (IsSpaceAToggle(now, _lastTypingKeyMs, modifierHeld))
+                    bool explicitChord = CtrlAltHeld() &&
+                        (GetAsyncKeyState(0x10) & 0x8000) == 0 &&
+                        (GetAsyncKeyState(0x5B) & 0x8000) == 0 &&
+                        (GetAsyncKeyState(0x5C) & 0x8000) == 0;
+                    if (ListeningShortcutAllowed(now, _lastTypingKeyMs, modifierHeld,
+                        explicitChord, IsAppWindowForeground(), PlainSpaceEverywhere))
                     {
                         DebugWindow.Log("HOOK", "SPACE TOGGLE PRESS");
                         _onSpacePressed?.Invoke();
@@ -360,6 +370,15 @@ namespace InterviewCopilot
 
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
         }
+
+        private static bool IsAppWindowForeground()
+        {
+            GetWindowThreadProcessId(GetForegroundWindow(), out uint processId);
+            return processId == (uint)Environment.ProcessId;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
 
         private bool IsOwnerWindowForeground()
         {
