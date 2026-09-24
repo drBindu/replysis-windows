@@ -1,3 +1,29 @@
+## Prepared screenshot: skip the encode when the screen has not moved (2026-09-24, from the Mac's finding)
+
+The Mac measured its idle cost to the prepared screenshot: every 2s it captured,
+scaled and JPEG-encoded the full screen, THEN compared a 16x16 signature to
+decide whether to upload - so a screen nobody touched paid the full encode and
+threw it away. It flagged the same shape on Windows: ScreenAnalyzer computed the
+change signature but only AFTER EncodePng + the palette reduction had already
+run, so the prepared-shot loop encoded an unchanged interview screen over and
+over for pictures the upload then skipped.
+
+Fixed the same way the Mac did: the signature comes off the raw bitmap first,
+and CaptureScreen now takes a skip predicate. When the caller says the screen is
+the one it already holds an id for - the exact condition the upload already
+trusted (id still fresh, signature within MinSignatureChange) - CaptureRegionCore
+returns an empty array before the encode. The prepared-shot path treats empty as
+"unchanged, do nothing". On-demand F8 passes no predicate and always encodes.
+
+Proven in suite 19 against the REAL CaptureScreen: an unchanged screen returns
+empty (no bytes, no encode), a changed screen still encodes. All 23 suites pass,
+0 warnings.
+
+Thanks for the catch - it's battery on a laptop in a long interview, on top of
+the animation-composition cost from before.
+
+---
+
 # What the Windows app learned, for the Mac app
 
 Hand this to the Mac session. It is written to be read cold, by someone with

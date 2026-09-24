@@ -3330,8 +3330,26 @@ namespace InterviewCopilot
             long screenSession = _screenSessionGeneration;
             try
             {
-                byte[]? shot = await CaptureScreenUnseenAsync();
+                // Decide whether the encode is even worth running, off the same
+                // signal the upload trusts: an id still fresh, pointing at a
+                // screen that has not moved. Snapshotted here on the UI thread so
+                // the background capture reads stable values.
+                string lastFingerprint = _uploadedShotFingerprint;
+                bool idStillUsable = !string.IsNullOrEmpty(_preparedShotId)
+                    && ScreenShotRules.ShouldReuseUnchangedShot(DateTime.UtcNow - _preparedShotIdUtc);
+                Func<string, bool> skipEncodeIfUnchanged = signature =>
+                    idStillUsable
+                    && !string.IsNullOrEmpty(signature)
+                    && SignatureDistance(signature, lastFingerprint) < MinSignatureChange;
+
+                byte[]? shot = await CaptureScreenUnseenAsync(skipEncodeIfUnchanged);
                 if (_windowClosed || screenSession != _screenSessionGeneration) return;
+
+                // An empty array is the encode-skipped signal: the screen is the
+                // one we already hold an id for, so keep the timer honest and do
+                // nothing else.
+                if (shot != null && shot.Length == 0) { _preparedShotUtc = DateTime.UtcNow; return; }
+
                 if (shot != null && shot.Length > 0)
                 {
                     _preparedShot = shot;
@@ -3717,7 +3735,7 @@ namespace InterviewCopilot
             _ = AskAiAsync(question);
         }
 
-        private async Task<byte[]?> CaptureScreenUnseenAsync()
+        private async Task<byte[]?> CaptureScreenUnseenAsync(Func<string, bool>? skipEncodeIfUnchanged = null)
         {
             bool answerWasVisible = answerWindow?.IsVisible == true;
             AnswerWindow? cloakedAnswer = answerWasVisible ? answerWindow : null;
@@ -3748,7 +3766,14 @@ namespace InterviewCopilot
                 // Watching means the whole monitor. Pointing at one window is
                 // for F8, where the user chose the window by being in it.
                 bool wholeScreen = _watchScreenMode;
-                byte[]? shot = await Task.Run(() => ScreenAnalyzer.CaptureScreen(wholeScreen));
+                byte[]? shot = await Task.Run(() => ScreenAnalyzer.CaptureScreen(wholeScreen, skipEncodeIfUnchanged));
+                if (shot != null && shot.Length == 0)
+                {
+                    // The signature said the screen had not moved, so the encode
+                    // never ran. Nothing to send, and nothing wasted.
+                    DebugWindow.Log("SCREEN", $"Unchanged screen, skipped encode ({sw.ElapsedMilliseconds}ms)");
+                    return shot;
+                }
                 DebugWindow.Log("SCREEN",
                     $"Capture+encode took {sw.ElapsedMilliseconds}ms ({(shot?.Length ?? 0) / 1024} KB)");
                 return shot;

@@ -222,7 +222,36 @@ namespace InterviewCopilot
         /// window. Predictable and slightly softer beats sharp and pointed at
         /// the wrong thing.
         /// </param>
-        public static byte[] CaptureScreen(bool wholeScreen)
+        // When set, CaptureRegionCore computes the change signature and, if this
+        // says the screen has not moved, returns before the PNG encode. Thread
+        // static because a capture runs synchronously on one thread inside
+        // Task.Run, so it is set and read on the same thread and cannot leak
+        // into a concurrent capture.
+        [ThreadStatic] private static Func<string, bool>? _skipEncodeIfUnchanged;
+
+        public static byte[] CaptureScreen(bool wholeScreen) => CaptureScreen(wholeScreen, null);
+
+        /// <summary>
+        /// Captures the screen, but skips the PNG encode entirely when
+        /// <paramref name="skipEncodeIfUnchanged"/> says the screen is the same
+        /// as the last one that was kept. Returns an empty array in that case.
+        ///
+        /// The prepared-shot loop runs every two seconds. The change signature
+        /// already decided whether to UPLOAD, but the encode - a full-screen PNG
+        /// plus a palette reduction - had already run by then, so an interview
+        /// screen that sits still for minutes paid the encode over and over for
+        /// pictures it then threw away. Deciding before the encode, off the raw
+        /// bitmap, is a laptop's battery back in a long interview. The Mac found
+        /// the same shape on its side.
+        /// </summary>
+        public static byte[] CaptureScreen(bool wholeScreen, Func<string, bool>? skipEncodeIfUnchanged)
+        {
+            _skipEncodeIfUnchanged = skipEncodeIfUnchanged;
+            try { return CaptureScreenCore(wholeScreen); }
+            finally { _skipEncodeIfUnchanged = null; }
+        }
+
+        private static byte[] CaptureScreenCore(bool wholeScreen)
         {
             _capturingWholeScreen = wholeScreen;
             if (wholeScreen)
@@ -479,6 +508,12 @@ namespace InterviewCopilot
             // model reading 'l' and reading '1'. PNG is lossless and, on this kind
             // of image, usually no larger than the JPEG it replaces.
             LastCaptureSignature = CoarseSignature(bmp);
+
+            // The one cheap thing is done: the signature is off the raw bitmap.
+            // If the caller says this is the same screen it already has, stop
+            // here, before the encode that was the whole cost.
+            if (_skipEncodeIfUnchanged != null && _skipEncodeIfUnchanged(LastCaptureSignature))
+                return Array.Empty<byte>();
 
             byte[] full = EncodePng(bmp);
 

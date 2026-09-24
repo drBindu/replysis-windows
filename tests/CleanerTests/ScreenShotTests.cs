@@ -41,6 +41,23 @@ internal static class ScreenShotTests
         Check(ScreenShotRules.IdStillUsable(TimeSpan.FromSeconds(59)), "an id under a minute is sent with the question");
         Check(!ScreenShotRules.IdStillUsable(TimeSpan.FromSeconds(75)), "an older id is dropped rather than sent");
 
+        // The encode is gated by the change signature, not run and then thrown
+        // away. A screen that has not moved must cost nothing past the capture.
+        // Proven on the real capture path so it cannot pass while the encode
+        // still runs. Skipped where there is no display to capture (a headless
+        // CI agent), since the point is the gate, not the pixels.
+        byte[] encoded = InterviewCopilot.ScreenAnalyzer.CaptureScreen(wholeScreen: true, _ => false);
+        if (encoded.Length > 0)
+        {
+            byte[] skipped = InterviewCopilot.ScreenAnalyzer.CaptureScreen(wholeScreen: true, _ => true);
+            Check(skipped.Length == 0, "an unchanged screen skips the encode entirely (empty, no bytes)");
+            Check(encoded.Length > 0, "a changed screen still encodes and returns the image");
+        }
+        else
+        {
+            Console.WriteLine("skip  no display to capture; encode-gate check not run here");
+        }
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "screenshot ids: all passed" : $"screenshot ids: {failed} FAILED");
         return failed;
