@@ -185,6 +185,20 @@ jobs:
 
       - name: Pack the installer and update package
         shell: powershell
+        env:
+          # signtool's Azure Trusted Signing plugin authenticates with
+          # Azure.Identity's DefaultAzureCredential, which reads these
+          # exact variable names from its own environment. They were only
+          # ever set on the earlier "Set up signing" step, and a step's
+          # env: block is invisible to every other step - so this step ran
+          # with no credentials at all, fell back to interactive login, and
+          # hung forever waiting for a prompt nobody could answer. Same
+          # failure the Velopack maintainers describe in
+          # https://github.com/velopack/velopack/issues/542, just a
+          # different reason for the missing credentials.
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
           $packArgs = @(
             "--packId",      "${{ env.APP_ID }}",
@@ -199,13 +213,14 @@ jobs:
           )
           switch ("${{ steps.signing.outputs.mode }}") {
             "azure" {
-              # Parallel signing (the default, 10 at once) can make the
-              # underlying signing library try to prompt for credentials
-              # interactively. vpk captures that output rather than showing
-              # it, so the prompt is invisible and the whole step hangs
-              # forever with no error - exactly what happened on three runs
-              # in a row here. One file at a time avoids the prompt.
-              # https://github.com/velopack/velopack/issues/542
+              # The real cause of the hang turned out to be missing
+              # credentials (see the env: block above) - the signing
+              # library falls back to an interactive login prompt when it
+              # can't authenticate, and that prompt is invisible because
+              # vpk captures stdout, so the step just sits there forever.
+              # Kept at parallelism 1 anyway: cheap insurance against the
+              # separate parallel-signing hang some users hit even with
+              # working credentials. https://github.com/velopack/velopack/issues/542
               $packArgs += @("--azureTrustedSignFile", "${{ steps.signing.outputs.metadata }}", "--signParallel", "1")
             }
             "pfx"   { $packArgs += @("--signParams", "/fd SHA256 /sha1 ${{ steps.signing.outputs.thumbprint }} /tr http://timestamp.digicert.com /td SHA256") }
