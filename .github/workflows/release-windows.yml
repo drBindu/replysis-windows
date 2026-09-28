@@ -153,9 +153,14 @@ jobs:
           echo "mode=none" >> $env:GITHUB_OUTPUT
 
       # ── Package ────────────────────────────────────────────────────────────
+      # 1.2.0 hung indefinitely inside Azure Trusted Signing's own signtool call
+      # - no error, no timeout, stuck after "N file(s) will be signed" on every
+      # attempt, cert state irrelevant. 1.2.0 is 158 patch releases behind, from
+      # before Velopack's Trusted Signing path had much use; a later release is
+      # simply where that bug got fixed. Confirmed a working case sits at 1.2.158.
       - name: Install Velopack
         shell: powershell
-        run: dotnet tool install -g vpk --version 1.2.0
+        run: dotnet tool install -g vpk --version 1.2.158
 
       # Pulls the previous release into the output folder so the pack step can
       # build a delta against it. A customer on the last version then downloads
