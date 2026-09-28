@@ -121,7 +121,9 @@ namespace InterviewCopilot
 
                 if (!res.IsSuccessStatusCode)
                 {
-                    DebugWindow.Log("CLOUD_SYNC", $"HTTP {(int)res.StatusCode}: {respBody[..Math.Min(respBody.Length, 160)]}");
+                    // Server response bodies can echo account/session content.
+                    // Status is sufficient for diagnostics without persisting PII.
+                    DebugWindow.Log("CLOUD_SYNC", $"HTTP {(int)res.StatusCode}");
                     return;
                 }
 

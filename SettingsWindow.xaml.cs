@@ -604,15 +604,15 @@ namespace InterviewCopilot
 
             /// <summary>
             /// Whether questions are answered from the screen without being asked
-            /// to look at it. On by default.
+            /// to look at it. On by default, and that is a product decision, not
+            /// an oversight (owner, 2026-09-17): an answer about what is on screen
+            /// depends on a screenshot already being ready. The capture itself only
+            /// runs during an active interview; see StartPreparedShots.
             ///
             /// It used to be a toolbar switch that started off, so the feature
             /// most likely to be needed in a coding round was the one a candidate
             /// had to remember to turn on, in the seconds before an interviewer
-            /// started talking. Nobody reads a toolbar under that pressure.
-            ///
-            /// It costs nothing while nothing is asked: the screen is only read
-            /// when a question arrives that is actually about it.
+            /// started talking.
             /// </summary>
             public bool   WatchScreenEnabled { get; set; } = true;
             // Off by default. Every session used to be recorded to disk

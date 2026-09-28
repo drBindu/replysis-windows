@@ -4,8 +4,8 @@
         xmlns:local="clr-namespace:InterviewCopilot"
         Title="Replysis AI"
         Icon="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
-        Height="600" Width="1060"
-        MinHeight="520" MinWidth="1000"
+        Height="590" Width="980"
+        MinHeight="540" MinWidth="880"
         WindowStartupLocation="Manual"
         KeyDown="Window_KeyDown"
         PreviewMouseDown="Window_PreviewMouseDown"
@@ -249,8 +249,8 @@
             <Setter Property="BorderThickness" Value="1.6"/>
             <Setter Property="BorderBrush" Value="#10B981"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Width" Value="46"/>
-            <Setter Property="Height" Value="46"/>
+            <Setter Property="Width" Value="42"/>
+            <Setter Property="Height" Value="42"/>
             <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -367,11 +367,15 @@
     <!-- ====================================================================
          MAIN CONTAINER  &#183;  pure glass on near-black
     ===================================================================== -->
-    <Border x:Name="MainAppBorder" CornerRadius="16"
-            BorderBrush="#1AFFFFFF" BorderThickness="1"
+    <Border x:Name="MainAppBorder" CornerRadius="18"
+            BorderBrush="#28384E" BorderThickness="1"
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <Border.Background>
-            <SolidColorBrush Color="#090B12"/>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#0B0F17" Offset="0"/>
+                <GradientStop Color="#0A0D14" Offset="0.58"/>
+                <GradientStop Color="#070A10" Offset="1"/>
+            </LinearGradientBrush>
         </Border.Background>
         <Border.Effect>
             <DropShadowEffect BlurRadius="48" ShadowDepth="16" Opacity="0.80" Color="#000000"/>
@@ -388,9 +392,9 @@
                 </Grid.RowDefinitions>
 
                 <!-- ================= HEADER ================= -->
-                <Border Grid.Row="0" CornerRadius="16,16,0,0"
-                        BorderBrush="#1E2C40" BorderThickness="0,0,0,1"
-                        Background="#0AFFFFFF">
+                <Border Grid.Row="0" CornerRadius="18,18,0,0"
+                        BorderBrush="#26364A" BorderThickness="0,0,0,1"
+                        Background="#08FFFFFF">
                     <Grid Margin="14,0,10,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -400,7 +404,7 @@
 
                         <!-- Brand -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Image Width="30" Height="30" Margin="0,0,8,0"
+                            <Image Width="34" Height="34" Margin="0,0,9,0"
                                    Source="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
                                    Stretch="Uniform" SnapsToDevicePixels="True"/>
                             <StackPanel VerticalAlignment="Center">
@@ -409,11 +413,13 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <!-- Mic + status -->
-                        <StackPanel Grid.Column="1" Orientation="Horizontal"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <!-- Mic + status - an Interview-step control, so hidden
+                             while Setup fills the page ("this page no interview").
+                             See EnterSetupStep / EnterInterviewStep. -->
+                        <StackPanel x:Name="HeaderMicArea" Grid.Column="1" Orientation="Horizontal"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center" Margin="14,0,0,0">
                             <Button x:Name="MicBtn" Style="{StaticResource MicBtnStyle}"
-                                    Click="MicBtn_Click" Margin="0,0,13,0">
+                                    Click="MicBtn_Click" Margin="0,0,9,0">
                                 <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets"
                                            FontSize="17" Foreground="#F1F5F9"/>
                                 <Button.Effect>
@@ -454,22 +460,22 @@
                                  state until it is opened, and this is state a
                                  user needs to see at a glance during an
                                  interview. -->
-                            <Border x:Name="ModeSegments" Margin="12,0,0,0"
+                            <Border x:Name="ModeSegments" Margin="9,0,0,0"
                                     Background="{DynamicResource ActionGraphiteSurface}" BorderBrush="{DynamicResource ActionGraphiteStroke}"
                                     BorderThickness="1" CornerRadius="6" Padding="3"
                                     VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <!-- Group 1: when to answer. Group 2, past the hairline: what to hear. -->
-                                    <Border x:Name="SegAuto" CornerRadius="4" Padding="9,5" Cursor="Hand"
+                                    <Border x:Name="SegAuto" CornerRadius="4" Padding="6,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegAuto_Click"
                                             ToolTip="Auto. Answers as soon as the question ends.">
-                                        <TextBlock x:Name="SegAutoText" Text="Auto" FontSize="10.5" FontWeight="SemiBold"
+                                        <TextBlock x:Name="SegAutoText" Text="Auto" FontSize="10" FontWeight="SemiBold"
                                                    Style="{StaticResource ToolbarPillLabel}"/>
                                     </Border>
-                                    <Border x:Name="SegManual" CornerRadius="4" Padding="9,5" Cursor="Hand"
+                                    <Border x:Name="SegManual" CornerRadius="4" Padding="6,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegManual_Click"
                                             ToolTip="Manual. Press Space in Replysis, or Ctrl+Alt+Space in another app, to listen and again to answer.">
-                                        <TextBlock x:Name="SegManualText" Text="Manual" FontSize="10.5" FontWeight="SemiBold"
+                                        <TextBlock x:Name="SegManualText" Text="Manual" FontSize="10" FontWeight="SemiBold"
                                                    Style="{StaticResource ToolbarPillLabel}"/>
                                     </Border>
                                     <!-- What the app listens to. This was a checkbox in Settings
@@ -477,26 +483,26 @@
                                          so the app heard the candidate's own answers and took them as
                                          new questions. Named for the situation, beside the mode it
                                          belongs with, and read before the call starts. -->
-                                    <Border x:Name="AudioSegments" Width="1" Height="18" Margin="6,0,6,0"
+                                    <Border x:Name="AudioSegments" Width="1" Height="18" Margin="4,0,4,0"
                                             Background="{DynamicResource ActionGraphiteStroke}"
                                             VerticalAlignment="Center"/>
-                                    <Border x:Name="SegInterview" CornerRadius="4" Padding="8,5" Cursor="Hand"
+                                    <Border x:Name="SegInterview" CornerRadius="4" Padding="5,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegInterview_Click"
                                             ToolTip="Interview. Hears the meeting only, so your own answers are never taken as questions. Use this for real interviews in Zoom, Meet or Teams.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock x:Name="SegInterviewIcon" Text="&#xE7F5;" FontFamily="Segoe MDL2 Assets"
                                                        FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                            <TextBlock x:Name="SegInterviewText" Text="Interview" FontSize="10.5" FontWeight="SemiBold"
+                                            <TextBlock x:Name="SegInterviewText" Text="Interview" FontSize="10" FontWeight="SemiBold"
                                                        Style="{StaticResource ToolbarPillLabel}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border x:Name="SegPractice" CornerRadius="4" Padding="8,5" Cursor="Hand"
+                                    <Border x:Name="SegPractice" CornerRadius="4" Padding="5,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegPractice_Click"
                                             ToolTip="Practice. Hears the meeting and your microphone, for practising on your own or with someone in the room.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock x:Name="SegPracticeIcon" Text="&#xE720;" FontFamily="Segoe MDL2 Assets"
                                                        FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                            <TextBlock x:Name="SegPracticeText" Text="Practice" FontSize="10.5" FontWeight="SemiBold"
+                                            <TextBlock x:Name="SegPracticeText" Text="Practice" FontSize="10" FontWeight="SemiBold"
                                                        Style="{StaticResource ToolbarPillLabel}"/>
                                         </StackPanel>
                                     </Border>
@@ -525,29 +531,51 @@
                                  option. F8/F9 keep working unchanged. Compact overlay used to sit
                                  in this menu, but it is a display mode rather than a way to read
                                  the screen, so it has its own pill and is no longer hidden here. -->
+                            <!-- Setup has no screen to read yet, so this slot shows the
+                                 credits/time balance instead of leaving it empty - the
+                                 same numbers CreditsLabel already tracks, just bound
+                                 straight through rather than duplicated in code. -->
+                            <Border x:Name="SetupCreditsSummary" Style="{StaticResource ToolbarBadge}"
+                                    Margin="0,0,6,0" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="&#x26A1;" FontSize="12" Foreground="#54D99A"
+                                               Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Text, ElementName=CreditsLabel}" Foreground="#FFFFFF"
+                                               FontSize="12" FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Text, ElementName=CreditsPlanLabel}" Foreground="#93A4BA"
+                                               FontSize="11" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Screen reading is the featured action; Compact is a quieter
-                                 companion with the same height and corner geometry. -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,6,0">
+                                 companion with the same height and corner geometry. Both are
+                                 Interview-step tools, so hidden on Setup - see EnterSetupStep. -->
+                                <!-- Icon-only: the labeled version needed ~180px between the
+                                     two buttons, which is what was pushing Interview/Practice
+                                     and the credits/timer/profile cluster into each other at
+                                     this window's width. The label lives in the tooltip now,
+                                     same as every other icon button in this header. -->
+                                <StackPanel x:Name="HeaderScreenToolsArea" Orientation="Horizontal" Margin="0,0,6,0">
                                     <Button x:Name="AnalyzePill" Style="{StaticResource ScreenActionButton}"
-                                            Click="ReadScreenPill_Click" Margin="0,0,7,0"
-                                            ToolTip="Read the screen and answer from it. F8 reads the window you are in, F9 your main screen, F7 a part you select.">
+                                            Click="ReadScreenPill_Click" Margin="0,0,6,0" Padding="9,0"
+                                            ToolTip="Read the screen and answer from it (F8 this window, F9 main screen, F7 a part you select).">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Path x:Name="WatchScreenIcon" Width="14" Height="14" Margin="0,0,6,0"
+                                            <Path x:Name="WatchScreenIcon" Width="13" Height="13" Margin="0,0,5,0"
                                                   Data="M1,5 V1 H5 M9,1 H13 V5 M13,9 V13 H9 M5,13 H1 V9 M4,7 H10"
                                                   Stroke="#F4F7FC" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                                   VerticalAlignment="Center"/>
-                                            <TextBlock x:Name="WatchScreenPillLabel" Text="Read screen"
-                                                       VerticalAlignment="Center"/>
-                                            <TextBlock Text="F8" Opacity="0.55" FontSize="9" Foreground="#FFFFFF"
-                                                       Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                            <!-- Kept for code-behind, which still toggles this text when
+                                                 switching between "Read screen" and an analyzing/cancel state -
+                                                 shortened so the button fits, unlike its old "Read screen". -->
+                                            <TextBlock x:Name="WatchScreenPillLabel" Text="Screen" FontSize="11" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
 
                                     <Button x:Name="CompactOverlayPill" Style="{StaticResource QuietActionBtn}"
-                                            Click="CompactOverlayPill_Click" Height="36" Padding="10,0"
+                                            Click="CompactOverlayPill_Click" Height="34" Padding="9,0"
                                             ToolTip="Shrink to a slim bar for in-person interviews.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Path Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
+                                            <Path Width="13" Height="13" Margin="0,0,5,0" VerticalAlignment="Center"
                                                   Data="M1,1 H13 V13 H1 Z M7,7 H11 V11 H7 Z"
                                                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.25"/>
                                             <TextBlock Text="Compact" FontSize="11" VerticalAlignment="Center"/>
@@ -628,7 +656,7 @@
                                                      Visibility="Collapsed"/>
                                         </Grid>
                                     </Border>
-                                    <TextBlock x:Name="ProfileNameLabel" Text="" MaxWidth="72" TextTrimming="CharacterEllipsis"
+                                    <TextBlock x:Name="ProfileNameLabel" Text="" MaxWidth="48" TextTrimming="CharacterEllipsis"
                                                Foreground="#EAF1F8" FontSize="11" FontWeight="Medium"
                                                FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                     <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets"
@@ -702,24 +730,50 @@
                 </Border>
 
                 <!-- ================= BODY ================= -->
-                <Grid x:Name="InterviewContent" Grid.Row="1" Margin="10,10,10,10">
+                <Grid x:Name="InterviewContent" Grid.Row="1" Margin="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition x:Name="ResumeColumn" Width="230"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
+                        <!-- Also Star, same as ResumeColumn, during Setup: two
+                             Star columns split the width between them, and
+                             MainContentArea is empty then, so that split showed
+                             as a dead gap on the right. Collapsed to 0 in
+                             EnterSetupStep and restored in EnterInterviewStep. -->
+                        <ColumnDefinition x:Name="MainContentColumn" Width="*"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- =========================================================
                          SIDE PANEL  &#183;  Interview Setup (tab-less, no dead space)
                     ========================================================== -->
                     <Border x:Name="ResumePanel" Grid.Column="0"
-                            CornerRadius="12" BorderBrush="#22FFFFFF" BorderThickness="1"
-                            Background="#10FFFFFF" Padding="12,11" ClipToBounds="True">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                            CornerRadius="16" BorderBrush="#26364A" BorderThickness="1"
+                            Background="#D90F141E" Padding="14" ClipToBounds="True">
+                        <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <!-- Two halves while Setup fills the page: resume and job
+                             details on the left, the explained listening choices on
+                             the right - not stacked one under the other. Once
+                             Interview starts this collapses back to the left half
+                             only, at the narrow sidebar width production has always
+                             used; see EnterSetupStep / EnterInterviewStep. -->
+                        <Grid x:Name="SetupTwoColumn" Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition x:Name="SetupDividerCol" Width="28"/>
+                                <ColumnDefinition x:Name="SetupRightCol" Width="1.1*"/>
+                            </Grid.ColumnDefinitions>
+
+                        <ScrollViewer x:Name="SetupLeftScroll" VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
-                                      PanningMode="VerticalOnly" Padding="0,0,4,0">
+                                      PanningMode="VerticalOnly" Padding="0,0,8,0"
+                                      PreviewMouseWheel="SlowScroll_PreviewMouseWheel">
                         <Grid>
                             <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
@@ -732,239 +786,295 @@
 
                             </Grid.RowDefinitions>
 
-                            <!-- Title -->
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-                                <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                           Foreground="#66FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="INTERVIEW SETUP" Style="{StaticResource SectionCaption}"
-                                           VerticalAlignment="Center"/>
+                            <!-- Title - a real page title, not a small caps label. The
+                                 repeated icon-chip-plus-label header three sections in a
+                                 row was the "generated template" tell; one confident
+                                 heading up top, then a plain accent rule per section
+                                 below, reads as designed rather than assembled. -->
+                            <!-- Setup-only: this sidebar is reused, narrowed, as the
+                                 Interview-step resume panel, where a page title makes
+                                 no sense - you're already in the interview. Collapsed
+                                 there by EnterInterviewStep. -->
+                            <StackPanel x:Name="SetupPageTitle" Grid.Row="0" Margin="1,0,0,12">
+                                <TextBlock Text="Interview setup" Foreground="#FAFBFD" FontSize="19"
+                                           FontWeight="Bold" FontFamily="Segoe UI"/>
+                                <TextBlock Text="Prepare your context once. Replysis keeps it available throughout the interview." Foreground="#8294AB"
+                                           FontSize="11" FontFamily="Segoe UI" Margin="0,3,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
 
-                            <!-- Resume label -->
-                            <Grid Grid.Row="1" Margin="0,0,0,7">
-                                <TextBlock Text="RESUME" Foreground="#93A9C4" FontSize="10.5"
-                                           FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                            </Grid>
-
-                            <!-- Premium upload / drop zone. A real Button so click-to-browse
-                                 fires reliably; the ResumeTextBox is kept only as a hidden
-                                 backing store for the extracted resume text. -->
-                            <Button x:Name="ResumeDropBorder" Grid.Row="2" Cursor="Hand"
-                                    Click="ResumeCard_Click" AllowDrop="True"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
-                                    DragEnter="ResumeDropBorder_DragEnter"
-                                    DragOver="ResumeDropBorder_DragOver"
-                                    DragLeave="ResumeDropBorder_DragLeave"
-                                    Drop="ResumeDropBorder_Drop">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="CardBd" CornerRadius="12" BorderBrush="{DynamicResource ActionGraphiteStroke}"
-                                                BorderThickness="1.2" MinHeight="158" Background="{DynamicResource ActionGraphiteSurface}">
-                                            <ContentPresenter/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="CardBd" Property="BorderBrush" Value="{DynamicResource GlassButtonHoverStroke}"/>
-                                                <Setter TargetName="CardBd" Property="Background" Value="{DynamicResource GlassButtonHoverSurface}"/>
-                                            </Trigger>
-                                            <Trigger Property="IsPressed" Value="True">
-                                                <Setter TargetName="CardBd" Property="Background" Value="{DynamicResource GlassButtonPressedSurface}"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
+                            <!-- RESUME - its own elevated card, not just a labeled row,
+                                 so it reads as the primary action on the page rather
+                                 than one field among several. -->
+                            <Border Grid.Row="1" Grid.RowSpan="3" CornerRadius="12"
+                                    Background="#111823" BorderBrush="#253449" BorderThickness="1"
+                                    Padding="13,12" Margin="0,0,0,14">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.28"/>
+                                </Border.Effect>
                                 <Grid>
-                                    <TextBox x:Name="ResumeTextBox" Visibility="Collapsed"
-                                             TextChanged="ResumeTextBox_TextChanged"/>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
 
-                                    <!-- Empty state: upload prompt -->
-                                    <StackPanel x:Name="ResumeEmptyState" HorizontalAlignment="Center"
-                                                VerticalAlignment="Center" Margin="18" IsHitTestVisible="False">
-                                        <Border Width="48" Height="48" CornerRadius="24" Background="#1E2B40"
-                                                HorizontalAlignment="Center" Margin="0,0,0,13">
-                                            <TextBlock Text="&#xE898;" FontFamily="Segoe MDL2 Assets" FontSize="21"
-                                                       Foreground="#7FA8E0" HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"/>
-                                        </Border>
-                                        <TextBlock Text="Drop your resume here" Foreground="#E8EEF6" FontSize="13"
-                                                   FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="or click to browse" Foreground="#7E90A8" FontSize="11"
-                                                   FontFamily="Segoe UI" HorizontalAlignment="Center" Margin="0,3,0,11"/>
-                                        <Border Background="#16FFFFFF" CornerRadius="6" Padding="9,3" HorizontalAlignment="Center">
-                                            <TextBlock Text="PDF, DOCX or TXT" Foreground="#93A4BA"
-                                                       FontSize="9.5" FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                        </Border>
+                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+                                        <Border Width="3" Height="14" CornerRadius="2" Background="#34E08A" Margin="0,0,9,0"/>
+                                        <TextBlock Text="Resume" Foreground="#E6EDF5" FontSize="13.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                     </StackPanel>
 
-                                    <!-- Loaded state -->
-                                    <StackPanel x:Name="ResumeLoadedState" HorizontalAlignment="Center"
-                                                VerticalAlignment="Center" Margin="18" Visibility="Collapsed"
-                                                IsHitTestVisible="False">
-                                        <Border Width="48" Height="48" CornerRadius="24" Background="#13331F"
-                                                HorizontalAlignment="Center" Margin="0,0,0,13">
-                                            <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="21"
-                                                       Foreground="#4ED88F" HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"/>
-                                        </Border>
-                                        <TextBlock x:Name="ResumeLoadedName" Text="Resume loaded" Foreground="#E8EEF6"
-                                                   FontSize="13" FontWeight="SemiBold" FontFamily="Segoe UI"
-                                                   HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                                   MaxWidth="235" TextAlignment="Center"/>
-                                        <TextBlock Text="click to replace" Foreground="#7E90A8" FontSize="11"
-                                                   FontFamily="Segoe UI" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                    <!-- Premium upload / drop zone. A real Button so click-to-browse
+                                         fires reliably; the ResumeTextBox is kept only as a hidden
+                                         backing store for the extracted resume text. -->
+                                    <Button x:Name="ResumeDropBorder" Grid.Row="1" Cursor="Hand"
+                                            Click="ResumeCard_Click" AllowDrop="True"
+                                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                            DragEnter="ResumeDropBorder_DragEnter"
+                                            DragOver="ResumeDropBorder_DragOver"
+                                            DragLeave="ResumeDropBorder_DragLeave"
+                                            Drop="ResumeDropBorder_Drop">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="CardBd" CornerRadius="10" BorderBrush="#26384F"
+                                                        BorderThickness="1" MinHeight="120" Background="#0CFFFFFF">
+                                                    <ContentPresenter/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="CardBd" Property="BorderBrush" Value="#3021924A"/>
+                                                        <Setter TargetName="CardBd" Property="Background" Value="#0F21924A"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter TargetName="CardBd" Property="Background" Value="#1621924A"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                        <Grid>
+                                            <TextBox x:Name="ResumeTextBox" Visibility="Collapsed"
+                                                     TextChanged="ResumeTextBox_TextChanged"/>
+
+                                            <!-- Empty state: upload prompt -->
+                                            <StackPanel x:Name="ResumeEmptyState" HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center" Margin="18" IsHitTestVisible="False">
+                                                <Border Width="42" Height="42" CornerRadius="21" Background="#14FFFFFF"
+                                                        BorderBrush="#22FFFFFF" BorderThickness="1"
+                                                        HorizontalAlignment="Center" Margin="0,0,0,10">
+                                                    <TextBlock Text="&#xE898;" FontFamily="Segoe MDL2 Assets" FontSize="17"
+                                                               Foreground="#C7D4E5" HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Drop your resume here" Foreground="#F4F7FC" FontSize="13.5"
+                                                           FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="or click to browse" Foreground="#8393A8" FontSize="10.5"
+                                                           FontFamily="Segoe UI" HorizontalAlignment="Center" Margin="0,2,0,8"/>
+                                                <Border Background="#14FFFFFF" BorderBrush="#1EFFFFFF" BorderThickness="1"
+                                                        CornerRadius="6" Padding="10,4" HorizontalAlignment="Center">
+                                                    <TextBlock Text="PDF, DOCX or TXT" Foreground="#9FB0C7"
+                                                               FontSize="9.5" FontWeight="Bold" FontFamily="Segoe UI"/>
+                                                </Border>
+                                            </StackPanel>
+
+                                            <!-- Loaded state -->
+                                            <StackPanel x:Name="ResumeLoadedState" HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center" Margin="18" Visibility="Collapsed"
+                                                        IsHitTestVisible="False">
+                                                <Border Width="50" Height="50" CornerRadius="25" Background="#1621924A"
+                                                        BorderBrush="#3821924A" BorderThickness="1"
+                                                        HorizontalAlignment="Center" Margin="0,0,0,14">
+                                                    <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                                                               Foreground="#54D99A" HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock x:Name="ResumeLoadedName" Text="Resume loaded" Foreground="#F4F7FC"
+                                                           FontSize="13.5" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                                           HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                           MaxWidth="235" TextAlignment="Center"/>
+                                                <Border Background="#0FFFFFFF" CornerRadius="6" Padding="9,3"
+                                                        HorizontalAlignment="Center" Margin="0,6,0,0">
+                                                    <TextBlock Text="click to replace" Foreground="#8393A8" FontSize="10.5"
+                                                               FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                                </Border>
+                                            </StackPanel>
+
+                                            <!-- Drag-over overlay -->
+                                            <Border x:Name="ResumeDragOverlay" CornerRadius="12"
+                                                    Background="#1A21924A" BorderBrush="#54D99A"
+                                                    BorderThickness="1.5" Visibility="Collapsed"
+                                                    IsHitTestVisible="False">
+                                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets"
+                                                               FontSize="24" Foreground="#8FE8B9"
+                                                               HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                                    <TextBlock Text="Drop to load" Foreground="#FFFFFF"
+                                                               FontSize="12" FontWeight="SemiBold"
+                                                               FontFamily="Segoe UI" HorizontalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                    </Button>
+
+                                    <!-- Previously uploaded resumes (shown only when some exist) -->
+                                    <Grid Grid.Row="2" Margin="0,10,0,0">
+                                        <Button x:Name="SavedResumesBtn" Style="{StaticResource GhostBtn}"
+                                                Click="SavedResumesBtn_Click" Padding="0,8"
+                                                Visibility="Collapsed" ToolTip="Previously uploaded resumes">
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                <TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                                           Foreground="#93A4BA" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Previous resumes" FontSize="11" FontFamily="Segoe UI"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <!-- TARGET ROLE - its own card, same treatment as Resume. -->
+                            <Border Grid.Row="4" Grid.RowSpan="4" CornerRadius="12"
+                                    Background="#111823" BorderBrush="#253449" BorderThickness="1"
+                                    Padding="13" Margin="0,0,0,14">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.28"/>
+                                </Border.Effect>
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+                                        <Border Width="3" Height="14" CornerRadius="2" Background="#34E08A" Margin="0,0,9,0"/>
+                                        <TextBlock Text="Target role" Foreground="#E6EDF5" FontSize="13.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                        <TextBlock Text="  optional" Foreground="#3EFFFFFF"
+                                                   FontSize="10" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                     </StackPanel>
 
-                                    <!-- Drag-over overlay -->
-                                    <Border x:Name="ResumeDragOverlay" CornerRadius="12"
-                                            Background="#12331F" BorderBrush="#34E08A"
-                                            BorderThickness="1.5" Visibility="Collapsed"
-                                            IsHitTestVisible="False">
-                                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets"
-                                                       FontSize="24" Foreground="#BBD6FF"
-                                                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                                            <TextBlock Text="Drop to load" Foreground="#FFFFFF"
-                                                       FontSize="12" FontWeight="SemiBold"
-                                                       FontFamily="Segoe UI" HorizontalAlignment="Center"/>
-                                        </StackPanel>
+                                    <TextBlock Grid.Row="1" Text="COMPANY" Foreground="#7E90A8" FontSize="9.5"
+                                               FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,5"/>
+                                    <Border Grid.Row="1" Margin="0,17,0,0" Background="#0DFFFFFF" CornerRadius="9"
+                                            BorderBrush="#1AFFFFFF" BorderThickness="1" Height="38">
+                                        <Grid>
+                                            <TextBox x:Name="CompanyNameBox" Background="Transparent"
+                                                     Foreground="#F0F0F2" BorderThickness="0"
+                                                     Padding="12,0" FontSize="12.5" FontFamily="Segoe UI"
+                                                     VerticalContentAlignment="Center"
+                                                     CaretBrush="#8FE8B9" TextChanged="CompanyNameBox_TextChanged"/>
+                                            <TextBlock x:Name="CompanyNameWatermark"
+                                                       Text="e.g. Google, Stripe, Amazon"
+                                                       Foreground="#52FFFFFF" FontSize="12.5" Margin="12,0"
+                                                       FontFamily="Segoe UI" IsHitTestVisible="False"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <TextBlock Grid.Row="2" Text="JOB DESCRIPTION" Foreground="#7E90A8" FontSize="9.5"
+                                               FontWeight="Bold" FontFamily="Segoe UI" Margin="2,14,0,5"/>
+                                    <Border Grid.Row="3" Background="#0DFFFFFF" CornerRadius="10"
+                                            BorderBrush="#1AFFFFFF" BorderThickness="1">
+                                        <Grid>
+                                            <TextBox x:Name="JobDescBox" TextWrapping="Wrap" AcceptsReturn="True"
+                                                     MinHeight="68" MaxHeight="170"
+                                                     Background="Transparent" Foreground="#F0F0F2"
+                                                     BorderThickness="0" Padding="12,10"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     FontFamily="Segoe UI" FontSize="12.5" CaretBrush="#8FE8B9"
+                                                     TextChanged="JobDescBox_TextChanged"/>
+                                            <TextBlock x:Name="JobDescWatermark" Foreground="#52FFFFFF"
+                                                       FontSize="12.5" TextWrapping="Wrap" Margin="12,10"
+                                                       VerticalAlignment="Top" IsHitTestVisible="False"
+                                                       FontFamily="Segoe UI"
+                                                       Text="Paste the title, must-have skills, tech stack and seniority."/>
+                                        </Grid>
                                     </Border>
                                 </Grid>
-                            </Button>
-
-                            <!-- Previously uploaded resumes (shown only when some exist) -->
-                            <Grid Grid.Row="3" Margin="0,10,0,0">
-                                <Button x:Name="SavedResumesBtn" Style="{StaticResource GhostBtn}"
-                                        Click="SavedResumesBtn_Click" Padding="0,8"
-                                        Visibility="Collapsed" ToolTip="Previously uploaded resumes">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE823;" FontFamily="Segoe MDL2 Assets" FontSize="12"
-                                                   Foreground="#93A4BA" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Previous resumes" FontSize="11" FontFamily="Segoe UI"
-                                                   VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                            </Grid>
-
-                            <!-- Divider -->
-                            <Border Grid.Row="4" Height="1" Background="#10FFFFFF" Margin="0,14,0,12"/>
-
-                            <!-- Target role label -->
-                            <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,0,0,7">
-                                <TextBlock Text="&#xE821;" FontFamily="Segoe MDL2 Assets" FontSize="10"
-                                           Foreground="#66FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="TARGET ROLE" Foreground="#93A9C4" FontSize="10.5"
-                                           FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                <TextBlock Text="  optional" Foreground="#40FFFFFF"
-                                           FontSize="9.5" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                            </StackPanel>
-
-                            <!-- Company -->
-                            <Border Grid.Row="6" Background="#1AFFFFFF" CornerRadius="8"
-                                    BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,0,8">
-                                <Grid>
-                                    <TextBox x:Name="CompanyNameBox" Background="Transparent"
-                                             Foreground="#F0F0F2" BorderThickness="0"
-                                             Padding="10,8" FontSize="12" FontFamily="Segoe UI" FontWeight="SemiBold"
-                                             CaretBrush="#AAAAAA" TextChanged="CompanyNameBox_TextChanged"/>
-                                    <TextBlock x:Name="CompanyNameWatermark"
-                                               Text="Company  (e.g. Google, Stripe, Amazon)"
-                                               Foreground="#66FFFFFF" FontSize="12" FontWeight="SemiBold" Margin="10,8"
-                                               FontFamily="Segoe UI" IsHitTestVisible="False"
-                                               VerticalAlignment="Center"/>
-                                </Grid>
                             </Border>
 
-                            <!-- Job description -->
-                            <Border Grid.Row="7" Background="#1AFFFFFF" CornerRadius="10"
-                                    BorderBrush="#22FFFFFF" BorderThickness="1">
-                                <Grid>
-                                    <TextBox x:Name="JobDescBox" TextWrapping="Wrap" AcceptsReturn="True"
-                                             MinHeight="86" MaxHeight="200"
-                                             Background="Transparent" Foreground="#F0F0F2"
-                                             BorderThickness="0" Padding="11"
-                                             VerticalScrollBarVisibility="Auto"
-                                             FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold" CaretBrush="#AAAAAA"
-                                             TextChanged="JobDescBox_TextChanged"/>
-                                    <TextBlock x:Name="JobDescWatermark" Foreground="#66FFFFFF"
-                                               FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Margin="11"
-                                               VerticalAlignment="Top" IsHitTestVisible="False"
-                                               FontFamily="Segoe UI"
-                                               Text="Paste the role &amp; requirements: title, must-have skills, tech stack, seniority."/>
-                                </Grid>
-                            </Border>
-
-                            <!-- What the candidate wants: never on a resume, always asked -->
-                            <StackPanel Grid.Row="8" Margin="0,14,0,0">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
-                                    <TextBlock Text="&#xE77B;" FontFamily="Segoe MDL2 Assets" FontSize="10"
-                                               Foreground="#66FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="WHAT YOU WANT" Foreground="#93A9C4" FontSize="10.5"
-                                               FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                    <TextBlock Text="  the screening questions" Foreground="#40FFFFFF"
-                                               FontSize="9.5" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                </StackPanel>
-
-                                <Grid Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Work type" Foreground="#7E90A8" FontSize="10"
-                                                   FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                        <ComboBox x:Name="WorkTypeCombo" Style="{StaticResource DarkComboBox}"
-                                                  SelectionChanged="ScreeningPref_Changed"/>
+                            <!-- WHAT YOU WANT - same card treatment again, so all three
+                                 sections read as one consistent system rather than three
+                                 different attempts at a layout. -->
+                            <Border Grid.Row="8" CornerRadius="12"
+                                    Background="#111823" BorderBrush="#253449" BorderThickness="1"
+                                    Padding="13">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.28"/>
+                                </Border.Effect>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                        <Border Width="3" Height="14" CornerRadius="2" Background="#34E08A" Margin="0,0,9,0"/>
+                                        <TextBlock Text="What you want" Foreground="#E6EDF5" FontSize="13.5"
+                                                   FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                        <TextBlock Text="  the screening questions" Foreground="#3EFFFFFF"
+                                                   FontSize="10" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Text="Work authorization" Foreground="#7E90A8" FontSize="10"
-                                                   FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                        <ComboBox x:Name="WorkAuthCombo" Style="{StaticResource DarkComboBox}"
-                                                  SelectionChanged="ScreeningPref_Changed"/>
-                                    </StackPanel>
-                                </Grid>
 
-                                <Grid Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Can start" Foreground="#7E90A8" FontSize="10"
-                                                   FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                        <ComboBox x:Name="AvailabilityCombo" Style="{StaticResource DarkComboBox}"
-                                                  SelectionChanged="ScreeningPref_Changed"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Text="Where" Foreground="#7E90A8" FontSize="10"
-                                                   FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                        <ComboBox x:Name="WorkLocationCombo" Style="{StaticResource DarkComboBox}"
-                                                  SelectionChanged="ScreeningPref_Changed"/>
-                                    </StackPanel>
-                                </Grid>
-
-                                <TextBlock Text="Pay" Foreground="#7E90A8" FontSize="10"
-                                           FontWeight="SemiBold" FontFamily="Segoe UI" Margin="2,0,0,4"/>
-                                <Border Background="#1AFFFFFF" CornerRadius="8"
-                                        BorderBrush="#22FFFFFF" BorderThickness="1">
-                                    <Grid>
-                                        <TextBox x:Name="PayExpectationBox" Background="Transparent"
-                                                 Foreground="#F0F0F2" BorderThickness="0"
-                                                 Padding="10,7" FontSize="12" FontFamily="Segoe UI" FontWeight="SemiBold"
-                                                 CaretBrush="#AAAAAA" TextChanged="PayExpectationBox_TextChanged"/>
-                                        <TextBlock x:Name="PayExpectationWatermark"
-                                                   Text="e.g. $65/hr on C2C, or $140k base"
-                                                   Foreground="#66FFFFFF" FontSize="12" FontWeight="SemiBold" Margin="10,7"
-                                                   FontFamily="Segoe UI" IsHitTestVisible="False"
-                                                   VerticalAlignment="Center"/>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="WORK TYPE" Foreground="#7E90A8" FontSize="9.5"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,5"/>
+                                            <ComboBox x:Name="WorkTypeCombo" Style="{StaticResource DarkComboBox}"
+                                                      SelectionChanged="ScreeningPref_Changed"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="WORK AUTHORIZATION" Foreground="#7E90A8" FontSize="9.5"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,5"/>
+                                            <ComboBox x:Name="WorkAuthCombo" Style="{StaticResource DarkComboBox}"
+                                                      SelectionChanged="ScreeningPref_Changed"/>
+                                        </StackPanel>
                                     </Grid>
-                                </Border>
 
-                                <TextBlock Text="Left blank, the app stays vague instead of guessing a number for you."
-                                           Foreground="#5A6A7E" FontSize="9.5" FontWeight="SemiBold"
-                                           FontFamily="Segoe UI" TextWrapping="Wrap" Margin="2,6,0,0"/>
-                            </StackPanel>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="CAN START" Foreground="#7E90A8" FontSize="9.5"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,5"/>
+                                            <ComboBox x:Name="AvailabilityCombo" Style="{StaticResource DarkComboBox}"
+                                                      SelectionChanged="ScreeningPref_Changed"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="WHERE" Foreground="#7E90A8" FontSize="9.5"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,5"/>
+                                            <ComboBox x:Name="WorkLocationCombo" Style="{StaticResource DarkComboBox}"
+                                                      SelectionChanged="ScreeningPref_Changed"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="PAY" Foreground="#7E90A8" FontSize="9.5"
+                                               FontWeight="Bold" FontFamily="Segoe UI" Margin="2,0,0,5"/>
+                                    <Border Background="#0DFFFFFF" CornerRadius="9"
+                                            BorderBrush="#1AFFFFFF" BorderThickness="1" Height="38">
+                                        <Grid>
+                                            <TextBox x:Name="PayExpectationBox" Background="Transparent"
+                                                     Foreground="#F0F0F2" BorderThickness="0"
+                                                     Padding="12,0" FontSize="12.5" FontFamily="Segoe UI"
+                                                     VerticalContentAlignment="Center"
+                                                     CaretBrush="#8FE8B9" TextChanged="PayExpectationBox_TextChanged"/>
+                                            <TextBlock x:Name="PayExpectationWatermark"
+                                                       Text="e.g. $65/hr on C2C, or $140k base"
+                                                       Foreground="#52FFFFFF" FontSize="12.5" Margin="12,0"
+                                                       FontFamily="Segoe UI" IsHitTestVisible="False"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <TextBlock Text="Left blank, the app stays vague instead of guessing a number for you."
+                                               Foreground="#5A6A7E" FontSize="9.5" FontFamily="Segoe UI"
+                                               TextWrapping="Wrap" Margin="2,7,0,0"/>
+                                </StackPanel>
+                            </Border>
 
                             <!-- Hidden ASK/GUIDE + SavePath (kept for code-behind) -->
                             <Grid Grid.Row="7" Visibility="Collapsed">
@@ -983,6 +1093,200 @@
                             </Grid>
                         </Grid>
                         </ScrollViewer>
+
+                        <Border x:Name="SetupRightDivider" Grid.Column="1" Width="1" Background="#18FFFFFF" Margin="0,6"/>
+
+                        <!-- Same choices as the toolbar's Auto/Manual/Interview/Practice
+                             switch, explained here in full sentences instead of a
+                             tooltip nobody hovers, and settable before the interview
+                             starts. Both places write the same state (SelectListeningMode /
+                             SelectAudioSource), so picking here or picking in the toolbar
+                             mid-interview are the same action from two places. -->
+                        <ScrollViewer x:Name="SetupRightScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly"
+                                      Padding="8,0,2,0" PreviewMouseWheel="SlowScroll_PreviewMouseWheel">
+                            <StackPanel Margin="4,0,0,0">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Border Width="3" Height="16" CornerRadius="2" Background="#34E08A" Margin="0,0,9,0"/>
+                                    <TextBlock Text="Listening controls" Foreground="#FAFBFD" FontSize="17"
+                                               FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Text="Choose how answers trigger and which audio Replysis should hear. You can change both later."
+                                           Foreground="#8393A8" FontSize="11" FontFamily="Segoe UI"
+                                           TextWrapping="Wrap" Margin="12,0,0,14"/>
+
+                                <!-- Two square-ish cards per row rather than four stacked
+                                     rectangles - reads as a real choice, not a wall of text,
+                                     and matches the density of an enterprise settings page. -->
+                                <TextBlock Text="WHEN TO ANSWER" Foreground="#7E90A8" FontSize="9.5"
+                                           FontWeight="Bold" FontFamily="Segoe UI" Margin="1,0,0,7"/>
+                                <Grid Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="9"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border x:Name="SetupAuto" Grid.Column="0" CornerRadius="11" BorderThickness="1.2"
+                                            Cursor="Hand" MinHeight="94" MouseLeftButtonDown="SetupAuto_Click">
+                                        <Grid Margin="12,10">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+                                            <Border x:Name="SetupAutoChip" Width="26" Height="26" CornerRadius="7"
+                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
+                                                <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock x:Name="SetupAutoTitle" Grid.Row="1" Text="Auto" FontSize="13"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,7,0,2"/>
+                                            <TextBlock Grid.Row="2" Text="Answers after each complete question."
+                                                       Foreground="#93A4BA" FontSize="10" FontFamily="Segoe UI"
+                                                       LineHeight="13.5" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border x:Name="SetupManual" Grid.Column="2" CornerRadius="11" BorderThickness="1.2"
+                                            Cursor="Hand" MinHeight="94" MouseLeftButtonDown="SetupManual_Click">
+                                        <Grid Margin="12,10">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+                                            <Border x:Name="SetupManualChip" Width="26" Height="26" CornerRadius="7"
+                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
+                                                <TextBlock Text="&#xE92E;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock x:Name="SetupManualTitle" Grid.Row="1" Text="Manual" FontSize="13"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,7,0,2"/>
+                                            <TextBlock Grid.Row="2" Text="Press Space to listen, then Space to answer."
+                                                       Foreground="#93A4BA" FontSize="10" FontFamily="Segoe UI"
+                                                       LineHeight="13.5" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+
+                                <TextBlock Text="WHAT IT HEARS" Foreground="#7E90A8" FontSize="9.5"
+                                           FontWeight="Bold" FontFamily="Segoe UI" Margin="1,0,0,7"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="9"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border x:Name="SetupInterview" Grid.Column="0" CornerRadius="11" BorderThickness="1.2"
+                                            Cursor="Hand" MinHeight="140" MouseLeftButtonDown="SetupInterview_Click">
+                                        <Grid Margin="12,10">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+                                            <Border x:Name="SetupInterviewChip" Width="26" Height="26" CornerRadius="7"
+                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
+                                                <TextBlock Text="&#xE7F5;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock x:Name="SetupInterviewTitle" Grid.Row="1" Text="Interview" FontSize="13.5"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,8,0,3"/>
+                                            <StackPanel Grid.Row="2">
+                                                <TextBlock Foreground="#B9C4D6" FontSize="10.5" FontFamily="Segoe UI"
+                                                           LineHeight="14.5" TextWrapping="Wrap">
+                                                    <Run Text="Hears "/><Run Text="system audio only" FontWeight="SemiBold" Foreground="#DDE4EE"/><Run Text=" from the meeting. Your microphone stays off, preventing your answer from becoming a new question."/>
+                                                </TextBlock>
+                                                <TextBlock Text="Recommended for real interviews" Foreground="#5FC98E"
+                                                           FontSize="10" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                                           TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border x:Name="SetupPractice" Grid.Column="2" CornerRadius="11" BorderThickness="1.2"
+                                            Cursor="Hand" MinHeight="140" MouseLeftButtonDown="SetupPractice_Click">
+                                        <Grid Margin="12,10">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+                                            <Border x:Name="SetupPracticeChip" Width="26" Height="26" CornerRadius="7"
+                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
+                                                <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock x:Name="SetupPracticeTitle" Grid.Row="1" Text="Practice" FontSize="13.5"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,8,0,3"/>
+                                            <StackPanel Grid.Row="2">
+                                                <TextBlock Foreground="#B9C4D6" FontSize="10.5" FontFamily="Segoe UI"
+                                                           LineHeight="14.5" TextWrapping="Wrap">
+                                                    <Run Text="Hears "/><Run Text="system audio and microphone" FontWeight="SemiBold" Foreground="#DDE4EE"/><Run Text=" together, ideal for rehearsing aloud or practising with someone nearby."/>
+                                                </TextBlock>
+                                                <TextBlock Text="Practice environment only" Foreground="#D99B7C"
+                                                           FontSize="10" FontWeight="SemiBold" FontFamily="Segoe UI"
+                                                           TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </ScrollViewer>
+                        </Grid>
+
+                        <!-- Pinned CTA - bottom-right of the panel, always in the
+                             same place, never inside the scroll area. Setup can
+                             be as long as the resume/job fields make it; this
+                             never moves with that content. -->
+                        <Border x:Name="StartInterviewPin" Grid.Row="1" HorizontalAlignment="Stretch"
+                                Margin="0,14,0,0" Padding="0,13,0,0" Panel.ZIndex="10"
+                                BorderBrush="#253449" BorderThickness="0,1,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="Ready for the interview?" Foreground="#E9EFF7" FontSize="12.5"
+                                               FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                    <TextBlock x:Name="StartInterviewHint" Text="Your setup stays available if you need to come back."
+                                               Foreground="#718298" FontSize="10" FontFamily="Segoe UI" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <Button x:Name="StartInterviewBtn" Grid.Column="1" Height="42" MinWidth="176" Padding="18,0"
+                                        Cursor="Hand" Click="StartInterviewStep_Click"
+                                        FocusVisualStyle="{StaticResource KeyboardFocus}">
+                                    <Button.Effect>
+                                        <DropShadowEffect Color="#16150F" Direction="270" ShadowDepth="5" BlurRadius="14" Opacity="0.32"/>
+                                    </Button.Effect>
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="StartBd" CornerRadius="10" BorderBrush="#32A864" BorderThickness="1" Padding="{TemplateBinding Padding}">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#1D8A4B" Offset="0"/>
+                                                        <GradientStop Color="#27A85C" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock Text="Start interview" Foreground="White" FontSize="12"
+                                                               FontWeight="Bold" FontFamily="Segoe UI"/>
+                                                    <TextBlock Text="&#xE72A;" FontFamily="Segoe MDL2 Assets" Foreground="#CDEBD8"
+                                                               FontSize="9.5" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="StartBd" Property="Opacity" Value="0.9"/></Trigger>
+                                                <Trigger Property="IsPressed" Value="True"><Setter TargetName="StartBd" Property="Opacity" Value="0.78"/></Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </Grid>
+                        </Border>
+                        </Grid>
                     </Border>
 
                     <!-- Panel toggle -->
@@ -992,9 +1296,16 @@
                             VerticalAlignment="Center" Margin="8,0,8,0"/>
 
                     <!-- =========================================================
-                         MAIN CONTENT
+                         MAIN CONTENT - the Interview step. Hidden and faded out
+                         while Setup is showing; slid and faded in once "Start
+                         Interview" is pressed. See EnterInterviewStep /
+                         EnterSetupStep in the code-behind.
                     ========================================================== -->
-                    <Grid Grid.Column="2">
+                    <Grid x:Name="MainContentArea" Grid.Column="2" Opacity="0" Visibility="Collapsed"
+                          RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
+                            <TranslateTransform x:Name="MainContentShift" X="36"/>
+                        </Grid.RenderTransform>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="4.2*"/>
                             <RowDefinition Height="12"/>
@@ -1020,6 +1331,17 @@
                                     <DockPanel>
                                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
                                                     VerticalAlignment="Center">
+                                            <Button x:Name="BackToSetupBtn"
+                                                    Style="{StaticResource QuietActionBtn}"
+                                                    Click="BackToSetupStep_Click" ToolTip="Return to interview setup"
+                                                    Padding="8,3" Margin="0,0,8,0" Visibility="Collapsed">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE72B;" FontFamily="Segoe MDL2 Assets"
+                                                               FontSize="9" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Setup" FontFamily="Segoe UI" FontSize="10"
+                                                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
                                             <Border Background="#14FFFFFF" CornerRadius="6" Padding="8,3"
                                                     Margin="0,0,8,0">
                                                 <StackPanel Orientation="Horizontal">
@@ -1056,13 +1378,22 @@
                                                     <TextBlock Text="Clear" FontSize="11" FontFamily="Segoe UI"/>
                                                 </StackPanel>
                                             </Button>
-                                            <Button x:Name="NewSessionBtn" Style="{StaticResource PrimaryActionBtn}"
-                                                    Click="NewSessionBtn_Click" Padding="14,4" MinWidth="112"
+                                            <Button x:Name="FinishInterviewBtn" Style="{StaticResource PrimaryActionBtn}"
+                                                    Click="FinishInterviewBtn_Click" Padding="11,4" Margin="0,0,7,0"
+                                                    ToolTip="Finish, save, and review this interview in Past Sessions.">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets"
+                                                               FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Finish" FontSize="11"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button x:Name="NewSessionBtn" Style="{StaticResource QuietActionBtn}"
+                                                    Click="NewSessionBtn_Click" Padding="10,4" MinWidth="92"
                                                     ToolTip="Save this session and start a new one. Your resume and role stay loaded.">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets"
                                                                FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="New session" FontSize="11.5"/>
+                                                    <TextBlock Text="New" FontSize="11"/>
                                                 </StackPanel>
                                             </Button>
                                         </StackPanel>

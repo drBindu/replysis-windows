@@ -526,18 +526,18 @@ namespace InterviewCopilot
         {
             var chip = new Border
             {
-                Background      = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
-                BorderBrush     = new SolidColorBrush(Color.FromArgb(38, 255, 255, 255)),
+                Background      = new SolidColorBrush(Color.FromArgb(150, 16, 24, 36)),
+                BorderBrush     = new SolidColorBrush(Color.FromArgb(75, 80, 106, 137)),
                 BorderThickness = new Thickness(1),
-                CornerRadius    = new CornerRadius(6),
-                Padding         = new Thickness(8, 3, 8, 3),
-                Margin          = new Thickness(0, 0, 6, 6)
+                CornerRadius    = new CornerRadius(5),
+                Padding         = new Thickness(7, 2, 7, 2),
+                Margin          = new Thickness(0, 0, 5, 4)
             };
             chip.Child = new TextBlock
             {
                 Text       = text,
                 Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
-                FontSize   = 10.5,
+                FontSize   = 9.5,
                 FontWeight = FontWeights.SemiBold,
                 FontFamily = new FontFamily("Segoe UI")
             };
@@ -569,14 +569,16 @@ namespace InterviewCopilot
                 var badgeRow = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Margin = new Thickness(0, 0, 0, 8)
+                    Margin = new Thickness(1, 0, 0, 7)
                 };
 
                 var badge = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
-                    CornerRadius = new CornerRadius(6),
-                    Padding = new Thickness(8, 3, 8, 3),
+                    Background = new SolidColorBrush(Color.FromArgb(180, 18, 28, 42)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(70, 76, 101, 133)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(5),
+                    Padding = new Thickness(7, 2, 7, 2),
                     HorizontalAlignment = HorizontalAlignment.Left
                 };
                 badge.Child = new TextBlock
@@ -605,11 +607,11 @@ namespace InterviewCopilot
                 // Question block
                 var qBorder = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(180, 15, 20, 40)),
-                    CornerRadius = new CornerRadius(8),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                    Background = new SolidColorBrush(Color.FromArgb(218, 11, 17, 28)),
+                    CornerRadius = new CornerRadius(10),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(115, 46, 66, 91)),
                     BorderThickness = new Thickness(1),
-                    Padding = new Thickness(14, 10, 14, 10),
+                    Padding = new Thickness(13, 9, 13, 9),
                     Margin = new Thickness(0, 0, 0, 6)
                 };
                 var qStack = new StackPanel();
@@ -626,7 +628,7 @@ namespace InterviewCopilot
                 {
                     Text = q,
                     Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#C6D4E8")),
-                    FontSize = 13,
+                    FontSize = 12.5,
                     FontWeight = FontWeights.SemiBold,
                     FontFamily = new FontFamily("Segoe UI"),
                     TextWrapping = TextWrapping.Wrap,
@@ -640,18 +642,18 @@ namespace InterviewCopilot
                 {
                     var aBorder = new Border
                     {
-                        Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
-                        CornerRadius = new CornerRadius(8),
-                        BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                        Background = new SolidColorBrush(Color.FromArgb(185, 16, 25, 37)),
+                        CornerRadius = new CornerRadius(10),
+                        BorderBrush = new SolidColorBrush(Color.FromArgb(90, 43, 65, 88)),
                         BorderThickness = new Thickness(1),
-                        Padding = new Thickness(14, 10, 14, 10),
-                        Margin = new Thickness(20, 0, 0, 16)
+                        Padding = new Thickness(13, 9, 13, 9),
+                        Margin = new Thickness(12, 0, 0, 14)
                     };
                     var aStack = new StackPanel();
                     aStack.Children.Add(new TextBlock
                     {
                         Text = "AI ANSWER",
-                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFFFFF")),
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#84E7B6")),
                         FontSize = 9,
                         FontWeight = FontWeights.Bold,
                         FontFamily = new FontFamily("Segoe UI"),
@@ -661,8 +663,8 @@ namespace InterviewCopilot
                     {
                         Text = a,
                         Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#EAF1F8")),
-                        FontSize = 13,
-                        FontWeight = FontWeights.SemiBold,
+                        FontSize = 12.5,
+                        FontWeight = FontWeights.Medium,
                         FontFamily = new FontFamily("Segoe UI"),
                         TextWrapping = TextWrapping.Wrap,
                         LineHeight = 21
@@ -783,10 +785,11 @@ namespace InterviewCopilot
             {
                 Clipboard.SetText(BuildTranscriptDocument(_selectedSession));
                 // Flash the button label for 2 seconds to confirm copy
+                object originalContent = CopyTranscriptBtn.Content;
                 CopyTranscriptBtn.Content = "Copied";
                 var timer = new System.Windows.Threading.DispatcherTimer
                     { Interval = TimeSpan.FromSeconds(2) };
-                timer.Tick += (s, _) => { CopyTranscriptBtn.Content = "Copy Text"; timer.Stop(); };
+                timer.Tick += (s, _) => { CopyTranscriptBtn.Content = originalContent; timer.Stop(); };
                 timer.Start();
             }
             catch (Exception ex)

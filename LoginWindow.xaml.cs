@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 
 namespace InterviewCopilot
@@ -209,19 +211,69 @@ namespace InterviewCopilot
             SetRegistrationMode(!_isRegistrationMode);
         }
 
+        // Sign in and Create account are one flow's two steps, so switching
+        // between them slides the header out, swaps every label at the
+        // midpoint where nothing is visible to see it happen, then slides
+        // the new step in from the opposite side - a real step transition
+        // rather than text changing mid-frame.
         private void SetRegistrationMode(bool registrationMode)
         {
             _isRegistrationMode = registrationMode;
-            Title = registrationMode ? "Create your Replysis AI account" : "Replysis AI Sign In";
-            AuthTitle.Text = registrationMode ? "Create your account" : "Welcome back";
-            LoginSubtitle.Text = registrationMode
-                ? "Set up your secure Replysis workspace"
-                : "Sign in to continue to your workspace";
-            SetPrimaryButtonCaption(registrationMode ? "Create account" : "Sign In");
-            ForgotPasswordRow.Visibility = registrationMode ? Visibility.Collapsed : Visibility.Visible;
-            RegisterPromptText.Text = registrationMode ? "Already have an account? " : "New here? ";
-            RegisterLink.Inlines.Clear();
-            RegisterLink.Inlines.Add(registrationMode ? "Sign in" : "Create an account");
+            bool forward = registrationMode;
+            const double travel = 16;
+            var outEase = new CubicEase { EasingMode = EasingMode.EaseIn };
+            var inEase  = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+            var outStoryboard = new Storyboard();
+            var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(120)) { EasingFunction = outEase };
+            Storyboard.SetTarget(fadeOut, AuthHeader);
+            Storyboard.SetTargetProperty(fadeOut, new PropertyPath(UIElement.OpacityProperty));
+            var slideOut = new DoubleAnimation(0, forward ? -travel : travel, TimeSpan.FromMilliseconds(120)) { EasingFunction = outEase };
+            Storyboard.SetTarget(slideOut, AuthHeaderShift);
+            Storyboard.SetTargetProperty(slideOut, new PropertyPath(TranslateTransform.XProperty));
+            outStoryboard.Children.Add(fadeOut);
+            outStoryboard.Children.Add(slideOut);
+
+            outStoryboard.Completed += (_, _) =>
+            {
+                Title = registrationMode ? "Create your Replysis AI account" : "Replysis AI Sign In";
+                AuthTitle.Text = registrationMode ? "Create your account" : "Welcome back";
+                LoginSubtitle.Text = registrationMode
+                    ? "Set up your secure Replysis workspace"
+                    : "Sign in to continue to your workspace";
+                SetPrimaryButtonCaption(registrationMode ? "Create account" : "Sign In");
+                RegisterPromptText.Text = registrationMode ? "Already have an account? " : "New here? ";
+                RegisterLink.Inlines.Clear();
+                RegisterLink.Inlines.Add(registrationMode ? "Sign in" : "Create an account");
+
+                AuthHeaderShift.X = forward ? travel : -travel;
+                var inStoryboard = new Storyboard();
+                var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = inEase };
+                Storyboard.SetTarget(fadeIn, AuthHeader);
+                Storyboard.SetTargetProperty(fadeIn, new PropertyPath(UIElement.OpacityProperty));
+                var slideIn = new DoubleAnimation(AuthHeaderShift.X, 0, TimeSpan.FromMilliseconds(180)) { EasingFunction = inEase };
+                Storyboard.SetTarget(slideIn, AuthHeaderShift);
+                Storyboard.SetTargetProperty(slideIn, new PropertyPath(TranslateTransform.XProperty));
+                inStoryboard.Children.Add(fadeIn);
+                inStoryboard.Children.Add(slideIn);
+                inStoryboard.Begin();
+            };
+            outStoryboard.Begin();
+
+            // Forgot-password only makes sense while signing in, so it fades
+            // out on the way to Create account and fades back in on the way
+            // back, instead of popping in and out of layout.
+            ForgotPasswordRow.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation(registrationMode ? 0 : 1, TimeSpan.FromMilliseconds(160)));
+            if (!registrationMode) ForgotPasswordRow.Visibility = Visibility.Visible;
+            var forgotTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(170) };
+            forgotTimer.Tick += (_, _) =>
+            {
+                forgotTimer.Stop();
+                if (registrationMode) ForgotPasswordRow.Visibility = Visibility.Collapsed;
+            };
+            forgotTimer.Start();
+
             HideError();
             PasswordBox.Focus();
         }
@@ -607,37 +659,68 @@ namespace InterviewCopilot
             if (loadPanel != null) loadPanel.Visibility = loading ? Visibility.Visible   : Visibility.Collapsed;
         }
 
+        // A banner drops in and settles rather than appearing mid-frame — the
+        // same small settle the auth form itself does on window open, so an
+        // error or success message reads as the page responding to you
+        // rather than a value flipping.
+        private static void AnimateBannerIn(System.Windows.Controls.Border banner, TranslateTransform shift)
+        {
+            banner.Visibility = Visibility.Visible;
+            banner.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut } });
+            shift.BeginAnimation(TranslateTransform.YProperty,
+                new DoubleAnimation(-6, 0, TimeSpan.FromMilliseconds(240)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        }
+
+        private static void HideBanner(System.Windows.Controls.Border banner)
+        {
+            banner.BeginAnimation(UIElement.OpacityProperty, null);
+            banner.Opacity = 0;
+            banner.Visibility = Visibility.Collapsed;
+        }
+
         private void ShowError(string msg)
         {
             if (_windowToken.IsCancellationRequested) return;
-            ErrorText.Text        = msg;
-            ErrorBanner.Visibility  = Visibility.Visible;
-            SuccessBanner.Visibility = Visibility.Collapsed;
+            ErrorText.Text = msg;
+            HideBanner(SuccessBanner);
+            AnimateBannerIn(ErrorBanner, ErrorBannerShift);
         }
 
         private void ShowSuccess(string msg)
         {
             if (_windowToken.IsCancellationRequested) return;
-            SuccessText.Text       = msg;
-            SuccessBanner.Visibility = Visibility.Visible;
-            ErrorBanner.Visibility  = Visibility.Collapsed;
+            SuccessText.Text = msg;
+            HideBanner(ErrorBanner);
+            AnimateBannerIn(SuccessBanner, SuccessBannerShift);
         }
 
         private void HideError()
         {
-            ErrorBanner.Visibility  = Visibility.Collapsed;
-            SuccessBanner.Visibility = Visibility.Collapsed;
+            HideBanner(ErrorBanner);
+            HideBanner(SuccessBanner);
         }
 
-        // Input focus highlight
-        private void EmailBox_GotFocus(object sender, RoutedEventArgs e) =>
-            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#21924A"));
-        private void EmailBox_LostFocus(object sender, RoutedEventArgs e) =>
-            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DCE4D8"));
-        private void PasswordBox_GotFocus(object sender, RoutedEventArgs e) =>
-            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#21924A"));
-        private void PasswordBox_LostFocus(object sender, RoutedEventArgs e) =>
-            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DCE4D8"));
+        // Input focus highlight — animated rather than an instant Setter, so
+        // the field visibly settles into focus: the border eases to green and
+        // a soft matching glow fades in behind it, then both reverse on blur.
+        private static readonly Color FieldRestColor  = (Color)ColorConverter.ConvertFromString("#DCE4D8");
+        private static readonly Color FieldFocusColor = (Color)ColorConverter.ConvertFromString("#21924A");
+
+        private static void AnimateFieldFocus(System.Windows.Controls.Border border, DropShadowEffect glow, bool focused)
+        {
+            var duration = TimeSpan.FromMilliseconds(160);
+            border.BorderBrush = new SolidColorBrush(border.BorderBrush is SolidColorBrush b ? b.Color : FieldRestColor);
+            ((SolidColorBrush)border.BorderBrush).BeginAnimation(SolidColorBrush.ColorProperty,
+                new ColorAnimation(focused ? FieldFocusColor : FieldRestColor, duration));
+            glow.BeginAnimation(DropShadowEffect.OpacityProperty, new DoubleAnimation(focused ? 0.22 : 0, duration));
+            glow.BeginAnimation(DropShadowEffect.BlurRadiusProperty, new DoubleAnimation(focused ? 16 : 0, duration));
+        }
+
+        private void EmailBox_GotFocus(object sender, RoutedEventArgs e) => AnimateFieldFocus(EmailBorder, EmailGlow, true);
+        private void EmailBox_LostFocus(object sender, RoutedEventArgs e) => AnimateFieldFocus(EmailBorder, EmailGlow, false);
+        private void PasswordBox_GotFocus(object sender, RoutedEventArgs e) => AnimateFieldFocus(PasswordBorder, PasswordGlow, true);
+        private void PasswordBox_LostFocus(object sender, RoutedEventArgs e) => AnimateFieldFocus(PasswordBorder, PasswordGlow, false);
 
         // ══════════════════════════════════════════════════════════════════════
         // PASSWORD REVEAL
@@ -676,8 +759,10 @@ namespace InterviewCopilot
 
             // Same eye glyph throughout, tinted when active. Swapping to a second
             // glyph risks rendering an empty box if that codepoint is missing.
-            RevealPasswordIcon.Foreground = new SolidColorBrush(
+            var eyeColor = new SolidColorBrush(
                 (Color)ColorConverter.ConvertFromString(_passwordRevealed ? "#21924A" : "#8A9086"));
+            RevealPasswordIcon.Stroke = eyeColor;
+            RevealPasswordPupil.Stroke = eyeColor;
         }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

@@ -1,3 +1,57 @@
+## Setup step, Finish flow and screen-capture lifecycle (2026-09-28, Windows 1.0.25)
+
+Client-side only. Nothing here touches the backend, so the Mac needs no server work.
+
+**Setup step, then Interview step.** The window now opens on a full-page Setup
+(resume, job details, and the Auto/Manual and Interview/Practice choices each
+with a plain explanation) and a pinned Start Interview button. Start Interview
+slides into the Interview view and collapses the resume sidebar. Two things
+bit us while building it and are worth knowing if the Mac copies the flow:
+
+- Picking Auto on Setup must NOT start listening. `StartAutoListeningIfReady`
+  returns early while `_inSetupStep` is true. Auto listening begins on the next
+  transcript poll after the step changes.
+- WPF `GridLengthAnimation` interpolates `.Value` and always returns Pixel
+  units, so animating a column back to `1*` collapses it to about 1px (a black
+  screen). Animate to a pixel width, then snap to Star on completion.
+
+**Screen capture lifecycle (behaviour unchanged while interviewing).** The
+prepared-shot timer no longer runs on Setup, on Past Sessions, or after Finish;
+before, finishing only cleared the prepared image and the timer kept capturing
+the desktop behind Past Sessions. It now starts only once an interview has begun
+and Setup is left. The 2s / 15s / 5 min / 90s timings are untouched.
+
+Watch-screen stays ON by default. A parallel edit had flipped
+`WatchScreenEnabled` to off and rewritten the Settings copy as an opt-in. That
+reverses the owner's 2026-09-17 decision (continuous capture is intentional,
+answers about the screen depend on a shot already being ready), so it was put
+back, along with its test. If the Mac has an equivalent default, leave it on.
+
+**Finish.** Finish stops the microphone without sending the partial sentence,
+waits up to 5s for the encrypted transcript writer to drain, then opens Past
+Sessions. It refuses while an answer is still streaming. Starting again from
+Setup creates a fresh session file rather than reusing the finished one.
+
+**Microphone resume.** Unmuting deletes `pause.flag`, but an engine restart can
+recreate it a moment later, leaving the UI saying LISTENING while every
+heartbeat stayed paused. `ConfirmCaptureResumedAsync` re-checks at 40/100/250/
+500 ms, clears a reappeared flag, and if it never clears shows "Microphone could
+not start. Press Space to retry." The Mac's FIFO pause path may have the same
+window between the toggle and the engine restart.
+
+**Privacy of the diagnostic log.** Sign-in email, resume file names, and raw
+HTTP response bodies are no longer written to the local log (status codes only).
+
+**Copy.** 408/504/generic failure messages no longer promise "No credits were
+used", because that depends on the backend refund path being deployed. Visible
+text still has no dashes or middle dots.
+
+Also in this build: sign-in window recolor and motion to match the website, the
+profile dropdown closes when you click away, and slower mouse-wheel scrolling on
+Setup.
+
+---
+
 ## Practice mode now keeps listening while an answer streams (2026-09-27)
 
 Interview mode (system audio only) already kept the mic open while an answer

@@ -10,6 +10,21 @@
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
 
+    <Window.Resources>
+        <!-- Hover feedback for both text links — a color shift plus the
+             underline appearing, rather than the underline sitting there
+             permanently (which reads as busier and less premium). -->
+        <Style x:Key="PremiumLink" TargetType="Hyperlink">
+            <Setter Property="TextDecorations" Value="None"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="TextDecorations" Value="Underline"/>
+                    <Setter Property="Foreground" Value="#21924A"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
     <Border x:Name="RootGlass" Background="#FEFEFC" BorderBrush="#E4E8E0" BorderThickness="1">
         <Grid>
             <Grid.ColumnDefinitions>
@@ -30,6 +45,50 @@
                         <GradientStop Color="#EAF3EC" Offset="1"/>
                     </LinearGradientBrush>
                 </Border.Background>
+
+                <Grid>
+                    <Grid.Triggers>
+                        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                    <DoubleAnimation Storyboard.TargetName="GlowOne" Storyboard.TargetProperty="Opacity"
+                                                     From="0.4" To="0.65" Duration="0:0:5.5">
+                                        <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetName="GlowTwo" Storyboard.TargetProperty="Opacity"
+                                                     From="0.55" To="0.28" Duration="0:0:6.5">
+                                        <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </Grid.Triggers>
+
+                    <!-- Ambient glow blobs — the same slow-drifting soft light the
+                         website's hero uses, at a scale that reads as depth rather
+                         than as a moving background. Clipped by the panel border,
+                         so a low frame rate here never shows outside it. -->
+                    <Ellipse x:Name="GlowOne" Width="260" Height="260" Margin="-120,-90,0,0"
+                             HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="0.55">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#4021924A" Offset="0"/>
+                                <GradientStop Color="#0021924A" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                        <Ellipse.Effect><BlurEffect Radius="45"/></Ellipse.Effect>
+                    </Ellipse>
+                    <Ellipse x:Name="GlowTwo" Width="220" Height="220" Margin="0,0,-100,-60"
+                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Opacity="0.4">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#331C7A3E" Offset="0"/>
+                                <GradientStop Color="#001C7A3E" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                        <Ellipse.Effect><BlurEffect Radius="40"/></Ellipse.Effect>
+                    </Ellipse>
+
                 <Grid Margin="48,42,44,40">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -173,6 +232,7 @@
                         </Grid>
                     </Border>
                 </Grid>
+                </Grid>
             </Border>
 
             <!-- Authentication panel -->
@@ -200,15 +260,52 @@
                     </Button.Template>
                 </Button>
 
-                <StackPanel Width="390" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock x:Name="AuthTitle" Text="Welcome back" Foreground="#16150F"
-                               FontSize="25" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="LoginSubtitle" Text="Sign in to continue to your workspace"
-                               Foreground="#7A8177" FontSize="12.5" Margin="0,5,0,24"/>
+                <StackPanel x:Name="AuthForm" Width="390" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Opacity="0" RenderTransformOrigin="0.5,0.5">
+                    <StackPanel.RenderTransform>
+                        <TranslateTransform x:Name="AuthFormShift" Y="14"/>
+                    </StackPanel.RenderTransform>
+                    <StackPanel.Triggers>
+                        <!-- The form settles into place rather than snapping on
+                             screen — a beat behind the window itself opening, so
+                             it reads as the page's own entrance and not a glitch. -->
+                        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1"
+                                                     Duration="0:0:0.45" BeginTime="0:0:0.1">
+                                        <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetName="AuthFormShift" Storyboard.TargetProperty="Y"
+                                                     From="14" To="0" Duration="0:0:0.5" BeginTime="0:0:0.1">
+                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </StackPanel.Triggers>
+
+                    <!-- Sign in and Create account are two steps of one flow, not
+                         two different pages, so switching between them slides and
+                         crossfades rather than snapping - the same idea as a
+                         wizard's step transition, just for a two-step one. -->
+                    <StackPanel x:Name="AuthHeader" RenderTransformOrigin="0.5,0.5">
+                        <StackPanel.RenderTransform>
+                            <TranslateTransform x:Name="AuthHeaderShift" X="0"/>
+                        </StackPanel.RenderTransform>
+                        <TextBlock x:Name="AuthTitle" Text="Welcome back" Foreground="#16150F"
+                                   FontSize="25" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="LoginSubtitle" Text="Sign in to continue to your workspace"
+                                   Foreground="#7A8177" FontSize="12.5" Margin="0,5,0,24"/>
+                    </StackPanel>
 
                     <Border x:Name="ErrorBanner" Background="#FDF1F1" CornerRadius="8"
                             Padding="11,9" Margin="0,0,0,12" Visibility="Collapsed"
-                            BorderBrush="#F3C6C6" BorderThickness="1">
+                            BorderBrush="#F3C6C6" BorderThickness="1" Opacity="0"
+                            RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="ErrorBannerShift" Y="-6"/>
+                        </Border.RenderTransform>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" Foreground="#C0392B"
                                        FontSize="11" Margin="0,1,8,0" VerticalAlignment="Top"/>
@@ -219,7 +316,11 @@
 
                     <Border x:Name="SuccessBanner" Background="#EEF7EF" CornerRadius="8"
                             Padding="11,9" Margin="0,0,0,12" Visibility="Collapsed"
-                            BorderBrush="#BFDFC7" BorderThickness="1">
+                            BorderBrush="#BFDFC7" BorderThickness="1" Opacity="0"
+                            RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="SuccessBannerShift" Y="-6"/>
+                        </Border.RenderTransform>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE930;" FontFamily="Segoe MDL2 Assets" Foreground="#21924A"
                                        FontSize="11" Margin="0,1,8,0" VerticalAlignment="Top"/>
@@ -230,40 +331,72 @@
 
                     <TextBlock Text="Email address" Foreground="#5A5F55" FontSize="11"
                                FontWeight="SemiBold" Margin="0,0,0,7"/>
-                    <Border x:Name="EmailBorder" Background="#F9FAF8" CornerRadius="7"
-                            BorderBrush="#DCE4D8" BorderThickness="1" Margin="0,0,0,14">
+                    <!-- Segoe MDL2 glyphs read as Windows-8-era chrome next to the
+                         rest of this page. Thin line-icons (the same family the
+                         website's own SVGs use) and a soft shadow instead of a flat
+                         fill make the field read as a modern SaaS control rather
+                         than a stock WPF TextBox. -->
+                    <Border x:Name="EmailBorder" Background="White" CornerRadius="10"
+                            BorderBrush="#DCE4D8" BorderThickness="1.3" Margin="0,0,0,16" Height="48">
+                        <Border.Effect>
+                            <DropShadowEffect x:Name="EmailGlow" Color="#21924A" Direction="270"
+                                               ShadowDepth="0" BlurRadius="0" Opacity="0"/>
+                        </Border.Effect>
                         <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="&#xE715;" FontFamily="Segoe MDL2 Assets" Foreground="#8A9086"
-                                       FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Viewbox Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Canvas Width="24" Height="24">
+                                    <Path Stroke="#8A9086" StrokeThickness="1.8" StrokeLineJoin="Round"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          Data="M4,5 L20,5 C21.1,5 22,5.9 22,7 L22,17 C22,18.1 21.1,19 20,19 L4,19 C2.9,19 2,18.1 2,17 L2,7 C2,5.9 2.9,5 4,5 Z"/>
+                                    <Path Stroke="#8A9086" StrokeThickness="1.8" StrokeLineJoin="Round"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          Data="M2.5,6.5 L12,13.5 L21.5,6.5"/>
+                                </Canvas>
+                            </Viewbox>
                             <TextBox Grid.Column="1" x:Name="EmailBox" Background="Transparent" Foreground="#16150F"
-                                     BorderThickness="0" Padding="2,10,13,10" FontSize="13" CaretBrush="#1C7A3E"
+                                     BorderThickness="0" Padding="2,0,15,0" FontSize="13.5" CaretBrush="#1C7A3E"
+                                     VerticalContentAlignment="Center"
                                      GotFocus="EmailBox_GotFocus" LostFocus="EmailBox_LostFocus" KeyDown="Input_KeyDown"/>
                         </Grid>
                     </Border>
 
                     <TextBlock Text="Password" Foreground="#5A5F55" FontSize="11"
                                FontWeight="SemiBold" Margin="0,0,0,7"/>
-                    <Border x:Name="PasswordBorder" Background="#F9FAF8" CornerRadius="7"
-                            BorderBrush="#DCE4D8" BorderThickness="1">
+                    <Border x:Name="PasswordBorder" Background="White" CornerRadius="10"
+                            BorderBrush="#DCE4D8" BorderThickness="1.3" Height="48">
+                        <Border.Effect>
+                            <DropShadowEffect x:Name="PasswordGlow" Color="#21924A" Direction="270"
+                                               ShadowDepth="0" BlurRadius="0" Opacity="0"/>
+                        </Border.Effect>
                         <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" Foreground="#8A9086"
-                                       FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Viewbox Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Canvas Width="24" Height="24">
+                                    <Path Stroke="#8A9086" StrokeThickness="1.8" StrokeLineJoin="Round"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          Data="M5,11 L19,11 C19.55,11 20,11.45 20,12 L20,20 C20,20.55 19.55,21 19,21 L5,21 C4.45,21 4,20.55 4,20 L4,12 C4,11.45 4.45,11 5,11 Z"/>
+                                    <Path Stroke="#8A9086" StrokeThickness="1.8" StrokeLineJoin="Round"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          Data="M7,11 L7,7 C7,4.24 9.24,2 12,2 C14.76,2 17,4.24 17,7 L17,11"/>
+                                </Canvas>
+                            </Viewbox>
                             <PasswordBox Grid.Column="1" x:Name="PasswordBox" Background="Transparent" Foreground="#16150F"
-                                         BorderThickness="0" Padding="2,10" FontSize="13" CaretBrush="#1C7A3E"
+                                         BorderThickness="0" Padding="2,0" FontSize="13.5" CaretBrush="#1C7A3E"
+                                         VerticalContentAlignment="Center"
                                          GotFocus="PasswordBox_GotFocus" LostFocus="PasswordBox_LostFocus" KeyDown="Input_KeyDown"/>
                             <TextBox Grid.Column="1" x:Name="PasswordPlainBox" Visibility="Collapsed" Background="Transparent"
-                                     Foreground="#16150F" BorderThickness="0" Padding="2,10" FontSize="13"
+                                     Foreground="#16150F" BorderThickness="0" Padding="2,0" FontSize="13.5"
+                                     VerticalContentAlignment="Center"
                                      CaretBrush="#1C7A3E" GotFocus="PasswordBox_GotFocus"
                                      LostFocus="PasswordBox_LostFocus" KeyDown="Input_KeyDown"/>
                             <Button Grid.Column="2" x:Name="RevealPasswordBtn" Click="RevealPasswordBtn_Click"
-                                    Width="36" Height="32" Margin="0,0,4,0" Cursor="Hand"
+                                    Width="38" Height="34" Margin="0,0,5,0" Cursor="Hand"
                                     VerticalAlignment="Center" ToolTip="Show password"
                                     FocusVisualStyle="{StaticResource KeyboardFocus}">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border x:Name="RevealSurface" CornerRadius="6" Background="Transparent">
+                                        <Border x:Name="RevealSurface" CornerRadius="7" Background="Transparent">
                                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
@@ -273,42 +406,133 @@
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Button.Template>
-                                <TextBlock x:Name="RevealPasswordIcon" Text="&#xE7B3;"
-                                           FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#8A9086"/>
+                                <Viewbox Width="16" Height="16">
+                                    <Canvas Width="24" Height="24">
+                                        <Path x:Name="RevealPasswordIcon" Stroke="#8A9086" StrokeThickness="1.8"
+                                              StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              Data="M1,12 C1,12 5,4 12,4 C19,4 23,12 23,12 C23,12 19,20 12,20 C5,20 1,12 1,12 Z"/>
+                                        <Ellipse x:Name="RevealPasswordPupil" Width="6" Height="6" Canvas.Left="9" Canvas.Top="9"
+                                                 Stroke="#8A9086" StrokeThickness="1.8"/>
+                                    </Canvas>
+                                </Viewbox>
                             </Button>
                         </Grid>
                     </Border>
 
                     <TextBlock x:Name="ForgotPasswordRow" HorizontalAlignment="Right" Margin="0,8,0,18">
                         <Hyperlink x:Name="ForgotLink" Click="ForgotLink_Click" Foreground="#1C7A3E"
-                                   TextDecorations="None" FontSize="11">Forgot password?</Hyperlink>
+                                   Style="{StaticResource PremiumLink}" FontSize="11">Forgot password?</Hyperlink>
                     </TextBlock>
 
+                    <!-- Premium hover feel: the button lifts (scale + deeper green
+                         glow) rather than just dimming, a light sweep drifts across
+                         it on a loop like the website's download button, and a
+                         press gives a quick, tactile scale-down. All animated with
+                         EnterActions/ExitActions rather than instant Setters, so the
+                         transition itself reads as considered rather than a flip. -->
                     <Button x:Name="SignInBtn" Click="SignInBtn_Click" Height="43" Cursor="Hand"
-                            Margin="0,0,0,14" FocusVisualStyle="{StaticResource KeyboardFocus}">
+                            Margin="0,0,0,14" FocusVisualStyle="{StaticResource KeyboardFocus}"
+                            RenderTransformOrigin="0.5,0.5">
+                        <Button.RenderTransform>
+                            <ScaleTransform x:Name="SignInScale" ScaleX="1" ScaleY="1"/>
+                        </Button.RenderTransform>
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="Bd" CornerRadius="7" BorderBrush="#1C7A3E" BorderThickness="1">
+                                    <Border.Effect>
+                                        <DropShadowEffect x:Name="BdGlow" Color="#21924A" Direction="270"
+                                                           ShadowDepth="4" BlurRadius="14" Opacity="0.28"/>
+                                    </Border.Effect>
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                             <GradientStop Color="#1C7A3E" Offset="0"/>
                                             <GradientStop Color="#21924A" Offset="1"/>
                                         </LinearGradientBrush>
                                     </Border.Background>
-                                    <Grid>
+                                    <Grid ClipToBounds="True">
+                                        <!-- Sweep: a soft diagonal band of white drifting left to
+                                             right forever, the same idea as the website's shimmer. -->
+                                        <Border x:Name="Sweep" Width="70" HorizontalAlignment="Left"
+                                                Margin="-90,0,0,0" Opacity="0.55">
+                                            <Border.RenderTransform>
+                                                <TranslateTransform x:Name="SweepMove" X="0"/>
+                                            </Border.RenderTransform>
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Color="#00FFFFFF" Offset="0"/>
+                                                    <GradientStop Color="#55FFFFFF" Offset="0.5"/>
+                                                    <GradientStop Color="#00FFFFFF" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                        </Border>
                                         <TextBlock x:Name="BtnText" Text="Sign In" Foreground="White" FontSize="13"
                                                    FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         <StackPanel x:Name="LoadingPanel" Orientation="Horizontal"
                                                     HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
                                             <TextBlock x:Name="LoadingDots" Text="Signing in..." Foreground="White" FontSize="12.5"/>
                                         </StackPanel>
-                                        <TextBlock Text="&#xE72A;" FontFamily="Segoe MDL2 Assets" Foreground="#CDEBD8"
+                                        <TextBlock x:Name="ArrowGlyph" Text="&#xE72A;" FontFamily="Segoe MDL2 Assets" Foreground="#CDEBD8"
                                                    FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                   Margin="0,0,14,0"/>
+                                                   Margin="0,0,14,0" RenderTransformOrigin="0.5,0.5">
+                                            <TextBlock.RenderTransform>
+                                                <TranslateTransform x:Name="ArrowShift" X="0"/>
+                                            </TextBlock.RenderTransform>
+                                        </TextBlock>
                                     </Grid>
                                 </Border>
                                 <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Opacity" Value="0.9"/></Trigger>
+                                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetName="SweepMove" Storyboard.TargetProperty="X"
+                                                                 From="0" To="360" Duration="0:0:3.2" BeginTime="0:0:1">
+                                                    <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                </DoubleAnimation>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </EventTrigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Trigger.EnterActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="SignInScale" Storyboard.TargetProperty="ScaleX" To="1.025" Duration="0:0:0.16"/>
+                                                    <DoubleAnimation Storyboard.TargetName="SignInScale" Storyboard.TargetProperty="ScaleY" To="1.025" Duration="0:0:0.16"/>
+                                                    <DoubleAnimation Storyboard.TargetName="BdGlow" Storyboard.TargetProperty="Opacity" To="0.55" Duration="0:0:0.18"/>
+                                                    <DoubleAnimation Storyboard.TargetName="BdGlow" Storyboard.TargetProperty="BlurRadius" To="22" Duration="0:0:0.18"/>
+                                                    <DoubleAnimation Storyboard.TargetName="ArrowShift" Storyboard.TargetProperty="X" To="3" Duration="0:0:0.18"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </Trigger.EnterActions>
+                                        <Trigger.ExitActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="SignInScale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.16"/>
+                                                    <DoubleAnimation Storyboard.TargetName="SignInScale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.16"/>
+                                                    <DoubleAnimation Storyboard.TargetName="BdGlow" Storyboard.TargetProperty="Opacity" To="0.28" Duration="0:0:0.2"/>
+                                                    <DoubleAnimation Storyboard.TargetName="BdGlow" Storyboard.TargetProperty="BlurRadius" To="14" Duration="0:0:0.2"/>
+                                                    <DoubleAnimation Storyboard.TargetName="ArrowShift" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.2"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </Trigger.ExitActions>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Trigger.EnterActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="SignInScale" Storyboard.TargetProperty="ScaleX" To="0.975" Duration="0:0:0.08"/>
+                                                    <DoubleAnimation Storyboard.TargetName="SignInScale" Storyboard.TargetProperty="ScaleY" To="0.975" Duration="0:0:0.08"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </Trigger.EnterActions>
+                                        <Trigger.ExitActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="SignInScale" Storyboard.TargetProperty="ScaleX" To="1.025" Duration="0:0:0.1"/>
+                                                    <DoubleAnimation Storyboard.TargetName="SignInScale" Storyboard.TargetProperty="ScaleY" To="1.025" Duration="0:0:0.1"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </Trigger.ExitActions>
+                                    </Trigger>
                                     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Bd" Property="Opacity" Value="0.45"/></Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -323,11 +547,19 @@
                     </Grid>
 
                     <Button x:Name="GoogleSignInBtn" Click="GoogleSignIn_Click" Height="43"
-                            Cursor="Hand" Margin="0,0,0,16" FocusVisualStyle="{StaticResource KeyboardFocus}">
+                            Cursor="Hand" Margin="0,0,0,16" FocusVisualStyle="{StaticResource KeyboardFocus}"
+                            RenderTransformOrigin="0.5,0.5">
+                        <Button.RenderTransform>
+                            <ScaleTransform x:Name="GoogleScale" ScaleX="1" ScaleY="1"/>
+                        </Button.RenderTransform>
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="GoogleBd" CornerRadius="7" Background="White"
                                         BorderBrush="#DCE4D8" BorderThickness="1">
+                                    <Border.Effect>
+                                        <DropShadowEffect x:Name="GoogleGlow" Color="#16150F" Direction="270"
+                                                           ShadowDepth="2" BlurRadius="0" Opacity="0"/>
+                                    </Border.Effect>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <Viewbox Width="16" Height="16" Margin="0,0,10,0">
                                             <Canvas Width="24" Height="24">
@@ -345,6 +577,29 @@
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter TargetName="GoogleBd" Property="Background" Value="#F6F8F3"/>
                                         <Setter TargetName="GoogleBd" Property="BorderBrush" Value="#C7D4C4"/>
+                                        <Trigger.EnterActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="GoogleScale" Storyboard.TargetProperty="ScaleX" To="1.015" Duration="0:0:0.16"/>
+                                                    <DoubleAnimation Storyboard.TargetName="GoogleScale" Storyboard.TargetProperty="ScaleY" To="1.015" Duration="0:0:0.16"/>
+                                                    <DoubleAnimation Storyboard.TargetName="GoogleGlow" Storyboard.TargetProperty="Opacity" To="0.16" Duration="0:0:0.16"/>
+                                                    <DoubleAnimation Storyboard.TargetName="GoogleGlow" Storyboard.TargetProperty="BlurRadius" To="14" Duration="0:0:0.16"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </Trigger.EnterActions>
+                                        <Trigger.ExitActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="GoogleScale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.16"/>
+                                                    <DoubleAnimation Storyboard.TargetName="GoogleScale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.16"/>
+                                                    <DoubleAnimation Storyboard.TargetName="GoogleGlow" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2"/>
+                                                    <DoubleAnimation Storyboard.TargetName="GoogleGlow" Storyboard.TargetProperty="BlurRadius" To="0" Duration="0:0:0.2"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </Trigger.ExitActions>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="GoogleBd" Property="Background" Value="#EEF2EC"/>
                                     </Trigger>
                                     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="GoogleBd" Property="Opacity" Value="0.45"/></Trigger>
                                 </ControlTemplate.Triggers>
@@ -355,7 +610,7 @@
                     <TextBlock x:Name="RegisterPrompt" HorizontalAlignment="Center" FontSize="11.5">
                         <Run x:Name="RegisterPromptText" Text="New to Replysis? " Foreground="#7A8177"/><Hyperlink
                             x:Name="RegisterLink" Click="RegisterLink_Click" Foreground="#1C7A3E"
-                            TextDecorations="None">Create an account</Hyperlink>
+                            Style="{StaticResource PremiumLink}">Create an account</Hyperlink>
                     </TextBlock>
                 </StackPanel>
             </Grid>

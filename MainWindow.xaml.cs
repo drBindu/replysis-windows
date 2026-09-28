@@ -72,8 +72,8 @@ namespace InterviewCopilot
         private const long   MaxResumeFileBytes      = 10 * 1024 * 1024;
         private const int    MaxResumeTextChars      = 100_000;
         private const int    MaxAiResponseChars      = 100_000;
-        private const double DefaultMainWindowWidth  = 1240;
-        private const double DefaultMainWindowHeight = 580;
+        private const double DefaultMainWindowWidth  = 980;
+        private const double DefaultMainWindowHeight = 590;
 
         private bool _suppressOpacitySlider = false;
         private bool isMuted = true;
@@ -265,6 +265,7 @@ namespace InterviewCopilot
         public MainWindow()
         {
             InitializeComponent();
+            EnterSetupStep(animate: false);
             projectRoot = AppDomain.CurrentDomain.BaseDirectory;
             scriptFolder = FindScriptFolder(projectRoot);
 
@@ -488,12 +489,10 @@ namespace InterviewCopilot
                     HookPopupStealth(SavedResumesPopup);
                     UpdateListeningModeUi();
 
-                    // On by default, and remembered. It used to start off every
-                    // time, so the feature most likely to matter in a coding
-                    // round was the one somebody had to remember to switch on
-                    // with an interviewer already speaking.
+                    // On by default and remembered (see AppConfig). The capture
+                    // timer itself does not start until an interview has begun,
+                    // so nothing is captured on Setup or Past Sessions.
                     _watchScreenMode = SettingsWindow.GetWatchScreenEnabled();
-                    if (_watchScreenMode) StartPreparedShots();
                     UpdateWatchScreenUi();
 
                     // First launch (no seen-flag yet): show the onboarding so new users
@@ -552,7 +551,8 @@ namespace InterviewCopilot
                     _ = InitializeSpeechPipelineAsync();
                     if (isRecording) EndSession();
                     await StartNewSessionAsync();
-                    DebugWindow.Log("AUTH", $"Logged in: {UserSession.Email}");
+                    // Do not persist account PII in the local diagnostic log.
+                    DebugWindow.Log("AUTH", "Signed-in account ready");
                     return true;
                 }
                 Close();
@@ -623,6 +623,19 @@ namespace InterviewCopilot
                 bool insidePopup2 = spc != null && src2 != null && IsDescendantOf(src2, spc);
                 bool onBtn = src2 != null && IsDescendantOf(src2, SavedResumesBtn);
                 if (!insidePopup2 && !onBtn) SavedResumesPopup.IsOpen = false;
+            }
+
+            // Close the profile dropdown the same way - it only ever closed by
+            // clicking the avatar again (ToggleProfileDropdown's own toggle),
+            // never by clicking away, which is the one thing every other menu
+            // in the app already does.
+            if (ProfileDropdownPopup.IsOpen)
+            {
+                var src3 = e.OriginalSource as DependencyObject;
+                var ppc = ProfileDropdownPopup.Child as FrameworkElement;
+                bool insidePopup3 = ppc != null && src3 != null && IsDescendantOf(src3, ppc);
+                bool onAvatar = src3 != null && IsDescendantOf(src3, ProfileBadge);
+                if (!insidePopup3 && !onAvatar) ProfileDropdownPopup.IsOpen = false;
             }
         }
 
@@ -922,7 +935,9 @@ namespace InterviewCopilot
 
                 using var res = await _creditsClient.SendAsync(req);
                 string body = await res.Content.ReadAsStringAsync();
-                CLog($"HTTP {(int)res.StatusCode} body={body[..Math.Min(body.Length, 200)]}");
+                // Response bodies may gain account fields over time. Log the
+                // status and the parsed non-PII balance below, not raw JSON.
+                CLog($"HTTP {(int)res.StatusCode}");
 
                 if (!res.IsSuccessStatusCode)
                 {
@@ -1451,6 +1466,9 @@ namespace InterviewCopilot
             SegInterviewIcon.Foreground = practice ? offFg : onFg;
             SegPracticeIcon.Foreground = practice ? onFg : offFg;
             if (ModeSegments != null) ModeSegments.ToolTip = AudioSourceRules.HearingLine(practice);
+
+            PaintSetupCard(SetupInterview, SetupInterviewTitle, !practice);
+            PaintSetupCard(SetupPractice, SetupPracticeTitle, practice);
         }
 
         /// <summary>
@@ -1615,7 +1633,42 @@ namespace InterviewCopilot
             if (!auto) SegManual.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "GlassButtonSelectedSurface");
             else SegManual.Background = Brushes.Transparent;
             SegManualText.Foreground = auto ? offFg : onFg;
+
+            PaintSetupCard(SetupAuto, SetupAutoTitle, auto);
+            PaintSetupCard(SetupManual, SetupManualTitle, !auto);
         }
+
+        /// <summary>
+        /// Shared look for every explained choice card in the setup sidebar -
+        /// selected gets the green accent, everything else stays neutral
+        /// graphite so only one card per group ever reads as "on".
+        /// </summary>
+        private static void PaintSetupCard(System.Windows.Controls.Border card,
+                                            System.Windows.Controls.TextBlock title, bool selected)
+        {
+            if (card == null || title == null) return;
+            if (selected)
+            {
+                card.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1421924A"));
+                card.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#5021924A"));
+                title.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F4F7FC"));
+            }
+            else
+            {
+                card.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "ActionGraphiteSurface");
+                card.SetResourceReference(System.Windows.Controls.Border.BorderBrushProperty, "ActionGraphiteStroke");
+                title.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#92929F"));
+            }
+        }
+
+        // The setup sidebar's explained cards are a second entry point to the
+        // exact same state as the toolbar switch - same methods, same effects,
+        // just reached from where a candidate is reading what each choice
+        // does instead of from a tooltip.
+        private void SetupAuto_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectListeningMode(ListeningMode.Auto);
+        private void SetupManual_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectListeningMode(ListeningMode.Manual);
+        private void SetupInterview_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAudioSource(practice: false);
+        private void SetupPractice_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAudioSource(practice: true);
 
 
 
@@ -1648,6 +1701,11 @@ namespace InterviewCopilot
 
         private void StartAutoListeningIfReady()
         {
+            // Picking Auto on the Setup page is choosing a preference, not
+            // pressing Start Interview - it must never itself begin listening
+            // and snap the page into Interview. Only Start Interview, Space,
+            // or the mic button count as that decision.
+            if (_inSetupStep) return;
             if (!AutoModeEnabled || !_engineOnline || isListening || isProcessing ||
                 _flushing || _isScreenAnalyzing)
                 return;
@@ -2708,6 +2766,22 @@ namespace InterviewCopilot
                 return;
             }
             if (_spaceHandling || isProcessing || !isMuted) return;
+            // Space or the mic button starting to listen is as real an
+            // intent to begin as pressing Start Interview - most often this
+            // IS how someone starts, mic first, never having clicked the
+            // button. Advance the step first so SetResumePanelCollapsed
+            // below has an Interview view to collapse onto, not a hidden one.
+            //
+            // collapseResumeColumn: false - SetResumePanelCollapsed(true, ...)
+            // fires a few lines below because listening is starting, and it
+            // animates the SAME ResumeColumn width property. Two BeginAnimation
+            // calls on one property race: the second replaces the first
+            // mid-flight, using whatever ActualWidth the first had reached by
+            // then, which is how "Start Interview" from Setup left a dead gap
+            // where the sidebar used to be. Let this call handle everything
+            // except that one width, and leave the collapse entirely to
+            // SetResumePanelCollapsed's own animation.
+            if (_inSetupStep) EnterInterviewStep(animate: true, collapseResumeColumn: false);
             _spaceHandling = true;
             try
             {
@@ -2754,6 +2828,16 @@ namespace InterviewCopilot
                 }
                 if (source != "AUTO" && answerWindow != null) answerWindow.UpdateQuestion("");
                 DeletePauseFlag();
+                // Deleting the flag is the real "microphone on" operation; the
+                // booleans above only update the app's UI.  A device/engine restart
+                // can finish at the same moment as this toggle and recreate the
+                // startup pause flag just after the first delete.  That produced a
+                // particularly dangerous split state in a live run: the window said
+                // LISTENING at 16:42:23, while every engine heartbeat remained
+                // paused=True until the user tried Space again a minute later.
+                // Re-check briefly after the toggle and remove a late flag, but stop
+                // immediately if this listening turn has already ended.
+                _ = ConfirmCaptureResumedAsync(_listeningStartTicks);
                 DebugWindow.Log("MIC", $"[{source}] UNMUTED — listening");
                 _lastMicUseUtc = DateTime.UtcNow;
                 // Unmuting is the moment a question becomes possible, so take a
@@ -3336,6 +3420,13 @@ namespace InterviewCopilot
 
         private void StartPreparedShots()
         {
+            // A saved preference is not consent to capture outside an active
+            // interview. This also prevents startup, Setup and Past Sessions
+            // from ever arming the timer.
+            if (!_watchScreenMode || !_interviewStarted || _inSetupStep ||
+                SessionsPanelHost?.Visibility == Visibility.Visible)
+                return;
+
             if (_preparedShotTimer == null)
             {
                 _preparedShotTimer = new DispatcherTimer { Interval = PreparedShotInterval };
@@ -3356,7 +3447,9 @@ namespace InterviewCopilot
             // Never while an answer is being produced: the capture would fight the
             // request for the network, and cloaking our own windows mid-answer is
             // visible to the user.
-            if (_windowClosed || !_watchScreenMode || _preparingShot || isProcessing || _isScreenAnalyzing) return;
+            if (_windowClosed || !_watchScreenMode || !_interviewStarted || _inSetupStep ||
+                SessionsPanelHost?.Visibility == Visibility.Visible ||
+                _preparingShot || isProcessing || _isScreenAnalyzing) return;
 
             // And never when no interview is happening.
             //
@@ -4092,7 +4185,7 @@ namespace InterviewCopilot
             {
                 UserSession.Clear();
                 Dispatcher.Invoke(() => { _ = SwitchToGuestSessionAsync(); });
-                throw new BackendRequestException("Your sign-in expired. Guest mode is ready; sign in again when convenient.");
+                throw new BackendRequestException("Your sign-in expired. Sign in again to continue.");
             }
             if (!res.IsSuccessStatusCode)
             {
@@ -4244,10 +4337,10 @@ namespace InterviewCopilot
         // middle of an interview, and every one of these cases is recoverable.
         private static string FriendlyBackendMessage(int status) => status switch
         {
-            408 or 504 => "That took longer than expected. No credits were used. Press space to try again.",
+            408 or 504 => "That took longer than expected. Press space to try again. Your balance will refresh automatically.",
             429        => "Too many requests in a short time. Wait a few seconds, then press space to try again.",
             503        => "The answer service is briefly unavailable. Your session is safe. Press space to try again.",
-            _          => "We could not generate an answer this time. No credits were used. Press space to try again.",
+            _          => "We could not generate an answer this time. Press space to try again. Your balance will refresh automatically.",
         };
 
         private static bool TryReadSseToken(string data, out string token, out bool isTerminal)
@@ -4557,6 +4650,7 @@ namespace InterviewCopilot
         {
             if (_interviewStarted) return;
             _interviewStarted = true;
+            if (_watchScreenMode) StartPreparedShots();
             _sessionSeconds = 0;
             SessionTimerLabel.Text = "0:00";
             SessionTimerBadge.Visibility = Visibility.Visible;
@@ -4612,7 +4706,11 @@ namespace InterviewCopilot
 
         private void EndSession()
         {
-            ResetScreenSession();
+            // Finishing means all proactive screen activity stops now. Merely
+            // clearing the prepared image left the timer alive, so it captured
+            // the desktop again while Past Sessions was open. Stop increments
+            // the generation too, invalidating any capture already in flight.
+            StopPreparedShots();
             try
             {
                 string f = Path.Combine(AppDataFolder, "record.flag");
@@ -4683,6 +4781,10 @@ namespace InterviewCopilot
                 _sessionsPanelWired = true;
             }
 
+            // Past Sessions is a review surface, not a live interview surface.
+            // Never keep preparing or uploading screenshots behind it.
+            StopPreparedShots();
+
             // A real view switch: the interview screen is hidden, not covered.
             //
             // Layering the panel on top and relying on its background to hide
@@ -4702,6 +4804,8 @@ namespace InterviewCopilot
                 SessionsPanelHost.Visibility = Visibility.Collapsed;
             if (InterviewContent != null)
                 InterviewContent.Visibility = Visibility.Visible;
+            if (_interviewStarted && _watchScreenMode)
+                StartPreparedShots();
         }
 
         private void UpdateMicUi()
@@ -5585,7 +5689,55 @@ namespace InterviewCopilot
         }
 
         private void WritePauseFlag() { try { File.WriteAllText(Path.Combine(AppDataFolder, "pause.flag"), "1"); } catch (Exception ex) { DebugWindow.Log("FILE", $"pause.flag write failed: {ex.Message}"); } }
-        private void DeletePauseFlag() { try { string f = Path.Combine(AppDataFolder, "pause.flag"); if (File.Exists(f)) File.Delete(f); } catch (Exception ex) { DebugWindow.Log("FILE", $"pause.flag delete failed: {ex.Message}"); } }
+        private void DeletePauseFlag()
+        {
+            try
+            {
+                // File.Delete already succeeds when the file is absent. Avoid the
+                // File.Exists/Delete time-of-check race: the engine may be changing
+                // state while the user presses Space.
+                File.Delete(Path.Combine(AppDataFolder, "pause.flag"));
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("FILE", $"pause.flag delete failed: {ex.Message}");
+            }
+        }
+
+        private async Task ConfirmCaptureResumedAsync(long listeningTurn)
+        {
+            string pausePath = Path.Combine(AppDataFolder, "pause.flag");
+            int[] retryDelaysMs = { 40, 100, 250, 500 };
+
+            foreach (int delayMs in retryDelaysMs)
+            {
+                await Task.Delay(delayMs);
+                if (isMuted || !isListening || _listeningStartTicks != listeningTurn)
+                    return;
+
+                if (!File.Exists(pausePath))
+                    continue;
+
+                DebugWindow.Log("MIC",
+                    $"pause.flag reappeared {delayMs}ms after unmute; clearing it again.");
+                DeletePauseFlag();
+            }
+
+            if (!isMuted && isListening && _listeningStartTicks == listeningTurn &&
+                File.Exists(pausePath))
+            {
+                // Never leave the UI claiming it is listening when capture is known
+                // to be paused. Keep this recoverable with another Space press and
+                // make the failure visible instead of silently losing the question.
+                isListening = false;
+                isMuted = true;
+                StopListeningMeter();
+                UpdateMicUi();
+                ShowListeningModeNotice("Microphone could not start. Press Space to retry.");
+                DebugWindow.Log("MIC",
+                    "Capture resume failed: pause.flag remained set after verified retries.");
+            }
+        }
         // ── PID file path — stores our engine's PID for crash-recovery cleanup ─
         private string EnginePidPath => Path.Combine(AppDataFolder, "engine.pid");
         private string RecordingIdPath => Path.Combine(AppDataFolder, "recording.id");
@@ -6506,6 +6658,80 @@ namespace InterviewCopilot
         }
 
         // ── Toolbar: End current session and immediately start a new one ─────
+        private async void FinishInterviewBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (_newSessionInProgress) return;
+
+            if (isProcessing || _flushing)
+            {
+                ShowInAppAlert(
+                    "Answer still finishing",
+                    "Wait for the current answer to finish, then choose Finish again so the complete turn is saved.");
+                return;
+            }
+
+            _newSessionInProgress = true;
+            var button = sender as System.Windows.Controls.Button;
+            object? originalContent = button?.Content;
+            if (button != null)
+            {
+                button.IsEnabled = false;
+                button.Content = "Saving...";
+            }
+
+            try
+            {
+                // Finishing is not the same action as submitting a question. If
+                // the microphone is open, stop capture without sending a partial
+                // sentence to the model, then finalize the encrypted transcript.
+                if (isListening)
+                {
+                    StopListeningMeter();
+                    isListening = false;
+                    isMuted = true;
+                    _autoTurnSubmitting = false;
+                    ResetAutoTurnDetection();
+                    WritePauseFlag();
+                    UpdateMicUi();
+                }
+
+                int completedSession = sessionNumber;
+                bool hadSession = isRecording;
+                EndSession();
+
+                // The transcript is encrypted as a whole and writes are ordered.
+                // Wait off the UI thread so Past Sessions never opens on a file
+                // whose final answer or duration is still queued behind it.
+                bool saved = await Task.Run(() => _sessionWriter.Drain(TimeSpan.FromSeconds(5)));
+                if (!saved)
+                {
+                    ShowInAppAlert(
+                        "Still saving",
+                        "The interview is finished, but its final local write is taking longer than expected. Past Sessions will refresh when you open it again.");
+                }
+                else if (hadSession)
+                {
+                    DebugWindow.Log("SESSION", $"Session {completedSession} finished and opened in Past Sessions");
+                }
+
+                SessionsBtn_Click(sender, new RoutedEventArgs());
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("SESSION", $"Finish interview failed: {ex.Message}");
+                ShowInAppAlert("Could not finish the interview", "Your existing answers remain saved. Please try Finish again.");
+            }
+            finally
+            {
+                _newSessionInProgress = false;
+                if (button != null)
+                {
+                    button.IsEnabled = true;
+                    button.Content = originalContent;
+                }
+            }
+        }
+
         private async void NewSessionBtn_Click(object sender, RoutedEventArgs e)
         {
             if (isProcessing || _newSessionInProgress) return;
@@ -6679,7 +6905,9 @@ namespace InterviewCopilot
 
                 _loadedResumeName = Path.GetFileName(filePath);
                 ResumeTextBox.Text = text;   // fires TextChanged -> shows the loaded card
-                DebugWindow.Log("RESUME", $"Loaded {text.Length} chars from {_loadedResumeName}");
+                // A resume filename often contains the person's full name.
+                // Keep useful size diagnostics without persisting that PII.
+                DebugWindow.Log("RESUME", $"Loaded {text.Length} chars from a resume file");
                 SaveCurrentResume();   // auto-save silently so it appears in history
                 CollapseResumeForAsk();
                 // Rebuild the speech engine's interview vocabulary from this resume (tools,
@@ -6916,8 +7144,10 @@ namespace InterviewCopilot
             // can be captured before one is asked instead of during the silence
             // after it. Only while watching: taking the screen on a timer when
             // the user has not asked for that is not a performance decision.
-            if (_watchScreenMode) StartPreparedShots();
-            else                  StopPreparedShots();
+            if (_watchScreenMode && _interviewStarted && !_inSetupStep)
+                StartPreparedShots();
+            else
+                StopPreparedShots();
 
             AiAnswerBox.Text = _watchScreenMode
                 ? "Watching the shared screen.\n\n" +
@@ -6936,11 +7166,13 @@ namespace InterviewCopilot
         {
             if (WatchScreenPillLabel == null || WatchScreenIcon == null) return;
 
-            // The button is an action now, so the label stays put and only the
-            // colour says whether screen answers are armed. A control whose
-            // label changes under the cursor is read as a switch, and this one
-            // is not: pressing it reads the screen either way.
-            WatchScreenPillLabel.Text = "Read screen";
+            // The button remains a one-shot action, but a subtle colour alone
+            // is not enough disclosure when continuous screen context is armed.
+            WatchScreenPillLabel.Text = _watchScreenMode ? "Screen live" : "Screen";
+            if (AnalyzePill != null)
+                AnalyzePill.ToolTip = _watchScreenMode
+                    ? "Screen context is ON for this interview. Click to read it now; turn continuous screen context off in Settings."
+                    : "Read the screen once and answer from it (F8 this window, F9 main screen, F7 a part you select).";
 
             var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
                 _watchScreenMode ? "#EDF4FF" : "#A7B6C8"));
@@ -7261,6 +7493,207 @@ namespace InterviewCopilot
         private void ResumeToggleBtn_Click(object sender, RoutedEventArgs e)
         {
             SetResumePanelCollapsed(!_resumeCollapsed, animate: true);
+        }
+
+        // WPF's default wheel scroll (~48px per notch, 3 lines) reads as a
+        // fast, uncontrolled jump on a page this dense with cards. A third of
+        // that per notch keeps the motion readable without turning scrolling
+        // into a chore.
+        private void SlowScroll_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.ScrollViewer sv) return;
+            e.Handled = true;
+            sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta / 3.0);
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // SETUP STEP  →  INTERVIEW STEP
+        //
+        // The app opens on a full-panel Setup: resume, job details, and the
+        // explained Auto/Manual and Interview/Practice cards, all at full
+        // width rather than squeezed into the 260px sidebar. "Start Interview"
+        // shrinks Setup back to that sidebar width and slides the Interview
+        // view (transcript, AI answer, the mic toolbar's segments) in from the
+        // right. Nothing about the interview engine changes - this only
+        // decides which part of the existing layout is on screen and how wide
+        // the resume column is, reusing the same GridLengthAnimation the old
+        // collapse/expand toggle already used.
+        // ══════════════════════════════════════════════════════════════════════
+        private bool _inSetupStep = true;
+
+        private void EnterSetupStep(bool animate)
+        {
+            // Setup may contain resume and account data. Never capture it as
+            // interview screen context, even when the preference is enabled.
+            StopPreparedShots();
+            _inSetupStep = true;
+            BackToSetupBtn.Visibility = Visibility.Collapsed;
+            ResumeToggleBtn.Visibility = Visibility.Collapsed;
+            HeaderMicArea.Visibility = Visibility.Collapsed;
+            HeaderScreenToolsArea.Visibility = Visibility.Collapsed;
+            SetupCreditsSummary.Visibility = Visibility.Visible;
+            // ResumeColumn is about to be forced to the full-page Setup width
+            // below regardless of collapse state, so the flag SetResumePanelCollapsed
+            // tracks would go stale here - reset it so the next "Start
+            // Interview" (EnterInterviewStep) actually re-collapses instead of
+            // seeing _resumeCollapsed already true and doing nothing.
+            _resumeCollapsed = false;
+            ResumePanel.Opacity = 1;
+            ResumePanel.Visibility = Visibility.Visible;
+            // The glass backdrop's transparency is for hiding this window from
+            // screen share during a real interview - it exists to be hard to
+            // see. Setup is never on screen during a call, so that same
+            // transparency here just makes the page hard to read against
+            // whatever's behind it. Force it solid; EnterInterviewStep restores
+            // whatever the user actually configured.
+            if (MainAppBorder != null)
+                MainAppBorder.Background = new SolidColorBrush(Color.FromRgb(0x0B, 0x0F, 0x17));
+            SetupPageTitle.Visibility = Visibility.Visible;
+            MainContentColumn.Width = new GridLength(0);
+            SetupRightCol.Width = new GridLength(1.1, GridUnitType.Star);
+            SetupDividerCol.Width = new GridLength(28);
+            SetupRightDivider.Visibility = Visibility.Visible;
+            SetupRightScroll.Visibility = Visibility.Visible;
+            StartInterviewPin.Visibility = Visibility.Visible;
+
+            if (!animate)
+            {
+                ResumeColumn.BeginAnimation(System.Windows.Controls.ColumnDefinition.WidthProperty, null);
+                ResumeColumn.Width = new GridLength(1, GridUnitType.Star);
+                MainContentArea.BeginAnimation(UIElement.OpacityProperty, null);
+                MainContentArea.Opacity = 0;
+                MainContentArea.Visibility = Visibility.Collapsed;
+                ResumePanel.Opacity = 1;
+                ResumePanel.Visibility = Visibility.Visible;
+                return;
+            }
+
+            // GridLengthAnimation interpolates raw GridLength.Value numbers and
+            // always rebuilds the result as Pixel (see GridLengthAnimation.cs) -
+            // animating straight to GridLength(1, Star) makes it land on
+            // "1 pixel wide", not "fill the space". That's the black screen
+            // this used to produce going back to Setup: the sidebar really was
+            // rendering, at ~1px. Animate to an actual pixel target instead,
+            // then snap to true Star on completion so it stays responsive to
+            // window resizes afterward.
+            double targetPixelWidth = Math.Max(240, InterviewContent.ActualWidth - 40);
+            var duration = new Duration(TimeSpan.FromMilliseconds(260));
+            var widthAnim = new GridLengthAnimation
+            {
+                From = new GridLength(Math.Max(0, ResumeColumn.ActualWidth)),
+                To = new GridLength(targetPixelWidth),
+                Duration = duration
+            };
+            widthAnim.Completed += (_, _) =>
+            {
+                ResumeColumn.BeginAnimation(System.Windows.Controls.ColumnDefinition.WidthProperty, null);
+                ResumeColumn.Width = new GridLength(1, GridUnitType.Star);
+            };
+            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(MainContentArea.Opacity, 0, duration);
+            fadeOut.Completed += (_, _) => MainContentArea.Visibility = Visibility.Collapsed;
+
+            ResumeColumn.BeginAnimation(System.Windows.Controls.ColumnDefinition.WidthProperty, widthAnim);
+            MainContentArea.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+        }
+
+        // collapseResumeColumn=false skips animating ResumeColumn's width here
+        // entirely, for the one caller (HandleSpaceDown's auto-advance) where
+        // SetResumePanelCollapsed animates that same property a moment later
+        // anyway - see the comment at that call site for what went wrong when
+        // both tried to.
+        private void EnterInterviewStep(bool animate, bool collapseResumeColumn = true)
+        {
+            _inSetupStep = false;
+            if (_interviewStarted && _watchScreenMode) StartPreparedShots();
+            SetupPageTitle.Visibility = Visibility.Collapsed;
+            MainContentColumn.Width = new GridLength(1, GridUnitType.Star);
+            // Same narrow, resume-only sidebar production has always had - the
+            // explained listening cards and the pinned Start button belong to
+            // the full-page Setup step only, not the cramped Interview sidebar.
+            SetupRightCol.Width = new GridLength(0);
+            SetupDividerCol.Width = new GridLength(0);
+            SetupRightDivider.Visibility = Visibility.Collapsed;
+            SetupRightScroll.Visibility = Visibility.Collapsed;
+            StartInterviewPin.Visibility = Visibility.Collapsed;
+            HeaderMicArea.Visibility = Visibility.Visible;
+            HeaderScreenToolsArea.Visibility = Visibility.Visible;
+            SetupCreditsSummary.Visibility = Visibility.Collapsed;
+            ApplyMainWindowOpacity(); // restore the user's actual glass setting
+
+            if (!animate)
+            {
+                // Setup is done - collapse the resume sidebar out of the way
+                // immediately rather than leaving it expanded until the user
+                // presses Space, since "Start Interview" already says they're
+                // finished with it. SetResumePanelCollapsed is the same
+                // mechanism the toggle arrow uses, so re-expanding later
+                // behaves exactly like it always has.
+                if (collapseResumeColumn) SetResumePanelCollapsed(true, animate: false);
+                MainContentArea.BeginAnimation(UIElement.OpacityProperty, null);
+                MainContentArea.Opacity = 1;
+                MainContentArea.Visibility = Visibility.Visible;
+                MainContentShift.X = 0;
+                // Not ResumeToggleBtn: re-opening a bare sidebar next to the
+                // interview is the thing being removed here. Back to Setup is
+                // the one way back to the resume/job details now - they were
+                // already handled before Start Interview was pressed.
+                BackToSetupBtn.Visibility = Visibility.Visible;
+                return;
+            }
+
+            if (collapseResumeColumn) SetResumePanelCollapsed(true, animate: true);
+
+            MainContentArea.Visibility = Visibility.Visible;
+            MainContentArea.Opacity = 0;
+            MainContentShift.X = 36;
+            var fadeIn  = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(360)))
+                { BeginTime = TimeSpan.FromMilliseconds(120), EasingFunction = new System.Windows.Media.Animation.SineEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } };
+            var slideIn = new System.Windows.Media.Animation.DoubleAnimation(36, 0, new Duration(TimeSpan.FromMilliseconds(400)))
+                { BeginTime = TimeSpan.FromMilliseconds(120), EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } };
+            fadeIn.Completed += (_, _) =>
+            {
+                BackToSetupBtn.Visibility = Visibility.Visible;
+            };
+
+            MainContentArea.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+            MainContentShift.BeginAnimation(TranslateTransform.XProperty, slideIn);
+        }
+
+        private async void StartInterviewStep_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_inSetupStep) return;
+
+            // Finish intentionally closes the previous session before showing
+            // Past Sessions. Starting again from Setup must therefore prepare a
+            // fresh encrypted transcript instead of reusing the finished file.
+            if (!isRecording)
+            {
+                var button = sender as System.Windows.Controls.Button;
+                if (button != null) button.IsEnabled = false;
+                try
+                {
+                    await StartNewSessionAsync();
+                }
+                finally
+                {
+                    if (button != null) button.IsEnabled = true;
+                }
+
+                if (!isRecording)
+                {
+                    ShowInAppAlert(
+                        "Interview could not start",
+                        "Replysis could not create the local session file. Check available storage and try again.");
+                    return;
+                }
+            }
+            EnterInterviewStep(animate: true);
+        }
+
+        private void BackToSetupStep_Click(object sender, RoutedEventArgs e)
+        {
+            if (_inSetupStep) return;
+            EnterSetupStep(animate: true);
         }
 
         private void SetResumePanelCollapsed(bool collapse, bool animate)
@@ -7946,7 +8379,7 @@ namespace InterviewCopilot
 
                 _loadedResumeName = name;
                 ResumeTextBox.Text = content;   // fires TextChanged -> shows the loaded card
-                DebugWindow.Log("RESUME", $"Restored last resume ({content.Length} chars): {name}");
+                DebugWindow.Log("RESUME", $"Restored last resume ({content.Length} chars)");
             }
             catch { }
         }

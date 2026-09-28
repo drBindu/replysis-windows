@@ -90,8 +90,7 @@ namespace InterviewCopilot
                 using var res = await Http.SendAsync(req);
                 if (!res.IsSuccessStatusCode)
                 {
-                    string body = await res.Content.ReadAsStringAsync();
-                    DebugWindow.Log("PRESENCE", $"HTTP {(int)res.StatusCode}: {body[..Math.Min(body.Length, 160)]}");
+                    DebugWindow.Log("PRESENCE", $"HTTP {(int)res.StatusCode}");
                     return false;
                 }
                 return true;

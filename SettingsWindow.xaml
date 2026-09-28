@@ -174,7 +174,7 @@
                                    Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Answer from the shared screen" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
-                            <TextBlock Text="Questions about your screen are answered from it. Questions about you are answered as usual. Press F8 to read the screen any time."
+                            <TextBlock Text="Questions about your screen are answered from it. Questions about you are answered as usual. Only runs during an interview, never in Setup or Past Sessions. Press F8 to read the screen any time."
                                        Foreground="#7E90A8" FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>

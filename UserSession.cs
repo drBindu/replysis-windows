@@ -181,7 +181,7 @@ namespace InterviewCopilot
 
                     lock (_smKeyLock)
                         _speechmaticsRetryAfterUtc = DateTime.UtcNow.AddSeconds(30);
-                    DebugWindow.Log("STT_KEY", $"HTTP {(int)res.StatusCode}: {body[..Math.Min(body.Length, 120)]}");
+                    DebugWindow.Log("STT_KEY", $"HTTP {(int)res.StatusCode}");
                     return false;
                 }
 
@@ -618,7 +618,7 @@ namespace InterviewCopilot
                     // Logged because this failing silently is what made a 401 look
                     // like a dead session rather than a refresh that did not happen.
                     DebugWindow.Log("AUTH",
-                        $"Token refresh refused: HTTP {(int)res.StatusCode} {body[..Math.Min(body.Length, 160)]}");
+                        $"Token refresh refused: HTTP {(int)res.StatusCode}");
                     return false;
                 }
 
