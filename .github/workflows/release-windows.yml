@@ -198,7 +198,16 @@ jobs:
             "-o",            "Releases"
           )
           switch ("${{ steps.signing.outputs.mode }}") {
-            "azure" { $packArgs += @("--azureTrustedSignFile", "${{ steps.signing.outputs.metadata }}") }
+            "azure" {
+              # Parallel signing (the default, 10 at once) can make the
+              # underlying signing library try to prompt for credentials
+              # interactively. vpk captures that output rather than showing
+              # it, so the prompt is invisible and the whole step hangs
+              # forever with no error - exactly what happened on three runs
+              # in a row here. One file at a time avoids the prompt.
+              # https://github.com/velopack/velopack/issues/542
+              $packArgs += @("--azureTrustedSignFile", "${{ steps.signing.outputs.metadata }}", "--signParallel", "1")
+            }
             "pfx"   { $packArgs += @("--signParams", "/fd SHA256 /sha1 ${{ steps.signing.outputs.thumbprint }} /tr http://timestamp.digicert.com /td SHA256") }
             default { Write-Host "Packing unsigned." }
           }
