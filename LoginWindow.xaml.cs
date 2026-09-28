@@ -331,11 +331,11 @@ namespace InterviewCopilot
                 // calm fallback while Replysis brings itself back to the foreground.
                 string html = ok
                     ? "<!doctype html><html><head><meta charset='utf-8'><title>Replysis</title></head>" +
-                      "<body style='margin:0;background:#0b111c;color:#dce5ef;font-family:Segoe UI,sans-serif;display:grid;place-items:center;height:100vh'>" +
-                      "<div style='text-align:center'><h2 style='color:#54d99a'>Signed in to Replysis</h2>" +
+                      "<body style='margin:0;background:#FEFEFC;color:#16150F;font-family:Segoe UI,sans-serif;display:grid;place-items:center;height:100vh'>" +
+                      "<div style='text-align:center'><h2 style='color:#1C7A3E'>Signed in to Replysis</h2>" +
                       "<p>Returning to the Replysis desktop app...</p></div>" +
                       "<script>setTimeout(function(){window.open('','_self');window.close();},150);</script></body></html>"
-                    : "<!doctype html><html><body style='margin:0;background:#0b111c;color:#ef8d96;font-family:Segoe UI,sans-serif;display:grid;place-items:center;height:100vh'>" +
+                    : "<!doctype html><html><body style='margin:0;background:#FEFEFC;color:#9A2E24;font-family:Segoe UI,sans-serif;display:grid;place-items:center;height:100vh'>" +
                       "<h2>Sign-in was not completed. Return to Replysis and try again.</h2></body></html>";
                 // Content-Length counts bytes, not characters. Both bodies above
                 // are ASCII today — the tick is written as an entity — so the two
@@ -631,13 +631,13 @@ namespace InterviewCopilot
 
         // Input focus highlight
         private void EmailBox_GotFocus(object sender, RoutedEventArgs e) =>
-            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6687AA"));
+            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#21924A"));
         private void EmailBox_LostFocus(object sender, RoutedEventArgs e) =>
-            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#26364C"));
+            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DCE4D8"));
         private void PasswordBox_GotFocus(object sender, RoutedEventArgs e) =>
-            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6687AA"));
+            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#21924A"));
         private void PasswordBox_LostFocus(object sender, RoutedEventArgs e) =>
-            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#26364C"));
+            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#DCE4D8"));
 
         // ══════════════════════════════════════════════════════════════════════
         // PASSWORD REVEAL
@@ -677,7 +677,7 @@ namespace InterviewCopilot
             // Same eye glyph throughout, tinted when active. Swapping to a second
             // glyph risks rendering an empty box if that codepoint is missing.
             RevealPasswordIcon.Foreground = new SolidColorBrush(
-                (Color)ColorConverter.ConvertFromString(_passwordRevealed ? "#34E08A" : "#6F8198"));
+                (Color)ColorConverter.ConvertFromString(_passwordRevealed ? "#21924A" : "#8A9086"));
         }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

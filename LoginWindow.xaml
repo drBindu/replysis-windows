@@ -5,26 +5,29 @@
         Icon="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
         Height="600" Width="1060"
         WindowStartupLocation="CenterScreen"
-        Background="#080B12" WindowStyle="None" AllowsTransparency="False"
+        Background="#FEFEFC" WindowStyle="None" AllowsTransparency="False"
         ResizeMode="NoResize" ShowInTaskbar="True"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
 
-    <Border x:Name="RootGlass" Background="#080B12" BorderBrush="#27374E" BorderThickness="1">
+    <Border x:Name="RootGlass" Background="#FEFEFC" BorderBrush="#E4E8E0" BorderThickness="1">
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="420"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Product panel -->
-            <Border Grid.Column="0" BorderBrush="#213148" BorderThickness="0,0,1,0"
+            <!-- Product panel — same palette as replysis.com: a light, warm
+                 green-tinted gradient rather than the app's own dark glass
+                 theme, so the first thing anyone signing in sees matches the
+                 site they just downloaded from. -->
+            <Border Grid.Column="0" BorderBrush="#DCE4D8" BorderThickness="0,0,1,0"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#101A2B" Offset="0"/>
-                        <GradientStop Color="#0A101C" Offset="0.55"/>
-                        <GradientStop Color="#07110E" Offset="1"/>
+                        <GradientStop Color="#F6F8F3" Offset="0"/>
+                        <GradientStop Color="#F1F5EE" Offset="0.55"/>
+                        <GradientStop Color="#EAF3EC" Offset="1"/>
                     </LinearGradientBrush>
                 </Border.Background>
                 <Grid Margin="48,42,44,40">
@@ -36,31 +39,31 @@
 
                     <StackPanel Orientation="Horizontal">
                         <Border Width="42" Height="42" CornerRadius="11"
-                                Background="#101A28" BorderBrush="#30445F" BorderThickness="1">
+                                Background="White" BorderBrush="#D8E3D6" BorderThickness="1">
                             <Image Source="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
                                    Width="40" Height="40" Stretch="Uniform"/>
                         </Border>
                         <StackPanel Margin="12,1,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="REPLYSIS" Foreground="#F5F8FC" FontSize="15"
+                            <TextBlock Text="REPLYSIS" Foreground="#16150F" FontSize="15"
                                        FontWeight="Bold"/>
-                            <TextBlock Text="AI INTERVIEW COPILOT" Foreground="#6F879F" FontSize="8.5"
+                            <TextBlock Text="AI INTERVIEW COPILOT" Foreground="#7A8177" FontSize="8.5"
                                        FontWeight="SemiBold"/>
                         </StackPanel>
                     </StackPanel>
 
                     <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="0,6,0,0">
-                        <Border HorizontalAlignment="Left" Background="#1534E08A" BorderBrush="#3434E08A"
+                        <Border HorizontalAlignment="Left" Background="#1421924A" BorderBrush="#3421924A"
                                 BorderThickness="1" CornerRadius="12" Padding="10,5" Margin="0,0,0,16">
                             <StackPanel Orientation="Horizontal">
-                                <Ellipse Width="5" Height="5" Fill="#54D99A" Margin="0,0,7,0"/>
-                                <TextBlock Text="YOUR INTERVIEW, IN FOCUS" Foreground="#8DE8B9"
+                                <Ellipse Width="5" Height="5" Fill="#21924A" Margin="0,0,7,0"/>
+                                <TextBlock Text="YOUR INTERVIEW, IN FOCUS" Foreground="#1C7A3E"
                                            FontSize="9" FontWeight="Bold"/>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="Be ready for the&#x0a;question that matters."
-                                   Foreground="#F4F7FB" FontSize="27" FontWeight="SemiBold" LineHeight="35"/>
+                                   Foreground="#16150F" FontSize="27" FontWeight="SemiBold" LineHeight="35"/>
                         <TextBlock Text="Replysis listens, understands the role and grounds every response in your real experience."
-                                   Foreground="#91A3B8" FontSize="12.5" TextWrapping="Wrap"
+                                   Foreground="#5A5F55" FontSize="12.5" TextWrapping="Wrap"
                                    LineHeight="19" Margin="0,12,8,0"/>
 
                         <!-- Layered live-product preview. Small independent motion creates
@@ -89,64 +92,64 @@
                             </Grid.Triggers>
 
                             <Border Width="285" Height="62" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                    Margin="7,7,0,0" CornerRadius="10" Background="#111B2A"
-                                    BorderBrush="#30445F" BorderThickness="1" RenderTransformOrigin="0.5,0.5">
+                                    Margin="7,7,0,0" CornerRadius="10" Background="White"
+                                    BorderBrush="#E3E8E0" BorderThickness="1" RenderTransformOrigin="0.5,0.5">
                                 <Border.RenderTransform>
                                     <TransformGroup>
                                         <RotateTransform Angle="-1.5"/>
                                         <TranslateTransform x:Name="QuestionFloat"/>
                                     </TransformGroup>
                                 </Border.RenderTransform>
-                                <Border.Effect><DropShadowEffect Color="#000000" BlurRadius="18" ShadowDepth="8" Opacity="0.5"/></Border.Effect>
+                                <Border.Effect><DropShadowEffect Color="#16150F" BlurRadius="18" ShadowDepth="8" Opacity="0.14"/></Border.Effect>
                                 <Grid Margin="13,10">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                    <Border Width="24" Height="24" CornerRadius="12" Background="#263A55" VerticalAlignment="Top">
-                                        <TextBlock Text="IN" Foreground="#C7D4E5" FontSize="8" FontWeight="Bold"
+                                    <Border Width="24" Height="24" CornerRadius="12" Background="#F0F2EE" VerticalAlignment="Top">
+                                        <TextBlock Text="IN" Foreground="#5A5F55" FontSize="8" FontWeight="Bold"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                        <TextBlock Text="INTERVIEWER" Foreground="#70849B" FontSize="8" FontWeight="Bold"/>
+                                        <TextBlock Text="INTERVIEWER" Foreground="#8A9086" FontSize="8" FontWeight="Bold"/>
                                         <TextBlock Text="Tell me about a project you led."
-                                                   Foreground="#EEF3F8" FontSize="11.5" Margin="0,3,0,0"/>
+                                                   Foreground="#16150F" FontSize="11.5" Margin="0,3,0,0"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
 
                             <Border Width="302" Height="82" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                    Margin="0,0,2,5" CornerRadius="11" Background="#12251E"
-                                    BorderBrush="#385F50" BorderThickness="1" RenderTransformOrigin="0.5,0.5">
+                                    Margin="0,0,2,5" CornerRadius="11" Background="#EEF7EF"
+                                    BorderBrush="#BFDFC7" BorderThickness="1" RenderTransformOrigin="0.5,0.5">
                                 <Border.RenderTransform>
                                     <TransformGroup>
                                         <RotateTransform Angle="1.2"/>
                                         <TranslateTransform x:Name="AnswerFloat"/>
                                     </TransformGroup>
                                 </Border.RenderTransform>
-                                <Border.Effect><DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="10" Opacity="0.62"/></Border.Effect>
+                                <Border.Effect><DropShadowEffect Color="#1C7A3E" BlurRadius="22" ShadowDepth="10" Opacity="0.18"/></Border.Effect>
                                 <Grid Margin="14,11">
                                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                                     <DockPanel>
                                         <StackPanel Orientation="Horizontal">
-                                            <Border Width="18" Height="18" CornerRadius="5" Background="#2234E08A">
-                                                <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" Foreground="#64E3A5"
+                                            <Border Width="18" Height="18" CornerRadius="5" Background="#2221924A">
+                                                <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" Foreground="#1C7A3E"
                                                            FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <TextBlock Text="REPLYSIS ANSWER" Foreground="#7EE4AE" FontSize="8.5"
+                                            <TextBlock Text="REPLYSIS ANSWER" Foreground="#1C7A3E" FontSize="8.5"
                                                        FontWeight="Bold" Margin="7,2,0,0"/>
                                         </StackPanel>
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                                            <Ellipse x:Name="LivePulse" Width="5" Height="5" Fill="#34E08A" Margin="0,0,5,0"/>
-                                            <TextBlock Text="RESUME GROUNDED" Foreground="#6F9986" FontSize="7.5" FontWeight="Bold"/>
+                                            <Ellipse x:Name="LivePulse" Width="5" Height="5" Fill="#21924A" Margin="0,0,5,0"/>
+                                            <TextBlock Text="RESUME GROUNDED" Foreground="#4F8A62" FontSize="7.5" FontWeight="Bold"/>
                                         </StackPanel>
                                     </DockPanel>
                                     <TextBlock Grid.Row="1" Text="I led the migration by splitting delivery into safe phases, reducing deployment risk while keeping the service available."
-                                               Foreground="#DDEBE4" FontSize="10.5" TextWrapping="Wrap"
+                                               Foreground="#2B3A2E" FontSize="10.5" TextWrapping="Wrap"
                                                LineHeight="15" Margin="0,7,0,0"/>
                                 </Grid>
                             </Border>
                         </Grid>
                     </StackPanel>
 
-                    <Border Grid.Row="2" Background="#121E2A" BorderBrush="#2C4D43"
+                    <Border Grid.Row="2" Background="White" BorderBrush="#DCE4D8"
                             BorderThickness="1" CornerRadius="10" Padding="12,10">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -154,18 +157,18 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="100" Foreground="#72E6AE" FontSize="22"
+                            <TextBlock Text="100" Foreground="#1C7A3E" FontSize="22"
                                        FontWeight="SemiBold" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1" Margin="11,0,8,0" VerticalAlignment="Center">
-                                <TextBlock Text="FREE WELCOME CREDITS" Foreground="#D9EAE2"
+                                <TextBlock Text="FREE WELCOME CREDITS" Foreground="#16150F"
                                            FontSize="9" FontWeight="Bold"/>
-                                <TextBlock Text="Included with every new account" Foreground="#718A80"
+                                <TextBlock Text="Included with every new account" Foreground="#7A8177"
                                            FontSize="9.5" Margin="0,2,0,0"/>
                             </StackPanel>
-                            <Border Grid.Column="2" CornerRadius="9" Background="#172536"
-                                    BorderBrush="#2B4058" BorderThickness="1" Padding="7,4"
+                            <Border Grid.Column="2" CornerRadius="9" Background="#F0F2EE"
+                                    BorderBrush="#DCE4D8" BorderThickness="1" Padding="7,4"
                                     VerticalAlignment="Center">
-                                <TextBlock Text="NO CARD" Foreground="#91A4BA" FontSize="7.5" FontWeight="Bold"/>
+                                <TextBlock Text="NO CARD" Foreground="#5A5F55" FontSize="7.5" FontWeight="Bold"/>
                             </Border>
                         </Grid>
                     </Border>
@@ -173,80 +176,111 @@
             </Border>
 
             <!-- Authentication panel -->
-            <Grid Grid.Column="1" Background="#0B111C">
-                <Button Click="CloseBtn_Click" Style="{StaticResource PremiumIconButton}"
-                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,16,0" ToolTip="Close">
-                    <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="11"/>
+            <Grid Grid.Column="1" Background="White">
+                <!-- Not PremiumIconButton: that style's hover state turns the icon
+                     white for the app's dark glass windows, which disappears
+                     against this page's white background. A small local
+                     template keeps the same shape without the mismatch. -->
+                <Button Click="CloseBtn_Click" Width="32" Height="32" Cursor="Hand"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,16,0" ToolTip="Close"
+                        FocusVisualStyle="{StaticResource KeyboardFocus}">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="CloseSurface" CornerRadius="6" Background="#F0F2EE" BorderBrush="#DCE4D8" BorderThickness="1">
+                                <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                           Foreground="#5A5F55" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="CloseSurface" Property="Background" Value="#FDF1F1"/>
+                                    <Setter TargetName="CloseSurface" Property="BorderBrush" Value="#F3C6C6"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
                 </Button>
 
                 <StackPanel Width="390" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock x:Name="AuthTitle" Text="Welcome back" Foreground="#F4F7FB"
+                    <TextBlock x:Name="AuthTitle" Text="Welcome back" Foreground="#16150F"
                                FontSize="25" FontWeight="SemiBold"/>
                     <TextBlock x:Name="LoginSubtitle" Text="Sign in to continue to your workspace"
-                               Foreground="#7F93AB" FontSize="12.5" Margin="0,5,0,24"/>
+                               Foreground="#7A8177" FontSize="12.5" Margin="0,5,0,24"/>
 
-                    <Border x:Name="ErrorBanner" Background="#251318" CornerRadius="8"
+                    <Border x:Name="ErrorBanner" Background="#FDF1F1" CornerRadius="8"
                             Padding="11,9" Margin="0,0,0,12" Visibility="Collapsed"
-                            BorderBrush="#6E303B" BorderThickness="1">
+                            BorderBrush="#F3C6C6" BorderThickness="1">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" Foreground="#F87171"
+                            <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" Foreground="#C0392B"
                                        FontSize="11" Margin="0,1,8,0" VerticalAlignment="Top"/>
-                            <TextBlock x:Name="ErrorText" Foreground="#FCA5A5" FontSize="11.5"
+                            <TextBlock x:Name="ErrorText" Foreground="#9A2E24" FontSize="11.5"
                                        TextWrapping="Wrap" MaxWidth="335"/>
                         </StackPanel>
                     </Border>
 
-                    <Border x:Name="SuccessBanner" Background="#10251A" CornerRadius="8"
+                    <Border x:Name="SuccessBanner" Background="#EEF7EF" CornerRadius="8"
                             Padding="11,9" Margin="0,0,0,12" Visibility="Collapsed"
-                            BorderBrush="#285D42" BorderThickness="1">
+                            BorderBrush="#BFDFC7" BorderThickness="1">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE930;" FontFamily="Segoe MDL2 Assets" Foreground="#34E08A"
+                            <TextBlock Text="&#xE930;" FontFamily="Segoe MDL2 Assets" Foreground="#21924A"
                                        FontSize="11" Margin="0,1,8,0" VerticalAlignment="Top"/>
-                            <TextBlock x:Name="SuccessText" Foreground="#AEEFCF" FontSize="11.5"
+                            <TextBlock x:Name="SuccessText" Foreground="#1C7A3E" FontSize="11.5"
                                        TextWrapping="Wrap" MaxWidth="335"/>
                         </StackPanel>
                     </Border>
 
-                    <TextBlock Text="Email address" Foreground="#A5B3C3" FontSize="11"
+                    <TextBlock Text="Email address" Foreground="#5A5F55" FontSize="11"
                                FontWeight="SemiBold" Margin="0,0,0,7"/>
-                    <Border x:Name="EmailBorder" Background="#0E1725" CornerRadius="7"
-                            BorderBrush="#2A3B52" BorderThickness="1" Margin="0,0,0,14">
+                    <Border x:Name="EmailBorder" Background="#F9FAF8" CornerRadius="7"
+                            BorderBrush="#DCE4D8" BorderThickness="1" Margin="0,0,0,14">
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="&#xE715;" FontFamily="Segoe MDL2 Assets" Foreground="#657A93"
+                            <TextBlock Text="&#xE715;" FontFamily="Segoe MDL2 Assets" Foreground="#8A9086"
                                        FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" x:Name="EmailBox" Background="Transparent" Foreground="#EAF2FF"
-                                     BorderThickness="0" Padding="2,10,13,10" FontSize="13" CaretBrush="#84A9D2"
+                            <TextBox Grid.Column="1" x:Name="EmailBox" Background="Transparent" Foreground="#16150F"
+                                     BorderThickness="0" Padding="2,10,13,10" FontSize="13" CaretBrush="#1C7A3E"
                                      GotFocus="EmailBox_GotFocus" LostFocus="EmailBox_LostFocus" KeyDown="Input_KeyDown"/>
                         </Grid>
                     </Border>
 
-                    <TextBlock Text="Password" Foreground="#A5B3C3" FontSize="11"
+                    <TextBlock Text="Password" Foreground="#5A5F55" FontSize="11"
                                FontWeight="SemiBold" Margin="0,0,0,7"/>
-                    <Border x:Name="PasswordBorder" Background="#0E1725" CornerRadius="7"
-                            BorderBrush="#2A3B52" BorderThickness="1">
+                    <Border x:Name="PasswordBorder" Background="#F9FAF8" CornerRadius="7"
+                            BorderBrush="#DCE4D8" BorderThickness="1">
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" Foreground="#657A93"
+                            <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" Foreground="#8A9086"
                                        FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            <PasswordBox Grid.Column="1" x:Name="PasswordBox" Background="Transparent" Foreground="#EAF2FF"
-                                         BorderThickness="0" Padding="2,10" FontSize="13" CaretBrush="#84A9D2"
+                            <PasswordBox Grid.Column="1" x:Name="PasswordBox" Background="Transparent" Foreground="#16150F"
+                                         BorderThickness="0" Padding="2,10" FontSize="13" CaretBrush="#1C7A3E"
                                          GotFocus="PasswordBox_GotFocus" LostFocus="PasswordBox_LostFocus" KeyDown="Input_KeyDown"/>
                             <TextBox Grid.Column="1" x:Name="PasswordPlainBox" Visibility="Collapsed" Background="Transparent"
-                                     Foreground="#EAF2FF" BorderThickness="0" Padding="2,10" FontSize="13"
-                                     CaretBrush="#84A9D2" GotFocus="PasswordBox_GotFocus"
+                                     Foreground="#16150F" BorderThickness="0" Padding="2,10" FontSize="13"
+                                     CaretBrush="#1C7A3E" GotFocus="PasswordBox_GotFocus"
                                      LostFocus="PasswordBox_LostFocus" KeyDown="Input_KeyDown"/>
                             <Button Grid.Column="2" x:Name="RevealPasswordBtn" Click="RevealPasswordBtn_Click"
-                                    Style="{StaticResource PremiumIconButton}" Width="36" Height="32" Margin="0,0,4,0"
-                                    VerticalAlignment="Center" ToolTip="Show password">
+                                    Width="36" Height="32" Margin="0,0,4,0" Cursor="Hand"
+                                    VerticalAlignment="Center" ToolTip="Show password"
+                                    FocusVisualStyle="{StaticResource KeyboardFocus}">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="RevealSurface" CornerRadius="6" Background="Transparent">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="RevealSurface" Property="Background" Value="#F0F2EE"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
                                 <TextBlock x:Name="RevealPasswordIcon" Text="&#xE7B3;"
-                                           FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#6F8198"/>
+                                           FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#8A9086"/>
                             </Button>
                         </Grid>
                     </Border>
 
                     <TextBlock x:Name="ForgotPasswordRow" HorizontalAlignment="Right" Margin="0,8,0,18">
-                        <Hyperlink x:Name="ForgotLink" Click="ForgotLink_Click" Foreground="#84E7B6"
+                        <Hyperlink x:Name="ForgotLink" Click="ForgotLink_Click" Foreground="#1C7A3E"
                                    TextDecorations="None" FontSize="11">Forgot password?</Hyperlink>
                     </TextBlock>
 
@@ -254,11 +288,11 @@
                             Margin="0,0,0,14" FocusVisualStyle="{StaticResource KeyboardFocus}">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border x:Name="Bd" CornerRadius="7" BorderBrush="#47749B" BorderThickness="1">
+                                <Border x:Name="Bd" CornerRadius="7" BorderBrush="#1C7A3E" BorderThickness="1">
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                            <GradientStop Color="#255B83" Offset="0"/>
-                                            <GradientStop Color="#28765F" Offset="1"/>
+                                            <GradientStop Color="#1C7A3E" Offset="0"/>
+                                            <GradientStop Color="#21924A" Offset="1"/>
                                         </LinearGradientBrush>
                                     </Border.Background>
                                     <Grid>
@@ -268,7 +302,7 @@
                                                     HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
                                             <TextBlock x:Name="LoadingDots" Text="Signing in..." Foreground="White" FontSize="12.5"/>
                                         </StackPanel>
-                                        <TextBlock Text="&#xE72A;" FontFamily="Segoe MDL2 Assets" Foreground="#CDE5DA"
+                                        <TextBlock Text="&#xE72A;" FontFamily="Segoe MDL2 Assets" Foreground="#CDEBD8"
                                                    FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center"
                                                    Margin="0,0,14,0"/>
                                     </Grid>
@@ -283,17 +317,17 @@
 
                     <Grid Margin="0,0,0,14">
                         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                        <Border Height="1" Background="#213148" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="OR" Foreground="#61738A" FontSize="9" FontWeight="Bold" Margin="12,0"/>
-                        <Border Grid.Column="2" Height="1" Background="#213148" VerticalAlignment="Center"/>
+                        <Border Height="1" Background="#E4E8E0" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="OR" Foreground="#8A9086" FontSize="9" FontWeight="Bold" Margin="12,0"/>
+                        <Border Grid.Column="2" Height="1" Background="#E4E8E0" VerticalAlignment="Center"/>
                     </Grid>
 
                     <Button x:Name="GoogleSignInBtn" Click="GoogleSignIn_Click" Height="43"
                             Cursor="Hand" Margin="0,0,0,16" FocusVisualStyle="{StaticResource KeyboardFocus}">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border x:Name="GoogleBd" CornerRadius="7" Background="#111B2A"
-                                        BorderBrush="#2A3B52" BorderThickness="1">
+                                <Border x:Name="GoogleBd" CornerRadius="7" Background="White"
+                                        BorderBrush="#DCE4D8" BorderThickness="1">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <Viewbox Width="16" Height="16" Margin="0,0,10,0">
                                             <Canvas Width="24" Height="24">
@@ -304,13 +338,13 @@
                                             </Canvas>
                                         </Viewbox>
                                         <TextBlock x:Name="GoogleBtnText" Text="Continue with Google"
-                                                   Foreground="#EAF2FF" FontSize="12.5" FontWeight="SemiBold"/>
+                                                   Foreground="#16150F" FontSize="12.5" FontWeight="SemiBold"/>
                                     </StackPanel>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="GoogleBd" Property="Background" Value="#172438"/>
-                                        <Setter TargetName="GoogleBd" Property="BorderBrush" Value="#3B506D"/>
+                                        <Setter TargetName="GoogleBd" Property="Background" Value="#F6F8F3"/>
+                                        <Setter TargetName="GoogleBd" Property="BorderBrush" Value="#C7D4C4"/>
                                     </Trigger>
                                     <Trigger Property="IsEnabled" Value="False"><Setter TargetName="GoogleBd" Property="Opacity" Value="0.45"/></Trigger>
                                 </ControlTemplate.Triggers>
@@ -319,8 +353,8 @@
                     </Button>
 
                     <TextBlock x:Name="RegisterPrompt" HorizontalAlignment="Center" FontSize="11.5">
-                        <Run x:Name="RegisterPromptText" Text="New to Replysis? " Foreground="#7F93AB"/><Hyperlink
-                            x:Name="RegisterLink" Click="RegisterLink_Click" Foreground="#84E7B6"
+                        <Run x:Name="RegisterPromptText" Text="New to Replysis? " Foreground="#7A8177"/><Hyperlink
+                            x:Name="RegisterLink" Click="RegisterLink_Click" Foreground="#1C7A3E"
                             TextDecorations="None">Create an account</Hyperlink>
                     </TextBlock>
                 </StackPanel>
