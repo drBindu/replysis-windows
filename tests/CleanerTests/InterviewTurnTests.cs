@@ -95,6 +95,26 @@ internal static class InterviewTurnTests
 
         PromptBuilder.ClearHistory();
         Console.WriteLine();
+        // Short / Detailed answer length (2026-09-28). Detailed widens questions
+        // with room for depth and leaves the ones that must stay short alone.
+        const string baseRule = "BASE";
+        string W(PromptBuilder.QuestionType t, string q, bool drill = false) =>
+            PromptBuilder.WidenForDetailedAnswers(baseRule, t, q, drill);
+        Check(W(PromptBuilder.QuestionType.Technical, "How does garbage collection work in Java?").Contains("2-3 spoken paragraphs"),
+            "Detailed widens a technical answer");
+        Check(W(PromptBuilder.QuestionType.Intro, "Tell me about yourself").Contains("2-3 spoken paragraphs"),
+            "Detailed widens tell me about yourself");
+        Check(W(PromptBuilder.QuestionType.YesNo, "Have you used Kubernetes?").Contains("3-4 sentences"),
+            "Detailed gives a yes/no question a few sentences, not paragraphs");
+        Check(W(PromptBuilder.QuestionType.Coding, "Write a function to reverse a string") == baseRule,
+            "Detailed leaves code answers alone");
+        Check(W(PromptBuilder.QuestionType.Logistics, "Is this role remote?") == baseRule,
+            "Detailed leaves logistics short");
+        Check(W(PromptBuilder.QuestionType.InterviewClosing, "That's all from me, thanks") == baseRule,
+            "Detailed leaves the closing short");
+        Check(W(PromptBuilder.QuestionType.YesNo, "Do you need visa sponsorship?") == baseRule,
+            "Detailed never expands a work authorization answer");
+
         Console.WriteLine(failed == 0 ? "interview turns: all passed" : $"interview turns: {failed} FAILED");
         return failed;
     }

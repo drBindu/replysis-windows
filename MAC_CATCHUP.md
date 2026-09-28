@@ -1,3 +1,37 @@
+## Practice-mode Auto ignored follow-up questions; Short / Detailed answers (2026-09-28, Windows 1.0.26)
+
+Client-side only, no backend change.
+
+**The bug.** A tester in Practice mode (system audio plus microphone) with Auto on
+reported answers arriving 2 to 3 minutes late. The server showed her requests
+simply stopped. Cause: the read-back guard (`IsReadingOurAnswerBack`), which
+ignores the candidate reading our answer aloud, compares vocabulary with the
+answer on screen and fires at 55% overlap. A follow-up ABOUT the answer shares
+its vocabulary by nature. Replayed against her real answer: "Why did you move
+from Baxter Pharmaceuticals to Ava Inc?" scored 0.80, "Can you tell me more
+about your experience as a QC lab supervisor at Ava?" 0.83, both ignored. Auto
+then sat silent until an unrelated question came along.
+
+**The fix.** `AutoTurnRules.IsQuestionToTheCandidate`: an utterance that opens
+like a question (what/why/how/can/tell/walk...), whose second word is not first
+person, and that addresses "you/your", is never treated as read-back. Our
+answers are first person; interviewer questions address the candidate. A bullet
+read aloud that opens with "How I prioritize..." stays a read-back because of
+the first-person check. Regression tests in `AutoTurnTests.cs` use her answer.
+If the Mac has an equivalent echo/read-back guard based on word overlap, it has
+the same hole.
+
+**Short / Detailed.** New "Answer length" cards on the Setup page, saved as
+`AppConfig.DetailedAnswers` (default false = Short = the old behaviour, where
+length follows the question). Detailed appends a widening line to the per-type
+length rule in `PromptBuilder.WidenForDetailedAnswers`: 2-3 spoken paragraphs
+(45-75 s) for open questions, 3-4 sentences for yes/no, preference and
+drill-downs. It never widens code, logistics, availability, salary, closings,
+candidate questions, context statements, locked-fact corrections, or work
+authorization. The wording has not been measured against the live model yet.
+
+---
+
 ## Setup step, Finish flow and screen-capture lifecycle (2026-09-28, Windows 1.0.25)
 
 Client-side only. Nothing here touches the backend, so the Mac needs no server work.

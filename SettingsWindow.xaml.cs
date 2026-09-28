@@ -615,6 +615,10 @@ namespace InterviewCopilot
             /// started talking.
             /// </summary>
             public bool   WatchScreenEnabled { get; set; } = true;
+            // Short keeps the length following the question; Detailed asks for
+            // fuller answers. Off by default so nothing changes for anyone who
+            // has not chosen it. See PromptBuilder.DetailedAnswers.
+            public bool   DetailedAnswers    { get; set; } = false;
             // Off by default. Every session used to be recorded to disk
             // automatically, kept seven days and never played back. Audio of
             // an interviewer is not something to keep without being asked.
@@ -777,6 +781,14 @@ namespace InterviewCopilot
         public static bool   GetSaveSessionAudio()   => LoadConfig().SaveSessionAudio;
         public static bool   GetScreenKeysEverywhere() => LoadConfig().ScreenKeysEverywhere;
         public static bool   GetKeepOnTop()          => LoadConfig().KeepOnTop;
+
+        public static bool   GetDetailedAnswers()    => LoadConfig().DetailedAnswers;
+        public static void SetDetailedAnswers(bool detailed)
+        {
+            var config = LoadConfig();
+            config.DetailedAnswers = detailed;
+            SaveConfig(config);
+        }
 
         public static void SetWatchScreenEnabled(bool enabled)
         {

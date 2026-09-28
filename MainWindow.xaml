@@ -1233,6 +1233,58 @@
                                         </Grid>
                                     </Border>
                                 </Grid>
+
+                                <TextBlock Text="ANSWER LENGTH" Foreground="#7E90A8" FontSize="9.5"
+                                           FontWeight="Bold" FontFamily="Segoe UI" Margin="1,14,0,7"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="9"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border x:Name="SetupShort" Grid.Column="0" CornerRadius="11" BorderThickness="1.2"
+                                            Cursor="Hand" MinHeight="94" MouseLeftButtonDown="SetupShort_Click">
+                                        <Grid Margin="12,10">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+                                            <Border Width="26" Height="26" CornerRadius="7"
+                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
+                                                <TextBlock Text="&#xE8C4;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock x:Name="SetupShortTitle" Grid.Row="1" Text="Short" FontSize="13"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,7,0,2"/>
+                                            <TextBlock Grid.Row="2" Text="Fits the question. Quick ones get a sentence or two, easy to say fast."
+                                                       Foreground="#93A4BA" FontSize="10" FontFamily="Segoe UI"
+                                                       LineHeight="13.5" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border x:Name="SetupDetailed" Grid.Column="2" CornerRadius="11" BorderThickness="1.2"
+                                            Cursor="Hand" MinHeight="94" MouseLeftButtonDown="SetupDetailed_Click">
+                                        <Grid Margin="12,10">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+                                            <Border Width="26" Height="26" CornerRadius="7"
+                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
+                                                <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock x:Name="SetupDetailedTitle" Grid.Row="1" Text="Detailed" FontSize="13"
+                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,7,0,2"/>
+                                            <TextBlock Grid.Row="2" Text="Fuller answers with more depth and an example, about a minute to say."
+                                                       Foreground="#93A4BA" FontSize="10" FontFamily="Segoe UI"
+                                                       LineHeight="13.5" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
                             </StackPanel>
                         </ScrollViewer>
                         </Grid>

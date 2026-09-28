@@ -162,6 +162,47 @@ namespace InterviewCopilot
         /// "work", "in", "the", "and", "will" with almost any answer, and it was
         /// ignored in a mock interview. Returns 0 when there is too little to judge.
         /// </summary>
+        /// <summary>
+        /// A question put to the candidate, as opposed to a line of our own answer
+        /// being read aloud.
+        ///
+        /// The read-back guard compares vocabulary with the answer on screen, and a
+        /// follow-up about that answer shares its vocabulary by nature: "Why did you
+        /// move from Baxter to Ava?" scored 0.80 against an answer naming both, and
+        /// was ignored as reading back. In Practice mode that left Auto silent until
+        /// the next unrelated question, minutes later (tester report, 2026-09-28).
+        ///
+        /// What separates the two is who is being spoken to. Our answers are in
+        /// the first person; an interviewer's question opens like a question and
+        /// addresses "you". A bullet read aloud that happens to open with "How"
+        /// ("How I prioritize multiple concurrent tasks") is still first person
+        /// straight after the opener, so it stays a read-back.
+        /// </summary>
+        internal static bool IsQuestionToTheCandidate(string text)
+        {
+            string[] w = Words(text);
+            if (w.Length < 3) return false;
+            if (!QuestionOpeners.Contains(w[0])) return false;
+            if (FirstPerson.Contains(w[1])) return false;
+            return w.Any(SecondPerson.Contains);
+        }
+
+        private static readonly HashSet<string> QuestionOpeners = new(StringComparer.Ordinal)
+        {
+            "what", "what's", "whats", "why", "how", "when", "where", "which", "who", "whose",
+            "can", "could", "would", "will", "do", "does", "did", "are", "is", "was", "were",
+            "have", "has", "should", "tell", "walk", "explain", "describe", "share", "give",
+            "talk", "so", "and", "okay", "ok", "now",
+        };
+        private static readonly HashSet<string> FirstPerson = new(StringComparer.Ordinal)
+        {
+            "i", "i'm", "i've", "i'd", "i'll", "my", "we", "we've", "we're", "our",
+        };
+        private static readonly HashSet<string> SecondPerson = new(StringComparer.Ordinal)
+        {
+            "you", "your", "yours", "yourself", "you've", "you're", "you'd", "you'll",
+        };
+
         internal static double MeaningfulShareOnScreen(string heard, string shown)
         {
             string[] said = Words(heard).Where(w => !CommonWords.Contains(w)).ToArray();

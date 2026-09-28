@@ -1497,7 +1497,55 @@ namespace InterviewCopilot
             return false;
         }
 
+        /// <summary>
+        /// The candidate's answer-length choice (Setup page and Settings).
+        ///
+        /// Short is the long-standing behaviour: the length follows the question,
+        /// so a quick or factual one gets a sentence or two. A tester read that as
+        /// "it only gives two lines" (2026-09-28), and the owner asked for a way to
+        /// get more. Detailed widens the length rule for questions that have room
+        /// for depth. Questions whose answer must stay short in any interview
+        /// (logistics, availability, salary, closings, a locked-fact correction,
+        /// and code, which has its own shape) keep their rule either way.
+        /// </summary>
+        public static bool DetailedAnswers { get; set; }
+
         private static string BuildFormatReminder(
+            QuestionType qType, string question, bool isDrillDown, string resumeFacts = "")
+        {
+            string rule = BuildBaseFormatReminder(qType, question, isDrillDown, resumeFacts);
+            return DetailedAnswers ? WidenForDetailedAnswers(rule, qType, question, isDrillDown) : rule;
+        }
+
+        internal static string WidenForDetailedAnswers(string rule, QuestionType qType, string question, bool isDrillDown)
+        {
+            string q = (question ?? "").ToLower();
+            if (HasLockedConflict(question ?? "")) return rule;
+            switch (qType)
+            {
+                case QuestionType.Coding:
+                case QuestionType.Availability:
+                case QuestionType.Logistics:
+                case QuestionType.Salary:
+                case QuestionType.InterviewClosing:
+                case QuestionType.CandidateQuestions:
+                case QuestionType.ContextStatement:
+                    return rule;
+                case QuestionType.YesNo when IsWorkAuthorizationQuestion(q) || q.Contains("relocat") ||
+                                             q.Contains("background") || q.Contains("drug"):
+                    return rule;
+            }
+
+            if (isDrillDown || qType is QuestionType.YesNo or QuestionType.Preference or QuestionType.MemoryRecall)
+                return rule + " The candidate chose Detailed answers: use 3-4 sentences instead, the direct answer first " +
+                              "and then the specifics behind it. Never invent facts to fill the space.";
+
+            return rule + " The candidate chose Detailed answers, so go further than that length: 2-3 spoken paragraphs, " +
+                          "about 45-75 seconds aloud, with more of the how and why and one concrete example where the verified " +
+                          "facts support it. Every rule above about facts still applies: never invent a project, result or tool.";
+        }
+
+        private static string BuildBaseFormatReminder(
             QuestionType qType, string question, bool isDrillDown, string resumeFacts = "")
         {
             // Conflict push: interviewer is asserting a different value than what's locked.

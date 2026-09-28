@@ -495,6 +495,9 @@ namespace InterviewCopilot
                     _watchScreenMode = SettingsWindow.GetWatchScreenEnabled();
                     UpdateWatchScreenUi();
 
+                    PromptBuilder.DetailedAnswers = SettingsWindow.GetDetailedAnswers();
+                    UpdateAnswerLengthUi();
+
                     // First launch (no seen-flag yet): show the onboarding so new users
                     // immediately understand the flow, resume/company setup and stealth.
                     if (!File.Exists(OnboardingSeenPath)) ShowOnboarding();
@@ -1669,6 +1672,26 @@ namespace InterviewCopilot
         private void SetupManual_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectListeningMode(ListeningMode.Manual);
         private void SetupInterview_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAudioSource(practice: false);
         private void SetupPractice_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAudioSource(practice: true);
+        private void SetupShort_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAnswerLength(detailed: false);
+        private void SetupDetailed_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAnswerLength(detailed: true);
+
+        // Applies from the next question; an answer already streaming keeps the
+        // length it was asked for.
+        private void SelectAnswerLength(bool detailed)
+        {
+            if (PromptBuilder.DetailedAnswers == detailed) return;
+            PromptBuilder.DetailedAnswers = detailed;
+            try { SettingsWindow.SetDetailedAnswers(detailed); }
+            catch (Exception ex) { DebugWindow.Log("SETTINGS", $"answer length persist failed: {ex.Message}"); }
+            UpdateAnswerLengthUi();
+            DebugWindow.Log("SETTINGS", detailed ? "Answer length: Detailed" : "Answer length: Short");
+        }
+
+        private void UpdateAnswerLengthUi()
+        {
+            PaintSetupCard(SetupShort, SetupShortTitle, !PromptBuilder.DetailedAnswers);
+            PaintSetupCard(SetupDetailed, SetupDetailedTitle, PromptBuilder.DetailedAnswers);
+        }
 
 
 
@@ -2320,6 +2343,11 @@ namespace InterviewCopilot
             // A real follow-up is short. Only a passage long enough to be
             // reading is judged here.
             if (said.Length < 8) return false;
+
+            // A question put to the candidate is never our answer read aloud,
+            // however many of the answer's words it reuses. Follow-ups about the
+            // answer reuse them by nature, and were being ignored for minutes.
+            if (AutoTurnRules.IsQuestionToTheCandidate(candidate)) return false;
 
             // Meaningful words only. Counting "you", "the", "to" and "work" made
             // a new question about work authorization look like reading back.

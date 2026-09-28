@@ -69,6 +69,7 @@ internal static class SpaceHotkeyTests
         Check(defaults.ScreenKeysEverywhere, "screen keys work everywhere by default");
         Check(defaults.WatchScreenEnabled, "continuous screen reading stays on by default");
         Check(defaults.KeepOnTop, "window is pinned in front by default");
+        Check(!defaults.DetailedAnswers, "answer length stays Short unless Detailed is chosen");
 
         // Ctrl+Alt+R brings the app back from behind other windows
         Check(GlobalHotkey.BringToFrontChord(0x52, ctrlAltHeld: true), "Ctrl+Alt+R brings Replysis to the front");

@@ -160,6 +160,33 @@ internal static class AutoTurnTests
         Check(AutoTurnRules.MeaningfulShareOnScreen("A RESTful API is an HTTP based interface that follows the principles of Representational State Transfer", restAnswer) >= 0.55,
               "reading the answer aloud is still recognized");
 
+        // Follow-ups about the answer on screen, from a tester's Practice session
+        // (2026-09-28). Each shares most of its words with the answer and was
+        // ignored as "reading back", leaving Auto silent for minutes.
+        const string qcAnswer = "I'm currently the QC Lab Supervisor at Ava Inc., where I lead day-to-day operations of the quality control lab, " +
+            "overseeing assay and impurity method development, validation, and troubleshooting on Agilent HPLC and GC systems. " +
+            "Before this, I built a solid foundation as a Research Associate at Baxter Pharmaceuticals and as a QC Analyst at Neuland Laboratories. " +
+            "MORE TO SAY - How I prioritize multiple concurrent tasks while maintaining strict documentation standards.";
+        foreach (var followUp in new[]
+        {
+            "Can you tell me more about your experience as a QC lab supervisor at Ava?",
+            "Why did you move from Baxter Pharmaceuticals to Ava Inc?",
+            "Tell me about a root cause analysis you led for an assay discrepancy.",
+            "How did you handle method development and validation at Ava?",
+        })
+        {
+
+            Check(AutoTurnRules.IsQuestionToTheCandidate(followUp), $"follow-up is a question, not read-back: {followUp}");
+        }
+        foreach (var readBack in new[]
+        {
+            "I'm currently the QC lab supervisor at Ava where I lead day to day operations of the quality control lab",
+            "How I prioritize multiple concurrent tasks while maintaining strict documentation standards.",
+            "Before this I built a solid foundation as a research associate at Baxter Pharmaceuticals",
+            "So my role at Ava is overseeing assay and impurity method development, do you see",
+        })
+            Check(!AutoTurnRules.IsQuestionToTheCandidate(readBack), $"reading our answer aloud stays a read-back: {readBack}");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "auto turns: all passed" : $"auto turns: {failed} FAILED");
         return failed;
