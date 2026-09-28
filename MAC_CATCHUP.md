@@ -1,3 +1,33 @@
+## Practice mode now keeps listening while an answer streams (2026-09-27)
+
+Interview mode (system audio only) already kept the mic open while an answer
+streamed, so a question arriving mid-answer wasn't lost. Practice mode (system
++ candidate's own microphone) did not: `_preserveAutoCapture` in
+`MainWindow.xaml.cs` was gated to `CaptureMode() == "system"`, so every
+Practice-mode answer paused capture and missed whatever the interviewer said
+during it.
+
+The gate existed on a real worry - an open mic in Practice would also hear the
+candidate reading the answer back, and that transcript could misfire as the
+next question. But that exact case already had its own guard a few lines
+later, `IsReadingOurAnswerBack`, which is applied whenever `CaptureMode() !=
+"system"` regardless of whether capture paused. So the pause was redundant
+caution stacked on top of a check that already covered it, and it cost every
+word said while an answer was streaming. Removed the system-only restriction;
+`_preserveAutoCapture` now applies to Auto turns in any capture mode.
+
+All 25 suites still pass. Flagged in `RELEASE_AUDIT_2026_09_27.md` as blocker
+#2 for the controlled-test build; this closes that one, but it still wants a
+live Practice-mode session where the interviewer talks over the candidate
+reading an answer, to confirm the guard actually holds outside test data.
+
+If the Mac client mixes candidate and system audio in a Practice-equivalent
+mode, check whether it has the same reading-back guard before mirroring this -
+without it, keeping the mic open here would be the "answer vanishes mid-read"
+bug this file's history keeps coming back to.
+
+---
+
 ## Prepared screenshot: skip the encode when the screen has not moved (2026-09-24, from the Mac's finding)
 
 The Mac measured its idle cost to the prepared screenshot: every 2s it captured,

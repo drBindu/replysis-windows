@@ -2941,9 +2941,17 @@ namespace InterviewCopilot
             // answered a second time as a new question.
             if (source == "AUTO" && !string.IsNullOrWhiteSpace(question))
                 _lastAutoSubmittedQuestion = PromptBuilder.NormalizeInterviewerQuestion(question);
-            // Preserve interviewer audio arriving while an answer streams.
-            // The next Auto turn strips the answered prefix from this transcript.
-            _preserveAutoCapture = source == "AUTO" && CaptureMode() == "system";
+            // Preserve audio arriving while an answer streams, in every
+            // capture mode. This used to be system-only, out of concern that
+            // Practice mode's open microphone would pick up the candidate
+            // reading the answer aloud and misfire it as the next question -
+            // but that exact case already has its own guard a few turns
+            // later (see IsReadingOurAnswerBack, applied here whenever
+            // CaptureMode() != "system"), so restricting capture itself was
+            // redundant caution that just cost Practice mode every word said
+            // while an answer was streaming. The next Auto turn strips the
+            // answered prefix from this transcript either way.
+            _preserveAutoCapture = source == "AUTO";
             if (_preserveAutoCapture)
             {
                 // Snapshot the full cumulative transcript, not the normalized
