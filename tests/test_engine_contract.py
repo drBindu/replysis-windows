@@ -93,7 +93,7 @@ _noise = _struct.pack("<1600h", *([32767, -32768] * 800))
 _voice = _struct.pack("<1600h", *[int(9000 * ((i % 40) - 20) / 20) for i in range(1600)])
 _loud = _struct.pack("<1600h", *([32767] * 30 + [1000] * 1570))
 check("a mic that dies mid-interview is searched for again",
-      "_mic_dead_reads >= MIC_DEAD_READS_BEFORE_RESEARCH" in SOURCE)
+      "mic_lost = _mic_needs_recovery(_mic_ever_heard, _mic_dead_reads)" in SOURCE)
 check("hearing a voice again resets the searches", "_mic_autoswitch_attempts = 0" in SOURCE)
 check("a locked or failed mic counts as dead air", "_mic_dead_reads += 1" in SOURCE)
 check("white noise at full scale counts as static", _ns["_is_capture_noise"](_noise))
@@ -192,6 +192,21 @@ check("Deepgram only with a token", 'os.environ.get("DG_TOKEN"' in SOURCE,
 # comparison that chose it. The speed only counted because keyterms fixed that.
 check("Deepgram sends keyterms", '("keyterm", term)' in SOURCE)
 
+# The default playback endpoint can change after launch (Bluetooth, dock,
+# meeting-device selection). Auto must follow the current endpoint rather than
+# remaining attached to the startup device for the whole interview.
+check("system audio follows a changed Windows default",
+      "_follow_current_windows_default()" in SOURCE and
+      "SYSTEM AUDIO followed new Windows default" in SOURCE)
+check("muted default output is never rotated for being quiet",
+      "get_read_available()" in SOURCE and
+      "WASAPI loopback selected (default output)" in SOURCE)
+both_capture = SOURCE[SOURCE.find("# Both: read mic, mix with system audio if available"):
+                      SOURCE.find("# Handle recording")]
+check("silent system audio never delays microphone transcription",
+      "get_read_available()" in both_capture and
+      '_read_stream_timeout(sys_stream' not in both_capture)
+
 # Both apps read these lines. Windows latches online from STATUS: ONLINE and the
 # Mac answers only after UTTERANCE END, so a path that prints neither transcribes
 # into an app that never shows it as connected or never answers.
@@ -199,6 +214,8 @@ dg = SOURCE[SOURCE.find("async def run_deepgram"):SOURCE.find("# ── MAIN WIT
 check("Deepgram path reports STATUS: ONLINE", "STATUS: ONLINE" in dg)
 check("Deepgram path reports UTTERANCE END", "UTTERANCE END" in dg)
 check("Deepgram path honours reset.flag", "RESET_FLAG" in dg)
+check("Deepgram keeps the first result after reset",
+      'except Exception:\n                                pass\n                            continue' not in dg)
 
 # A server that accepts and closes at once was reconnected in a tight loop
 # forever, because every successful handshake reset the failure count.

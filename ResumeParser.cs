@@ -12,6 +12,8 @@ namespace InterviewCopilot
     /// </summary>
     public static class ResumeParser
     {
+        private const int MaxResumeEvidenceChars = 9_000;
+
         private static readonly Dictionary<string, int> MonthMap =
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
@@ -32,6 +34,20 @@ namespace InterviewCopilot
         private static string? _cachedResumeText;
         private static string? _cachedFacts;
 
+        private static readonly Regex EmailPattern = new(
+            @"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex UrlPattern = new(
+            @"\b(?:https?://|www\.|linkedin\.com/|github\.com/)\S+",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex PhonePattern = new(
+            @"(?<!\d)(?:\+?\d[\s().-]*){10,15}(?!\d)",
+            RegexOptions.Compiled);
+
+        private static readonly Regex RepeatedWhitespace = new(@"[ \t]+", RegexOptions.Compiled);
+
         public static void InvalidateCache()
         {
             _cachedResumeText = null;
@@ -50,6 +66,20 @@ namespace InterviewCopilot
                 return _cachedFacts;
 
             var sb = new StringBuilder();
+
+            // The model used to receive only job headings and whatever happened to
+            // follow a heading containing the word "skills". Project descriptions,
+            // accomplishments, domains and day-to-day responsibilities were discarded.
+            // A resume could therefore be visibly loaded while the answer generator had
+            // almost none of it, and filled the gaps with a generic software-engineer
+            // profile. Preserve the candidate's own wording as the primary evidence.
+            // Direct contact details are irrelevant to an interview answer and are
+            // removed before this context leaves the device.
+            string evidence = BuildResumeEvidence(resume);
+            sb.AppendLine("RESUME EVIDENCE (candidate's own wording; do not add facts):");
+            sb.AppendLine(evidence);
+            sb.AppendLine();
+            sb.AppendLine("COMPUTED SUMMARY (use only when consistent with the evidence above):");
 
             // 1. Name — first short non-label, non-header line
             string[] nameSkip = { "resume", "curriculum vitae", "cv", "profile", "summary",
@@ -125,6 +155,35 @@ namespace InterviewCopilot
             _cachedResumeText = resume;
             _cachedFacts = sb.ToString();
             return _cachedFacts;
+        }
+
+        internal static string BuildResumeEvidence(string resume)
+        {
+            var output = new StringBuilder();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string rawLine in resume.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+            {
+                string line = RepeatedWhitespace.Replace(rawLine.Trim(), " ");
+                if (line.Length == 0) continue;
+
+                line = EmailPattern.Replace(line, " ");
+                line = UrlPattern.Replace(line, " ");
+                line = PhonePattern.Replace(line, " ");
+                line = RepeatedWhitespace.Replace(line, " ").Trim(' ', '|', ',', ';', '-');
+                if (line.Length == 0 || !seen.Add(line)) continue;
+
+                int extra = line.Length + Environment.NewLine.Length;
+                if (output.Length + extra > MaxResumeEvidenceChars)
+                {
+                    output.AppendLine("[remaining resume text omitted for length]");
+                    break;
+                }
+
+                output.AppendLine(line);
+            }
+
+            return output.Length == 0 ? "No readable resume evidence." : output.ToString().TrimEnd();
         }
 
         // ── Job extraction ──────────────────────────────────────────

@@ -1156,7 +1156,7 @@ namespace InterviewCopilot
             if (hasResume)
             {
                 sb.AppendLine("VERIFIED CANDIDATE FACTS:");
-                sb.AppendLine(Truncate(resumeFacts, 4_500));
+                sb.AppendLine(Truncate(resumeFacts, 10_000));
                 sb.AppendLine("Use only facts and numbers present above. If a detail is absent, speak qualitatively.");
                 sb.AppendLine();
                 sb.AppendLine("The employers listed above are the only ones this candidate has worked");
@@ -1165,13 +1165,8 @@ namespace InterviewCopilot
                 sb.AppendLine("say which of the roles above you mean, or ask which one they mean.");
                 sb.AppendLine("Asked about a company that is not listed, say you did not work there.");
                 sb.AppendLine();
-                sb.AppendLine("This is not hypothetical. Asked what came before Macy's, the answer");
-                sb.AppendLine("began \"I spent one year at Uber\", and a later answer described work");
-                sb.AppendLine("in \"Uber's real-time dispatch system\". There is no Uber above. An");
-                sb.AppendLine("interviewer holding the CV sees a company that is not on it.");
-                sb.AppendLine();
-                sb.AppendLine("A technical example needs no employer. \"In a dispatch system\" is");
-                sb.AppendLine("safe and makes the same point; \"at Uber\" is a claim about their life.");
+                sb.AppendLine("For a technical example, omit the employer unless that employer and");
+                sb.AppendLine("the example are both explicitly present in the candidate facts.");
                 sb.AppendLine();
             }
             else
@@ -1182,16 +1177,8 @@ namespace InterviewCopilot
                 sb.AppendLine();
                 sb.AppendLine("The candidate's field is also unknown, and it is not safe to guess.");
                 sb.AppendLine("Do not say which languages, frameworks or specialisms are theirs.");
-                sb.AppendLine("Never write phrases like \"my backend experience with Java and Spring Boot\",");
-                sb.AppendLine("\"as a frontend developer\", or \"my years in data science\". Any of these is a");
-                sb.AppendLine("claim about their career, and a wrong one is read aloud to someone");
-                sb.AppendLine("holding their CV.");
-                sb.AppendLine();
-                sb.AppendLine("This happened. With no resume loaded, a Gen AI and Python candidate was");
-                sb.AppendLine("told to say they wanted to keep building on their backend experience,");
-                sb.AppendLine("\"especially with Java and Spring Boot\". Fluent, confident, and about a");
-                sb.AppendLine("different person. Defaulting to the most common CV is the exact failure");
-                sb.AppendLine("to avoid: with nothing to go on, be general rather than typical.");
+                sb.AppendLine("Do not claim any particular language, framework, specialism or industry");
+                sb.AppendLine("as the candidate's. With nothing to go on, be general rather than typical.");
                 sb.AppendLine();
                 sb.AppendLine("Use the technology the interviewer named, or the target role below if");
                 sb.AppendLine("one is given. Otherwise stay stack-neutral: \"the systems I have worked");
@@ -1257,24 +1244,16 @@ namespace InterviewCopilot
             sb.AppendLine("  colleague, not the way an encyclopedia opens an article. Say what it is");
             sb.AppendLine("  for and where you have met it. A dictionary sentence is the single");
             sb.AppendLine("  clearest sign to an interviewer that something is being read out.");
-            sb.AppendLine();
-            sb.AppendLine("  Not this:");
-            sb.AppendLine("    \"Java is a general-purpose, object-oriented programming language that");
-            sb.AppendLine("     runs on the JVM. It is known for its write once, run anywhere");
-            sb.AppendLine("     philosophy.\"");
-            sb.AppendLine("  This (the substance stays, only the voice changes):");
-            sb.AppendLine("    \"Java is an object-oriented, statically typed language, and it's what most of");
-            sb.AppendLine("     my backend work is in. You compile to bytecode, and the JVM runs that bytecode");
-            sb.AppendLine("     on any operating system, so the same jar runs on my laptop and in our Linux");
-            sb.AppendLine("     containers. The JVM also manages memory with garbage collection and has");
-            sb.AppendLine("     multithreading built in, which matters a lot for backend services.\"");
+            sb.AppendLine("  Do not copy a sample answer or default to a common technology profile.");
+            sb.AppendLine("  No language, framework, employer, system or project may appear unless it");
+            sb.AppendLine("  appears in the question, candidate facts, target context or prior turns.");
             sb.AppendLine("  Sounding like a person never means saying less. An experienced engineer's");
             sb.AppendLine("  answer is full of real specifics; it is only the textbook phrasing that goes.");
             sb.AppendLine();
             sb.AppendLine("  How real speech differs from written prose:");
             sb.AppendLine("    Contractions throughout. It's, I've, that's, doesn't, we'd. Always.");
-            sb.AppendLine("    Except the name of the thing being asked about: say \"Java is\", never");
-            sb.AppendLine("    \"Java's\". The candidate reads the name out in full.");
+            sb.AppendLine("    Write the full name of the thing being asked about; do not turn its name");
+            sb.AppendLine("    into a contraction with 's.");
             sb.AppendLine("    Sentence lengths vary. A long one, then a short one. Never three");
             sb.AppendLine("    evenly balanced sentences in a row, which is the rhythm nothing but a");
             sb.AppendLine("    machine produces.");
@@ -1457,25 +1436,17 @@ namespace InterviewCopilot
                 return opening +
                        $"{t} is in the verified facts, so the first or second sentence says where it sits in your work, " +
                        "without inventing a project or detail that is not in the facts. " +
-                       "Shape only, never reuse its words: Kafka is a distributed event streaming platform, and at work it's what carries events between our services. " +
-                       "Producers write to topics, each topic is split into partitions, and every partition is an append-only log that consumers read at their own pace by offset. " +
-                       "That's what makes it durable, because a consumer that falls over just picks up from its last offset. " +
-                       "And partitions are how it scales, since consumers in a group split them between them. " +
+                       "Use only mechanisms and examples supported by the question and verified facts; no sample technology is supplied here. " +
                        more;
 
             bool hasFacts = !string.IsNullOrWhiteSpace(resumeFacts) && resumeFacts != "No resume provided.";
             return opening +
                    $"{t} is NOT in the verified facts, so never say you use it, have used it, or work with it. " +
                    (hasFacts
-                       ? "End with one honest sentence connecting it to what the verified facts show you do work with, for example your main language or tools, " +
-                         "and how the idea carries over. Never imply you have used the term itself. "
-                       : "") +
-                   "Shape only, never reuse its words: Rust is a systems language built so the compiler catches memory bugs before the code ever runs. " +
-                   "It does that with ownership, where every value has exactly one owner, and borrowing rules the compiler checks for you. " +
-                   "So you get C-level speed with no garbage collector, and whole classes of crashes and data races just can't compile. " +
-                   (hasFacts
-                       ? "Most of my own work is in Python, so I lean on the runtime for memory, but that trade-off between safety and control is the same one. "
-                       : "The price is a steeper learning curve, you spend real time early on fighting the borrow checker. ") +
+                        ? "End with one honest sentence connecting it to what the verified facts show you do work with, for example your main language or tools, " +
+                          "and how the idea carries over. Never imply you have used the term itself. "
+                        : "") +
+                   "Explain the requested term directly, but use no unrelated language, framework or project as a sample. " +
                    more;
         }
 
@@ -1532,8 +1503,7 @@ namespace InterviewCopilot
             // Conflict push: interviewer is asserting a different value than what's locked.
             // ALWAYS MICRO — hold your ground in 1-2 sentences, no bullets, no elaboration.
             if (HasLockedConflict(question))
-                return "1-2 short sentences. Politely correct, restate your locked answer. " +
-                       "Example: 'Actually I said Python earlier, that's still my answer.' Don't justify.";
+                return "1-2 short sentences. Politely correct the interviewer and restate the locked answer verbatim. Don't justify.";
 
             // Drill-down always short — cite exact prior specifics
             if (isDrillDown)
@@ -1909,7 +1879,7 @@ namespace InterviewCopilot
                 sb.AppendLine("  - For coding requests, output complete runnable code immediately; if vague, choose a sensible compact example.");
                 sb.AppendLine("  - Do NOT invent specific employers, specific project names, or specific salary numbers.");
                 sb.AppendLine("  - Use neutral phrases such as 'my current team' or 'a product I worked on'; do not invent an industry or employer.");
-                sb.AppendLine("  - Do not name a technology as YOURS: no 'my Java and Spring Boot experience', no 'as a frontend developer'. Their field is unknown and guessing it invents their career.");
+                sb.AppendLine("  - Do not name a technology, specialism or industry as yours. Their field is unknown and guessing invents their career.");
                 sb.AppendLine("  - Follow the interviewer's own words for tools and stack; otherwise say 'the systems I have worked on'. Answer the technical content in full either way.");
                 sb.AppendLine("  - For salary, visa, location, and other personal facts, stay neutral unless the candidate supplied the detail.");
                 sb.AppendLine("  - Do NOT start answers with: Great question / Absolutely / Of course / Certainly.");

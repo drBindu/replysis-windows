@@ -10,6 +10,7 @@ namespace InterviewCopilot
     {
         private static Mutex? _singleInstanceMutex;
         private static bool _ownsSingleInstanceMutex;
+        private bool _showAuthenticationPreview;
 
         // Suppression window so a repeating fault (e.g. a timer throwing every
         // tick) cannot stack dozens of identical dialogs on top of each other.
@@ -19,6 +20,8 @@ namespace InterviewCopilot
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            _showAuthenticationPreview = Array.Exists(e.Args,
+                arg => string.Equals(arg, "--auth-preview", StringComparison.OrdinalIgnoreCase));
             // Install crash protection before anything else can throw. Without
             // this an unhandled exception tears the process down and Windows
             // shows a raw .NET stack trace, losing the session.
@@ -91,9 +94,63 @@ namespace InterviewCopilot
 
             try
             {
+                // Restore the last signed-in account before creating any window.
+                // Firebase ID tokens expire after an hour, but the protected local
+                // session also contains a refresh token, so returning users can be
+                // signed in silently rather than seeing the account page every time.
+                bool sessionRestored = !_showAuthenticationPreview && UserSession.TryLoadFromDisk();
+                if (!sessionRestored && !string.IsNullOrEmpty(UserSession.RefreshToken))
+                {
+                    DebugWindow.Log("AUTH", "Saved ID token expired - refreshing session before launch");
+                    sessionRestored = await UserSession.TryRefreshAsync(force: true);
+                    DebugWindow.Log("AUTH", sessionRestored
+                        ? "Saved session restored"
+                        : "Saved session could not be refreshed");
+                }
+
+                bool interactiveLogin = !sessionRestored;
+                if (interactiveLogin)
+                {
+                    // No dashboard is created behind this page. It is the only
+                    // first-launch surface until authentication succeeds.
+                    var loginWindow = new LoginWindow();
+                    MainWindow = loginWindow;
+                    loginWindow.ShowDialog();
+
+                    if (!loginWindow.LoginSuccess || !UserSession.IsLoggedIn)
+                    {
+                        Shutdown();
+                        return;
+                    }
+                }
+
+                // Begin the credential warm-up before constructing the workspace.
+                // MainWindow shares this in-flight request and starts its audio
+                // process in its constructor, giving the engine the entire window
+                // creation/render interval to become ready before a user can press Space.
+                _ = UserSession.EnsureSpeechmaticsKeyAsync(DeviceIdentity.Current);
+
                 var window = new MainWindow();
                 MainWindow = window;
                 window.Show();
+                window.WindowState = WindowState.Normal;
+                window.Activate();
+                window.Focus();
+
+                if (interactiveLogin)
+                {
+                    // The Google OAuth callback returns through the system browser.
+                    // Pulse the new workspace above it once so the user lands inside
+                    // Replysis without manually minimizing Chrome or Edge. The main
+                    // window's own pin preference remains unchanged afterward.
+                    window.Topmost = true;
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        window.Topmost = false;
+                        window.Activate();
+                        window.Focus();
+                    }, DispatcherPriority.ApplicationIdle);
+                }
 
                 // Back to the ordinary rule now that there is something on screen:
                 // closing the app's windows closes the app.

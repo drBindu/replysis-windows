@@ -114,6 +114,18 @@ internal static class Program
         Check(outp.Contains("ListNode* next = curr->next;"), "inner pointer intact");
         Check(outp.Contains("merge sort") && !outp.Contains("**merge sort**"), "prose bold stripped");
         Check(outp.Contains("in place") && !outp.Contains("*in place*"), "prose italic stripped");
+        Check(!MainWindow.HasUsableAiAnswer("\n"), "a newline is not a delivered answer");
+        Check(!MainWindow.HasUsableAiAnswer("• ..."), "formatting and punctuation are not a delivered answer");
+        Check(MainWindow.HasUsableAiAnswer("C"), "a one-letter multiple-choice answer is still valid");
+        Check(MainWindow.HasUsableAiAnswer("No."), "a short spoken answer is still valid");
+        Check(MainWindow.TryParseWorkingMicrophone(
+                  ">>> MIC SWITCHED [2] Microphone (NVIDIA Broadcast) (peak 1266)",
+                  out int switchedIndex, out string switchedName)
+              && switchedIndex == 2 && switchedName == "Microphone (NVIDIA Broadcast)",
+              "a proven working microphone survives an engine restart");
+        Check(!MainWindow.TryParseWorkingMicrophone(
+                  ">>> MIC SIGNAL DETECTED: amp=1266", out _, out _),
+              "ordinary signal logs do not overwrite the saved microphone");
 
         Console.WriteLine("\n6. The deafness detector fires, and stays quiet");
         _failed += SpeechHealthTests.Run();
@@ -168,6 +180,12 @@ internal static class Program
 
         Console.WriteLine("\n23. Resume bounds, OAuth callbacks and small-screen safety");
         _failed += AuditHardeningTests.Run();
+
+        Console.WriteLine("\n24. Loaded resume evidence reaches the answer without prompt contamination");
+        _failed += ResumeGroundingTests.Run();
+
+        Console.WriteLine("\n25. Windows-only login creates the admin-visible user profile");
+        _failed += UserProfileSyncTests.Run();
 
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");

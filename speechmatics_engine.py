@@ -359,21 +359,21 @@ def find_wasapi_loopback_device(p):
 
         # FAST PATH (the common case): the DEFAULT OUTPUT device's own loopback IS
         # "system audio" by definition — it's where the interviewer's voice plays.
-        # Match it by name and use it immediately, with NO per-device signal probing.
-        # That probe added ~2.5s to every cold start for no benefit here, so speech
-        # right after opening the app is now captured seconds sooner.
+        # Match it by name and use it immediately, with NO signal-based selection.
+        #
+        # Do not reject it merely because a startup read times out. A loopback is
+        # normally silent before the meeting starts, and several WASAPI drivers do
+        # not complete a read until the first real packet arrives. Treating that as
+        # a dead endpoint made the selector walk away from the actual speakers and
+        # settle on the first idle virtual cable that returned zeroes. Auto mode
+        # then looked healthy and transcribed nothing the interviewer said.
+        #
+        # The capture path already bounds every read and can recover from a device
+        # that genuinely hangs. Device identity is stronger evidence here than
+        # silence observed before anybody has spoken.
         for i, dev in enumerate(candidates):
             if (default_name and default_name[:25] in dev['name']
                     and 'microphone' not in dev['name'].lower()):
-                # One short read to confirm it answers. It is the right device by
-                # definition, but "right" and "working" are different claims, and
-                # committing to a frozen one costs the whole session's system
-                # audio the moment real sound arrives.
-                responded, _ = _probe_device(p, dev, timeout_sec=0.4)
-                if not responded:
-                    print(f">>> Default output loopback [{dev['index']}] did not answer; "
-                          f"looking for another.", flush=True)
-                    break
                 _active_loopback_index  = i
                 _default_loopback_index = i
                 print(f">>> WASAPI loopback selected (default output): "
@@ -484,6 +484,88 @@ def _follow_the_audio(reason=""):
     except Exception as e:
         print(f">>> Could not open [{dev['index']}]: {e}", flush=True)
         return False
+
+
+def _follow_current_windows_default():
+    """Follow a Windows default-output change made after the engine started.
+
+    Headsets, docks and meeting apps can change the default renderer while an
+    interview is already running. Silence-based probing cannot detect that in a
+    quiet moment, and waiting for sound on the new endpoint loses the beginning
+    of the next question. Re-resolve the WASAPI default periodically and move by
+    identity, even while it is silent.
+
+    Returns True only when a replacement stream was opened.
+    """
+    global sys_stream, _sys_native_rate, _sys_native_channels, _sys_chunk_frames
+    global _active_loopback_index, _default_loopback_index, _sys_use_loopback
+    global _last_default_output_check_at, _last_default_output_name
+
+    now = time.monotonic()
+    if now - _last_default_output_check_at < DEFAULT_OUTPUT_CHECK_SECS:
+        return False
+    _last_default_output_check_at = now
+
+    try:
+        wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+        default_out = wasapi_info.get('defaultOutputDevice', -1)
+        default_name = (str(p.get_device_info_by_index(default_out).get('name', ''))
+                        if default_out >= 0 else '')
+    except Exception:
+        return False
+
+    if not default_name:
+        return False
+
+    match = None
+    for i, dev in enumerate(_loopback_candidates):
+        if (default_name[:25] in dev['name']
+                and 'microphone' not in dev['name'].lower()):
+            match = i
+            break
+
+    # The endpoint may have appeared after PortAudio enumerated its devices.
+    # The normal signal follower remains the fallback; log a name change once so
+    # support can distinguish that from a recogniser failure.
+    if match is None:
+        if default_name != _last_default_output_name:
+            print(f">>> Windows default output changed to '{default_name}', but its "
+                  "loopback is not available in this engine session yet.", flush=True)
+            _last_default_output_name = default_name
+        return False
+
+    _last_default_output_name = default_name
+    _default_loopback_index = match
+    if match == _active_loopback_index:
+        return False
+
+    dev = _loopback_candidates[match]
+    lb_chunk = max(CHUNK_FRAMES, int(CHUNK_FRAMES * dev['rate'] / SAMPLE_RATE))
+    try:
+        replacement = p.open(
+            format=pyaudio.paInt16,
+            channels=dev['channels'],
+            rate=dev['rate'],
+            input=True,
+            input_device_index=dev['index'],
+            frames_per_buffer=lb_chunk,
+        )
+    except Exception as exc:
+        print(f">>> Windows default output changed, but [{dev['index']}] could not "
+              f"be opened: {exc}", flush=True)
+        return False
+
+    # Do not close the old stream here. A timed-out native read can still own it
+    # on a daemon worker; closing underneath that call can crash PortAudio.
+    sys_stream = replacement
+    _active_loopback_index = match
+    _sys_native_rate = dev['rate']
+    _sys_native_channels = dev['channels']
+    _sys_chunk_frames = lb_chunk
+    _sys_use_loopback = True
+    print(f">>> SYSTEM AUDIO followed new Windows default: [{dev['index']}] "
+          f"{dev['name'][:45]}", flush=True)
+    return True
 
 
 def _try_next_loopback():
@@ -948,6 +1030,11 @@ LIVE_THRESHOLD         = 400
 _last_pause_state      = True   # engine starts muted; log the first observed transition too
 _default_silence_noted = False  # say "staying put" once, not every 3.5s
 _probe_cursor          = 0      # where the next signal sweep resumes
+_last_default_output_check_at = 0.0
+_last_default_output_name = ""
+# Fast enough to catch a headset/dock/meeting-device switch before the next
+# question, slow enough that device enumeration is negligible beside audio I/O.
+DEFAULT_OUTPUT_CHECK_SECS = 2.0
 # How many devices one sweep may open. Each costs PROBE_TIMEOUT, and this runs
 # on the capture thread, so a full fourteen-device sweep would stall audio for
 # seconds. Four keeps a sweep under a second and the cursor covers the rest.
@@ -998,9 +1085,21 @@ MIC_WORDS_QUIET_SECS    = 8.0    # no mic search while words arrived this recent
 _mic_last_search_at     = 0.0    # when the last microphone search ran
 MIC_RESEARCH_BACKOFF_SECS = 30.0 # after the first three, search again this often
 MIC_DEAD_LEVEL          = 8      # a working mic in a quiet room reads 25 to 150
-MIC_DEAD_READS_BEFORE_RESEARCH = 100   # ~10s of nothing from a mic that used to work
-MIC_QUIET_READS_BEFORE_SWITCH = 40    # ~4s at 0.1s per read
+# A mixed capture iteration is closer to 0.3-0.5s on Windows because the
+# loopback read is bounded too. The old 40/100-read limits therefore became
+# roughly 20/50 seconds in practice. A digitally dead virtual microphone sits
+# at level 0-8 while a real quiet microphone still has an ambient floor around
+# 25-150, so this faster check does not confuse a quiet room with a dead route.
+MIC_DEAD_READS_BEFORE_RESEARCH = 40   # 4 seconds at 100 ms per read
+MIC_QUIET_READS_BEFORE_SWITCH = 20    # 2 seconds of digital silence at startup
 MIC_SIGNAL_THRESHOLD          = 400   # same figure the rest of the file uses
+
+
+def _mic_needs_recovery(ever_heard, dead_reads):
+    """Quiet ambient audio is not evidence of a disconnected device."""
+    threshold = (MIC_DEAD_READS_BEFORE_RESEARCH if ever_heard
+                 else MIC_QUIET_READS_BEFORE_SWITCH)
+    return dead_reads >= threshold
 
 
 def _real_input_devices(audio, exclude_index=None):
@@ -1598,6 +1697,8 @@ def resample_to_16k_mono(data: bytes, src_rate: int, src_channels: int, out_fram
         samples = mono
 
     src_len = len(samples)
+    if src_len == 0:
+        return b"\x00" * (out_frames * 2)
     if src_rate == 16000:
         out = list(samples[:out_frames])
     elif src_rate > 16000 and out_frames > 0:
@@ -1606,7 +1707,10 @@ def resample_to_16k_mono(data: bytes, src_rate: int, src_channels: int, out_fram
         # Plain interpolation has NO anti-aliasing, so frequencies above 8kHz fold back
         # into the voice band and garble the interviewer's audio — a real accuracy hit.
         # Averaging the window acts as a low-pass filter and removes most of that aliasing.
-        ratio = src_len / out_frames
+        # Packet duration varies (especially nonblocking WASAPI reads). The
+        # physical sample rates determine pitch; buffer length must not stretch
+        # a short packet to a full 100 ms. Missing frames are silence.
+        ratio = src_rate / 16000.0
         out = []
         for i in range(out_frames):
             start = int(i * ratio)
@@ -1624,11 +1728,14 @@ def resample_to_16k_mono(data: bytes, src_rate: int, src_channels: int, out_fram
             out.append(max(-32768, min(32767, acc // (end - start))))
     else:
         # Upsampling or equal-ish rate: linear interpolation is fine (no aliasing risk).
-        ratio = src_len / out_frames if out_frames else 1.0
+        ratio = src_rate / 16000.0
         out = []
         for i in range(out_frames):
             pos  = i * ratio
             i0   = int(pos)
+            if i0 >= src_len:
+                out.append(0)
+                continue
             i1   = min(i0 + 1, src_len - 1)
             frac = pos - i0
             val  = int(samples[i0] * (1.0 - frac) + samples[i1] * frac)
@@ -2054,16 +2161,19 @@ class MixedStream:
                 if mic_stream:
                     _read_stream_timeout(mic_stream, num_frames, 0.5, "MIC-drain")
                 if sys_stream:
-                    sys_drain = _read_stream_timeout(
-                        sys_stream,
-                        _sys_chunk_frames,
-                        SYS_READ_TIMEOUT_SECS if args.mode == "both" else 0.5,
-                        "SYS-drain",
-                    )
-                    if sys_drain is None and args.mode == "both":
-                        disable_unresponsive_system_audio(
-                            "loopback did not return audio while idle"
-                        )
+                    # A WASAPI loopback may legitimately have no packet until
+                    # the renderer plays sound. Blocking read() while muted made
+                    # that normal idle state look like a hung device and rotated
+                    # away from the real Windows default before the interview
+                    # started. Drain only what PortAudio says is already buffered.
+                    # No available frames means quiet, not broken.
+                    try:
+                        available = int(sys_stream.get_read_available())
+                    except Exception:
+                        available = 0
+                    if available > 0:
+                        sys_stream.read(min(available, _sys_chunk_frames),
+                                        exception_on_overflow=False)
             except:
                 pass
             if not recording_requested:
@@ -2087,6 +2197,7 @@ class MixedStream:
 
         if args.mode == "system":
             # System-audio-only: never touch the mic stream
+            _follow_current_windows_default()
             if sys_stream:
                 try:
                     raw = _read_stream_timeout(
@@ -2135,6 +2246,7 @@ class MixedStream:
                 data = SILENCE
         else:
             # Both: read mic, mix with system audio if available
+            _follow_current_windows_default()
             try:
                 if mic_stream:
                     mic_raw = _read_stream_timeout(mic_stream, _mic_chunk_frames, 0.5, "MIC")
@@ -2179,8 +2291,7 @@ class MixedStream:
                     # deaf until restart. A quiet room is never "nothing at all",
                     # and the search only switches to a device that hears a
                     # voice, so a mic that is fine but gated is kept.
-                    mic_lost = ((not _mic_ever_heard and _mic_quiet_reads >= MIC_QUIET_READS_BEFORE_SWITCH)
-                                or (_mic_ever_heard and _mic_dead_reads >= MIC_DEAD_READS_BEFORE_RESEARCH))
+                    mic_lost = _mic_needs_recovery(_mic_ever_heard, _mic_dead_reads)
                     # A search holds up reading for a second or two, so it
                     # waits while the interviewer's audio is playing rather
                     # than lose their words to find the candidate's mic.
@@ -2257,7 +2368,12 @@ class MixedStream:
             if sys_stream:
                 # System audio is BEST-EFFORT here — the mic (the user's
                 # voice on Space) is the primary path and must never be
-                # disrupted. We do NOT hot-swap on silence: silence is the
+                # disrupted. A silent WASAPI loopback often blocks read() until
+                # Windows produces a packet. Waiting 0.5s for every 0.1s mic
+                # chunk made live transcription run about five times slower.
+                # Read only frames PortAudio says are already available; if
+                # none are available, send the mic chunk immediately. We do
+                # NOT hot-swap on silence: silence is the
                 # normal case (user is speaking, nothing is playing), and
                 # churning through loopback devices on silence was both
                 # pointless and, on some setups, actively corrupted the mic
@@ -2266,24 +2382,16 @@ class MixedStream:
                 # drop system audio for the rest of the session so it can
                 # never interfere with mic capture again.
                 try:
-                    raw = _read_stream_timeout(sys_stream, _sys_chunk_frames, 0.5, "SYS")
+                    available = int(sys_stream.get_read_available())
+                    raw = (sys_stream.read(min(available, _sys_chunk_frames),
+                                           exception_on_overflow=False)
+                           if available > 0 else None)
                 except Exception:
                     raw = None
 
                 if raw is None:
-                    _sys_hang_count += 1
                     data = mic_data
-                    if _sys_hang_count >= SYS_HANG_DISABLE_LIMIT:
-                        print(">>> SYSTEM AUDIO disabled for this session — its loopback "
-                              "device kept hanging. Running mic-only; your voice still "
-                              "transcribes normally.", flush=True)
-                        # Deliberately abandon WITHOUT closing: a hung read left a
-                        # daemon thread blocked inside the native stream.read(), and
-                        # closing it out from under that thread is a use-after-close
-                        # crash at the C level. Dropping the reference is safe.
-                        sys_stream = None
                 else:
-                    _sys_hang_count = 0
                     sys_data = (resample_to_16k_mono(raw, _sys_native_rate, _sys_native_channels, num_frames)
                                 if (_sys_native_rate != SAMPLE_RATE or _sys_native_channels != 1)
                                 else raw)
@@ -2631,8 +2739,11 @@ async def run_deepgram() -> str:
                             if kind == "Error" or msg.get("err_code"):
                                 print(f">>> [DEEPGRAM] error: {str(msg)[:200]}", flush=True)
                             continue
-                        # Same contract as handle_partial/handle_final: a reset
-                        # clears both halves and drops the message that saw it.
+                        # A reset separates this turn from the previous one.  It
+                        # must not discard the message that happens to observe
+                        # the flag: for a short question Deepgram may send only
+                        # one Results message, so dropping it makes the entire
+                        # question disappear and leaves latest.txt empty.
                         if os.path.exists(RESET_FLAG):
                             transcript["confirmed"] = ""
                             transcript["partial"] = ""
@@ -2640,7 +2751,6 @@ async def run_deepgram() -> str:
                                 os.remove(RESET_FLAG)
                             except Exception:
                                 pass
-                            continue
                         if os.path.exists(PAUSE_FLAG):
                             continue
 
@@ -2704,7 +2814,13 @@ async def run_deepgram() -> str:
             status = _http_status(e)
             print(f">>> [DEEPGRAM] {'HTTP ' + str(status) if status else 'error'}: {str(e)[:200]}", flush=True)
             if status in _DEEPGRAM_REFUSED:
-                print(f">>> [DEEPGRAM] Refused with {status}; Speechmatics takes over.", flush=True)
+                # Keep the 401 wording literal: the desktop client watches this exact
+                # line to renew an expired temporary token instead of leaving speech
+                # offline for the rest of the interview.
+                if status == 401:
+                    print(">>> [DEEPGRAM] Refused with 401; Speechmatics takes over.", flush=True)
+                else:
+                    print(f">>> [DEEPGRAM] Refused with {status}; Speechmatics takes over.", flush=True)
                 return "fallback"
             failures += 1
             if failures >= _DEEPGRAM_MAX_FAILURES:
@@ -2848,7 +2964,6 @@ async def main():
                                 os.remove(RESET_FLAG)
                             except:
                                 pass
-                            return
 
                         segment = build_text_from_results(msg.get("results", []))
                         if not segment.strip():
@@ -2869,16 +2984,14 @@ async def main():
                         if os.path.exists(PAUSE_FLAG):
                             return
                         if os.path.exists(RESET_FLAG):
-                            # MUST clear confirmed_text here too. Partials arrive before
-                            # finals, so if this handler removed the reset flag without
-                            # clearing confirmed_text, the final handler would never see
-                            # the flag and the previous question's text would keep
-                            # accumulating onto every following question.
+                            # Clear the previous turn but keep processing this
+                            # partial.  This is commonly the first (and for a
+                            # short question sometimes the only) recognition
+                            # result after unmuting.
                             confirmed_text = ""
                             partial_text   = ""
                             try: os.remove(RESET_FLAG)
                             except: pass
-                            return
 
                         segment      = build_text_from_results(msg.get("results", []))
                         partial_text = segment

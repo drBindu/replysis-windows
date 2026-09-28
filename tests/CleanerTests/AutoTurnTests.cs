@@ -19,6 +19,42 @@ internal static class AutoTurnTests
         }
 
         var submit = new DateTime(2026, 9, 17, 12, 35, 24, DateTimeKind.Utc);
+        Check(!AutoTurnRules.RecognitionSettled(
+                  submit.AddSeconds(3), submit, submit.AddSeconds(2.4), DateTime.MinValue, submit, false),
+              "repeated partials keep Auto listening even when the text itself is unchanged");
+        Check(AutoTurnRules.RecognitionSettled(
+                  submit.AddSeconds(4.5), submit, submit.AddSeconds(2.4), DateTime.MinValue, submit, false),
+              "two seconds without any provider result permits the fallback");
+        Check(AutoTurnRules.RecognitionSettled(
+                  submit.AddSeconds(1), submit, submit.AddMilliseconds(900), submit.AddMilliseconds(950), submit, false),
+              "a final newer than the partial completes the recognition turn");
+        Check(AutoTurnRules.RecognitionSettled(
+                  submit.AddMilliseconds(400), submit, submit.AddMilliseconds(350), DateTime.MinValue, submit, true),
+              "an explicit provider boundary completes the recognition turn");
+        Check(AutoTurnRules.CompletionGraceMs(2800) == 2800,
+              "a recognizer full stop gets continuation grace instead of causing a first-clause answer");
+        Check(AutoTurnRules.CompletionGraceMs(2800) == 2800,
+              "provider-inferred question punctuation cannot bypass continuation grace");
+        Check(AutoTurnRules.HoldCompletedQuestionOnEmptyRestart(true, "What is dependency injection?", ""),
+              "an empty Auto restart keeps the completed interviewer question visible");
+        Check(!AutoTurnRules.HoldCompletedQuestionOnEmptyRestart(true, "What is dependency injection?", "And where did you use it?"),
+              "real words replace the completed interviewer question");
+        Check(!AutoTurnRules.HoldCompletedQuestionOnEmptyRestart(false, "What is dependency injection?", ""),
+              "Manual mode still clears for an explicit new turn");
+        Check(!AutoTurnRules.IsRevisionOf("Can Redis replace Postgres?", "Can Postgres replace Redis?"),
+              "reversing the comparison must produce a new answer");
+        Check(!AutoTurnRules.IsRevisionOf("Should I use Redis?", "Should I not use Redis?"),
+              "removing negation changes intent and must not be discarded");
+        Check(!AutoTurnRules.IsRevisionOf("Why use Redis?", "How and why use Redis?"),
+              "a focused follow-up remains answerable");
+        Check(!AutoTurnRules.IsRevisionOf("Why did you choose Redis?", "How did you choose Redis?"),
+              "a why follow-up must not be suppressed as a how revision");
+        Check(!AutoTurnRules.IsRevisionOf("Would you not use caching?", "Would you use caching?"),
+              "a negated follow-up remains answerable");
+        Check(!AutoTurnRules.IsRevisionOf("What are the disadvantages of using Redis for this service?", "What are the advantages of using Redis for this service?"),
+              "a one-word change in intent must still get an answer");
+        Check(AutoTurnRules.UnconsumedTranscript("Explain Redis. With an example.", "Explain Redis.") == "With an example.",
+              "two-word answered prompts do not swallow or repeat the next clause");
         Check(AutoTurnRules.StartedSoonEnoughToContinue(submit, submit.AddSeconds(1.2)), "words 1.2s after the submission can continue it");
         Check(!AutoTurnRules.StartedSoonEnoughToContinue(submit, submit.AddSeconds(8)), "words 8s later are the next question");
         Check(!AutoTurnRules.StartedSoonEnoughToContinue(submit, DateTime.MinValue), "no words yet cannot continue anything");
@@ -61,6 +97,58 @@ internal static class AutoTurnTests
         Check(AutoTurnRules.IsBareRequestOpener("Tell me about"), "'Tell me about' waits");
         Check(!AutoTurnRules.IsBareRequestOpener("Can you tell me about yourself?"), "'Can you tell me about yourself' is a whole question");
         Check(!AutoTurnRules.IsBareRequestOpener("Tell me about Kafka"), "'Tell me about Kafka' is a whole question");
+
+        // Deepgram's explicit utterance boundary recovers questions whose punctuation or
+        // opening was imperfect, but never acknowledgements, noise, or half a request.
+        Check(AutoTurnRules.IsSubstantiveBoundaryUtterance("Your experience with Kubernetes"),
+              "an explicit boundary can recover a noun-phrase interview question");
+        Check(AutoTurnRules.IsSubstantiveBoundaryUtterance("I'd like to hear about the migration"),
+              "an explicit boundary can recover a polite declarative request");
+        Check(!AutoTurnRules.IsSubstantiveBoundaryUtterance("Okay, thank you."),
+              "an acknowledgement is not a question at an utterance boundary");
+        Check(!AutoTurnRules.IsSubstantiveBoundaryUtterance("Can you tell me"),
+              "a boundary does not submit a bare request opener");
+        Check(!AutoTurnRules.IsSubstantiveBoundaryUtterance("Capital m o t o g p f"),
+              "a boundary does not submit spelled-out noise");
+
+        // Reading the answer aloud versus asking something new
+        DateTime submitted = DateTime.UtcNow;
+        foreach (double gap in new[] { 3.0, 4.0, 5.0, 7.0 })
+        {
+            Check(AutoTurnRules.CanContinueAfterPause(
+                "and explain how you tested it under load in production", submitted, submitted.AddSeconds(gap)),
+                $"long linked clause survives {gap}s arrival gap");
+        }
+
+        // Replay repeated turns through the actual cumulative-transcript rule.
+        // Each answer consumes exactly its snapshot; incoming speech remains
+        // available, and polling unchanged snapshots never creates another turn.
+        string cumulative = "";
+        string consumed = "";
+        bool replayPassed = true;
+        for (int turn = 0; turn < 50; turn++)
+        {
+            string next = $"Explain scenario {turn}.";
+            cumulative = (cumulative + " " + next).Trim();
+            replayPassed &= AutoTurnRules.UnconsumedTranscript(cumulative, consumed) == next;
+            consumed = cumulative;
+            replayPassed &= AutoTurnRules.UnconsumedTranscript(cumulative, consumed) == "";
+            cumulative += " And give an example with the failure handling included.";
+            replayPassed &= AutoTurnRules.UnconsumedTranscript(cumulative, consumed) ==
+                "And give an example with the failure handling included.";
+            consumed = cumulative;
+        }
+        Check(replayPassed, "50 successive turns preserve arriving extensions without duplicate replay");
+        Check(AutoTurnRules.CanContinueAfterPause("and where have you used it in your last project?", submitted, submitted.AddSeconds(5)),
+              "linked extension survives four seconds of silence plus recognition delay");
+        Check(!AutoTurnRules.CanContinueAfterPause("And what is Kubernetes?", submitted, submitted.AddSeconds(5)),
+              "a separate topic after a pause is not merged");
+        Check(!AutoTurnRules.CanContinueAfterPause("with an example", submitted, submitted.AddSeconds(20)),
+              "old questions do not absorb unrelated later fragments");
+        Check(AutoTurnRules.UnconsumedTranscript("What is Java?", "What is Java?") == "",
+              "continuous capture does not resubmit the answered question");
+        Check(AutoTurnRules.UnconsumedTranscript("What is Java? And where have you used it?", "What is Java?") == "And where have you used it?",
+              "speech captured during answer generation survives for the next turn");
 
         // Reading the answer aloud versus asking something new
         const string restAnswer = "A RESTful API is an HTTP based interface that follows the principles of Representational State Transfer. " +

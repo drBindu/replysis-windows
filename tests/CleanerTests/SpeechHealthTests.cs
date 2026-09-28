@@ -35,6 +35,18 @@ internal static class SpeechHealthTests
             if (!ok) { failed++; Console.WriteLine($"        expected {want}: {why}"); }
         }
 
+        var taps = new SustainedAudioEvidence();
+        bool tapTriggered = false;
+        for (int i = 0; i < 60; i++)
+            tapTriggered |= taps.Observe(T0.AddSeconds(i), 8000);
+        Case("isolated loud taps do not establish sustained audio", tapTriggered, false, "peak alone is insufficient");
+        var sustained = new SustainedAudioEvidence();
+        bool sustainedTriggered = false;
+        for (int i = 0; i < 20; i++)
+            sustainedTriggered |= sustained.Observe(T0.AddMilliseconds(i * 100), 4000);
+        Case("sustained loud audio establishes recovery evidence", sustainedTriggered, true, "repeated audio is present");
+        Case("old evidence expires after silence", sustained.Observe(T0.AddSeconds(10), 100), false, "no stale restart evidence");
+
         // ── It fires ──────────────────────────────────────────────────────────
         // Speech arriving now, nothing ever returned, listening for 20s.
         // This is the exact shape a broken FIFO reader produces.
@@ -77,6 +89,14 @@ internal static class SpeechHealthTests
         Case("quiet: engine offline",
             SpeechHealth.ShouldWarn(false, T0.AddSeconds(20), T0.AddSeconds(19), Never, T0, Never, out _),
             false, "an offline engine already says so itself");
+
+        Case("quiet: keyboard and fan noise are not speech",
+            SpeechHealth.IsConfidentSpeechAmplitude(1800),
+            false, "weak laptop noise must not restart a healthy recognizer");
+
+        Case("voice peaks count as speech",
+            SpeechHealth.IsConfidentSpeechAmplitude(8000),
+            true, "real spoken audio must still detect a deaf recognizer");
 
         Case("quiet: a silent room",
             Warn(T0.AddSeconds(20), Never, Never, T0, Never, out _),

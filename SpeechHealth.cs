@@ -9,6 +9,20 @@ using System.Runtime.CompilerServices;
 
 namespace InterviewCopilot
 {
+    // Sustained loud audio, not a speech classifier. Isolated taps must not
+    // restart a healthy recognizer. Reset per engine process.
+    internal sealed class SustainedAudioEvidence
+    {
+        private readonly System.Collections.Generic.Queue<DateTime> samples = new();
+        internal bool Observe(DateTime now, int amplitude)
+        {
+            while (samples.Count > 0 && now - samples.Peek() > TimeSpan.FromSeconds(3))
+                samples.Dequeue();
+            if (SpeechHealth.IsConfidentSpeechAmplitude(amplitude)) samples.Enqueue(now);
+            return samples.Count >= 10 && now - samples.Peek() >= TimeSpan.FromSeconds(1);
+        }
+    }
+
     /// <summary>
     /// Whether the speech engine has gone deaf while still reporting itself
     /// healthy.
@@ -64,6 +78,15 @@ namespace InterviewCopilot
 
         /// <summary>How often the warning may be repeated.</summary>
         internal static readonly TimeSpan WarningInterval = TimeSpan.FromSeconds(60);
+
+        // The engine logs MIC SIGNAL DETECTED from 400 upward for diagnostics,
+        // but keyboard taps and laptop vibration commonly reach that level.
+        // They are not evidence that a recognizer is deaf. Real speech peaks on
+        // the supported microphones are normally several thousand or more.
+        internal const int ConfidentSpeechAmplitude = 2500;
+
+        internal static bool IsConfidentSpeechAmplitude(int amplitude) =>
+            amplitude >= ConfidentSpeechAmplitude;
 
         /// <summary>
         /// How long the engine may sit connecting before that stops being

@@ -786,6 +786,14 @@ namespace InterviewCopilot
         }
         public static int    GetAudioDeviceIndex()  => LoadConfig().AudioDeviceIndex;
         public static string GetAudioDeviceName()   => LoadConfig().AudioDeviceName ?? "";
+        public static bool RememberWorkingAudioDevice(int index, string name)
+        {
+            if (index < 0 || string.IsNullOrWhiteSpace(name)) return false;
+            var config = LoadConfig();
+            config.AudioDeviceIndex = index;
+            config.AudioDeviceName = name.Trim();
+            return SaveConfig(config);
+        }
         public static string GetTranscriptLanguage()
         {
             var lang = LoadConfig().TranscriptLanguage;

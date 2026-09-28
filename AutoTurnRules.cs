@@ -28,6 +28,50 @@ namespace InterviewCopilot
         /// </summary>
         internal static readonly TimeSpan ContinuationStartWindow = TimeSpan.FromSeconds(4);
 
+        internal static bool IsExplicitExtension(string text) =>
+            Regex.IsMatch((text ?? "").Trim(),
+                @"^(?:and|also|but|including|with|without|especially|specifically|for example|in particular|what about|how about)\b",
+                RegexOptions.IgnoreCase) && !AsksItsOwnQuestion(text ?? "") &&
+            !IsSpelledOutNoise(text ?? "") && Words(text ?? "").Length >= 2;
+
+        internal static bool CanContinueAfterPause(string text, DateTime submitted, DateTime firstWords) =>
+            StartedSoonEnoughToContinue(submitted, firstWords) ||
+            (submitted != DateTime.MinValue && firstWords >= submitted &&
+             firstWords - submitted <= TimeSpan.FromSeconds(8) && IsExplicitExtension(text));
+
+        /// <summary>
+        /// Whether recognition has genuinely stopped changing. Providers often
+        /// repeat the same partial text while audio is still arriving; text
+        /// stability alone therefore cuts a live sentence in half.
+        /// </summary>
+        internal static bool RecognitionSettled(
+            DateTime now, DateTime transcriptChanged, DateTime lastPartial,
+            DateTime lastFinal, DateTime listeningStarted, bool providerEnded)
+        {
+            if (providerEnded) return true;
+            bool finalForTurn = lastFinal >= listeningStarted && lastFinal >= lastPartial;
+            if (finalForTurn) return true;
+            if (transcriptChanged == DateTime.MinValue || now - transcriptChanged < TimeSpan.FromSeconds(2))
+                return false;
+            return lastPartial == DateTime.MinValue || now - lastPartial >= TimeSpan.FromSeconds(2);
+        }
+
+        /// <summary>
+        /// Speech recognizers often put a full stop on a request when the speaker
+        /// merely pauses: "Could you explain dependency injection? ...and describe
+        /// when you use it?"  Treating '.' like a real question mark produced two
+        /// answers (and two charges) for one interviewer turn. The provider may infer
+        /// either '.' or '?' from the same audio, so punctuation cannot safely shorten
+        /// the continuation grace period. Any new partial resets transcriptChanged,
+        /// so the second clause cancels the pending submission naturally.
+        /// </summary>
+        internal static int CompletionGraceMs(int continuationGraceMs) => continuationGraceMs;
+
+        internal static bool HoldCompletedQuestionOnEmptyRestart(
+            bool autoMode, string shownQuestion, string incomingTranscript) =>
+            autoMode && string.IsNullOrWhiteSpace(incomingTranscript) &&
+            !string.IsNullOrWhiteSpace(shownQuestion);
+
         internal static bool StartedSoonEnoughToContinue(DateTime lastSubmitUtc, DateTime firstWordsAfterUtc) =>
             lastSubmitUtc != DateTime.MinValue &&
             firstWordsAfterUtc != DateTime.MinValue &&
@@ -36,6 +80,19 @@ namespace InterviewCopilot
 
         private static string[] Words(string s) =>
             Regex.Matches((s ?? "").ToLowerInvariant(), @"[\p{L}\p{N}']+").Select(m => m.Value).ToArray();
+
+        internal static string UnconsumedTranscript(string captured, string consumed)
+        {
+            string[] done = Words(consumed);
+            var matches = Regex.Matches(captured ?? "", @"[\p{L}\p{N}']+");
+            if (done.Length == 0 || matches.Count < done.Length) return captured ?? "";
+            for (int i = 0; i < done.Length; i++)
+                if (!string.Equals(matches[i].Value, done[i], StringComparison.OrdinalIgnoreCase))
+                    return captured ?? "";
+            if (matches.Count == done.Length) return "";
+            Match last = matches[done.Length - 1];
+            return captured![(last.Index + last.Length)..].TrimStart(' ', '?', '.', '!', ',', ';', ':');
+        }
 
         /// <summary>Mostly single letters: recognition hearing noise, not a sentence.</summary>
         internal static bool IsSpelledOutNoise(string text)
@@ -57,6 +114,34 @@ namespace InterviewCopilot
                 @"(?:(?:can|could|would|will) (?:you|u) (?:please )?)?" +
                 @"(?:tell|walk|describe|explain|talk|share|give|go over|go through|take)" +
                 @"(?: (?:me|us))?(?: (?:about|through|a bit about|more about|how|what|why))?$");
+
+        /// <summary>
+        /// A recogniser-confirmed utterance that contains enough substance to answer even
+        /// when punctuation or the first word was transcribed imperfectly.
+        ///
+        /// This is deliberately used only for system-audio Auto mode after the speech
+        /// provider emits an explicit utterance boundary. It recovers real recruiter
+        /// prompts such as "Your experience with Kubernetes" and "I'd like to hear about
+        /// the migration" without turning mic noise, acknowledgements, or half a request
+        /// into paid answer calls.
+        /// </summary>
+        internal static bool IsSubstantiveBoundaryUtterance(string text)
+        {
+            string value = text ?? "";
+            string[] words = Words(value);
+            if (words.Length < 3 || value.Trim().Length < 12) return false;
+            if (IsSpelledOutNoise(value) || IsBareRequestOpener(value)) return false;
+
+            string normalized = string.Join(" ", words);
+            if (normalized is "okay thank you" or "yes thank you" or "that is fine" or
+                              "that sounds good" or "nice to meet you" or "thanks for that")
+                return false;
+
+            // An utterance boundary is useful evidence, not permission to answer a
+            // paragraph of background conversation.
+            int stops = value.Count(c => c is '.' or '?' or '!');
+            return stops <= 3;
+        }
 
         private static readonly HashSet<string> CommonWords = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -143,9 +228,20 @@ namespace InterviewCopilot
             string[] said = Words(candidate);
             string[] last = Words(lastQuestion);
             if (said.Length < 3 || last.Length == 0 || said.Length > last.Length) return false;
-            var known = new HashSet<string>(last);
-            int inLast = said.Count(known.Contains);
-            return inLast >= Math.Ceiling(said.Length * 0.9);
+            // Same vocabulary does not imply the same request. Reversing the
+            // operands or removing a negation changes the answer.
+            static bool Negative(string word) => word is "not" or "never" or "no" || word.EndsWith("n't");
+            if (said.Any(Negative) != last.Any(Negative)) return false;
+            var interrogatives = new HashSet<string> { "what", "why", "how", "when", "where", "who", "which" };
+            if (interrogatives.Contains(said[0]) && said[0] != last[0]) return false;
+            int cursor = 0;
+            foreach (string word in said)
+            {
+                while (cursor < last.Length && last[cursor] != word) cursor++;
+                if (cursor == last.Length) return false;
+                cursor++;
+            }
+            return true;
         }
     }
 }

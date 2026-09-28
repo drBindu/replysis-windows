@@ -23,6 +23,7 @@ namespace InterviewCopilot
         private readonly CancellationTokenSource _windowLifetime = new();
         private readonly CancellationToken _windowToken;
         private bool _authBusy;
+        private bool _isRegistrationMode;
 
         // Result — set when login succeeds
         public bool LoginSuccess { get; private set; } = false;
@@ -45,10 +46,9 @@ namespace InterviewCopilot
                 PasswordBox.Clear();
                 PasswordPlainBox.Clear();
             };
-            // Same glass as the main window, from the same stored setting.
-            // Every window painted its own solid near-black before this, so
-            // opening one dropped an opaque slab on top of a translucent app.
-            Glass.Apply(this, RootGlass);
+            // Authentication is intentionally opaque and fixed-size. Applying
+            // the workspace glass/opacity setting here made the first screen
+            // look unfinished and exposed whatever was behind the app.
             try { WindowStealth.SetStealthMode(this, SettingsWindow.GetStealthMode()); } catch { }
             EmailBox.Focus();
 
@@ -88,8 +88,12 @@ namespace InterviewCopilot
 
             try
             {
-                // ── Call Firebase Auth REST API ──
-                string url = $"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FirebaseApiKey}";
+                // Firebase keeps registration and password sign-in as separate
+                // endpoints. Keeping both inside this window means a first-time
+                // desktop user does not have to visit the website just to create
+                // their account.
+                string action = _isRegistrationMode ? "signUp" : "signInWithPassword";
+                string url = $"https://identitytoolkit.googleapis.com/v1/accounts:{action}?key={FirebaseApiKey}";
 
                 var payload = new
                 {
@@ -110,13 +114,17 @@ namespace InterviewCopilot
                 if (!res.IsSuccessStatusCode)
                 {
                     // Parse Firebase error
-                    string errMsg = "Login failed. Check your email and password.";
+                    string errMsg = _isRegistrationMode
+                        ? "Could not create your account. Please try again."
+                        : "Login failed. Check your email and password.";
                     if (doc.RootElement.TryGetProperty("error", out var err))
                     {
                         string code = err.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
                         errMsg = code switch
                         {
                             "EMAIL_NOT_FOUND"      => "No account found with this email.",
+                            "EMAIL_EXISTS"          => "An account already exists with this email. Sign in instead.",
+                            "WEAK_PASSWORD"         => "Use a password with at least 6 characters.",
                             "INVALID_PASSWORD"     => "Incorrect password. Please try again.",
                             "INVALID_EMAIL"        => "Invalid email address.",
                             "USER_DISABLED"        => "This account has been disabled.",
@@ -197,12 +205,34 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════
         private void RegisterLink_Click(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                    "https://replysis.com/signup") { UseShellExecute = true });
-            }
-            catch { }
+            if (_authBusy) return;
+            SetRegistrationMode(!_isRegistrationMode);
+        }
+
+        private void SetRegistrationMode(bool registrationMode)
+        {
+            _isRegistrationMode = registrationMode;
+            Title = registrationMode ? "Create your Replysis AI account" : "Replysis AI Sign In";
+            AuthTitle.Text = registrationMode ? "Create your account" : "Welcome back";
+            LoginSubtitle.Text = registrationMode
+                ? "Set up your secure Replysis workspace"
+                : "Sign in to continue to your workspace";
+            SetPrimaryButtonCaption(registrationMode ? "Create account" : "Sign In");
+            ForgotPasswordRow.Visibility = registrationMode ? Visibility.Collapsed : Visibility.Visible;
+            RegisterPromptText.Text = registrationMode ? "Already have an account? " : "New here? ";
+            RegisterLink.Inlines.Clear();
+            RegisterLink.Inlines.Add(registrationMode ? "Sign in" : "Create an account");
+            HideError();
+            PasswordBox.Focus();
+        }
+
+        private void SetPrimaryButtonCaption(string caption)
+        {
+            // BtnText lives inside SignInBtn's ControlTemplate, so WPF creates it
+            // at template scope rather than as a window field.
+            SignInBtn.ApplyTemplate();
+            if (SignInBtn.Template.FindName("BtnText", SignInBtn) is System.Windows.Controls.TextBlock text)
+                text.Text = caption;
         }
 
         // ══════════════════════════════════════════════════════════
@@ -294,9 +324,19 @@ namespace InterviewCopilot
                 bool ok = OAuthCallbackReader.TryGetCode(req, state, out string returnedCode);
                 code = ok ? returnedCode : null;
                 DebugWindow.Log("GOOGLE", $"S5 callback accepted={ok}; callback values omitted.");
+                // Browsers only permit window.close() when their security model
+                // considers the tab script-opened. A native app opens the system
+                // browser through ShellExecute, so some browsers close this tab and
+                // others deliberately refuse. Attempt the safe close, then leave a
+                // calm fallback while Replysis brings itself back to the foreground.
                 string html = ok
-                    ? "<html><body style='background:#0d1117;color:#4ade80;font-family:sans-serif;text-align:center;padding:60px'><h2>Return to Replysis to finish signing in. You can close this tab.</h2></body></html>"
-                    : "<html><body style='background:#0d1117;color:#ef4444;font-family:sans-serif;text-align:center;padding:60px'><h2>Sign-in failed. Please close this tab and try again.</h2></body></html>";
+                    ? "<!doctype html><html><head><meta charset='utf-8'><title>Replysis</title></head>" +
+                      "<body style='margin:0;background:#0b111c;color:#dce5ef;font-family:Segoe UI,sans-serif;display:grid;place-items:center;height:100vh'>" +
+                      "<div style='text-align:center'><h2 style='color:#54d99a'>Signed in to Replysis</h2>" +
+                      "<p>Returning to the Replysis desktop app...</p></div>" +
+                      "<script>setTimeout(function(){window.open('','_self');window.close();},150);</script></body></html>"
+                    : "<!doctype html><html><body style='margin:0;background:#0b111c;color:#ef8d96;font-family:Segoe UI,sans-serif;display:grid;place-items:center;height:100vh'>" +
+                      "<h2>Sign-in was not completed. Return to Replysis and try again.</h2></body></html>";
                 // Content-Length counts bytes, not characters. Both bodies above
                 // are ASCII today — the tick is written as an entity — so the two
                 // agree by luck rather than by construction, and the first
@@ -316,6 +356,11 @@ namespace InterviewCopilot
                     ShowError("Sign-in was not completed. Please try again. (E5)");
                     return;
                 }
+
+                // Do not leave the user looking at localhost. The browser may
+                // keep the tab because of its own close-tab policy, but Replysis
+                // becomes the active foreground window immediately in either case.
+                BringAuthenticationWindowForward();
             }
             catch (OperationCanceledException)
             {
@@ -458,6 +503,14 @@ namespace InterviewCopilot
             if (string.IsNullOrWhiteSpace(idToken) || string.IsNullOrWhiteSpace(uid) || string.IsNullOrWhiteSpace(email))
                 throw new InvalidOperationException("The sign-in response is missing account information.");
             UserSession.SetSession(idToken, email, name, uid, refreshToken, photoUrl);
+            // Warm speech credentials during the success transition, while the
+            // welcome state is already on screen. By the time MainWindow exists,
+            // the engine can start without a cold network round-trip.
+            _ = UserSession.EnsureSpeechmaticsKeyAsync(DeviceIdentity.Current);
+            // Firebase Authentication alone does not create the users/{uid}
+            // document listed by the admin portal. Use the website's verified,
+            // server-side initializer so desktop-only users appear there too.
+            await UserProfileSync.EnsureCurrentUserAsync();
             // A manual close during the welcome animation must still report a
             // completed login to the owner, since the session is already saved.
             LoginSuccess = true;
@@ -578,11 +631,11 @@ namespace InterviewCopilot
 
         // Input focus highlight
         private void EmailBox_GotFocus(object sender, RoutedEventArgs e) =>
-            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#34E08A"));
+            EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6687AA"));
         private void EmailBox_LostFocus(object sender, RoutedEventArgs e) =>
             EmailBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#26364C"));
         private void PasswordBox_GotFocus(object sender, RoutedEventArgs e) =>
-            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#34E08A"));
+            PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6687AA"));
         private void PasswordBox_LostFocus(object sender, RoutedEventArgs e) =>
             PasswordBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#26364C"));
 
@@ -633,5 +686,64 @@ namespace InterviewCopilot
         }
 
         private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        private void BringAuthenticationWindowForward()
+        {
+            try
+            {
+                // Chrome/Edge correctly refuse script-closing a tab launched by
+                // a native process. Minimize the exact foreground browser window
+                // that completed OAuth instead. Never terminate the browser or
+                // touch its tabs, because the same window can contain user work.
+                IntPtr browserWindow = GetForegroundWindow();
+                if (browserWindow != IntPtr.Zero)
+                {
+                    GetWindowThreadProcessId(browserWindow, out uint browserPid);
+                    try
+                    {
+                        string processName = System.Diagnostics.Process
+                            .GetProcessById(unchecked((int)browserPid)).ProcessName.ToLowerInvariant();
+                        if (processName is "chrome" or "msedge" or "firefox" or "brave" or "opera")
+                            ShowWindowAsync(browserWindow, 6); // SW_MINIMIZE
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugWindow.Log("GOOGLE", $"Could not identify OAuth browser: {ex.Message}");
+                    }
+                }
+
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (!IsLoaded) return;
+                    WindowState = WindowState.Normal;
+                    Show();
+                    Activate();
+                    Focus();
+                    IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        ShowWindowAsync(hwnd, 9); // SW_RESTORE
+                        SetForegroundWindow(hwnd);
+                    }
+                }, DispatcherPriority.Send);
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("GOOGLE", $"Could not restore app focus: {ex.Message}");
+            }
+        }
     }
 }

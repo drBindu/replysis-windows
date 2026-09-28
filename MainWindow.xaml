@@ -4,8 +4,8 @@
         xmlns:local="clr-namespace:InterviewCopilot"
         Title="Replysis AI"
         Icon="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
-        Height="600" Width="1240"
-        MinHeight="500" MinWidth="1180"
+        Height="600" Width="1060"
+        MinHeight="520" MinWidth="1000"
         WindowStartupLocation="Manual"
         KeyDown="Window_KeyDown"
         PreviewMouseDown="Window_PreviewMouseDown"
@@ -391,7 +391,7 @@
                 <Border Grid.Row="0" CornerRadius="16,16,0,0"
                         BorderBrush="#1E2C40" BorderThickness="0,0,0,1"
                         Background="#0AFFFFFF">
-                    <Grid Margin="18,0,14,0">
+                    <Grid Margin="14,0,10,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
@@ -400,7 +400,7 @@
 
                         <!-- Brand -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Image Width="35" Height="35" Margin="0,0,12,0"
+                            <Image Width="30" Height="30" Margin="0,0,8,0"
                                    Source="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
                                    Stretch="Uniform" SnapsToDevicePixels="True"/>
                             <StackPanel VerticalAlignment="Center">
@@ -460,13 +460,13 @@
                                     VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <!-- Group 1: when to answer. Group 2, past the hairline: what to hear. -->
-                                    <Border x:Name="SegAuto" CornerRadius="4" Padding="12,5" Cursor="Hand"
+                                    <Border x:Name="SegAuto" CornerRadius="4" Padding="9,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegAuto_Click"
                                             ToolTip="Auto. Answers as soon as the question ends.">
                                         <TextBlock x:Name="SegAutoText" Text="Auto" FontSize="10.5" FontWeight="SemiBold"
                                                    Style="{StaticResource ToolbarPillLabel}"/>
                                     </Border>
-                                    <Border x:Name="SegManual" CornerRadius="4" Padding="12,5" Cursor="Hand"
+                                    <Border x:Name="SegManual" CornerRadius="4" Padding="9,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegManual_Click"
                                             ToolTip="Manual. Press Space in Replysis, or Ctrl+Alt+Space in another app, to listen and again to answer.">
                                         <TextBlock x:Name="SegManualText" Text="Manual" FontSize="10.5" FontWeight="SemiBold"
@@ -480,7 +480,7 @@
                                     <Border x:Name="AudioSegments" Width="1" Height="18" Margin="6,0,6,0"
                                             Background="{DynamicResource ActionGraphiteStroke}"
                                             VerticalAlignment="Center"/>
-                                    <Border x:Name="SegInterview" CornerRadius="4" Padding="10,5" Cursor="Hand"
+                                    <Border x:Name="SegInterview" CornerRadius="4" Padding="8,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegInterview_Click"
                                             ToolTip="Interview. Hears the meeting only, so your own answers are never taken as questions. Use this for real interviews in Zoom, Meet or Teams.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -490,7 +490,7 @@
                                                        Style="{StaticResource ToolbarPillLabel}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border x:Name="SegPractice" CornerRadius="4" Padding="10,5" Cursor="Hand"
+                                    <Border x:Name="SegPractice" CornerRadius="4" Padding="8,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegPractice_Click"
                                             ToolTip="Practice. Hears the meeting and your microphone, for practising on your own or with someone in the room.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -628,7 +628,7 @@
                                                      Visibility="Collapsed"/>
                                         </Grid>
                                     </Border>
-                                    <TextBlock x:Name="ProfileNameLabel" Text=""
+                                    <TextBlock x:Name="ProfileNameLabel" Text="" MaxWidth="72" TextTrimming="CharacterEllipsis"
                                                Foreground="#EAF1F8" FontSize="11" FontWeight="Medium"
                                                FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                     <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets"
@@ -702,9 +702,9 @@
                 </Border>
 
                 <!-- ================= BODY ================= -->
-                <Grid x:Name="InterviewContent" Grid.Row="1" Margin="14,12,14,14">
+                <Grid x:Name="InterviewContent" Grid.Row="1" Margin="10,10,10,10">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition x:Name="ResumeColumn" Width="260"/>
+                        <ColumnDefinition x:Name="ResumeColumn" Width="230"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
@@ -714,7 +714,7 @@
                     ========================================================== -->
                     <Border x:Name="ResumePanel" Grid.Column="0"
                             CornerRadius="12" BorderBrush="#22FFFFFF" BorderThickness="1"
-                            Background="#10FFFFFF" Padding="14,13" ClipToBounds="True">
+                            Background="#10FFFFFF" Padding="12,11" ClipToBounds="True">
                         <ScrollViewer VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
                                       PanningMode="VerticalOnly" Padding="0,0,4,0">

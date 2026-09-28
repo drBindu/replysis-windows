@@ -58,6 +58,13 @@ namespace InterviewCopilot
                 if (!UserSession.IsLoggedIn || string.IsNullOrEmpty(UserSession.UserId))
                     return false;
 
+                // The admin portal reads users/{uid}, while Firebase Auth and
+                // Firestore are separate stores. Ensure the profile exists
+                // before the update-only presence PATCH; retry each heartbeat
+                // until a transient network/server failure clears.
+                if (!await UserProfileSync.EnsureCurrentUserAsync())
+                    return false;
+
                 // Keep the ID token fresh (Firebase tokens expire hourly)
                 if (UserSession.IsTokenExpired())
                     await UserSession.TryRefreshAsync();
