@@ -758,6 +758,16 @@ namespace InterviewCopilot
         public static string GetFirebaseApiKey() => LoadConfig().FirebaseApiKey ?? "AIzaSyAGGmuFpR0qkCHLI3q2cPv_o3cQlbIU8lE";
         public static string GetBackendUrl()
         {
+#if DEBUG
+            // Developer builds only: tests/scenarios runs the real app against a fake server
+            // that plays each account situation (no listening time, no credits, signed out,
+            // service down...). Loopback only, and never compiled into a release build.
+            string? testUrl = Environment.GetEnvironmentVariable("REPLYSIS_BACKEND_URL");
+            if (!string.IsNullOrWhiteSpace(testUrl) &&
+                Uri.TryCreate(testUrl.Trim().TrimEnd('/'), UriKind.Absolute, out Uri? testUri) &&
+                testUri.Scheme == Uri.UriSchemeHttp && testUri.IsLoopback)
+                return testUri.ToString().TrimEnd('/');
+#endif
             string value = (LoadConfig().BackendUrl ?? "").Trim().TrimEnd('/');
             if (Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) &&
                 string.IsNullOrEmpty(uri.Query) &&

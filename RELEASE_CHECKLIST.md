@@ -25,6 +25,18 @@ If you change any plan number, change it everywhere it names, and rerun.
     python tests/test_store_packaging.py
     python tests/test_audio_samples.py
 
+## 2b. The real app against a fake server, in every account situation (must print ALL SCENARIOS PASSED)
+
+    dotnet build InterviewCopilot.csproj -c Debug
+    node tests/scenarios/run-scenarios.mjs
+
+Runs the real app against `mock-backend.mjs`, which plays: no listening time, no
+credits, signed out, service down, rate limited. For each it checks what the person
+is told in words, that the app does not hammer the server, and saves a picture of the
+screen to `tests/scenarios/out/` to LOOK at. Needs one saved sign in on this PC.
+This is the test that would have caught the 2026-09-29 lockout. When you add a
+server response the app can receive, add a scenario for it.
+
 ## 3. Every "it is not working" state is explained in words
 
 `ListeningProblems.cs` describes each one, and `ListeningProblemTests` fails if a

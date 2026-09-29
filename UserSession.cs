@@ -299,6 +299,10 @@ namespace InterviewCopilot
 
         private static bool TryLoadCachedSpeechmaticsKey()
         {
+#if DEBUG
+            // A scenario run (tests/scenarios) must ask its fake server, not reuse a real key.
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("REPLYSIS_BACKEND_URL"))) return false;
+#endif
             try
             {
                 if (!File.Exists(SpeechmaticsKeyPath)) return false;

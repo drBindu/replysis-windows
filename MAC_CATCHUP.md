@@ -1,3 +1,20 @@
+## Server: refused speech-key requests no longer spend the mint budget; scenario test (2026-09-29)
+
+**Server (deployed, `SttController`):** the strict limits (12 keys an hour per account, 5 a minute per
+address, the guest ceiling) now apply only when a token is about to be minted. A request refused with
+402 used to count too, so an account refused a dozen times was locked out for an hour behind a 429 that
+hid the reason. A loose limit still guards the credit lookups. `SttKeyOrderTests` proves 60 refusals in a
+row stay 402, an account restored after 40 refusals starts at once, and farming is still stopped. The 402
+text says "fair use limit". **Clients on any platform benefit at once, and a Mac client that retries on a
+short timer after 402 is no longer punished for it.**
+
+**Scenario test (`tests/scenarios/`):** the real app against a fake server playing each account
+situation, checking what the person is told and that the app does not hammer the server, with a picture
+of each screen. Developer builds accept `REPLYSIS_BACKEND_URL` (loopback only) and skip the saved speech
+key when it is set. Not compiled into release builds.
+
+---
+
 ## A rate limit reply hid "no listening time"; the app hammered the key endpoint (2026-09-29, Windows 1.0.28)
 
 A Free tester updated to 1.0.27 and still got nothing, and now not even the explanation.
