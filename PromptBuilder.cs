@@ -684,8 +684,9 @@ namespace InterviewCopilot
                     "", RegexOptions.IgnoreCase).Trim();
             } while (stripped != prev && stripped.Length > 0);
 
-            if (Regex.Matches(stripped, @"[\p{L}\p{N}']+").Count < 2) return q;
-            return char.ToUpperInvariant(stripped[0]) + stripped[1..];
+            if (Regex.Matches(stripped, @"[\p{L}\p{N}']+").Count < 2) stripped = q;
+            stripped = Regex.Replace(stripped, @"^what'?s\b", "What is", RegexOptions.IgnoreCase);
+            return stripped.Length == 0 ? q : char.ToUpperInvariant(stripped[0]) + stripped[1..];
         }
 
         private static string NormalizeInterviewerQuestionCore(string question)
@@ -755,8 +756,33 @@ namespace InterviewCopilot
                 return string.Join(" ", parts);
             }
 
+            // Noise and a question in one unpunctuated run: "Frame partner
+            // sequence Tell me what is Java." (owner's live test, a noisy room
+            // on an open microphone). No piece looked like a question, so it
+            // was never answered. Start at the first word that opens one.
+            string embedded = QuestionInsideLastPiece(remaining[^1]);
+            if (embedded.Length > 0) return embedded;
+
             return string.Join(" ", remaining);
         }
+
+        private static string QuestionInsideLastPiece(string piece)
+        {
+            var words = Regex.Matches(piece ?? "", @"[\p{L}\p{N}']+");
+            for (int i = 1; i < words.Count; i++)
+            {
+                if (!Regex.IsMatch(words[i].Value, EmbeddedOpeners, RegexOptions.IgnoreCase)) continue;
+                string tail = piece![words[i].Index..].Trim();
+                if (Regex.Matches(tail, @"[\p{L}\p{N}']+").Count >= 3 && IsCompleteInterviewQuestion(tail))
+                    return char.ToUpperInvariant(tail[0]) + tail[1..];
+            }
+            return "";
+        }
+
+        // Openers strong enough to trust mid-sentence. Bare auxiliaries ("is",
+        // "do", "have") are left out: they sit inside ordinary sentences.
+        private const string EmbeddedOpeners =
+            @"^(?:tell|explain|describe|walk|give|talk|what|why|how|which|can|could|would)$";
 
         private static bool StartsWithJoiningWord(string segment) =>
             Regex.IsMatch((segment ?? "").Trim().ToLowerInvariant(),
@@ -790,7 +816,7 @@ namespace InterviewCopilot
             Regex.IsMatch(" " + (segment ?? "").ToLowerInvariant() + " ",
                 @"[ ,](that|it|this|there|them|those|these)[ ?.!,]");
 
-        private static bool StartsLikeAQuestion(string segment) =>
+        internal static bool StartsLikeAQuestion(string segment) =>
             Regex.IsMatch(StripLeadingDiscourse(segment).ToLowerInvariant(), QuestionOpeningPattern);
 
         private const string QuestionOpeningPattern =
@@ -1378,6 +1404,21 @@ namespace InterviewCopilot
         // latency here, and the rule works without the anecdote.
         private static void AppendSharedVoiceRules(StringBuilder sb)
         {
+            // The owner, 2026-09-28: "the user has to speak by reading from the
+            // screen, so no tough speaking... pure human words, how humans talk".
+            // Measured answer before this: "Java is a compiled-to-bytecode language
+            // ... which abstracts the underlying operating system ... JIT-compiles
+            // to native code at runtime." Correct, and impossible to say naturally.
+            sb.AppendLine("EASY TO SAY OUT LOUD (this matters more than sounding clever):");
+            sb.AppendLine("  The candidate reads your answer aloud from the screen while the interviewer");
+            sb.AppendLine("  watches. Write it so they can say it smoothly on the first read.");
+            sb.AppendLine("  Short sentences. Most under 15 words. One idea each.");
+            sb.AppendLine("  Everyday words a person says in conversation. If a technical term is needed,");
+            sb.AppendLine("  say it once and then explain it in plain words, like talking to a smart friend.");
+            sb.AppendLine("  No semicolons, brackets, slashes, dashes, file extensions or code symbols in the");
+            sb.AppendLine("  spoken part. No stacked jargon: never three technical terms in one sentence.");
+            sb.AppendLine("  It should sound like a real person talking across a table, not a document.");
+            sb.AppendLine();
             sb.AppendLine("SOUND LIKE A PERSON, NOT A DEFINITION:");
             sb.AppendLine("  Asked what something is, answer the way an engineer would answer a");
             sb.AppendLine("  colleague, not the way an encyclopedia opens an article. Say what it is");
@@ -1475,10 +1516,22 @@ namespace InterviewCopilot
         // FORMAT REMINDER
         // =====================================================================
 
+        // "Tell me what is Java", "Can you explain what Kafka is", "What's Docker":
+        // how definition questions are actually spoken. Only "What is X" at the
+        // start matched, so these fell to the one-or-two-sentence general rule
+        // and read as a short textbook line (owner's live test, 2026-09-28).
+        private const string DefinitionLeadIn =
+            @"(?:^|[?.!]\s*)(?:(?:can|could|would) you\s+)?(?:please\s+)?(?:tell me|explain|describe|say)?\s*";
+
+        private const string WhatXIs =
+            @"(?:^|[?.!]\s*)(?:(?:can|could|would) you\s+)?(?:please\s+)?(?:tell me|explain|describe)\s+what\s+" +
+            @"(?:an?\s+|the\s+)?(?!you\b|your\b)(.{1,40}?)\s+(?:is|are)\s*[?.!]?\s*$";
+
         private static bool IsSimpleDefinitionQuestion(string question) =>
             Regex.IsMatch(question,
-                @"(?:^|[?.!]\s*)(?:what is|what are|define)\s+(?!your\b|you\b)",
-                RegexOptions.IgnoreCase);
+                DefinitionLeadIn + @"(?:what is|what's|whats|what are|define)\s+(?!your\b|you\b)",
+                RegexOptions.IgnoreCase) ||
+            Regex.IsMatch(question, WhatXIs, RegexOptions.IgnoreCase);
 
         /// <summary>
         /// The thing a definition question asks about: "What is a REST API?" gives
@@ -1486,9 +1539,11 @@ namespace InterviewCopilot
         /// </summary>
         internal static string DefinitionTerm(string question)
         {
-            var m = Regex.Match(question ?? "",
-                @"(?:^|[?.!]\s*)(?:what is|what are|define)\s+(?:an?\s+|the\s+)?(.+?)(?:[?!]|\.(?=\s|$)|$)",
-                RegexOptions.IgnoreCase);
+            var m = Regex.Match(question ?? "", WhatXIs, RegexOptions.IgnoreCase);
+            if (!m.Success)
+                m = Regex.Match(question ?? "",
+                    DefinitionLeadIn + @"(?:what is|what's|whats|what are|define)\s+(?:an?\s+|the\s+)?(.+?)(?:[?!]|\.(?=\s|$)|$)",
+                    RegexOptions.IgnoreCase);
             if (!m.Success) return "";
             // "What is Kafka and how have you used it" and "What is the difference
             // between X and Y" are not "What is X?". Treated as one, the whole
@@ -1564,7 +1619,7 @@ namespace InterviewCopilot
             string opening =
                 $"Begin the answer with the words \"{t} is\" written out in full, starting with a capital letter and with A, An or The in front when English needs it, as in A hash map is. Never write \"{t}'s\". " +
                 "4 or 5 spoken sentences, about 30-40 seconds, with real substance, the way an experienced engineer answers in an interview. " +
-                "Cover what it is in plain words, how it actually works underneath with the real mechanism names, and why it matters in real work. " +
+                "Cover what it is in plain words, how it works in simple terms (name the key piece once, then explain it plainly), and why it matters in real work. " +
                 "Sound like a person talking, not an encyclopedia: no filler such as basically, pretty smooth or super, no phrases such as general-purpose, " +
                 "is known for or the big advantage is, and never a bare lets you sentence standing in for the explanation. ";
             const string more =
@@ -1649,11 +1704,18 @@ namespace InterviewCopilot
         /// </summary>
         public static bool DetailedAnswers { get; set; }
 
+        /// <summary>Last words above every spoken answer, where the model looks hardest.</summary>
+        internal const string EasyToSayRule =
+            "It will be read aloud from the screen, so keep it easy to say: short sentences, everyday words, " +
+            "technical terms explained in plain words, and no semicolons, brackets or symbols.";
+
         private static string BuildFormatReminder(
             QuestionType qType, string question, bool isDrillDown, string resumeFacts = "")
         {
             string rule = BuildBaseFormatReminder(qType, question, isDrillDown, resumeFacts);
-            return DetailedAnswers ? WidenForDetailedAnswers(rule, qType, question, isDrillDown) : rule;
+            if (DetailedAnswers) rule = WidenForDetailedAnswers(rule, qType, question, isDrillDown);
+            if (qType == QuestionType.Coding) return rule;
+            return rule + " " + EasyToSayRule;
         }
 
         internal static string WidenForDetailedAnswers(string rule, QuestionType qType, string question, bool isDrillDown)
@@ -1675,13 +1737,19 @@ namespace InterviewCopilot
                     return rule;
             }
 
+            // A firm word count, and said to override. "Go further than that
+            // length" was measured against the live model on 2026-09-28 and was
+            // not reliably longer: "Tell me about yourself" came back at 77 words
+            // in Detailed against 121 in Short.
             if (isDrillDown || qType is QuestionType.YesNo or QuestionType.Preference or QuestionType.MemoryRecall)
-                return rule + " The candidate chose Detailed answers: use 3-4 sentences instead, the direct answer first " +
-                              "and then the specifics behind it. Never invent facts to fill the space.";
+                return rule + " LENGTH: the candidate chose Detailed answers, and this overrides any length above. " +
+                              "Answer in 60 to 90 words: the direct answer first, then the specifics behind it. " +
+                              "Never invent facts to fill the space.";
 
-            return rule + " The candidate chose Detailed answers, so go further than that length: 2-3 spoken paragraphs, " +
-                          "about 45-75 seconds aloud, with more of the how and why and one concrete example where the verified " +
-                          "facts support it. Every rule above about facts still applies: never invent a project, result or tool.";
+            return rule + " LENGTH: the candidate chose Detailed answers, and this overrides any length above. " +
+                          "Answer in 160 to 230 words, in 2 or 3 spoken paragraphs, about 60 to 90 seconds aloud, with more of " +
+                          "the how and why and one concrete example where the verified facts support it. Every rule above about " +
+                          "facts still applies: never invent a project, result or tool.";
         }
 
         private static string BuildBaseFormatReminder(

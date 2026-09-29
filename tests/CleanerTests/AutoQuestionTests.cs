@@ -115,6 +115,11 @@ internal static class AutoQuestionTests
             Check(!AutoTurnRules.IsSubstantiveBoundaryUtterance(line), $"not answered at an utterance end: {line}");
         }
         Check(Q("I see you led the migration at Amazon."), "a statement aimed at the candidate is still a prompt");
+        Check(N("Frame partner sequence Tell me what is Java.") == "Tell me what is Java.",
+            "room noise glued in front of a question is dropped");
+        Check(Q("Frame partner sequence Tell me what is Java."), "and the question is answered");
+        Check(!Q("Sign a sequence frame number g. Handle low. Start point node c."),
+            "noise with no question in it is still not a question");
         Check(Q("Your resume mentions Kafka and Spark."), "a statement about their resume is still a prompt");
 
         Console.WriteLine();

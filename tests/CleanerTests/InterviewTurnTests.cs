@@ -100,11 +100,11 @@ internal static class InterviewTurnTests
         const string baseRule = "BASE";
         string W(PromptBuilder.QuestionType t, string q, bool drill = false) =>
             PromptBuilder.WidenForDetailedAnswers(baseRule, t, q, drill);
-        Check(W(PromptBuilder.QuestionType.Technical, "How does garbage collection work in Java?").Contains("2-3 spoken paragraphs"),
+        Check(W(PromptBuilder.QuestionType.Technical, "How does garbage collection work in Java?").Contains("160 to 230 words"),
             "Detailed widens a technical answer");
-        Check(W(PromptBuilder.QuestionType.Intro, "Tell me about yourself").Contains("2-3 spoken paragraphs"),
+        Check(W(PromptBuilder.QuestionType.Intro, "Tell me about yourself").Contains("160 to 230 words"),
             "Detailed widens tell me about yourself");
-        Check(W(PromptBuilder.QuestionType.YesNo, "Have you used Kubernetes?").Contains("3-4 sentences"),
+        Check(W(PromptBuilder.QuestionType.YesNo, "Have you used Kubernetes?").Contains("60 to 90 words"),
             "Detailed gives a yes/no question a few sentences, not paragraphs");
         Check(W(PromptBuilder.QuestionType.Coding, "Write a function to reverse a string") == baseRule,
             "Detailed leaves code answers alone");

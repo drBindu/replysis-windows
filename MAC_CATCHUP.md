@@ -1,3 +1,37 @@
+## Auto, round three, and answers that are easy to say (2026-09-28, Windows 1.0.26)
+
+Client-side only (the prompt is built in the client).
+
+**Verified live, silently** (recorded interviewer played into a VB-Audio cable,
+developer build): acknowledgement + question, split questions, context
+sentences, asides ignored, a killed speech engine recovered in 3 s and Auto kept
+answering, follow-up merged. All nine scenarios passed.
+
+- **Noise glued in front of a question** ("Frame partner sequence Tell me what
+  is Java.") is now cut to the question. A noisy room on an open mic produced it.
+- **Space in Auto recovers a question set aside in the last 30 s** instead of
+  answering only the noise that came after it.
+- **"Tell me..." / "Walk me through..." commands** get the fast 1.5 s wait when
+  the provider confirms the end, like "?" questions (2.9 s -> about 1.5 s).
+- **Definition questions as people say them**: "Tell me what is Java", "Can you
+  explain what Kafka is", "What's Docker" now reach the 4-5 sentence definition
+  answer. "Tell me what is Java" had been getting a one-line textbook sentence.
+  "What's" is rewritten to "What is" in the sent question.
+- **Detailed now really is longer**: a firm word count (160-230, or 60-90 for
+  yes/no) that says it overrides. Measured, same four questions: Short 161/157/
+  38/223 words, Detailed 223/181/87/314. The soft "go further" wording measured
+  no longer than Short.
+- **Easy to say out loud** (owner: "the user has to speak by reading from the
+  screen... pure human words"). New EASY TO SAY rule first in the voice
+  section and again right above every spoken answer: short sentences, everyday
+  words, terms explained plainly, no semicolons, brackets or symbols. The
+  definition rule no longer asks for "real mechanism names". The client cleaner
+  also turns prose semicolons into full stops and "e.g." into "for example"
+  (code untouched). The Mac should apply the same prompt change; it is the same
+  model and the same complaint.
+
+---
+
 ## Auto, round two: from the owner's live test (2026-09-28, Windows 1.0.26)
 
 Client-side only.

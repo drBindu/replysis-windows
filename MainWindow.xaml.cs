@@ -499,6 +499,9 @@ namespace InterviewCopilot
                     UpdateWatchScreenUi();
 
                     PromptBuilder.DetailedAnswers = SettingsWindow.GetDetailedAnswers();
+#if DEBUG
+                    ApplyAutoTestLengthOverride();
+#endif
                     UpdateAnswerLengthUi();
 
                     // First launch (no seen-flag yet): show the onboarding so new users
@@ -2498,6 +2501,13 @@ namespace InterviewCopilot
         private string _autoRejectedRaw = "";
         private string _autoRejectedTranscript = "";
 
+        // What had been answered before the last set-aside, so Space can bring the
+        // set-aside words back. In the owner's test the question was said, lost
+        // among room noise, set aside after a pause, and Space then answered only
+        // the noise that followed.
+        private string _consumedBeforeSetAside = "";
+        private DateTime _setAsideUtc = DateTime.MinValue;
+
         private void NoteAutoRejected(string transcript, string candidate)
         {
             // A question still being spoken ("My next question is") is not
@@ -2645,8 +2655,13 @@ namespace InterviewCopilot
                     _autoListeningStartedUtc, providerConfirmedEnd))
                 return;
             int requiredSilenceMs;
+            // "Tell me about yourself." is as plainly finished as a question mark
+            // (silent live test: 2.9s to the first word, against 1.4s for "?").
+            // A statement prompt ("Your resume says...") still waits the full time.
             if (ending == TurnEnding.Finished && providerConfirmedEnd &&
-                candidateQuestion.TrimEnd().EndsWith('?') && IsLikelyCompleteAutomaticQuestion(candidateQuestion))
+                IsLikelyCompleteAutomaticQuestion(candidateQuestion) &&
+                (candidateQuestion.TrimEnd().EndsWith('?') ||
+                 PromptBuilder.StartsLikeAQuestion(LastSentence(candidateQuestion))))
             {
                 // A question mark, and the provider itself heard the speaker stop.
                 // Waiting the full 2.8s here put 3.5s between the last word and the
@@ -3121,6 +3136,7 @@ namespace InterviewCopilot
             // while an answer was streaming. The next Auto turn strips the
             // answered prefix from this transcript either way.
             _preserveAutoCapture = source == "AUTO";
+            _setAsideUtc = DateTime.MinValue;
             if (_preserveAutoCapture)
             {
                 // Snapshot the full cumulative transcript, not the normalized
@@ -3131,7 +3147,7 @@ namespace InterviewCopilot
             _waitedForWordsMs = _turnStopwatch?.ElapsedMilliseconds ?? 0;
             DebugWindow.Log("MIC", $"[{source}] firing AI ({question.Length} chars)");
 #if DEBUG
-            if (_autoTestHarness) DebugWindow.Log("AUTOTEST", $"sent: {question}");
+            if (_autoTestHarness) DebugWindow.Log("AUTOTEST", $"sent ({(PromptBuilder.DetailedAnswers ? "detailed" : "short")}): {question}");
 #endif
 
             if (string.IsNullOrWhiteSpace(question))
@@ -3192,6 +3208,12 @@ namespace InterviewCopilot
             else              HandleSpaceUp(source);
         }
 
+        private static string LastSentence(string text)
+        {
+            string[] s = Regex.Split((text ?? "").Trim(), @"(?<=[?.!])\s+");
+            return s.Length == 0 ? "" : s[^1];
+        }
+
         private DateTime _lastAnswerNowUtc = DateTime.MinValue;
 
         /// <summary>
@@ -3211,6 +3233,26 @@ namespace InterviewCopilot
             string heard = (ReadLatestTxtSafe() ?? "").Trim();
             if (DateTime.UtcNow - _lastAutoSubmitUtc < TimeSpan.FromSeconds(45))
                 heard = AutoTurnRules.StripAnsweredPrefix(heard, _lastAutoSubmittedQuestion);
+
+            // No question in what is on screen, but one may have been set aside a
+            // moment ago. Space means "answer the question", so look there too.
+            if (!AutoTurnRules.IsLikelyCompleteQuestion(PromptBuilder.NormalizeInterviewerQuestion(heard)) &&
+                DateTime.UtcNow - _setAsideUtc < TimeSpan.FromSeconds(30))
+            {
+                string saved = _autoCaptureConsumedText;
+                _autoCaptureConsumedText = _consumedBeforeSetAside;
+                string withSetAside = (ReadLatestTxtSafe() ?? "").Trim();
+                if (AutoTurnRules.IsLikelyCompleteQuestion(PromptBuilder.NormalizeInterviewerQuestion(withSetAside)))
+                {
+                    heard = withSetAside;
+                    DebugWindow.Log("AUTO", "Space: the question was in words set aside a moment ago; using them.");
+                }
+                else
+                {
+                    _autoCaptureConsumedText = saved;
+                }
+            }
+            _setAsideUtc = DateTime.MinValue;
             if (string.IsNullOrWhiteSpace(PromptBuilder.NormalizeInterviewerQuestion(heard)))
             {
                 ShowListeningModeNotice("Nothing heard yet");
@@ -3381,6 +3423,12 @@ namespace InterviewCopilot
                 PromptBuilder.AddToHistory(q, final);
                 AppendToSessionLog(q, final);
                 DebugWindow.Log("AI", $"Done — {tokenCount} tokens");
+#if DEBUG
+                if (_autoTestHarness)
+                    DebugWindow.Log("AUTOTEST", $"answer ({AiAnswerBox.Text.Length} chars, " +
+                        $"{Regex.Matches(AiAnswerBox.Text, @"[\p{L}\p{N}']+").Count} words): " +
+                        AiAnswerBox.Text.Replace("\r", " ").Replace("\n", " / "));
+#endif
 
                 // Refresh credits display after AI call
                 _ = FetchAndDisplayCreditsAsync().ContinueWith(t => {
@@ -4593,6 +4641,15 @@ namespace InterviewCopilot
                 // the compact overlay. The figure dash and the minus sign turn up in
                 // numbers for the same reason.
                 prose = prose.Replace("‑", "-").Replace("‒", "-").Replace("−", "-");
+
+                // Written-only marks that trip someone reading aloud (owner, 2026-09-28:
+                // "the user has to speak by reading from the screen"). A semicolon
+                // survived the prompt's own rule in a live answer ("checks the bucket;
+                // if a token is available"). Code is untouched: this is prose only.
+                prose = Regex.Replace(prose, @";[ \t]+(\p{Ll})", m => ". " + char.ToUpperInvariant(m.Groups[1].Value[0]));
+                prose = Regex.Replace(prose, @";[ \t]+", ". ");
+                prose = Regex.Replace(prose, @"\be\.g\.,?[ \t]*", "for example ", RegexOptions.IgnoreCase);
+                prose = Regex.Replace(prose, @"\bi\.e\.,?[ \t]*", "that is, ", RegexOptions.IgnoreCase);
                 prose = Regex.Replace(prose, @",\s*,", ",");           // collapse accidental double commas
                 return prose;
             });
@@ -5214,6 +5271,8 @@ namespace InterviewCopilot
                     string.Equals(_autoRejectedTranscript, _autoLastTranscript, StringComparison.Ordinal) &&
                     DateTime.UtcNow - _autoTranscriptChangedUtc >= AutoTurnRules.StaleRejectedSpeechPause)
                 {
+                    _consumedBeforeSetAside = _autoCaptureConsumedText;
+                    _setAsideUtc = DateTime.UtcNow;
                     _autoCaptureConsumedText = _autoRejectedRaw;
                     _autoRejectedRaw = "";
                     _autoRejectedTranscript = "";
@@ -5410,6 +5469,14 @@ namespace InterviewCopilot
                 if (!string.IsNullOrWhiteSpace(savedName))
                     deviceArg += $" --device-name \"{savedName.Replace("\"", "")}\"";
                 string modeArg = $" --mode {CaptureMode()}";
+#if DEBUG
+                // Developer builds only: feed system audio from a chosen device (a
+                // virtual cable) so Auto can be tested with recorded speech in
+                // silence. Never compiled into a release build.
+                string testSysDevice = Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST_SYSDEVICE") ?? "";
+                if (int.TryParse(testSysDevice, out int testSysIndex))
+                    modeArg += $" --sysdevice {testSysIndex}";
+#endif
                 string langArg   = $" --language {SettingsWindow.GetTranscriptLanguage()}";
                 speechmaticsProcess.StartInfo.Arguments = $"{scriptArg}{deviceArg}{modeArg}{langArg}";
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SM_API_KEY"] = smKey;
@@ -7902,6 +7969,14 @@ namespace InterviewCopilot
         // so Auto can be tested end to end with recorded speech and no clicks.
         // Never compiled into a release build.
         private bool _autoTestHarness;
+
+        // Not saved: the owner's own Short/Detailed choice is left alone.
+        private void ApplyAutoTestLengthOverride()
+        {
+            string len = Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST_LENGTH") ?? "";
+            if (len == "detailed") PromptBuilder.DetailedAnswers = true;
+            if (len == "short") PromptBuilder.DetailedAnswers = false;
+        }
         private void ArmAutoTestHarness()
         {
             if (Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST") != "1") return;
@@ -7912,6 +7987,7 @@ namespace InterviewCopilot
                 if (!_engineOnline) return;
                 wait.Stop();
                 SelectAudioSource(practice: Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST_PRACTICE") == "1");
+                ApplyAutoTestLengthOverride();
                 SelectListeningMode(ListeningMode.Auto);
                 StartInterviewStep_Click(this, new RoutedEventArgs());
                 DebugWindow.Log("AUTOTEST", "armed: Auto, interview step");

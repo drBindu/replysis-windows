@@ -53,6 +53,14 @@ internal static class HumanVoiceTests
         outp = MainWindow.CleanAiOutput($"I owned the pipeline {EmDash} end to end {EmDash} for two years.");
         Check(outp.IndexOf(EmDash) < 0, "em dash still removed", outp);
 
+        outp = MainWindow.CleanAiOutput("Each call checks the bucket; if a token is free it goes through.");
+        Check(outp == "Each call checks the bucket. If a token is free it goes through.",
+            "a semicolon becomes a full stop, easier to read aloud", outp);
+        outp = MainWindow.CleanAiOutput("Use a queue, e.g. Kafka, for that.");
+        Check(outp == "Use a queue, for example Kafka, for that.", "e.g. is said as 'for example'", outp);
+        outp = MainWindow.CleanAiOutput("Here it is:\n```python\nfor i in range(3): print(i); x = 1\n```");
+        Check(outp.Contains("print(i); x = 1"), "semicolons inside code are left alone", outp);
+
         outp = MainWindow.CleanAiOutput($"I was there 2020{EnDash}2023.");
         Check(outp.IndexOf(EnDash) < 0 && outp.Contains("2020-2023"),
               "tight en dash range still becomes a hyphen", outp);
