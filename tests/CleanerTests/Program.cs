@@ -148,6 +148,9 @@ internal static class Program
         Console.WriteLine("\n9d. Scrolling is slow in every box");
         _failed += WheelScrollTests.Run();
 
+        Console.WriteLine("\n9e. An open app keeps looking for updates, and says so");
+        _failed += UpdateTests.RunPolicy();
+
         Console.WriteLine("\n10. Punctuation that reads as AI generated");
         _failed += HumanVoiceTests.Run();
 

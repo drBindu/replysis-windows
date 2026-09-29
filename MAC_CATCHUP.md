@@ -1,3 +1,19 @@
+## The update notice: check repeatedly, and never hide it behind an error notice (2026-09-29, Windows 1.0.29)
+
+A tester's laptop showed no "update ready" notice for 1.0.28. Two flaws, both ours:
+1. The check ran ONCE, 12 s after launch. An app left open when a release came out never looked again.
+2. A rule added in 1.0.27 skipped the notice while an error notice was showing, so someone stuck on a
+   problem the update fixes was never told about it.
+
+Now: the check repeats every 30 minutes while the app is open (`UpdatePolicy.RecheckEvery`; GitHub allows
+an address 60 unauthenticated requests an hour, so this leaves room for about 30 people behind one
+address), a version is announced once, and the notice shows whatever else is on screen and hands the
+screen back to the error notice when dismissed. The silent path is unchanged and is why updates still
+arrive without a notice: the update downloads in the background, is staged, and is swapped in when the
+app closes. **If the Mac has a one-shot launch check, it has the same gap.**
+
+---
+
 ## Server: refused speech-key requests no longer spend the mint budget; scenario test (2026-09-29)
 
 **Server (deployed, `SttController`):** the strict limits (12 keys an hour per account, 5 a minute per

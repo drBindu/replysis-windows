@@ -1311,9 +1311,12 @@ namespace InterviewCopilot
         /// Keep the banner up until dismissed. Used for faults the user has to act
         /// on, which a timed banner would hide again before they had read it.
         /// </param>
+        private bool _bannerIsUpdate;
+
         internal void ShowInAppAlert(string title, string message, bool persist = false,
-                                    string? actionLabel = null, Action? action = null)
+                                    string? actionLabel = null, Action? action = null, bool isUpdate = false)
         {
+            _bannerIsUpdate = isUpdate;
             // In compact overlay the main window is hidden, so the banner would
             // never be seen. The overlay is the visible surface there.
             if (_isCameraMode && answerWindow != null)
@@ -1363,54 +1366,75 @@ namespace InterviewCopilot
         /// uses the in-app banner rather than a dialog, which would show up on a
         /// screen share.
         /// </summary>
+        private string? _updateAnnouncedFor;
+
         private async Task NotifyIfUpdateAvailableAsync()
         {
-            try
+            TimeSpan every = UpdatePolicy.RecheckEvery;
+#if DEBUG
+            if (int.TryParse(Environment.GetEnvironmentVariable("REPLYSIS_UPDATE_RECHECK_SECONDS"), out int testSeconds) && testSeconds > 0)
+                every = TimeSpan.FromSeconds(testSeconds);
+#endif
+            try { await Task.Delay(UpdatePolicy.FirstCheck); } catch { return; }
+
+            // Not once. It used to look a single time, twelve seconds after opening, so an app
+            // left open when a release came out never noticed it (2026-09-29).
+            while (!_windowClosed)
             {
-                await Task.Delay(TimeSpan.FromSeconds(12));
+                try { await CheckForUpdateOnceAsync(); }
+                catch (Exception ex) { DebugWindow.Log("UPDATE", $"Update check skipped: {ex.GetType().Name}"); }
 
-                if (UpdateService.IsManaged)
-                {
-                    string? staged = await AppUpdates.CheckAndStageAsync();
-                    if (string.IsNullOrEmpty(staged)) return;
+                try { await Task.Delay(every); } catch { return; }
+            }
+        }
 
-                    // One banner fits at a time, and a problem banner explains why
-                    // nothing works. The update is staged either way and installs
-                    // on the next restart.
-                    if (_problemsShown.Count > 0) return;
+        private async Task CheckForUpdateOnceAsync()
+        {
+            string? found;
+            bool managed = UpdateService.IsManaged;
+            found = managed
+                ? await AppUpdates.CheckAndStageAsync()
+                : await SettingsWindow.GetNewerVersionOrNullAsync();
 
-                    await Dispatcher.InvokeAsync(() =>
-                        ShowInAppAlert(
-                            $"Replysis {staged} is ready",
-                            "Restart now to update, or it installs by itself the next time you open Replysis. Nothing changes until you choose.",
-                            persist: true,
-                            actionLabel: "Restart and update",
-                            action: AppUpdates.RestartToUpdate));
-                    return;
-                }
+            DebugWindow.Log("UPDATE", string.IsNullOrEmpty(found) ? "Checked for updates: none." : $"Checked for updates: {found} found.");
+            if (!UpdatePolicy.ShouldAnnounce(found, _updateAnnouncedFor)) return;
+            _updateAnnouncedFor = found;
 
-                string? newer = await SettingsWindow.GetNewerVersionOrNullAsync();
-                if (string.IsNullOrEmpty(newer)) return;
-                if (_problemsShown.Count > 0) return;
-
-                await Dispatcher.InvokeAsync(() =>
+            // Announced whatever else is on screen. It used to be skipped while a problem
+            // notice was showing, which hid the update from exactly the person the update
+            // fixes. The problem is still explained by the badge and the answer area, and the
+            // notice comes back when this one is dismissed.
+            await Dispatcher.InvokeAsync(() =>
+            {
+                DebugWindow.Log("UPDATE", $"Update announced: {found}.");
+                if (managed)
                     ShowInAppAlert(
-                        $"Version {newer} is available",
+                        $"Replysis {found} is ready",
+                        "Restart now to update, or it installs by itself the next time you open Replysis. Nothing changes until you choose.",
+                        persist: true, actionLabel: "Restart and update", action: AppUpdates.RestartToUpdate, isUpdate: true);
+                else
+                    ShowInAppAlert(
+                        $"Version {found} is available",
                         $"You are on {SettingsWindow.InstalledVersion()}. Download the new version and install it over this one.",
-                        persist: true,
-                        actionLabel: "Download",
-                        action: AppUpdates.OpenDownloadPage));
-            }
-            catch (Exception ex)
-            {
-                DebugWindow.Log("UPDATE", $"Startup update check skipped: {ex.GetType().Name}");
-            }
+                        persist: true, actionLabel: "Download", action: AppUpdates.OpenDownloadPage, isUpdate: true);
+            });
+        }
+
+        /// <summary>After an update notice is closed, a problem notice it replaced comes back.</summary>
+        private void RestoreProblemNoticeAfterUpdateNotice()
+        {
+            if (!_bannerIsUpdate) return;
+            _bannerIsUpdate = false;
+            if (_problemsShown.Count == 0) return;
+            _problemsShown.Clear();
+            UpdateMicUi();
         }
 
         private void InAppAlertDismiss_Click(object sender, RoutedEventArgs e)
         {
             _alertTimer?.Stop();
             if (InAppAlert != null) InAppAlert.Visibility = Visibility.Collapsed;
+            RestoreProblemNoticeAfterUpdateNotice();
         }
 
         private void CompactOverlayPill_Click(object sender, RoutedEventArgs e)
