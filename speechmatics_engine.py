@@ -2770,6 +2770,13 @@ async def run_deepgram() -> str:
                         display = f"{transcript['confirmed']} {transcript['partial']}".strip()
                         print(f">>> {label} received ({len(display)} chars)", flush=True)
                         _write_latest(display)
+                        # Deepgram's own call that the speaker stopped (300 ms of silence,
+                        # the endpointing setting above). It arrives about a second before
+                        # UtteranceEnd, and Auto answering on the later signal was most of
+                        # the pause between the last word and the first word of the answer.
+                        # A separate line, so every older reader of this output is unaffected.
+                        if label == "FINAL" and msg.get("speech_final"):
+                            print(">>> SPEECH FINAL", flush=True)
 
                 tasks = [asyncio.create_task(sender()), asyncio.create_task(receiver())]
                 done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)

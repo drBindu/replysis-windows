@@ -213,6 +213,9 @@ check("silent system audio never delays microphone transcription",
 dg = SOURCE[SOURCE.find("async def run_deepgram"):SOURCE.find("# ── MAIN WITH AUTO-RECONNECT")]
 check("Deepgram path reports STATUS: ONLINE", "STATUS: ONLINE" in dg)
 check("Deepgram path reports UTTERANCE END", "UTTERANCE END" in dg)
+# Windows Auto answers on this, about a second sooner than on UTTERANCE END. A separate line, so
+# nothing that reads the old ones is affected, and only Deepgram (the path that has the signal).
+check("Deepgram path reports SPEECH FINAL", 'print(">>> SPEECH FINAL"' in dg and 'msg.get("speech_final")' in dg)
 check("Deepgram path honours reset.flag", "RESET_FLAG" in dg)
 check("Deepgram keeps the first result after reset",
       'except Exception:\n                                pass\n                            continue' not in dg)

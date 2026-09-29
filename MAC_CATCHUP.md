@@ -1,3 +1,54 @@
+## Instant response: Auto no longer waits on top of the wait; smaller upload; words type in (2026-09-29, Windows 1.0.29)
+
+The product is the speed. Recorded questions were played into the real app and timed, per stage.
+Measured on one connection, before and after (the speech service's own delay varies by seconds from
+run to run on a mobile link, so the comparison is between the parts the app controls):
+
+| stage | before | after |
+|---|---|---|
+| Auto's own wait after the service said the speaker stopped | 1.1 to 2.6 s, 1.8 s average | 0.14 to 0.74 s, 0.5 s average |
+| request upload (whole prompt, resume loaded) | 19 to 23 KB | 7 to 8.5 KB (gzip) |
+| ask sent to first word on screen | 1.5 to 1.9 s (0.5 to 1.4 s on good runs) | 0.31 to 0.83 s |
+| last word spoken to first word of the answer | 2.8 to 10 s | 1.3 to 2.2 s, 1.8 s average |
+
+1. **Engine prints `>>> SPEECH FINAL`** when Deepgram's `speech_final` is true (after `>>> FINAL received`).
+   It is Deepgram's own call that the speaker stopped (`endpointing=300`), about 1 s before
+   `>>> UTTERANCE END`. A separate line, so nothing reading the old ones is affected. The Mac engine
+   should print it too (`tests/test_engine_contract.py` checks it).
+2. **Auto sends a plainly finished question 650 ms after SPEECH FINAL** (`AutoTurnRules.QuickSendWaitMs`),
+   250 ms after UTTERANCE END, instead of the flat 1,500 ms it added on top. "Plainly finished" is unchanged:
+   a question mark, or a request such as "Tell me about yourself." Statements still wait the full 2.8 s.
+   A tail that arrives is merged as a continuation exactly as before.
+3. **The slow-speaker floor now learns from the speaker, not the connection** (`GapWasASpeakerPause`).
+   It took the longest gap between transcript updates as the speaker's pause. On a slow link the service
+   sends an update about every second, so those gaps became "pauses" and questions that plainly ended waited
+   1.2 to 1.6 s. Now only a gap the service heard a pause in counts: SPEECH FINAL or UTTERANCE END arrived
+   inside it and the speaker then carried on. Engines without the signal (Speechmatics, Sarvam) are judged the
+   old way; the app knows which from the engine's start-up line (`DEEPGRAM ENGINE: READY`).
+4. **Flush is one look, not five, once SPEECH FINAL is the latest event** (`FlushStableChecks`), because
+   nothing is in flight. Saves about 100 ms on every Auto question and on Space.
+5. **The keep-warm request now uses the client the answers use.** It went through a second client with its
+   own connection pool, so it warmed a connection no answer ever used, and the first question after a
+   quiet minute opened a new one. Now HEAD every 25 s (was GET every 75 s) on the same client.
+6. **Request bodies are gzip compressed** (`RequestCompression`, over 1 KB). The prompt upload was the
+   slowest, most erratic part of an answer on a slow uplink: a tiny request answered in a steady 0.13 s, a
+   13 KB one took 0.13 to 1.08 s over the same connection. **Server (deployed, `GzipRequestFilter`)** decodes
+   `Content-Encoding: gzip` and passes everything else through untouched, so existing clients are not
+   affected; decompressed size is capped at 8 MB; a body that says gzip and is not gets 400 before any
+   charge. If a server ever answers 400/415/501 to a compressed request the app resends it once plain and
+   stays plain for the run (safe: that refusal comes before any charge; nothing else is ever repeated). The
+   Mac client can use the same server support with no server change.
+7. **The transcript types in** (`TranscriptTyper`, `SetTranscript`). Words arrived in whole phrases, each
+   time the service sent a new version of the sentence, which reads as lag. They now type in a character or two
+   per drawn frame, never more than about a third of a second behind what was heard; a revised word is taken
+   back and typed again. Everything that decides anything (Auto, what is sent) reads the real text
+   (`_transcriptTarget`), never the part typed so far. Skipped when Windows animations are off.
+
+Tests: `InstantResponseTests` (rules, typing, compression), `GzipRequestFilterTests` (server). Developer
+builds with `REPLYSIS_AUTOTEST` log each typing step as `[TYPER]`.
+
+---
+
 ## The update notice: check repeatedly, and never hide it behind an error notice (2026-09-29, Windows 1.0.29)
 
 A tester's laptop showed no "update ready" notice for 1.0.28. Two flaws, both ours:

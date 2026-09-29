@@ -39,6 +39,78 @@ namespace InterviewCopilot
             (submitted != DateTime.MinValue && firstWords >= submitted &&
              firstWords - submitted <= TimeSpan.FromSeconds(8) && IsExplicitExtension(text));
 
+        // ── How soon a plainly finished question is sent ──────────────────────────────
+        //
+        // Recorded questions played into the real app (2026-09-29) showed Auto waiting
+        // 1.1 to 2.6 seconds, 1.8 on average, AFTER the speech service had already said the
+        // speaker stopped, before it asked. That wait was ours: the service had already sat
+        // through 300 ms of silence to say so, and Auto then asked for 1.5 s more.
+        //
+        // The service says it twice. "speech final" arrives about 0.3 s after the last word;
+        // "utterance end" about a second after it. A question that is plainly finished (a
+        // question mark, or a request like "Tell me about yourself.") needs only a short
+        // confirmation on top of either one. A speaker who pauses a lot mid sentence still
+        // gets their own longer floor, and a tail that does arrive is merged as a
+        // continuation, exactly as before.
+        internal const int SpeechFinalConfirmMs = 650;
+        internal const int UtteranceEndConfirmMs = 250;
+
+        /// <summary>
+        /// The speech service called the end of the speech, and nothing has been heard since.
+        /// Ordered by the ticks the engine's own lines arrived with, so the 40 ms poll of the
+        /// transcript file cannot make a fresh signal look old.
+        /// </summary>
+        internal static bool SpeechFinalIsLatest(
+            long speechFinalTicks, long lastPartialTicks, long lastFinalTicks, DateTime listeningStarted) =>
+            speechFinalTicks > 0 &&
+            speechFinalTicks >= lastPartialTicks &&
+            speechFinalTicks >= lastFinalTicks &&
+            speechFinalTicks >= listeningStarted.Ticks;
+
+        /// <summary>
+        /// How long a plainly finished question must sit unchanged before it is sent.
+        /// <paramref name="paceFloorMs"/> is the speaker's own longest pause inside a sentence,
+        /// so someone who talks slowly is not cut off; <paramref name="ceilingMs"/> caps it.
+        /// </summary>
+        internal static int QuickSendWaitMs(bool utteranceEnded, int paceFloorMs, int ceilingMs) =>
+            Math.Min(ceilingMs, Math.Max(utteranceEnded ? UtteranceEndConfirmMs : SpeechFinalConfirmMs, paceFloorMs));
+
+        /// <summary>
+        /// Whether a gap between two changes of the transcript was the speaker pausing.
+        ///
+        /// It used to be assumed. The longest gap between updates became "this speaker's pause",
+        /// and the wait before answering was raised to match. But the speech service sends an
+        /// update roughly every second on a slow connection, so ordinary delivery gaps were
+        /// learned as pauses, and questions that plainly ended waited 1.2 to 1.6 s for nothing
+        /// (recorded questions through the real app, 2026-09-29).
+        ///
+        /// When the service reports endpoints, only a gap it heard a pause in counts: it called
+        /// an end (a speech final or an utterance end) after the previous change, and the
+        /// speaker then carried on. That last part matters. The call to end the speech arrives
+        /// with the final words themselves, so when the change that closes the gap IS that
+        /// final, the call came at the gap's end, not in the middle of it, and nobody paused.
+        /// A service that reports neither (the fallback engines) is judged as it always was.
+        /// </summary>
+        internal static bool GapWasASpeakerPause(
+            bool serviceReportsEndpoints, long speechFinalTicks, long utteranceEndTicks,
+            DateTime previousChange, DateTime now)
+        {
+            if (!serviceReportsEndpoints) return true;
+            long after = previousChange.Ticks - TimeSpan.FromMilliseconds(100).Ticks;   // the file is polled every 40 ms
+            long before = now.Ticks - TimeSpan.FromMilliseconds(150).Ticks;             // words that came later, not the same instant
+            return (speechFinalTicks > 0 && speechFinalTicks >= after && speechFinalTicks <= before) ||
+                   (utteranceEndTicks > 0 && utteranceEndTicks >= after && utteranceEndTicks <= before);
+        }
+
+        /// <summary>
+        /// How many 20 ms reads with no change the last look at the transcript needs before
+        /// the question is sent. When the service has already called the end of the speech
+        /// nothing is in flight, so one read is enough; otherwise 100 ms, or 800 ms when the
+        /// sentence plainly is not over.
+        /// </summary>
+        internal static int FlushStableChecks(bool speechFinalIsLatest, bool looksUnfinished) =>
+            looksUnfinished ? 40 : speechFinalIsLatest ? 1 : 5;
+
         /// <summary>
         /// Whether recognition has genuinely stopped changing. Providers often
         /// repeat the same partial text while audio is still arriving; text

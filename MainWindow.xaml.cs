@@ -179,6 +179,14 @@ namespace InterviewCopilot
         // finished an utterance. Interlocked ticks make the background reader/UI handoff
         // atomic without dispatching every engine line through the UI thread.
         private long _lastUtteranceEndUtcTicks;
+        // When the engine last printed ">>> SPEECH FINAL": the speech service's own call that
+        // the speaker stopped, about 0.3 s after the last word.
+        private long _lastSpeechFinalUtcTicks;
+        // Whether the engine now running is on the speech service that reports endpoints
+        // (Deepgram). The fallback engines do not, and their pauses are judged the old way.
+        // Read from the engine's own start-up line, so the very first question of a session
+        // is judged by the right rule too.
+        private volatile bool _engineReportsEndpoints;
 
         // The question already asked, waiting to be joined to the tail still
         // arriving. Empty except between recognising a continuation and sending it.
@@ -249,6 +257,9 @@ namespace InterviewCopilot
 
         // HTTP — shared singletons defined in SharedHttpClient.cs
         private static HttpClient _backendClient => SharedHttpClient.Http;
+        // Set when a server answered a compressed request with "cannot read that", so the rest
+        // of this run sends plain (see RequestCompression).
+        private static volatile bool _serverRefusedCompression;
         private static HttpClient _creditsClient => SharedHttpClient.HttpShort;
 
         // Cached once — Directory.CreateDirectory on every access was a redundant syscall per tick
@@ -464,7 +475,9 @@ namespace InterviewCopilot
                     // sometimes"). Ping it every 75s — well under the idle timeout — so the
                     // container stays hot and first-token stays at its ~0.7s warm number.
                     _ = WarmBackendAsync();
-                    warmupTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(75) };
+                    // Every 25 s: shorter than the time a proxy or a home router keeps a quiet
+                    // connection, so the next question never has to open a new one.
+                    warmupTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(25) };
                     warmupTimer.Tick += (s2, e2) => _ = WarmBackendAsync();
                     warmupTimer.Start();
 
@@ -807,7 +820,7 @@ namespace InterviewCopilot
             _answers.Clear();
             UpdateHistoryNav();
             ClearAnswer();
-            TranscriptTextBlock.Text = "";
+            SetTranscript("");
             TranscriptHint.Visibility = Visibility.Visible;
             answerWindow?.UpdateAnswer("");
             answerWindow?.UpdateQuestion("");
@@ -2335,6 +2348,7 @@ namespace InterviewCopilot
             _autoTranscriptChangedUtc = DateTime.UtcNow;
             _autoLongestMidTurnGapMs = 0;
             Interlocked.Exchange(ref _lastUtteranceEndUtcTicks, 0);
+            Interlocked.Exchange(ref _lastSpeechFinalUtcTicks, 0);
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -2759,6 +2773,8 @@ namespace InterviewCopilot
             long partialTicks = Interlocked.Read(ref _lastPartialResultUtcTicks);
             DateTime lastFinal = finalTicks > 0 ? new DateTime(finalTicks, DateTimeKind.Utc) : DateTime.MinValue;
             DateTime lastPartial = partialTicks > 0 ? new DateTime(partialTicks, DateTimeKind.Utc) : DateTime.MinValue;
+            bool speechFinalEnded = AutoTurnRules.SpeechFinalIsLatest(
+                Interlocked.Read(ref _lastSpeechFinalUtcTicks), partialTicks, finalTicks, _autoListeningStartedUtc);
             if (!AutoTurnRules.RecognitionSettled(
                     now, _autoTranscriptChangedUtc, lastPartial, lastFinal,
                     _autoListeningStartedUtc, providerConfirmedEnd))
@@ -2767,7 +2783,7 @@ namespace InterviewCopilot
             // "Tell me about yourself." is as plainly finished as a question mark
             // (silent live test: 2.9s to the first word, against 1.4s for "?").
             // A statement prompt ("Your resume says...") still waits the full time.
-            if (ending == TurnEnding.Finished && providerConfirmedEnd &&
+            if (ending == TurnEnding.Finished && (providerConfirmedEnd || speechFinalEnded) &&
                 IsLikelyCompleteAutomaticQuestion(candidateQuestion) &&
                 (candidateQuestion.TrimEnd().EndsWith('?') ||
                  PromptBuilder.StartsLikeAQuestion(LastSentence(candidateQuestion))))
@@ -2778,8 +2794,13 @@ namespace InterviewCopilot
                 // was the complaint. The speaker's own mid-question pauses still set
                 // a floor, so a slow speaker is not cut off; a tail that does come
                 // is merged as a continuation.
+                //
+                // And once the service itself has called the end of the speech, that wait
+                // was 1.5 s on top of the 0.3 s it had already sat through: 1.8 s of nothing
+                // on average, measured with recorded questions on 2026-09-29. Now a short
+                // confirmation, longer only for a speaker who pauses a lot.
                 int paceFloorMs = (int)Math.Round(_autoLongestMidTurnGapMs * 1.3);
-                requiredSilenceMs = Math.Min(AutoTurnFinishedSilenceMs, Math.Max(1_500, paceFloorMs));
+                requiredSilenceMs = AutoTurnRules.QuickSendWaitMs(providerConfirmedEnd, paceFloorMs, AutoTurnFinishedSilenceMs);
             }
             else if (ending == TurnEnding.Finished)
             {
@@ -2843,6 +2864,15 @@ namespace InterviewCopilot
         {
             if (_autoTranscriptChangedUtc == DateTime.MinValue) return;
             double gapMs = (now - _autoTranscriptChangedUtc).TotalMilliseconds;
+
+            // Only a gap the speech service heard a pause in. Otherwise the pace was the
+            // connection's, not the speaker's (see AutoTurnRules.GapWasASpeakerPause).
+            if (!AutoTurnRules.GapWasASpeakerPause(
+                    _engineReportsEndpoints,
+                    Interlocked.Read(ref _lastSpeechFinalUtcTicks),
+                    Interlocked.Read(ref _lastUtteranceEndUtcTicks),
+                    _autoTranscriptChangedUtc, now))
+                return;
 
             // Above two seconds it is no longer a pause inside a sentence: they
             // stopped, and something else (a slow packet, thinking) explains it.
@@ -3018,7 +3048,7 @@ namespace InterviewCopilot
                 // Manual mode is an explicit new turn and still clears normally.
                 if (source != "AUTO")
                 {
-                    TranscriptTextBlock.Text = "";
+                    SetTranscript("");
                     TranscriptHint.Visibility = Visibility.Visible;
                 }
                 // Manual listening starts a fresh visual turn. Auto modes resume listening
@@ -3167,9 +3197,13 @@ namespace InterviewCopilot
                         // had finished, because a finished sentence does not
                         // reach this branch at all.
                         stableCount++;
-                        int stableNeeded =
+                        int stableNeeded = AutoTurnRules.FlushStableChecks(
+                            AutoTurnRules.SpeechFinalIsLatest(
+                                Interlocked.Read(ref _lastSpeechFinalUtcTicks),
+                                Interlocked.Read(ref _lastPartialResultUtcTicks),
+                                Interlocked.Read(ref _lastFinalResultUtcTicks), DateTime.MinValue),
                             ClassifyTurnEnding(PromptBuilder.NormalizeInterviewerQuestion(question))
-                                == TurnEnding.Unfinished ? 40 : 5;   // 800ms, or 100ms
+                                == TurnEnding.Unfinished);   // 800ms, 100ms, or a single look
 
                         if (stableCount >= stableNeeded)
                         {
@@ -3224,7 +3258,7 @@ namespace InterviewCopilot
             }
 
             if (!string.IsNullOrWhiteSpace(question))
-                TranscriptTextBlock.Text = question;
+                SetTranscript(question);
 
             // Remember what is actually being sent, not the shorter text the
             // submission was decided on. Recognition often finishes the sentence
@@ -3434,7 +3468,7 @@ namespace InterviewCopilot
             try
             {
                 string rawQuestion = string.IsNullOrWhiteSpace(customQuestion)
-                    ? TranscriptTextBlock.Text.Trim()
+                    ? _transcriptTarget.Trim()
                     : customQuestion.Trim();
                 q = PromptBuilder.NormalizeInterviewerQuestion(rawQuestion);
                 if (string.IsNullOrWhiteSpace(q)) { isProcessing = false; UpdateMicUi(); return; }
@@ -4502,10 +4536,15 @@ namespace InterviewCopilot
         {
             try
             {
-                using var req = new HttpRequestMessage(HttpMethod.Get, $"{BackendUrl}/health");
+                // On the SAME client the answers use. This went through the short-timeout client,
+                // which has its own connection pool, so it kept a connection warm that no answer
+                // ever used, and the first question after a quiet minute paid for a new
+                // connection (DNS, TCP and TLS) on top of everything else. HEAD, so the reply
+                // carries no body.
+                using var req = new HttpRequestMessage(HttpMethod.Head, $"{BackendUrl}/health");
                 using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(6));
-                using var res = await _creditsClient.SendAsync(req, cts.Token);
-                // Any response (even 404) means the container is awake — that's all we need.
+                using var res = await _backendClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                // Any response (even 404) means the connection is open — that's all we need.
             }
             catch { /* offline / cold / 404 — nothing to do, this is best-effort */ }
         }
@@ -4546,7 +4585,15 @@ namespace InterviewCopilot
             if (!string.IsNullOrEmpty(UserSession.IdToken))
                 request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
             request.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
-            request.Content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
+
+            // Compressed: the prompt is 19 to 23 KB and its upload was the slowest, most erratic
+            // part of an answer on a slow uplink (see RequestCompression).
+            byte[] bodyBytes = Encoding.UTF8.GetBytes(payloadJson);
+            bool compressed = !_serverRefusedCompression && RequestCompression.ShouldCompress(bodyBytes.Length);
+            request.Content = compressed
+                ? RequestCompression.Content(bodyBytes)
+                : new StringContent(payloadJson, Encoding.UTF8, "application/json");
+            DebugWindow.Log("AI", $"Upload {request.Content.Headers.ContentLength} bytes{(compressed ? " (compressed)" : "")}.");
 
             // Losing response headers does not prove the server did not charge.
             // Without server idempotency, automatic POST replay is unsafe.
@@ -4556,6 +4603,20 @@ namespace InterviewCopilot
                     HttpResponseMessage response = await _backendClient.SendAsync(
                         request,
                         HttpCompletionOption.ResponseHeadersRead, ct);
+
+                    // A server that cannot read a compressed body says so before it does anything
+                    // else, so before any charge, and asking again in plain is the one safe repeat.
+                    if (compressed && RequestCompression.ServerRefusedCompression((int)response.StatusCode))
+                    {
+                        _serverRefusedCompression = true;
+                        DebugWindow.Log("AI",
+                            $"The server refused a compressed request (HTTP {(int)response.StatusCode}); sending it plain from now on.");
+                        response.Dispose();
+                        using var plain = CloneRequest(request, payloadJson);
+                        requestTimer.Restart();
+                        response = await _backendClient.SendAsync(
+                            plain, HttpCompletionOption.ResponseHeadersRead, ct);
+                    }
                     DebugWindow.Log("AI", $"Backend headers in {requestTimer.ElapsedMilliseconds}ms (HTTP {(int)response.StatusCode}).");
                     return response;
                 }
@@ -5387,7 +5448,7 @@ namespace InterviewCopilot
                 // An Auto restart is not a new visible turn yet. Clearing here made
                 // the question disappear as soon as its answer arrived.
                 if (!AutoModeEnabled)
-                    TranscriptTextBlock.Text = "";      // force blank during suppression
+                    SetTranscript("");      // force blank during suppression
                 if (_listenStartTicks >= 4) _justStartedListening = false;
                 return;
             }
@@ -5409,9 +5470,9 @@ namespace InterviewCopilot
                     DebugWindow.Log("AUTO", "New speech after a pause; set aside earlier words that were not a question.");
                 }
                 bool autoTranscriptChanged = AutoModeEnabled && text != _autoLastTranscript;
-                bool displayChanged = text != TranscriptTextBlock.Text;
+                bool displayChanged = text != _transcriptTarget;
                 bool holdCompletedAutoQuestion = AutoTurnRules.HoldCompletedQuestionOnEmptyRestart(
-                    AutoModeEnabled, TranscriptTextBlock.Text, text);
+                    AutoModeEnabled, _transcriptTarget, text);
 
                 if (autoTranscriptChanged && !string.IsNullOrWhiteSpace(text) &&
                     string.IsNullOrWhiteSpace(_autoLastTranscript) &&
@@ -5420,7 +5481,7 @@ namespace InterviewCopilot
 
                 if (displayChanged && !holdCompletedAutoQuestion)
                 {
-                    TranscriptTextBlock.Text = text;
+                    SetTranscript(text);
                     TranscriptHint.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Visible : Visibility.Collapsed;
                     TranscriptScroll.ScrollToBottom();
                     if (_isCameraMode && answerWindow != null)
@@ -5473,7 +5534,89 @@ namespace InterviewCopilot
                 }
                 catch { }
             }
-            return TranscriptTextBlock.Text;
+            return _transcriptTarget;
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // THE TRANSCRIPT TYPES ITSELF OUT
+        //
+        // Words used to appear in whole phrases, each time the speech service sent a new
+        // version of the sentence, which reads as lag even when it is not. They now type
+        // in at speed, a few characters every frame, and never fall more than about a
+        // third of a second behind what was actually heard. Everything that decides
+        // anything (Auto, what is sent to the model) reads _transcriptTarget, the real
+        // text, never the part typed so far.
+        // ══════════════════════════════════════════════════════════════════════
+        private string _transcriptTarget = "";
+        private DispatcherTimer? _typerTimer;   // the safety net: keeps typing when no frames are being drawn
+        private bool _typerOnFrames;            // stepping once per drawn frame, the smooth way
+        private long _typerLastStamp;
+
+        private void SetTranscript(string text)
+        {
+            text ??= "";
+            _transcriptTarget = text;
+
+            // Nothing to type: clearing, an empty answer, or a person who has turned
+            // animation off in Windows.
+            if (text.Length == 0 || _windowClosed || !SystemParameters.ClientAreaAnimation)
+            {
+                StopTyper();
+                if (TranscriptTextBlock.Text != text) TranscriptTextBlock.Text = text;
+                return;
+            }
+            if (TranscriptTextBlock.Text == text) { StopTyper(); return; }
+
+            if (_typerTimer == null)
+            {
+                // A timer alone steps every 15 to 45 ms, which shows as jumps of several
+                // characters. It stays only so typing still finishes when nothing is being
+                // drawn (a hidden or covered window produces no frames).
+                _typerTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(40) };
+                _typerTimer.Tick += (_, _) => TypeTranscriptStep();
+            }
+            if (!_typerTimer.IsEnabled)
+            {
+                _typerLastStamp = Stopwatch.GetTimestamp() - Stopwatch.Frequency / 60;
+                _typerTimer.Start();
+            }
+            if (!_typerOnFrames)
+            {
+                CompositionTarget.Rendering += OnTypeFrame;
+                _typerOnFrames = true;
+            }
+            TypeTranscriptStep();   // the first characters do not wait for the next frame
+        }
+
+        private void TypeTranscriptStep()
+        {
+            long now = Stopwatch.GetTimestamp();
+            double seconds = (now - _typerLastStamp) / (double)Stopwatch.Frequency;
+            _typerLastStamp = now;
+
+            string shown = TranscriptTextBlock.Text;
+            string next = TranscriptTyper.Advance(shown, _transcriptTarget, Math.Min(seconds, 0.25));
+            if (!string.Equals(next, shown, StringComparison.Ordinal))
+            {
+                TranscriptTextBlock.Text = next;
+                TranscriptScroll.ScrollToBottom();
+#if DEBUG
+                if (_autoTestHarness) DebugWindow.Log("TYPER", $"{next.Length}/{_transcriptTarget.Length}");
+#endif
+            }
+            if (string.Equals(next, _transcriptTarget, StringComparison.Ordinal)) StopTyper();
+        }
+
+        private void OnTypeFrame(object? sender, EventArgs e) => TypeTranscriptStep();
+
+        private void StopTyper()
+        {
+            if (_typerOnFrames)
+            {
+                CompositionTarget.Rendering -= OnTypeFrame;
+                _typerOnFrames = false;
+            }
+            if (_typerTimer != null && _typerTimer.IsEnabled) _typerTimer.Stop();
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -5515,6 +5658,7 @@ namespace InterviewCopilot
 
                 KillAndDisposeEngine();
                 _engineOnline      = false; // fresh process: not ready to transcribe yet
+                _engineReportsEndpoints = false;   // until its start-up line says which service it is on
                 _engineAuthFailed  = false; // reset so MonitorEngine can restart after a key change
                 _engineUsageLimitReached = false;
                 _engineFatalReason = "";
@@ -5760,6 +5904,14 @@ namespace InterviewCopilot
                             }
                             else if (line.Contains("UTTERANCE END", StringComparison.Ordinal))
                                 Interlocked.Exchange(ref _lastUtteranceEndUtcTicks, DateTime.UtcNow.Ticks);
+                            else if (line.Contains("SPEECH FINAL", StringComparison.Ordinal))
+                                Interlocked.Exchange(ref _lastSpeechFinalUtcTicks, DateTime.UtcNow.Ticks);
+                            else if (line.Contains("DEEPGRAM ENGINE: READY", StringComparison.Ordinal))
+                                _engineReportsEndpoints = true;
+                            else if (line.Contains("SPEECHMATICS ENGINE: READY", StringComparison.Ordinal) ||
+                                     line.Contains("SARVAM ENGINE: READY", StringComparison.Ordinal) ||
+                                     line.Contains("Speechmatics takes over", StringComparison.Ordinal))
+                                _engineReportsEndpoints = false;
                             else if (line.Contains("PARTIAL received") || line.Contains("FINAL received"))
                             {
                                 if (line.Contains("FINAL received"))
@@ -6834,7 +6986,7 @@ namespace InterviewCopilot
         // ── Toolbar: Clear transcript + answer ───────────────────────────────
         private void ClearAnswerBtn_Click(object sender, RoutedEventArgs e)
         {
-            TranscriptTextBlock.Text = "";
+            SetTranscript("");
             TranscriptHint.Visibility = Visibility.Visible;
             ClearAnswer();
             StarBadge.Visibility = Visibility.Collapsed;
@@ -7193,7 +7345,7 @@ namespace InterviewCopilot
                 previousSessionSaved = true;
             }
             // Don't increment here — StartNewSession's while(File.Exists) scan is the sole source of truth
-            TranscriptTextBlock.Text = "";
+            SetTranscript("");
             TranscriptHint.Visibility = Visibility.Visible;
             ClearAnswer();
             // A new session is a new interview. The arrows must not reach back into
