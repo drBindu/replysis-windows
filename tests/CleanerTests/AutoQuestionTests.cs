@@ -98,6 +98,25 @@ internal static class AutoQuestionTests
         Check(AutoTurnRules.UnconsumedTranscript("Tell me about the RESTful", "Tell me about the rest full") == "",
             "nothing new yet means nothing new");
 
+        // From the owner's live Practice test (2026-09-28): a film was playing on
+        // the computer, and "So what is Java?" got a textbook answer.
+        Check(N("So what is Java?") == "What is Java?", "'So' is dropped, so the definition voice applies");
+        Check(N("Okay so, tell me about yourself.") == "Tell me about yourself.", "'Okay so,' is dropped");
+        Check(N("And where have you used it?").StartsWith("And"), "'And' stays, continuation merging reads it");
+        foreach (var line in new[]
+        {
+            "Two days of counting my fingers.",
+            "The dreams just keep getting worse. Every time I close my eyes.",
+            "Everyone's safe for themselves.",
+            "I have been at the company for five years.",
+        })
+        {
+            Check(!Q(line), $"not answered as a question: {line}");
+            Check(!AutoTurnRules.IsSubstantiveBoundaryUtterance(line), $"not answered at an utterance end: {line}");
+        }
+        Check(Q("I see you led the migration at Amazon."), "a statement aimed at the candidate is still a prompt");
+        Check(Q("Your resume mentions Kafka and Spark."), "a statement about their resume is still a prompt");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "auto questions: all passed" : $"auto questions: {failed} FAILED");
         return failed;

@@ -233,6 +233,10 @@ namespace InterviewCopilot
             // the answer the candidate was still reading.
             if (PromptBuilder.IsAcknowledgement(value) || IsInterviewerAside(value))
                 return false;
+            // Only a prompt aimed at the candidate. The interviewer describing
+            // the role, or anything else audible on the computer, is not one.
+            if (!AddressesTheCandidate(value))
+                return false;
 
             // An utterance boundary is useful evidence, not permission to answer a
             // paragraph of background conversation.
@@ -345,7 +349,25 @@ namespace InterviewCopilot
 
             char last = core.TrimEnd()[^1];
             bool hasClosingPunctuation = last is '.' or '!';
-            return words.Length >= 5 && core.Length >= 20 && hasClosingPunctuation;
+            // A statement is a prompt only when it is aimed at the candidate
+            // ("Your resume mentions Kafka.", "I see you led the migration.").
+            // Any five-word sentence used to count, so a film playing on the
+            // computer was answered line by line in a live Practice test, and
+            // an interviewer describing their own team got an answer too.
+            return words.Length >= 5 && core.Length >= 20 && hasClosingPunctuation &&
+                   AddressesTheCandidate(core);
+        }
+
+        /// <summary>Speaks to the candidate: second person, or a request.</summary>
+        internal static bool AddressesTheCandidate(string text)
+        {
+            string[] w = Words(text);
+            if (w.Any(SecondPerson.Contains) || w.Contains("u")) return true;
+            string n = string.Join(" ", w);
+            return Regex.IsMatch(n,
+                @"^(?:let's|let us) (?:talk|discuss|move|go|dive|start|switch|turn|focus|look|get)\b|" +
+                @"^(?:i'd|i would|i) (?:really )?(?:like|love|want|wanted) to (?:hear|know|understand|learn|see|talk|discuss|ask)\b|" +
+                @"^(?:i'm|i am) (?:curious|interested)\b");
         }
 
         /// <summary>

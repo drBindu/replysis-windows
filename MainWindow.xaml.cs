@@ -2645,7 +2645,19 @@ namespace InterviewCopilot
                     _autoListeningStartedUtc, providerConfirmedEnd))
                 return;
             int requiredSilenceMs;
-            if (ending == TurnEnding.Finished)
+            if (ending == TurnEnding.Finished && providerConfirmedEnd &&
+                candidateQuestion.TrimEnd().EndsWith('?') && IsLikelyCompleteAutomaticQuestion(candidateQuestion))
+            {
+                // A question mark, and the provider itself heard the speaker stop.
+                // Waiting the full 2.8s here put 3.5s between the last word and the
+                // first word of the answer in the owner's live test, and "too late"
+                // was the complaint. The speaker's own mid-question pauses still set
+                // a floor, so a slow speaker is not cut off; a tail that does come
+                // is merged as a continuation.
+                int paceFloorMs = (int)Math.Round(_autoLongestMidTurnGapMs * 1.3);
+                requiredSilenceMs = Math.Min(AutoTurnFinishedSilenceMs, Math.Max(1_500, paceFloorMs));
+            }
+            else if (ending == TurnEnding.Finished)
             {
                 requiredSilenceMs = AutoTurnRules.CompletionGraceMs(AutoTurnFinishedSilenceMs);
             }
@@ -3165,6 +3177,8 @@ namespace InterviewCopilot
                 StartAutoListeningIfReady();
                 return;
             }
+            if (AutoModeEnabled && source != "AUTO" && TryAnswerNowInAuto(source))
+                return;
             if (AutoModeEnabled && source != "AUTO")
             {
                 ShowListeningModeNotice("Auto is on");
@@ -3176,6 +3190,45 @@ namespace InterviewCopilot
             if (isProcessing || _flushing) { InterruptAiAndListen(source); return; }
             if (isMuted)      HandleSpaceDown(source);
             else              HandleSpaceUp(source);
+        }
+
+        private DateTime _lastAnswerNowUtc = DateTime.MinValue;
+
+        /// <summary>
+        /// Space (or the mic) while Auto is listening means "answer what you heard,
+        /// now". The owner asked for it as the second way to get an answer when
+        /// Auto has not decided a question is finished. Only while listening with
+        /// words on screen, never while an answer is streaming, and at most once a
+        /// second: Space presses used to cancel answers and fire many tiny requests
+        /// in Auto, which is why Space was switched off here in the first place.
+        /// </summary>
+        private bool TryAnswerNowInAuto(string source)
+        {
+            if (!isListening || isProcessing || _flushing || _autoTurnSubmitting) return false;
+            if (source != "BUTTON" && IsTypingInTextField()) return false;
+            if (DateTime.UtcNow - _lastAnswerNowUtc < TimeSpan.FromSeconds(1)) return true;
+
+            string heard = (ReadLatestTxtSafe() ?? "").Trim();
+            if (DateTime.UtcNow - _lastAutoSubmitUtc < TimeSpan.FromSeconds(45))
+                heard = AutoTurnRules.StripAnsweredPrefix(heard, _lastAutoSubmittedQuestion);
+            if (string.IsNullOrWhiteSpace(PromptBuilder.NormalizeInterviewerQuestion(heard)))
+            {
+                ShowListeningModeNotice("Nothing heard yet");
+                return true;
+            }
+
+            _lastAnswerNowUtc = DateTime.UtcNow;
+            _autoTurnSubmitting = true;
+            _previousAutoSubmittedQuestion = _lastAutoSubmittedQuestion;
+            _autoContinuationPrefix = "";
+            _lastAutoSubmittedFragment = "";
+            _lastAutoSubmittedQuestion = PromptBuilder.NormalizeInterviewerQuestion(heard);
+            _lastAutoSubmitUtc = DateTime.UtcNow;
+            _continuationChainStartedUtc = DateTime.UtcNow;
+            _continuationCount = 0;
+            DebugWindow.Log("AUTO", $"{source} pressed: answering what was heard now ({heard.Length} chars).");
+            HandleSpaceUp("AUTO");
+            return true;
         }
 
         // Cancel an in-flight answer (or the transcript-flush window) and immediately begin
@@ -4935,13 +4988,17 @@ namespace InterviewCopilot
                 case "auto-practice":
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. "));
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Ask a question out loud") { FontWeight = FontWeights.Bold, Foreground = white });
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" or play one, and the answer appears here on its own. No keys needed."));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" or play one, and the answer appears here on its own. If it has not answered, press "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" to answer right away."));
                     TranscriptHintText.Text = "Listening to your microphone and computer audio";
                     break;
                 default:
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. When the interviewer "));
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("asks a question in your meeting") { FontWeight = FontWeights.Bold, Foreground = white });
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(", the answer appears here on its own. Your own voice is not picked up."));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(", the answer appears here on its own. If it has not answered, press "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" to answer right away."));
                     TranscriptHintText.Text = "Listening for the interviewer on your computer audio";
                     break;
             }

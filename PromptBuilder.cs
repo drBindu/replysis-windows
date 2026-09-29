@@ -661,7 +661,34 @@ namespace InterviewCopilot
             return true;
         }
 
-        public static string NormalizeInterviewerQuestion(string question)
+        public static string NormalizeInterviewerQuestion(string question) =>
+            DropSpokenLeadIn(NormalizeInterviewerQuestionCore(question));
+
+        /// <summary>
+        /// "So what is Java?" missed the definition rule, which looks for a
+        /// question that starts with "What is", and got a textbook answer (owner's
+        /// live test, 2026-09-28). The lead-in carries nothing, so it goes.
+        /// Joining words ("and", "also", "but") stay: continuation merging reads them.
+        /// </summary>
+        private static string DropSpokenLeadIn(string question)
+        {
+            string q = question ?? "";
+            string stripped = q;
+            string prev;
+            do
+            {
+                prev = stripped;
+                stripped = Regex.Replace(stripped,
+                    @"^(?:so|now|okay|ok|alright|all right|um|uh|well|right|next question|next one|" +
+                    @"moving on|my next question is|the next question is|let me ask you|i want to ask you)\b[\s,.:]*",
+                    "", RegexOptions.IgnoreCase).Trim();
+            } while (stripped != prev && stripped.Length > 0);
+
+            if (Regex.Matches(stripped, @"[\p{L}\p{N}']+").Count < 2) return q;
+            return char.ToUpperInvariant(stripped[0]) + stripped[1..];
+        }
+
+        private static string NormalizeInterviewerQuestionCore(string question)
         {
             string normalized = Regex.Replace(question ?? "", @"\s+", " ").Trim();
             if (string.IsNullOrWhiteSpace(normalized)) return "";

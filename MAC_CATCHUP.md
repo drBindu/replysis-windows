@@ -1,3 +1,28 @@
+## Auto, round two: from the owner's live test (2026-09-28, Windows 1.0.26)
+
+Client-side only.
+
+- **Space in Auto now means "answer what you heard, now".** Owner's request, as a
+  second way to get an answer when Auto has not decided a question is finished.
+  Only while listening with words on screen, never while an answer streams, at
+  most once a second (Space used to cancel answers and fire tiny requests in
+  Auto, which is why it was switched off). `TryAnswerNowInAuto`.
+- **Faster answers for plain questions.** A question ending in "?" that the
+  provider has also marked ended (UtteranceEnd after the last words) now waits
+  1.5 s, not 2.8 s, floored by the speaker's own mid-question pauses. Measured
+  before: 3.5 s from last word to first answer word. A tail that still arrives
+  is merged as a continuation.
+- **"So what is Java?" got a textbook answer.** The definition voice only
+  matches questions starting "What is". The sent question now drops "So / Now /
+  Okay so / Next question" in front. "And / also / but" stay (merging reads them).
+- **A film playing on the computer was answered line by line** in Practice. Any
+  5-word sentence counted as a prompt. Statements now count only when aimed at
+  the candidate (second person, or "let's talk about", "I'd like to hear about"),
+  and the same rule gates the system-audio boundary fallback, which the earlier
+  timing fix would otherwise have let answer the interviewer describing their team.
+
+---
+
 ## Auto mode audit: seven faults, most of them silent (2026-09-28, Windows 1.0.26)
 
 Client-side only. Found by replaying realistic interviewer speech through the
