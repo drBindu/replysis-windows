@@ -37,8 +37,20 @@ namespace InterviewCopilot
 
         internal readonly record struct Description(string Label, string Title, string Body, NextStep Step);
 
-        internal static Description Describe(Kind kind) => kind switch
+        /// <param name="freeTrial">
+        /// True for the one-time free answers (and a guest). Running out of those is not a monthly
+        /// limit that renews, it is the end of a trial, so it says what Pro gives instead. Words
+        /// only, no numbers: they belong to the server and the website.
+        /// </param>
+        internal static Description Describe(Kind kind, bool freeTrial = false) => kind switch
         {
+            Kind.NoCredits when freeTrial => new(
+                "NO CREDITS",
+                "Your free answers are used",
+                "That is what Replysis does in a real interview. Pro gives you a whole month of answers, " +
+                "enough for many interviews, and you can cancel any time.",
+                NextStep.SeePlans),
+
             Kind.NoListeningTime => new(
                 "MONTHLY LIMIT",
                 "Monthly listening limit reached",

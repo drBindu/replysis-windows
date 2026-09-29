@@ -30,7 +30,7 @@ namespace InterviewCopilot
         private const int    ThinkingAnimMs          = 800;   // thinking dot animation interval
         private const int    CreditRefreshMinutes    = 5;     // background credits refresh
         private const int    EngineMonitorSecs       = 3;     // how often to check engine health
-        private const int    CreditsLowThreshold     = 20;    // amber warning below this
+        private const int    CreditsLowThreshold     = 10;    // amber warning at two answers left or fewer
         private const int    CreditsCriticalThreshold= 5;     // red warning / block below this
         private const int    TranscriptRetryCount    = 5;     // retries on torn file read
         private const int    TranscriptRetryDelayMs  = 5;     // delay between retries
@@ -798,8 +798,8 @@ namespace InterviewCopilot
                 SetLoggedOutUI();
                 // Kept as the recovery call site for an expired Firebase token,
                 // but there is no guest fallback anymore. Falling back used to
-                // give a device 100 credits and then give the signed-in account
-                // another 100 credits.
+                // give a device its free answers and then give the signed-in account
+                // another set.
                 if (!await RequireSignInAsync()) Close();
             }
             catch (Exception ex)
@@ -1025,7 +1025,7 @@ namespace InterviewCopilot
                         bool limitReached = _audioMinutesRemaining == 0;
                         CreditsLabel.Text = $"{display} credits";
                         if (CreditsBadge != null)
-                            CreditsBadge.ToolTip = ExplainCredits(credits, limitReached);
+                            CreditsBadge.ToolTip = ExplainCredits(credits, limitReached, OnFreeTrial());
                         CreditsIcon.Text = "";
 
                         // Pure glass: badge stays neutral; only the numeral flips to soft
@@ -2159,10 +2159,13 @@ namespace InterviewCopilot
         /// The one meter, in plain words: credits, and what they buy in answers.
         /// Listening is not shown to the user at all.
         /// </summary>
-        internal static string ExplainCredits(int credits, bool limitReached)
+        internal static string ExplainCredits(int credits, bool limitReached, bool freeTrial = false)
         {
             int answers = Math.Max(0, credits) / AnswerCreditCost;
-            string line = $"{credits:N0} credits, about {answers:N0} answers left this month.";
+            // The free answers are one time; saying "this month" would promise a refill that never comes.
+            string line = freeTrial
+                ? $"{credits:N0} credits, about {answers:N0} free answers left. Free answers do not refresh."
+                : $"{credits:N0} credits, about {answers:N0} answers left this month.";
             string cost = $"Each answer or screen read costs {AnswerCreditCost} credits.";
             return limitReached
                 ? $"{line}\n{cost}\nYou have reached this month's fair use limit for listening, so nothing more can be heard until it renews. Click for plans."
@@ -2170,7 +2173,11 @@ namespace InterviewCopilot
         }
 
         /// <summary>What one answer or screen read costs. Must equal INTERVIEW_QUESTION_COST on the server.</summary>
-        internal const int AnswerCreditCost = 5;
+        internal const int AnswerCreditCost = PlanFacts.AnswerCost;
+
+        /// <summary>On the one-time free answers rather than a paid plan (a guest counts).</summary>
+        private static bool OnFreeTrial() =>
+            !UserSession.IsUnlimited && PlanFacts.IsFreeTrial(UserSession.Plan, UserSession.IsLoggedIn);
 
         private readonly System.Collections.Generic.HashSet<ListeningProblems.Kind> _problemsShown = new();
 
@@ -2195,7 +2202,7 @@ namespace InterviewCopilot
         private void ShowProblemOnce(ListeningProblems.Kind kind)
         {
             if (!_problemsShown.Add(kind)) return;
-            var d = ListeningProblems.Describe(kind);
+            var d = ListeningProblems.Describe(kind, OnFreeTrial());
             DebugWindow.Log("MODE", $"Problem shown to the user: {kind}.");
             ShowInAppAlert(
                 d.Title, d.Body, persist: true,
@@ -7873,19 +7880,24 @@ namespace InterviewCopilot
             // Guard: don't double-fire while already processing
             if (isProcessing || _isScreenAnalyzing) return;
 
-            // Credits check — guests get 100 credits/month (tracked by device ID)
+            // Credits check. A guest gets the free answers once (tracked by device ID).
             if (!UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold)
             {
                 int remaining = UserSession.Credits;
                 bool isGuest = !UserSession.IsLoggedIn;
                 AiAnswerBox.Text = isGuest
-                    ? $"Your guest session has {remaining} credit{(remaining == 1 ? "" : "s")} remaining.\n\n" +
-                      "Screen AI and all features are available on a free account.\n\n" +
-                      "Create a free Replysis AI account to get 100 credits each month,\n" +
-                      "or upgrade to Pro for 5,000 credits/month with priority processing."
-                    : $"Insufficient credits ({remaining} remaining).\n\n" +
-                      "Upgrade your Replysis AI plan to continue\n" +
-                      "using Screen AI and other advanced features.";
+                    ? $"Your free answers are used ({remaining} credit{(remaining == 1 ? "" : "s")} left).\n\n" +
+                      $"Pro gives you {PlanFacts.Answers(PlanFacts.ProCredits):N0} answers a month, enough for about " +
+                      $"{PlanFacts.InterviewsFor(PlanFacts.ProCredits)} interviews.\n" +
+                      "Open Plans from the credits badge to upgrade."
+                    : OnFreeTrial()
+                      ? "Your free answers are used.\n\n" +
+                        $"That is what Replysis does in a real interview. Pro gives you {PlanFacts.Answers(PlanFacts.ProCredits):N0} answers a month, " +
+                        $"enough for about {PlanFacts.InterviewsFor(PlanFacts.ProCredits)} interviews.\n" +
+                        "Open Plans from the credits badge to upgrade."
+                      : $"Insufficient credits ({remaining} remaining).\n\n" +
+                        "Upgrade your Replysis AI plan to continue\n" +
+                        "using Screen AI and other advanced features.";
                 return;
             }
 

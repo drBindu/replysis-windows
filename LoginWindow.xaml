@@ -216,10 +216,10 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="100" Foreground="#1C7A3E" FontSize="22"
+                            <TextBlock Text="5" Foreground="#1C7A3E" FontSize="22"
                                        FontWeight="SemiBold" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1" Margin="11,0,8,0" VerticalAlignment="Center">
-                                <TextBlock Text="FREE WELCOME CREDITS" Foreground="#16150F"
+                                <TextBlock Text="FREE ANSWERS TO TRY IT" Foreground="#16150F"
                                            FontSize="9" FontWeight="Bold"/>
                                 <TextBlock Text="Included with every new account" Foreground="#7A8177"
                                            FontSize="9.5" Margin="0,2,0,0"/>

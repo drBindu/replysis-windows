@@ -32,18 +32,13 @@ namespace InterviewCopilot
             else
             {
                 CreditsAmountText.Text = $"{UserSession.Credits:N0} credits";
-                // Must match PLAN_MONTHLY_CREDITS in the website's
-                // app/api/stt/tokens/route.ts. lifetime/teams are retired
-                // plans, kept only so an existing account still shows its
-                // real allowance instead of silently falling to the free tier.
-                AllowanceText.Text = plan switch
-                {
-                    "pro" => "2,000 each month",
-                    "max" or "lifetime" => "5,000 each month",
-                    "teams" => "10,000 each month",
-                    _ => "100 each month"
-                };
-                ResetText.Text = NextMonthlyReset().ToString("MMM d, yyyy");
+                // The numbers live in PlanFacts, which check-sync compares with the website
+                // and the server. lifetime/teams are retired plans, kept only so an existing
+                // account still shows its real allowance instead of silently falling to free.
+                bool freeTrial = PlanFacts.IsFreeTrial(UserSession.Plan, UserSession.IsLoggedIn);
+                AllowanceText.Text = PlanFacts.AllowanceText(UserSession.Plan, UserSession.IsLoggedIn);
+                // Free answers are given once. A refresh date would promise a refill that never comes.
+                ResetText.Text = freeTrial ? "Not refreshed" : NextMonthlyReset().ToString("MMM d, yyyy");
             }
 
             PlanText.Text = UserSession.IsLoggedIn ? planLabel : "Guest plan";

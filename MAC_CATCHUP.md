@@ -1,3 +1,44 @@
+## New plans: 5 free answers once, Pro 500 a month, Max 1,500 a month (2026-09-29, Windows 1.0.29)
+
+Decided with the owner. The server enforces it (deploying it applies to every client, Mac included). The Mac
+app must SAY the same things. Everything below is what Windows changed; `PlanFacts.cs` is the pattern.
+
+| | Free | Pro | Max |
+|---|---|---|---|
+| Credits | 25, once | 2,500 a month | 7,500 a month |
+| Answers (5 credits each) | 5 | 500 | 1,500 |
+| About this many interviews (30 answers each) | less than one | 15 | 50 |
+| Price | $0 | $34.99 (was $29.99) | $79.99 (was $49.99) |
+
+1. **Free is a one time trial, not a monthly allowance.** It used to be 100 credits refilled every month. The server no
+   longer refills Free at month end (`FirestoreCreditsService.creditsAfterReset`; the website has the same rule in
+   `data/productFacts.ts`). Someone who signs up on the 30th still has all five answers on the 2nd. A guest gets the
+   same five, per device. Existing free accounts keep whatever they already hold.
+2. **Never describe Free as monthly on the Mac.** Windows: the credits window says "5 answers, one time" and "Not
+   refreshed"; the credits tooltip says "free answers do not refresh"; the sign in screen says "5 FREE ANSWERS TO TRY IT".
+3. **Running out of the free answers is the moment someone decides**, so it says what Pro is, in words, with no number
+   (`ListeningProblems.Describe(NoCredits, freeTrial: true)`): "Your free answers are used. That is what Replysis does
+   in a real interview. Pro gives you a whole month of answers, enough for many interviews." A paid plan that runs out
+   still says its credits renew. The screen read message for a guest and a free account says the same, with Pro's
+   answers and interviews taken from `PlanFacts`.
+4. **Low warnings are in answers, not raw credits:** amber at two answers left or fewer (`CreditsLowThreshold = 10`),
+   blocked below one answer (5).
+5. **Starting a live session on the website no longer costs a credit** (it was 1, so 25 credits were not five answers
+   there). It still needs enough credits for one answer to get a speech token.
+6. **Listening is unchanged and still invisible:** the hidden fair use guard is Free 15, Pro 900, Max 1,800 minutes of
+   speech. It is not in any customer text.
+7. **Yearly plans are hidden** on the website, and the packs are unchanged (500, 1,500, 5,000 credits for $9.99,
+   $24.99, $69.99). The Mac app must not offer yearly either.
+8. **India:** rupee prices unchanged (Rs 699 and Rs 1,299), credits now equal the dollar plans.
+
+Verification is `node scripts/check-sync.mjs` in the website repo: it compares the server, the website and
+`PlanFacts.cs` against the agreed numbers, checks the ladder (each step bigger, dearer and no dearer per answer), that
+no customer text still says the old numbers, that every reset uses the one rule, and worst case profit including India.
+It was run with three numbers broken on purpose and failed each time. **A Mac `PlanFacts` equivalent would let it
+check the Mac too.**
+
+---
+
 ## Closing the lid: waking from sleep left the app dead (2026-09-29, Windows 1.0.29)
 
 Found by leaving a running app on a laptop that slept for two hours. On waking, the network was not up

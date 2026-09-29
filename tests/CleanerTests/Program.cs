@@ -151,6 +151,9 @@ internal static class Program
         Console.WriteLine("\n9e. An open app keeps looking for updates, and says so");
         _failed += UpdateTests.RunPolicy();
 
+        Console.WriteLine("\n9g. The plans as agreed: 5 free answers once, Pro 500, Max 1,500");
+        _failed += PlanFactsTests.Run();
+
         Console.WriteLine("\n9f. Instant response: Auto does not wait on top of the wait, and words type in");
         _failed += InstantResponseTests.Run();
 

@@ -50,7 +50,7 @@
                                    VerticalAlignment="Center"/>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="CreditsAmountText" Text="100 credits" Foreground="#FFFFFF"
+                        <TextBlock x:Name="CreditsAmountText" Text="25 credits" Foreground="#FFFFFF"
                                    FontSize="22" FontWeight="Bold" FontFamily="Segoe UI"/>
                         <TextBlock x:Name="PlanText" Text="Guest plan" Foreground="#88A0B8"
                                    FontSize="12" FontFamily="Segoe UI" Margin="0,3,0,0"/>
@@ -75,7 +75,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="Allowance" Foreground="#9EADBE" FontSize="12.5" FontFamily="Segoe UI"/>
-                    <TextBlock x:Name="AllowanceText" Grid.Column="1" Text="100 each month"
+                    <TextBlock x:Name="AllowanceText" Grid.Column="1" Text="5 answers, one time"
                                Foreground="#FFFFFF" FontSize="12.5" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                 </Grid>
                 <Border Height="1" Background="#1B2A3E"/>
