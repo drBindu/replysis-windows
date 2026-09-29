@@ -1,3 +1,16 @@
+## "No transcription" in Interview mode, explained on screen (2026-09-29, after 1.0.26)
+
+A tester updated to 1.0.26, spoke for a while and saw nothing. Interview mode (the
+fresh-install default) hears the meeting only and never the candidate's own voice,
+by design, and nothing on screen said so. Worse, my Auto hint rewrite the night
+before had dropped the sentence "Your own voice is not picked up". The hint now says
+it again and points at Practice, and after 45 s of an interview with no words heard
+at all, a one-time banner offers **Switch to Practice** (`_wordsHeardThisInterview`,
+`ListeningMeterTick`). If the Mac has an equivalent system-audio-only default, a new
+user speaking into it needs the same explanation.
+
+---
+
 ## Update banner gets a button (2026-09-28, Windows 1.0.26)
 
 Owner: users could not tell how to update from "Replysis 1.0.25 is ready", which

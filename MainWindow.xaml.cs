@@ -1891,11 +1891,34 @@ namespace InterviewCopilot
             catch (Exception ex) { DebugWindow.Log("STT_KEY", $"Early renewal skipped: {ex.Message}"); }
         }
 
+        // Words heard at any point in this interview, in any listening turn. Auto
+        // restarts listening after every answer, so the per-turn flag cannot say.
+        private bool _wordsHeardThisInterview;
+        private bool _interviewSilentTipShown;
+
         private void ListeningMeterTick()
         {
             if (!isListening) { StopListeningMeter(); return; }
 
             var now = DateTime.UtcNow;
+
+            // A tester in Interview mode (the default) spoke for minutes and saw
+            // nothing, because Interview hears the meeting only and never her own
+            // voice (2026-09-29). After 45 seconds with nothing heard at all, say
+            // so once, and offer the switch.
+            if (!_wordsHeardThisInterview && !_interviewSilentTipShown && !PracticeAudioOn &&
+                _interviewStarted && _sessionSeconds >= 45)
+            {
+                _interviewSilentTipShown = true;
+                DebugWindow.Log("MODE", "Interview mode heard nothing for 45s; offered a switch to Practice.");
+                ShowInAppAlert(
+                    "Nothing heard yet",
+                    "Interview mode listens to your meeting only, so your own voice is not picked up. " +
+                    "If you are speaking yourself, switch to Practice.",
+                    persist: false,
+                    actionLabel: "Switch to Practice",
+                    action: () => SelectAudioSource(practice: true));
+            }
 
             WarnIfHearingButNotTranscribing(now);
 
@@ -4847,6 +4870,8 @@ namespace InterviewCopilot
         {
             if (_interviewStarted) return;
             _interviewStarted = true;
+            _wordsHeardThisInterview = false;
+            _interviewSilentTipShown = false;
             if (_watchScreenMode) StartPreparedShots();
             _sessionSeconds = 0;
             SessionTimerLabel.Text = "0:00";
@@ -5057,9 +5082,11 @@ namespace InterviewCopilot
                 default:
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. When the interviewer "));
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("asks a question in your meeting") { FontWeight = FontWeights.Bold, Foreground = white });
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(", the answer appears here on its own. If it has not answered, press "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(", the answer appears here on its own. Interview mode does not pick up your own voice. To try it by speaking, choose "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Practice") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" above. If an answer does not come, press "));
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" to answer right away."));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("."));
                     TranscriptHintText.Text = "Listening for the interviewer on your computer audio";
                     break;
             }
@@ -5312,6 +5339,7 @@ namespace InterviewCopilot
                     // minutes into a long answer.
                     _lastSpeechHeardUtc = DateTime.UtcNow;
                     _heardAnythingThisSession = true;
+                    _wordsHeardThisInterview = true;
                 }
 
                 if (autoTranscriptChanged)
