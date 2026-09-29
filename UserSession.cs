@@ -88,6 +88,15 @@ namespace InterviewCopilot
         /// A message that contradicts the screen beside it is worse than none.
         /// </summary>
         public static bool SpeechmaticsOutOfListeningTime { get; private set; }
+
+#if DEBUG
+        /// <summary>Developer builds only: see the out-of-listening-time screens without a real 402.</summary>
+        internal static void SimulateOutOfListeningTime()
+        {
+            SpeechmaticsOutOfListeningTime = true;
+            SpeechmaticsLastStatusCode = 402;
+        }
+#endif
         /// <summary>When the current transcription token stops working.</summary>
         public static DateTime SttKeyExpiresAtUtc => _speechmaticsExpiresAtUtc;
 

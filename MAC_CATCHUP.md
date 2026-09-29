@@ -1,3 +1,24 @@
+## "55 credits but no listening time" now explained in words (2026-09-29)
+
+A Free-plan tester (uid BZmG...) updated to 1.0.26, spoke, and got no transcription.
+Not her laptop: her debug log showed `STT_KEY 402: monthly listening time used up`.
+Credits (55 left, 5 per answer) and listening time (0 left, Free = 15 min a month,
+`PLAN_MONTHLY_AUDIO_MINUTES` in `FirestoreCreditsService.java`) are two separate
+meters, and Auto keeps the mic open, so 15 minutes goes in one sitting. The only
+sign was a small red "NO LISTENING TIME" label beside a badge reading "55 credits,
+0m left". Now: a persistent banner in words ("Credits pay for answers... Listening
+time pays for hearing the interview... Free includes 15 minutes a month... F8 still
+works") with a **See plans** button, the same text where the answer would appear,
+a badge that reads "55 credits  No listening time left" in red, and a tooltip
+explaining both meters. The update banner no longer replaces it (one banner fits at
+a time). The Mac should say the same in words when its listening time is used up.
+
+**Policy question left open for the owner:** 15 free minutes disappears fast with
+Auto. Options: raise Free (cost is about $0.54 per listening hour), or count only
+time with speech in it.
+
+---
+
 ## "No transcription" in Interview mode, explained on screen (2026-09-29, after 1.0.26)
 
 A tester updated to 1.0.26, spoke for a while and saw nothing. Interview mode (the

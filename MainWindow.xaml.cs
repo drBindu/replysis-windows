@@ -996,9 +996,15 @@ namespace InterviewCopilot
                         // stop them is the one coloured. Credits alone were never
                         // the whole truth: they meter questions, and the microphone
                         // bills by the hour.
-                        CreditsLabel.Text = _audioMinutesRemaining >= 0
+                        // "55 credits, 0m left" read as a contradiction: plenty left,
+                        // and none. They are two meters (a tester on the Free plan
+                        // used her 15 listening minutes and saw exactly this,
+                        // 2026-09-29). At zero the badge now says which one ran out.
+                        CreditsLabel.Text = _audioMinutesRemaining > 0
                             ? $"{display} credits, {FormatListeningTime(_audioMinutesRemaining)} left"
                             : $"{display} credits";
+                        if (CreditsBadge != null)
+                            CreditsBadge.ToolTip = ExplainMeters(display, _audioMinutesRemaining);
                         CreditsIcon.Text = "";
 
                         // Pure glass: badge stays neutral; only the numeral flips to soft
@@ -1011,8 +1017,10 @@ namespace InterviewCopilot
                             (Color)ColorConverter.ConvertFromString(creditColor));
 
                         CreditsPlanLabel.Text = _audioMinutesRemaining == 0
-                            ? "  no listening time left"
+                            ? "  No listening time left"
                             : "";
+                        CreditsPlanLabel.Foreground = new SolidColorBrush(
+                            (Color)ColorConverter.ConvertFromString(_audioMinutesRemaining == 0 ? "#F87171" : "#A0A0A4"));
                         CreditsPlanLabel.Visibility = _audioMinutesRemaining == 0
                             ? Visibility.Visible : Visibility.Collapsed;
                     }
@@ -1356,6 +1364,11 @@ namespace InterviewCopilot
                     string? staged = await AppUpdates.CheckAndStageAsync();
                     if (string.IsNullOrEmpty(staged)) return;
 
+                    // One banner fits at a time, and "no listening time left" is
+                    // the one that explains why nothing works. The update is staged
+                    // either way and installs on the next restart.
+                    if (UserSession.SpeechmaticsOutOfListeningTime && _noListeningTimeShown) return;
+
                     await Dispatcher.InvokeAsync(() =>
                         ShowInAppAlert(
                             $"Replysis {staged} is ready",
@@ -1368,6 +1381,7 @@ namespace InterviewCopilot
 
                 string? newer = await SettingsWindow.GetNewerVersionOrNullAsync();
                 if (string.IsNullOrEmpty(newer)) return;
+                if (UserSession.SpeechmaticsOutOfListeningTime && _noListeningTimeShown) return;
 
                 await Dispatcher.InvokeAsync(() =>
                     ShowInAppAlert(
@@ -2085,6 +2099,51 @@ namespace InterviewCopilot
         /// 52m" is. Minutes only below an hour, because that is when it starts
         /// to matter and precision is worth the width.
         /// </summary>
+        /// <summary>
+        /// The two meters, in plain words. Credits pay for answers; listening time
+        /// pays for hearing the interview. Free is 15 minutes a month, which Auto
+        /// (mic always open) can use up in one sitting.
+        /// </summary>
+        internal static string ExplainMeters(string credits, int minutesLeft)
+        {
+            string time = minutesLeft < 0 ? "Listening time: not limited on your plan."
+                        : minutesLeft == 0 ? "Listening time: none left this month."
+                        : $"Listening time: {FormatListeningTime(minutesLeft)} left this month.";
+            return $"Credits: {credits}. Each answer costs 5 credits.\n{time}\n" +
+                   "Listening time is what lets Replysis hear the interview, and it is separate from credits. " +
+                   "Click for plans.";
+        }
+
+        private bool _noListeningTimeShown;
+
+        /// <summary>
+        /// Says, once, in words, why nothing is being heard. The only sign before
+        /// was a small red label, so a tester with 55 credits and no listening
+        /// time spoke to a silent app and concluded her laptop was broken.
+        /// </summary>
+        private void ShowNoListeningTimeOnce()
+        {
+            if (_noListeningTimeShown) return;
+            _noListeningTimeShown = true;
+            DebugWindow.Log("MODE", "Out of listening time; told the user why nothing is being heard.");
+            ShowInAppAlert(
+                "No listening time left this month",
+                "Replysis has two meters. Credits pay for answers, and you still have some. " +
+                "Listening time pays for hearing the interview, and the Free plan includes 15 minutes a month, which is now used up. " +
+                "Nothing can be heard until it renews or you upgrade. Reading your screen with F8 still works.",
+                persist: true,
+                actionLabel: "See plans",
+                action: () =>
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://replysis.com/pricing")
+                            { UseShellExecute = true });
+                    }
+                    catch (Exception ex) { DebugWindow.Log("UPDATE", $"Could not open pricing: {ex.GetType().Name}"); }
+                });
+        }
+
         private static string FormatListeningTime(int minutes)
         {
             if (minutes <= 0) return "0m";
@@ -5042,7 +5101,9 @@ namespace InterviewCopilot
         {
             if (AiAnswerHint == null || TranscriptHintText == null) return;
             bool practice = PracticeAudioOn;
-            string key = !AutoModeEnabled ? "manual"
+            if (!UserSession.SpeechmaticsOutOfListeningTime) _noListeningTimeShown = false;
+            string key = UserSession.SpeechmaticsOutOfListeningTime && !_engineOnline ? "no-listening"
+                       : !AutoModeEnabled ? "manual"
                        : _autoPausedForIdle ? "paused"
                        : !_engineOnline ? "starting"
                        : practice ? "auto-practice" : "auto-interview";
@@ -5053,6 +5114,11 @@ namespace InterviewCopilot
             var white = new SolidColorBrush(Colors.White);
             switch (key)
             {
+                case "no-listening":
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("No listening time left this month, so nothing can be heard. ") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Credits pay for answers and listening time is separate. Choose See plans to keep listening. Reading your screen with F8 still works."));
+                    TranscriptHintText.Text = "Listening time used up";
+                    break;
                 case "manual":
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Press "));
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
@@ -5102,6 +5168,7 @@ namespace InterviewCopilot
                 // Two limits, two messages. "NO CREDITS" beside a badge showing
                 // two thousand credits reads as a bug rather than a limit.
                 c = Color.FromRgb(239, 68, 68);
+                if (UserSession.SpeechmaticsOutOfListeningTime) ShowNoListeningTimeOnce();
                 label = UserSession.SpeechmaticsOutOfListeningTime
                     ? "NO LISTENING TIME"
                     : "NO CREDITS";
@@ -8011,6 +8078,21 @@ namespace InterviewCopilot
         }
         private void ArmAutoTestHarness()
         {
+            if (Environment.GetEnvironmentVariable("REPLYSIS_SHOW_NOLISTEN") == "1")
+            {
+                // Screenshot aid: show the out-of-listening-time screens.
+                var show = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+                show.Tick += (_, _) =>
+                {
+                    show.Stop();
+                    UserSession.SimulateOutOfListeningTime();
+                    _audioMinutesRemaining = 0;
+                    _engineOnline = false;
+                    UpdateMicUi();
+                    DebugWindow.Log("AUTOTEST", "showing the out-of-listening-time screens");
+                };
+                show.Start();
+            }
             if (Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST") != "1") return;
             _autoTestHarness = true;
             var wait = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
