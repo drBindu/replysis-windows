@@ -1,0 +1,88 @@
+using System.Text.RegularExpressions;
+using InterviewCopilot;
+
+namespace CleanerTests;
+
+/// <summary>
+/// The rule behind "no more silent problems" (owner, 2026-09-29): every reason
+/// the app can be open and deaf has to be explained in words, and a new reason
+/// cannot be added without one.
+///
+/// It exists because a Free-plan tester with 55 credits and no listening time
+/// saw a small red label, spoke to a silent app for minutes, and decided her
+/// laptop was broken.
+/// </summary>
+internal static class ListeningProblemTests
+{
+    internal static int Run()
+    {
+        int failed = 0;
+        void Check(bool ok, string label)
+        {
+            Console.WriteLine($"{(ok ? "ok  " : "FAIL")}  {label}");
+            if (!ok) failed++;
+        }
+
+        // Every value of the enum, so adding one without describing it fails here.
+        foreach (ListeningProblems.Kind kind in Enum.GetValues<ListeningProblems.Kind>())
+        {
+            var d = ListeningProblems.Describe(kind);
+            Check(d.Title.Length is >= 8 and <= 60, $"{kind}: has a short title");
+            Check(d.Body.Length >= 60, $"{kind}: explains itself in a full sentence or two");
+            Check(d.Label.Length > 0 && d.Label == d.Label.ToUpperInvariant(), $"{kind}: has the mic label");
+
+            // Numbers belong to the server and the website. A copy here goes stale.
+            // Key names such as F8 and Ctrl+Alt+F12 are not plan numbers.
+            string words = Regex.Replace(d.Title + d.Body, @"\bF\d{1,2}\b", "");
+            Check(!Regex.IsMatch(words, @"\d"), $"{kind}: states no number that could drift from the server");
+            Check(!Regex.IsMatch(words, @"\b(minutes?|hours?|mins?)\b", RegexOptions.IgnoreCase),
+                $"{kind}: never talks in minutes or hours, credits are the only meter");
+
+            // The owner's copy rules: no dashes, no middle dots.
+            Check(!(d.Title + d.Body).Any(ch => ch is '—' or '–' or '·' or '•'),
+                $"{kind}: no dashes or middle dots");
+            Check(!d.Body.Contains("error", StringComparison.OrdinalIgnoreCase) &&
+                  !d.Body.Contains("exception", StringComparison.OrdinalIgnoreCase),
+                $"{kind}: says what to do, not what the code called it");
+        }
+
+        // The limits are told apart, and the two meters are named.
+        var time = ListeningProblems.Describe(ListeningProblems.Kind.NoListeningTime);
+        Check(time.Body.Contains("You still have credits"),
+            "monthly limit: says credits are fine, so credits left over is not a contradiction");
+        Check(time.Body.Contains("fair use"), "monthly limit: calls it a fair use limit");
+        Check(time.Body.Contains("F8"), "no listening time: says what still works");
+        Check(time.Step == ListeningProblems.NextStep.SeePlans, "no listening time: offers plans");
+        Check(ListeningProblems.Describe(ListeningProblems.Kind.NoCredits).Step == ListeningProblems.NextStep.SeePlans,
+            "no credits: offers plans");
+
+        // Detection
+        ListeningProblems.Kind? D(bool online = false, int code = 0, bool audio = false, bool wait = false,
+                                  bool noMic = false, bool stalled = false) =>
+            ListeningProblems.Detect(online, code, audio, wait, noMic, stalled);
+        Check(D(online: true, code: 402) is null, "nothing is wrong while it is hearing");
+        Check(D(code: 402, audio: true) == ListeningProblems.Kind.NoListeningTime, "402 for listening time");
+        Check(D(code: 402, audio: false) == ListeningProblems.Kind.NoCredits, "402 for credits");
+        Check(D(code: 401) == ListeningProblems.Kind.SignInExpired, "401 is a sign in problem");
+        Check(D(code: 503) == ListeningProblems.Kind.ServiceUnavailable, "503 is the service");
+        Check(D(wait: true) == ListeningProblems.Kind.WaitingToReconnect, "a backoff is a reconnect");
+        Check(D(noMic: true) == ListeningProblems.Kind.NoMicrophone, "no microphone");
+        Check(D(stalled: true) == ListeningProblems.Kind.NoSpeechService, "a stalled connection");
+        Check(D() is null, "just starting is not a problem");
+
+        // What one answer costs in the words matches the server's number.
+        Check(MainWindow.AnswerCreditCost == 5, "an answer costs 5 credits, as INTERVIEW_QUESTION_COST on the server");
+        Check(MainWindow.ExplainCredits(55, false).Contains("about 11 answers left"),
+            "55 credits reads as about 11 answers");
+        Check(MainWindow.ExplainCredits(100, false).Contains("about 20 answers"),
+            "a free account's 100 credits reads as 20 answers");
+        Check(MainWindow.ExplainCredits(55, false).Contains($"{MainWindow.AnswerCreditCost} credits"),
+            "the tooltip states the cost from the same constant");
+        Check(!Regex.IsMatch(MainWindow.ExplainCredits(55, true), @"\b(minutes?|hours?)\b"),
+            "even at the limit, the tooltip never talks in minutes");
+
+        Console.WriteLine();
+        Console.WriteLine(failed == 0 ? "listening problems: all passed" : $"listening problems: {failed} FAILED");
+        return failed;
+    }
+}

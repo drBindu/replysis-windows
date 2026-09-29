@@ -17,9 +17,61 @@ namespace CleanerTests;
 /// </summary>
 internal static class BillingTests
 {
+    /// <summary>Runs the real meter arithmetic over a session, one 5 second tick at a time.</summary>
+    private static double SpeechSeconds(TimeSpan length, Func<TimeSpan, bool> wordsAt)
+    {
+        var t0 = new DateTime(2026, 9, 29, 9, 0, 0, DateTimeKind.Utc);
+        DateTime last = DateTime.MinValue, since = t0, wordsSeen = DateTime.MinValue;
+        double counted = 0;
+        for (var t = TimeSpan.Zero; t < length; t += TimeSpan.FromSeconds(1))
+        {
+            var now = t0 + t;
+            if (wordsAt(t)) wordsSeen = now;
+            if (t.TotalSeconds % 5 == 4)
+            {
+                counted += ListeningBilling.CountableSeconds(since, now, wordsSeen);
+                since = now;
+            }
+        }
+        _ = last;
+        return counted;
+    }
+
     internal static int Run()
     {
         int failed = 0;
+
+        // Listening time is speech time (owner, 2026-09-29). An open mic that
+        // hears nobody must cost nothing, or Auto burns the free minutes while
+        // the credits are still full.
+        void Speech(string label, double seconds, Func<double, bool> ok)
+        {
+            bool pass = ok(seconds);
+            Console.WriteLine($"{(pass ? "ok  " : "FAIL")}  {label}  ->  {seconds:0} s counted");
+            if (!pass) failed++;
+        }
+        Speech("an hour of Auto with nobody speaking counts nothing",
+            SpeechSeconds(TimeSpan.FromHours(1), _ => false), s => s == 0);
+        Speech("ten minutes of continuous speech counts about ten minutes",
+            SpeechSeconds(TimeSpan.FromMinutes(10), _ => true), s => s is >= 570 and <= 605);
+        // The free tier's promise: 100 credits is 20 answers. Twenty 6 second
+        // questions in an hour-long Auto session must fit well inside 15 minutes.
+        Speech("twenty questions across an hour of Auto stay inside the 15 free minutes",
+            SpeechSeconds(TimeSpan.FromHours(1),
+                t => (int)t.TotalSeconds % 180 < 6),
+            s => s < 15 * 60);
+        Speech("a sentence with a two second pause in it is not split",
+            SpeechSeconds(TimeSpan.FromSeconds(60),
+                t => t.TotalSeconds is >= 10 and < 14 || t.TotalSeconds is >= 16 and < 20),
+            s => s is >= 20 and <= 40);
+        Speech("a silent room is not billed after the words stop",
+            SpeechSeconds(TimeSpan.FromMinutes(5), t => t.TotalSeconds < 10),
+            s => s <= 30);
+        Speech("an empty result never starts the clock",
+            ListeningBilling.CountableSeconds(
+                new DateTime(2026, 9, 29, 9, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 9, 29, 9, 0, 5, DateTimeKind.Utc), DateTime.MinValue),
+            s => s == 0);
 
         void Case(string label, int got, int want)
         {

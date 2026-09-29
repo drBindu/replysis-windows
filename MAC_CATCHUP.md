@@ -1,3 +1,45 @@
+## One meter: credits only. Listening counted as speech. Slower scrolling. (2026-09-29, Windows 1.0.27)
+
+**Owner's decisions, in his words:** the free tier is 20 questions, 5 credits each, so
+100 credits. "Credits and no minutes, no hours, nothing." "If the mic is on, no need
+to calculate it; calculate by the question or the word itself." "I don't want to lose
+money." Cause: a Free tester had 55 credits and 0 listening minutes and saw
+"55 credits, 0m left", spoke to a silent app, and thought her laptop was broken.
+
+**What changed (client):**
+- **Nothing in the UI mentions minutes or hours.** The badge is "55 credits"; its
+  tooltip says "about 11 answers left" (`ExplainCredits`, from `AnswerCreditCost = 5`,
+  which must equal `INTERVIEW_QUESTION_COST` on the server). The "N min left" notices are gone.
+- **Listening is metered by speech, not by how long the mic is open.**
+  `ListeningBilling.CountableSeconds`: an interval counts only if a non-empty transcript
+  result arrived in it or in the 6 s before (`_lastWordsReceivedUtc`). Simulated: an hour
+  of Auto with 20 questions used to bill 60 minutes and now bills about 5. Tests in
+  `BillingTests`. The Mac meters mic-open time today and will burn the same free allowance
+  the same way; it needs the same rule.
+- **The server limit stays, as a hidden fair use guard** (Free 15, Pro 900, Max 1,800 minutes
+  of speech, unchanged) so an open mic cannot cost money. When reached the app says, in
+  words, "You have reached this month's fair use limit for listening. You still have
+  credits..." and offers plans. Worst case per plan keeps at least 61% margin (see
+  `frontend/scripts/check-sync.mjs`).
+- **Every reason it cannot hear is explained in words** (`ListeningProblems.cs`): no
+  credits, fair use limit, sign in expired, service busy, reconnecting, no microphone, no
+  speech service. A test fails if one has no explanation or states a number.
+- **The provider-capacity error** ("Add available transcription capacity, then restart the
+  audio service from Settings") was written for an operator. It now tells the user it is
+  temporary and not their account.
+- **Scrolling is under half speed everywhere** (`WheelScroll.cs`, one class handler for every
+  ScrollViewer; measured 21.6 px a notch against the Windows default of 48). The Mac needs the same.
+
+**Website (same change, deployed):** pricing and account copy say credits and answers, never
+hours; "Live listening included with your credits, subject to fair use"; the web interview
+page meters speech the same way; the table now says Starter includes the Windows app.
+
+**Prevention:** `node frontend/scripts/check-sync.mjs` checks that server, website and app
+agree, that customers see credits only, and that no plan can lose money. `RELEASE_CHECKLIST.md`
+here lists what to run, including walking the app as a brand new Free user.
+
+---
+
 ## "55 credits but no listening time" now explained in words (2026-09-29)
 
 A Free-plan tester (uid BZmG...) updated to 1.0.26, spoke, and got no transcription.

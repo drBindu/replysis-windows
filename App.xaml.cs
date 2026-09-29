@@ -20,6 +20,8 @@ namespace InterviewCopilot
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            // Slower wheel scrolling in every box, before any window exists.
+            WheelScroll.Install();
             _showAuthenticationPreview = Array.Exists(e.Args,
                 arg => string.Equals(arg, "--auth-preview", StringComparison.OrdinalIgnoreCase));
             // Install crash protection before anything else can throw. Without

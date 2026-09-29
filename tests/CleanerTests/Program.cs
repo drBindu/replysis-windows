@@ -142,6 +142,12 @@ internal static class Program
         Console.WriteLine("\n9b. What Auto treats as a question, and what it sends");
         _failed += AutoQuestionTests.Run();
 
+        Console.WriteLine("\n9c. Every reason it cannot hear is explained in words");
+        _failed += ListeningProblemTests.Run();
+
+        Console.WriteLine("\n9d. Scrolling is slow in every box");
+        _failed += WheelScrollTests.Run();
+
         Console.WriteLine("\n10. Punctuation that reads as AI generated");
         _failed += HumanVoiceTests.Run();
 

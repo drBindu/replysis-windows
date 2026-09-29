@@ -33,6 +33,35 @@ namespace InterviewCopilot
     /// </summary>
     internal static class ListeningBilling
     {
+        /// <summary>
+        /// How long after words stop arriving the meter keeps counting. Long enough
+        /// that a pause between two sentences is not a gap, short enough that a
+        /// silent room is not billed.
+        /// </summary>
+        internal static readonly TimeSpan SpeechWindow = TimeSpan.FromSeconds(6);
+
+        /// <summary>
+        /// The part of an interval that counts as listening.
+        ///
+        /// Listening time is now speech time (owner, 2026-09-29): an open
+        /// microphone that hears nobody costs the user nothing. It was mic-open
+        /// time, and Auto keeps the mic open for the whole session, so the 15
+        /// free minutes ran out long before the 100 free credits (about 20
+        /// answers, roughly five minutes of anyone actually speaking) did.
+        ///
+        /// The interval [start, now] counts in full when words arrived in it, or
+        /// in the <see cref="SpeechWindow"/> before it; otherwise it counts for
+        /// nothing. <paramref name="lastWords"/> is when a non-empty transcript
+        /// result last arrived, so an empty result from a silent room never
+        /// starts the clock.
+        /// </summary>
+        internal static double CountableSeconds(DateTime start, DateTime now, DateTime lastWords)
+        {
+            if (start == DateTime.MinValue || now <= start) return 0;
+            if (lastWords == DateTime.MinValue) return 0;
+            return lastWords > start - SpeechWindow ? (now - start).TotalSeconds : 0;
+        }
+
         /// <summary>Minutes reported by the periodic tick: whole minutes only,
         /// remainder carried forward in <paramref name="carrySeconds"/>.</summary>
         internal static int MinutesOnTick(double unreportedSeconds, out double carrySeconds)
