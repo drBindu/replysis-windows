@@ -216,6 +216,12 @@ check("Deepgram path reports UTTERANCE END", "UTTERANCE END" in dg)
 # Windows Auto answers on this, about a second sooner than on UTTERANCE END. A separate line, so
 # nothing that reads the old ones is affected, and only Deepgram (the path that has the signal).
 check("Deepgram path reports SPEECH FINAL", 'print(">>> SPEECH FINAL"' in dg and 'msg.get("speech_final")' in dg)
+# A laptop waking from sleep failed twice on DNS, was handed to the slower fallback for the rest of the
+# session, and the fallback failed too. No network at all is not a broken provider (2026-09-29).
+check("a dead network is not counted as a broken Deepgram",
+      "_looks_like_no_network(e)" in dg and "_network_is_down" in dg and
+      dg.index("_network_is_down") < dg.index("failures += 1", dg.index("_network_is_down")))
+check("no network waits and retries instead of falling back", "No network right now" in dg)
 check("Deepgram path honours reset.flag", "RESET_FLAG" in dg)
 check("Deepgram keeps the first result after reset",
       'except Exception:\n                                pass\n                            continue' not in dg)

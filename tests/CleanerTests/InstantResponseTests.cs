@@ -175,6 +175,23 @@ internal static class InstantResponseTests
         }
         Check(!splitPair && shownEmoji == emoji, "a character made of two units is never shown half typed");
 
+        // ── A laptop wakes up and the network is not there yet (2026-09-29) ─────────────
+        // The app must keep asking, in seconds, for as long as it is open.
+        Check(RecoveryPolicy.KeyRetryAfterNoConnection(1) == TimeSpan.FromSeconds(2),
+            "the first retry after no connection is 2 seconds, not half a minute");
+        Check(RecoveryPolicy.KeyRetryAfterNoConnection(5) == TimeSpan.FromSeconds(30) &&
+              RecoveryPolicy.KeyRetryAfterNoConnection(500) == TimeSpan.FromSeconds(30),
+            "and settles at 30 seconds however long it lasts");
+        bool nonDecreasing = true;
+        for (int n = 1; n < 20; n++)
+            if (RecoveryPolicy.KeyRetryAfterNoConnection(n + 1) < RecoveryPolicy.KeyRetryAfterNoConnection(n)) nonDecreasing = false;
+        Check(nonDecreasing, "it backs off, never speeds up");
+        Check(RecoveryPolicy.CredentialRenewalWaitSeconds(0) == 5 && RecoveryPolicy.CredentialRenewalWaitSeconds(1) == 15 &&
+              RecoveryPolicy.CredentialRenewalWaitSeconds(2) == 30 && RecoveryPolicy.CredentialRenewalWaitSeconds(3) == 60,
+            "renewing rejected speech credentials: 5, 15, 30, then a minute");
+        Check(RecoveryPolicy.CredentialRenewalWaitSeconds(100) == 60 && RecoveryPolicy.CredentialRenewalWaitSeconds(-1) == 5,
+            "there is always a next attempt: it never gives up, and never spins");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "instant response: all passed" : $"instant response: {failed} FAILED");
         return failed;

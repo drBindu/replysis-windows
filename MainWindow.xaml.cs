@@ -221,7 +221,10 @@ namespace InterviewCopilot
         private int _engineStartGeneration;
         private bool _engineStarting;
         private bool _engineRecoveryInProgress;
-        private bool _engineTokenRefreshAttempted;
+        // Renewals of rejected speech credentials since the engine last connected; paces the
+        // next one (RecoveryPolicy.CredentialRenewalWaitSeconds) and is what lets the app keep
+        // trying for as long as it is open instead of giving up after one.
+        private int _authRecoveryAttempts;
         private DateTime _lastTokenRecoveryUtc = DateTime.MinValue;
         private DateTime _lastDeafnessRestartUtc = DateTime.MinValue;
         // The question answered before the current one, so a transcript that still
@@ -453,14 +456,18 @@ namespace InterviewCopilot
                     // after it has already begun.
                     await StartNewSessionAsync();
 
+                    // Watching the speech engine starts HERE, before the network calls below. It
+                    // started after them, and each can take seconds to fail when the network is not
+                    // up yet (a laptop opened before its Wi-Fi is back): the engine was not even
+                    // retried until they gave up. It is what asks for the speech key again.
+                    _engineMonitorTimer.Start();
+
                     // Also repairs accounts restored from disk that have never
                     // signed in through replysis.com. Both calls are deliberately
                     // after local session readiness because they require network I/O.
                     await UserProfileSync.EnsureCurrentUserAsync();
                     await FetchAndDisplayCreditsAsync();
                     UpdateProfileUI();
-
-                    _engineMonitorTimer.Start();
 
                     creditsRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(CreditRefreshMinutes) };
                     creditsRefreshTimer.Tick += async (s2, e2) =>
@@ -3571,6 +3578,20 @@ namespace InterviewCopilot
                     DebugWindow.Log("AUTOTEST", $"answer ({AiAnswerBox.Text.Length} chars, " +
                         $"{Regex.Matches(AiAnswerBox.Text, @"[\p{L}\p{N}']+").Count} words): " +
                         AiAnswerBox.Text.Replace("\r", " ").Replace("\n", " / "));
+                // Handles that stay after a forced cleanup are a leak; ones that drop were just
+                // waiting to be collected.
+                if (_autoTestHarness)
+                {
+                    int handlesNow;
+                    using (var me = Process.GetCurrentProcess()) handlesNow = me.HandleCount;
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(3000);
+                        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+                        using var me2 = Process.GetCurrentProcess();
+                        DebugWindow.Log("AUTOTEST", $"handles {handlesNow} -> {me2.HandleCount} after a forced cleanup");
+                    });
+                }
 #endif
 
                 // Refresh credits display after AI call
@@ -4540,8 +4561,10 @@ namespace InterviewCopilot
                 // which has its own connection pool, so it kept a connection warm that no answer
                 // ever used, and the first question after a quiet minute paid for a new
                 // connection (DNS, TCP and TLS) on top of everything else. HEAD, so the reply
-                // carries no body.
-                using var req = new HttpRequestMessage(HttpMethod.Head, $"{BackendUrl}/health");
+                // carries no body, and to the answer server's own constant status route: /health
+                // is not the answer server's, it lands on the website, which renders a whole
+                // page to say "not found" and would feel every open app pinging it every 25 s.
+                using var req = new HttpRequestMessage(HttpMethod.Head, $"{BackendUrl}/api/v1/resume/status");
                 using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(6));
                 using var res = await _backendClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
                 // Any response (even 404) means the connection is open — that's all we need.
@@ -5942,7 +5965,7 @@ namespace InterviewCopilot
                                 _engineOnline = true;
                                 _engineRestartCount = 0;
                                 _nextEngineRestartUtc = DateTime.MinValue;
-                                _engineTokenRefreshAttempted = false;
+                                _authRecoveryAttempts = 0;
                                 _ = Dispatcher.BeginInvoke(new Action(() =>
                                 {
                                     UpdateMicUi();
@@ -6657,9 +6680,17 @@ namespace InterviewCopilot
 
                 if (code == SpeechRecognitionExitCodes.AuthenticationFailure)
                 {
-                    if (!IsSarvamLanguage(SettingsWindow.GetTranscriptLanguage()) && !_engineTokenRefreshAttempted)
+                    if (!IsSarvamLanguage(SettingsWindow.GetTranscriptLanguage()))
                     {
-                        _engineTokenRefreshAttempted = true;
+                        // Never a permanent stop. The credentials are temporary and issued by our
+                        // server; being refused means they expired or could not be renewed yet,
+                        // and both clear up. This used to try once, and a second refusal inside a
+                        // minute of the first marked the engine failed for good ("fix your key in
+                        // Settings", a key the person cannot see). A laptop waking from sleep hit
+                        // it: the network was not up for the first attempt, and nothing ever
+                        // tried again after it was (2026-09-29, RecoveryPolicy).
+                        _nextEngineRestartUtc = DateTime.UtcNow.AddSeconds(
+                            RecoveryPolicy.CredentialRenewalWaitSeconds(_authRecoveryAttempts));
                         _ = RecoverSpeechmaticsAuthenticationAsync();
                         return;
                     }
@@ -6672,8 +6703,14 @@ namespace InterviewCopilot
                     Dispatcher.Invoke(() => ShowEngineAuthError());
                     return;
                 }
-                int retrySeconds = Math.Min(30, 1 << Math.Min(_engineRestartCount, 5));
-                _engineRestartCount++;
+                // No engine process because there was no key to start it with (no network, a
+                // refused key) is not an engine that keeps crashing. The key request has its own
+                // pacing (RecoveryPolicy), so this must not also climb toward 30 s: after a long
+                // outage that made the first speech after the network returned wait half a minute.
+                bool waitingForKey = speechmaticsProcess == null
+                                     && string.IsNullOrWhiteSpace(UserSession.SpeechmaticsKey);
+                int retrySeconds = waitingForKey ? 1 : Math.Min(30, 1 << Math.Min(_engineRestartCount, 5));
+                if (!waitingForKey) _engineRestartCount++;
                 _nextEngineRestartUtc = DateTime.UtcNow.AddSeconds(retrySeconds);
                 DebugWindow.Log("ENGINE", $"Engine stopped; retrying with {retrySeconds}-second backoff.");
                 if (isListening)
@@ -6702,8 +6739,11 @@ namespace InterviewCopilot
         {
             // Once per run was enough for one expiry. An interview can outlive two.
             if (_engineRecoveryInProgress) return;
-            if (DateTime.UtcNow - _lastTokenRecoveryUtc < TimeSpan.FromMinutes(1)) return;
+            // Paced, not once a minute and not once ever: quick at first, a minute at most.
+            if (DateTime.UtcNow - _lastTokenRecoveryUtc <
+                TimeSpan.FromSeconds(RecoveryPolicy.CredentialRenewalWaitSeconds(_authRecoveryAttempts))) return;
             _lastTokenRecoveryUtc = DateTime.UtcNow;
+            _authRecoveryAttempts++;
             _engineRecoveryInProgress = true;
             _engineAuthFailed = true;
             try
@@ -6719,14 +6759,12 @@ namespace InterviewCopilot
                 }
                 else
                 {
-                    _engineTokenRefreshAttempted = false;
                     UpdateMicUi();
                 }
             }
             catch (Exception ex)
             {
                 _engineAuthFailed = false;
-                _engineTokenRefreshAttempted = false;
                 DebugWindow.Log("ENGINE", $"Token recovery failed: {ex.Message}");
                 UpdateMicUi();
             }
@@ -8446,6 +8484,7 @@ namespace InterviewCopilot
             try { _aiCts?.Cancel(); } catch { }
             _aiCts = null;
             // Stop all timers first so no callbacks fire during teardown
+            StopTyper();   // also lets go of the static per-frame event, which would keep this window alive
             transcriptTimer?.Stop();
             thinkingTimer?.Stop();
             creditsRefreshTimer?.Stop();

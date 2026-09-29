@@ -113,6 +113,23 @@ namespace InterviewCopilot
         }
 
 #if DEBUG
+        // Developer builds only: tests/scenarios plays "a laptop woke up with an expired sign-in"
+        // against a fake token server. Loopback only, never compiled into a release build.
+        private static bool TestTokenServerActive =>
+            Uri.TryCreate(Environment.GetEnvironmentVariable("REPLYSIS_TOKEN_URL") ?? "", UriKind.Absolute, out Uri? u)
+            && u.IsLoopback && u.Scheme == Uri.UriSchemeHttp;
+
+        private static void ApplyStaleTokenTestHook()
+        {
+            string? mode = Environment.GetEnvironmentVariable("REPLYSIS_STALE_TOKEN");
+            if (string.IsNullOrEmpty(mode) || !TestTokenServerActive || !IsLoggedIn) return;
+            IdToken = "stale-token";
+            // "expired": the app knows it is old. Anything else: the app believes it is fine and
+            // only the server says otherwise (a long sleep, a clock change, a revoked session).
+            _savedAt = mode == "expired" ? DateTime.UtcNow.AddHours(-3) : DateTime.UtcNow;
+            DebugWindow.Log("SESSION", $"TEST: sign-in token replaced with a stale one ({mode}).");
+        }
+
         /// <summary>Developer builds only: see the out-of-listening-time screens without a real 402.</summary>
         internal static void SimulateOutOfListeningTime()
         {
@@ -166,30 +183,61 @@ namespace InterviewCopilot
         public static Task<bool> FetchSpeechmaticsKeyAsync(string deviceId = "") =>
             EnsureSpeechmaticsKeyAsync(deviceId);
 
+        // What the key endpoint said, read out so the request and its response are disposed at once.
+        private sealed record KeyReply(int Status, string Body, TimeSpan? RetryAfter);
+
+        // Consecutive times the request could not even be made (no network, no DNS).
+        private static int _keyNoConnectionFailures;
+
+        private static async Task<KeyReply> RequestKeyAsync(string deviceId)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get,
+                $"{SettingsWindow.GetBackendUrl()}/api/v1/stt/key");
+
+            // Only add Authorization if we have a real token.
+            if (!string.IsNullOrEmpty(IdToken))
+                req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {IdToken}");
+            if (!string.IsNullOrEmpty(deviceId))
+                req.Headers.TryAddWithoutValidation("X-Device-Id", deviceId);
+
+            using var res = await _http.SendAsync(req).ConfigureAwait(false);
+            string body = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+            TimeSpan? retryAfter = res.Headers.RetryAfter?.Delta
+                ?? (res.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow);
+            return new KeyReply((int)res.StatusCode, body, retryAfter);
+        }
+
         private static async Task<bool> FetchSpeechmaticsKeyCoreAsync(string deviceId)
         {
             try
             {
-                using var req = new HttpRequestMessage(HttpMethod.Get,
-                    $"{SettingsWindow.GetBackendUrl()}/api/v1/stt/key");
+                // Refreshed FIRST if it has expired. The answer path always did this; this one
+                // sent whatever was stored. A laptop that slept for two hours woke up, asked for
+                // a speech key with a token that expired an hour before, and was told 401, which
+                // the app then showed as "sign in again" (2026-09-29, see RecoveryPolicy).
+                await EnsureFreshTokenAsync().ConfigureAwait(false);
 
-                // Only add Authorization if we have a real token.
-                if (!string.IsNullOrEmpty(IdToken))
-                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {IdToken}");
-                if (!string.IsNullOrEmpty(deviceId))
-                    req.Headers.TryAddWithoutValidation("X-Device-Id", deviceId);
+                KeyReply res = await RequestKeyAsync(deviceId).ConfigureAwait(false);
 
-                using var res = await _http.SendAsync(req);
-                string body = await res.Content.ReadAsStringAsync();
-
-                if (!res.IsSuccessStatusCode)
+                // The client's idea of "still valid" is a timestamp, and it is wrong after a long
+                // sleep, a clock change, or a session revoked elsewhere. A 401 with a refresh token
+                // in hand is worth one forced refresh and one more try before it is called a
+                // sign-out. Only for a signed-in person: a guest has nothing to refresh.
+                if (res.Status == 401 && !string.IsNullOrEmpty(RefreshToken) &&
+                    await TryRefreshAsync(force: true).ConfigureAwait(false))
                 {
-                    SpeechmaticsLastStatusCode = (int)res.StatusCode;
-                    if ((int)res.StatusCode == 429)
+                    DebugWindow.Log("STT_KEY", "401 on an expired sign-in; refreshed it and asked again.");
+                    res = await RequestKeyAsync(deviceId).ConfigureAwait(false);
+                }
+                string body = res.Body;
+                _keyNoConnectionFailures = 0;   // an answer of any kind means the connection is back
+
+                if (res.Status is < 200 or > 299)
+                {
+                    SpeechmaticsLastStatusCode = res.Status;
+                    if (res.Status == 429)
                     {
-                        TimeSpan delay = res.Headers.RetryAfter?.Delta
-                            ?? (res.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow)
-                            ?? TimeSpan.FromSeconds(60);
+                        TimeSpan delay = res.RetryAfter ?? TimeSpan.FromSeconds(60);
                         if (delay < TimeSpan.FromSeconds(15)) delay = TimeSpan.FromSeconds(15);
                         if (delay > TimeSpan.FromMinutes(5)) delay = TimeSpan.FromMinutes(5);
                         lock (_smKeyLock)
@@ -198,7 +246,7 @@ namespace InterviewCopilot
                         return false;
                     }
 
-                    if ((int)res.StatusCode == 402)
+                    if (res.Status == 402)
                     {
                         // The backend names which limit was hit. Anything else
                         // stays "credits", which is what it was before both
@@ -223,8 +271,8 @@ namespace InterviewCopilot
                     // five minutes; the badge and the mic ask again on demand.
                     lock (_smKeyLock)
                         _speechmaticsRetryAfterUtc = DateTime.UtcNow.AddSeconds(
-                            (int)res.StatusCode == 402 ? 300 : 30);
-                    DebugWindow.Log("STT_KEY", $"HTTP {(int)res.StatusCode}");
+                            res.Status == 402 ? 300 : 30);
+                    DebugWindow.Log("STT_KEY", $"HTTP {res.Status}");
                     return false;
                 }
 
@@ -260,9 +308,24 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
+                // Could not even ask: no network, no DNS (a laptop waking up, Wi-Fi switching).
+                // Try again within seconds, not half a minute, and drop any earlier refusal from
+                // the screen: it is no longer the latest thing that happened. Nothing reached the
+                // server, so nothing counts against its limits. Anything else that goes wrong
+                // (a reply that cannot be read) keeps the slower wait.
+                bool noConnection = ex is HttpRequestException or TaskCanceledException
+                    or System.Net.Sockets.SocketException
+                    || ex.InnerException is System.Net.Sockets.SocketException;
+                TimeSpan wait = noConnection
+                    ? RecoveryPolicy.KeyRetryAfterNoConnection(++_keyNoConnectionFailures)
+                    : TimeSpan.FromSeconds(30);
                 lock (_smKeyLock)
-                    _speechmaticsRetryAfterUtc = DateTime.UtcNow.AddSeconds(30);
-                DebugWindow.Log("STT_KEY", $"FetchSpeechmaticsKeyAsync failed: {ex.Message}");
+                {
+                    _speechmaticsRetryAfterUtc = DateTime.UtcNow.Add(wait);
+                    if (noConnection) SpeechmaticsLastStatusCode = 0;
+                }
+                DebugWindow.Log("STT_KEY",
+                    $"FetchSpeechmaticsKeyAsync failed: {ex.Message}; trying again in {wait.TotalSeconds:0} s");
                 return false;
             }
         }
@@ -559,6 +622,9 @@ namespace InterviewCopilot
                     return false;
 
                 IdToken = data.IdToken ?? "";
+#if DEBUG
+                ApplyStaleTokenTestHook();
+#endif
                 return IsLoggedIn;
             }
             catch (Exception ex)
@@ -654,6 +720,9 @@ namespace InterviewCopilot
                 if (!force && !IsTokenExpired()) return true;
 
                 string url = $"https://securetoken.googleapis.com/v1/token?key={FirebaseApiKey}";
+#if DEBUG
+                if (TestTokenServerActive) url = Environment.GetEnvironmentVariable("REPLYSIS_TOKEN_URL")!;
+#endif
                 using var content = new System.Net.Http.FormUrlEncodedContent(new[]
                 {
                     new System.Collections.Generic.KeyValuePair<string,string>("grant_type",    "refresh_token"),
@@ -679,6 +748,11 @@ namespace InterviewCopilot
                 {
                     IdToken = newIdToken;
                     if (!string.IsNullOrEmpty(newRefresh)) RefreshToken = newRefresh;
+#if DEBUG
+                    // A scenario run gets fake tokens from a fake server. They must never be
+                    // written over the real saved sign-in.
+                    if (TestTokenServerActive) { _savedAt = DateTime.UtcNow; return; }
+#endif
                     SaveToDisk();
                 });
             }

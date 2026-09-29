@@ -8,6 +8,7 @@ import base64
 import wave
 import threading
 import tempfile
+import socket
 import struct
 import time
 import urllib.parse
@@ -2633,6 +2634,39 @@ def _deepgram_url() -> str:
     return DEEPGRAM_URL + "?" + urllib.parse.urlencode(query)
 
 
+def _looks_like_no_network(exc) -> bool:
+    """A failure that only says "could not reach anything": DNS, unreachable, timed out."""
+    if isinstance(exc, (socket.gaierror, TimeoutError, asyncio.TimeoutError)):
+        return True
+    if isinstance(exc, OSError):
+        code = getattr(exc, "winerror", None) or exc.errno
+        # network down / unreachable / host unreachable / timed out, on Windows and elsewhere,
+        # and the two "name not found" codes
+        return code in (10050, 10051, 10065, 10060, 11001, 11002, 100, 101, 113, 110)
+    return False
+
+
+def _network_is_down() -> bool:
+    """True when this machine cannot reach the internet at all right now.
+
+    Different from one provider being blocked, which is what falling back exists for. A laptop
+    waking from sleep, Wi-Fi switching networks, a phone tether dropping: every host fails, for a
+    few seconds to a minute, and then everything works again. A real connection is tried, not
+    just a name lookup, because Windows answers lookups from its cache while the network is down.
+    """
+    deadline = time.monotonic() + 8.0
+    for host in ("eu.rt.speechmatics.com", "replysis.com", "us.rt.speechmatics.com"):
+        left = deadline - time.monotonic()
+        if left <= 0.5:
+            break
+        try:
+            socket.create_connection((host, 443), timeout=min(3.0, left)).close()
+            return False
+        except OSError:
+            continue
+    return True
+
+
 def _http_status(exc) -> int:
     """The HTTP status a refused websocket handshake carried, or 0."""
     response = getattr(exc, "response", None)
@@ -2829,6 +2863,15 @@ async def run_deepgram() -> str:
                 else:
                     print(f">>> [DEEPGRAM] Refused with {status}; Speechmatics takes over.", flush=True)
                 return "fallback"
+            # No network at all is not a broken provider. A laptop waking from sleep failed
+            # twice in a row on DNS, was handed to the slower fallback for the rest of the
+            # session, and the fallback failed the same way (2026-09-29). Wait for the network
+            # and keep trying Deepgram; nothing is counted against it.
+            if _looks_like_no_network(e) and await loop.run_in_executor(None, _network_is_down):
+                print(">>> [DEEPGRAM] No network right now; waiting for it to come back.", flush=True)
+                await asyncio.sleep(min(reconnect_delay, 5))
+                reconnect_delay = min(reconnect_delay * 2, 5)
+                continue
             failures += 1
             if failures >= _DEEPGRAM_MAX_FAILURES:
                 print(f">>> [DEEPGRAM] {failures} failed connections in a row; Speechmatics takes over.",

@@ -1,3 +1,42 @@
+## Closing the lid: waking from sleep left the app dead (2026-09-29, Windows 1.0.29)
+
+Found by leaving a running app on a laptop that slept for two hours. On waking, the network was not up
+yet, and the app never recovered even after it was: the mic button said SIGN IN and the banner said
+"Speech transcription is not available ... Fix your Speechmatics key in Settings". Three separate flaws,
+each enough to keep it down:
+
+1. **The speech key was requested with an expired sign-in token.** The answer path refreshed the token
+   first; the key path sent whatever was stored (`FetchSpeechmaticsKeyCoreAsync`). The refresh had failed
+   because there was no network, so the server answered 401 and the app called that "sign in again".
+   Now the token is refreshed first, and a 401 for a signed-in person gets one forced refresh and one more
+   try before it is called a sign-out. **Any client that asks for a key needs both.**
+2. **No connection was not retried like one.** A request that could not be made at all waited 30 s and
+   left the previous refusal on screen. Now 2, 4, 8, 15, then 30 s (`RecoveryPolicy`), and the screen
+   forgets the old refusal. Nothing reached the server, so nothing counts against its limits. The
+   engine-restart backoff no longer climbs while the only thing missing is the key.
+3. **Rejected speech credentials were renewed once, and a second rejection marked the engine failed for
+   good.** Now there is no permanent stop: 5, 15, 30 s, then every minute, for as long as the app is open
+   (`RecoveryPolicy.CredentialRenewalWaitSeconds`). The old "fix your key in Settings" state remains only for
+   the Sarvam languages.
+4. **Engine (`speechmatics_engine.py`): no network at all is not a broken provider.** Two DNS failures in a
+   row used to hand the session to the slower fallback, which failed the same way. Now a failure that
+   looks like "cannot reach anything" (`_looks_like_no_network`) is checked against a real connection to
+   other hosts (`_network_is_down`; a name lookup alone is not enough, Windows answers those from its
+   cache while the network is down) and, if the machine is offline, waits and retries Deepgram without
+   counting the failure. One host blocked while others work still falls back, as before.
+5. The engine monitor now starts before the profile and credits calls at launch (it started after them,
+   and they can take many seconds to fail with no network), so a laptop opened before its Wi-Fi is back
+   retries the speech key at once.
+
+Tests: `tests/scenarios` gained `wake-token-rejected` (the app believes its token is fine and the server
+says 401), `wake-token-expired` and `wake-network-late` (no server for the first 12 s). The first was
+run with the fix switched off and fails with the tester's exact symptom (told "sign in again", 0
+refreshes), so it can fail. Developer builds take `REPLYSIS_TOKEN_URL` (loopback only) to send refreshes to
+the fake server and never write fake tokens over the real saved sign-in, and `REPLYSIS_STALE_TOKEN`.
+Not exercised end to end: the engine's wait-for-network branch itself (needs the real network to drop).
+
+---
+
 ## Instant response: Auto no longer waits on top of the wait; smaller upload; words type in (2026-09-29, Windows 1.0.29)
 
 The product is the speed. Recorded questions were played into the real app and timed, per stage.
