@@ -1,3 +1,20 @@
+## Update banner gets a button (2026-09-28, Windows 1.0.26)
+
+Owner: users could not tell how to update from "Replysis 1.0.25 is ready", which
+had only a close X. The banner now has **Restart and update**. It closes the app
+through its normal shutdown (the usual "still working, close anyway?" question
+if an interview is live, session saved, engine stopped) and the updater reopens
+it on the new version (`WaitExitThenApplyUpdates(..., restart: true)`). Settings'
+"Update Ready" dialog uses the same path; the old abrupt `ApplyUpdatesAndRestart`
+is gone. Copies that cannot update themselves get a **Download** button instead.
+Nothing restarts without a click. If the Mac shows an "update ready" notice, it
+needs the same button.
+
+Note: the button ships in 1.0.26, so the 1.0.25 -> 1.0.26 update itself still
+shows the old buttonless banner. From 1.0.26 on, every update has the button.
+
+---
+
 ## Auto, round three, and answers that are easy to say (2026-09-28, Windows 1.0.26)
 
 Client-side only (the prompt is built in the client).

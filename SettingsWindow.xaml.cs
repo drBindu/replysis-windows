@@ -312,11 +312,15 @@ namespace InterviewCopilot
                     // an interview with this window open.
                     var answer = MessageBox.Show(this,
                         $"Replysis {staged} has been downloaded and is ready.\n\n" +
-                        "It installs by itself the next time you close and reopen Replysis. " +
-                        "Restart now instead?",
+                        "Restart Replysis now to update? If not, it installs by itself " +
+                        "the next time you open Replysis.",
                         "Update Ready", MessageBoxButton.YesNo, MessageBoxImage.Information);
 
-                    if (answer == MessageBoxResult.Yes) UpdateService.ApplyAndRestart();
+                    if (answer == MessageBoxResult.Yes)
+                    {
+                        Close();
+                        AppUpdates.RestartToUpdate();
+                    }
                 }
                 finally
                 {
@@ -361,10 +365,11 @@ namespace InterviewCopilot
 
                 if (IsVersionNewer(latest, current))
                 {
-                    MessageBox.Show(this,
+                    var open = MessageBox.Show(this,
                         $"A new version is available: {latest}\nYou have {current}.\n\n" +
-                        "Open Replysis on the web to download it when you are ready.",
-                        "Update Available", MessageBoxButton.OK, MessageBoxImage.Information);
+                        "Open the download page now?",
+                        "Update Available", MessageBoxButton.YesNo, MessageBoxImage.Information);
+                    if (open == MessageBoxResult.Yes) AppUpdates.OpenDownloadPage();
                 }
                 else
                 {

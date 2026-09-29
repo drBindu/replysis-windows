@@ -1359,8 +1359,10 @@ namespace InterviewCopilot
                     await Dispatcher.InvokeAsync(() =>
                         ShowInAppAlert(
                             $"Replysis {staged} is ready",
-                            "It installs by itself the next time you close and reopen Replysis. Nothing will interrupt you before then.",
-                            persist: true));
+                            "Restart now to update, or it installs by itself the next time you open Replysis. Nothing changes until you choose.",
+                            persist: true,
+                            actionLabel: "Restart and update",
+                            action: AppUpdates.RestartToUpdate));
                     return;
                 }
 
@@ -1370,8 +1372,10 @@ namespace InterviewCopilot
                 await Dispatcher.InvokeAsync(() =>
                     ShowInAppAlert(
                         $"Version {newer} is available",
-                        $"You are on {SettingsWindow.InstalledVersion()}. Download the new version from replysis.com when you have a moment.",
-                        persist: true));
+                        $"You are on {SettingsWindow.InstalledVersion()}. Download the new version and install it over this one.",
+                        persist: true,
+                        actionLabel: "Download",
+                        action: AppUpdates.OpenDownloadPage));
             }
             catch (Exception ex)
             {
@@ -8141,6 +8145,7 @@ namespace InterviewCopilot
             if (answer == MessageBoxResult.No)
             {
                 e.Cancel = true;
+                UpdateService.RestartAfterExit = false;
                 DebugWindow.Log("EXIT", "Close cancelled: the user kept the session running");
                 return;
             }

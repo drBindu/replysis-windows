@@ -159,37 +159,28 @@ namespace InterviewCopilot
         /// app has finished saving. No window, no prompt, no restart: the user gets
         /// the new version the next time they open Replysis.
         /// </summary>
+        /// <summary>
+        /// Set only by the "Restart and update" button. The app then closes the
+        /// normal way (session saved, speech engine shut down) and the updater
+        /// reopens it on the new version once it is gone.
+        /// </summary>
+        internal static bool RestartAfterExit { get; set; }
+
+        internal static bool HasStagedUpdate => _staged != null;
+
         internal static void ApplyOnExit()
         {
             if (_staged == null) return;
 
             try
             {
-                Manager?.WaitExitThenApplyUpdates(_staged, silent: true, restart: false);
+                Manager?.WaitExitThenApplyUpdates(_staged, silent: true, restart: RestartAfterExit);
             }
             catch (Exception ex)
             {
                 // Worst case the update stays staged and installs after the next
                 // exit. Never let this stop the app from closing.
                 DebugWindow.Log("UPDATE", $"Could not hand off update: {ex.GetType().Name}");
-            }
-        }
-
-        /// <summary>
-        /// Closes Replysis, installs the staged update, and opens it again. Only
-        /// ever called because the user pressed a button asking for exactly that.
-        /// </summary>
-        internal static void ApplyAndRestart()
-        {
-            if (_staged == null) return;
-
-            try
-            {
-                Manager?.ApplyUpdatesAndRestart(_staged);
-            }
-            catch (Exception ex)
-            {
-                DebugWindow.Log("UPDATE", $"Could not restart to update: {ex.GetType().Name}");
             }
         }
 

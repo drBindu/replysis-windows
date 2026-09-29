@@ -134,6 +134,35 @@ namespace InterviewCopilot
         }
 
         /// <summary>
+        /// "Restart and update": close Replysis through its normal shutdown and
+        /// reopen it on the staged version. The owner reported that the "ready"
+        /// banner had no button, so people could not tell how to update
+        /// (2026-09-28). Closing goes through the main window's usual
+        /// confirmation, so a live interview is never cut off without a yes.
+        /// </summary>
+        internal static void RestartToUpdate()
+        {
+            if (Current != Channel.DirectDownload || !UpdateService.HasStagedUpdate) return;
+            UpdateService.RestartAfterExit = true;
+            DebugWindow.Log("UPDATE", "Restart and update requested by the user.");
+            System.Windows.Application.Current?.MainWindow?.Close();
+        }
+
+        /// <summary>Opens the download page for a copy that cannot update itself.</summary>
+        internal static void OpenDownloadPage()
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://replysis.com")
+                    { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("UPDATE", $"Could not open the download page: {ex.GetType().Name}");
+            }
+        }
+
+        /// <summary>
         /// The quiet background check the main window runs after launch. Only
         /// the direct-download channel has one: on the Store, checking again
         /// after launch could only lead to interrupting someone, which is the
