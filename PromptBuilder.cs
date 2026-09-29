@@ -675,7 +675,8 @@ namespace InterviewCopilot
 
             string[] segments = Regex.Split(normalized, @"(?<=[?.!])\s+");
             int firstQuestion = 0;
-            while (firstQuestion < segments.Length - 1 && IsOpeningConversationFiller(segments[firstQuestion]))
+            while (firstQuestion < segments.Length - 1 &&
+                   (IsOpeningConversationFiller(segments[firstQuestion]) || IsAcknowledgement(segments[firstQuestion])))
                 firstQuestion++;
 
             string[] remaining = segments.Skip(firstQuestion)
@@ -695,21 +696,132 @@ namespace InterviewCopilot
             // filler that previously prevented Auto mode from ever submitting.
             for (int index = remaining.Length - 1; index >= 0; index--)
             {
-                if (IsCompleteInterviewQuestion(remaining[index]))
-                    return string.Join(" ", remaining.Skip(index));
+                if (!IsCompleteInterviewQuestion(remaining[index])) continue;
+
+                // Deepgram finalises at every 300ms pause and punctuates each
+                // piece, so one spoken question arrives as "What is the.
+                // Difference between an abstract class and an interface?". The
+                // last piece looks complete on its own, and sending only it lost
+                // the head of the question ("Through your last project?").
+                // Walk back over pieces that cannot end a sentence.
+                int start = index;
+                while (start > 0 && EndsMidSentence(remaining[start - 1], remaining[start]))
+                    start--;
+
+                int splitPieces = index - start;
+
+                // "Your resume says you led a team of six. Walk me through that."
+                // and "What is Python? And where have you used it?". Sent alone,
+                // "that" and "it" pointed at nothing. Keep the one sentence the
+                // question leans on.
+                if (start == index && start > 0 &&
+                    (PointsBack(remaining[start]) || StartsWithJoiningWord(remaining[start])) &&
+                    !IsAcknowledgement(remaining[start - 1]) &&
+                    !IsOpeningConversationFiller(remaining[start - 1]))
+                    start--;
+
+                string[] kept = remaining.Skip(start).ToArray();
+                int offset = index - start - splitPieces;   // context sentence kept whole
+                var parts = kept.Select(s => s.Trim()).ToArray();
+                for (int i = offset; i < offset + splitPieces && i < parts.Length - 1; i++)
+                    parts[i] = parts[i].TrimEnd('.', '!', ' ');
+                return string.Join(" ", parts);
             }
 
             return string.Join(" ", remaining);
         }
 
-        private static bool IsCompleteInterviewQuestion(string segment)
-        {
-            if (IsOpeningConversationFiller(segment)) return false;
+        private static bool StartsWithJoiningWord(string segment) =>
+            Regex.IsMatch((segment ?? "").Trim().ToLowerInvariant(),
+                @"^(?:and|also|but|plus|so|then|what about|how about)\b");
 
-            string text = segment.Trim().ToLower();
-            return Regex.IsMatch(text,
-                @"^(what|why|how|when|where|who|which|do|does|did|is|are|can|could|would|will|have|has|tell|describe|explain|define|compare|walk|give|share|introduce|write|create|build|implement|develop|generate|code|program|solve|show)\b") ||
+        private static readonly HashSet<string> SplitTailWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "or", "and", "but", "nor", "to", "of", "for", "with", "without", "from", "into",
+            "in", "on", "at", "by", "about", "over", "between", "the", "a", "an", "my", "our",
+            "your", "their", "its", "than", "because", "while", "if", "like", "me", "us",
+            "is", "are", "was", "were", "do", "does", "did", "can", "could", "would", "will",
+            "should", "have", "has", "what", "how", "why", "which", "when", "where", "who",
+        };
+
+        private static bool EndsMidSentence(string previous, string next)
+        {
+            string prev = (previous ?? "").Trim();
+            if (prev.Length == 0 || prev.EndsWith('?')) return false;
+            var words = Regex.Matches(prev.ToLowerInvariant(), @"[\p{L}\p{N}']+").Select(m => m.Value).ToArray();
+            if (words.Length == 0) return false;
+            if (SplitTailWords.Contains(words[^1])) return true;
+            if (AutoTurnRules.IsBareRequestOpener(prev)) return true;
+            // "Tell me about a time." then "You disagreed with your manager?": a
+            // short opener, and a next piece that does not start a question of
+            // its own. "Tell me about yourself. What are your strengths?" is two
+            // questions and stays two.
+            return words.Length <= 6 && StartsLikeAQuestion(prev) && !StartsLikeAQuestion(next ?? "");
+        }
+
+        private static bool PointsBack(string segment) =>
+            Regex.IsMatch(" " + (segment ?? "").ToLowerInvariant() + " ",
+                @"[ ,](that|it|this|there|them|those|these)[ ?.!,]");
+
+        private static bool StartsLikeAQuestion(string segment) =>
+            Regex.IsMatch(StripLeadingDiscourse(segment).ToLowerInvariant(), QuestionOpeningPattern);
+
+        private const string QuestionOpeningPattern =
+            @"^(what|why|how|when|where|who|which|do|does|did|is|are|can|could|would|will|have|has|should|" +
+            @"tell|describe|explain|define|compare|walk|give|share|introduce|write|create|build|implement|develop|" +
+            @"generate|code|program|solve|show|design|talk|take|elaborate|summari[sz]e|discuss|name|list|" +
+            @"let's|let us|i'd like|i would like|i'd love|i want to|i wanted to|i'm curious|i am curious|" +
+            @"i'm interested|i am interested)\b";
+
+        /// <summary>
+        /// "So", "Now", "Okay so", "Next question": how interviewers start a question,
+        /// never the question itself.
+        /// </summary>
+        internal static string StripLeadingDiscourse(string text)
+        {
+            string t = (text ?? "").Trim();
+            string prev;
+            do
+            {
+                prev = t;
+                t = Regex.Replace(t,
+                    @"^(?:so|now|and|okay|ok|alright|all right|um|uh|well|then|right|next question|next one|" +
+                    @"moving on|my next question is|the next question is|let me ask you|i want to ask you)\b[\s,.:]*",
+                    "", RegexOptions.IgnoreCase).Trim();
+            } while (t != prev && t.Length > 0);
+            return t;
+        }
+
+        internal static bool IsCompleteInterviewQuestion(string segment)
+        {
+            if (IsOpeningConversationFiller(segment) || IsAcknowledgement(segment)) return false;
+
+            string text = StripLeadingDiscourse(segment).ToLower();
+            return Regex.IsMatch(text, QuestionOpeningPattern) ||
                 (text.EndsWith('?') && text.Count(char.IsLetter) >= 2);
+        }
+
+        /// <summary>
+        /// What an interviewer says after hearing an answer and before the next
+        /// question: "Got it.", "Great, thanks for that.", "That's really helpful."
+        ///
+        /// Left in front of the question, it made the whole turn read as small
+        /// talk. "Got it. So walk me through your resume." was not a question to
+        /// Auto, and waited until the interviewer spoke again (2026-09-28 audit).
+        /// </summary>
+        internal static bool IsAcknowledgement(string segment)
+        {
+            string t = Regex.Replace((segment ?? "").ToLowerInvariant(), @"[^\p{L}\p{N}' ]+", " ");
+            t = Regex.Replace(t, @"\s+", " ").Trim();
+            if (t.Length == 0) return false;
+            return Regex.IsMatch(t,
+                @"^(?:(?:ok(?:ay)?|alright|all right|great|perfect|awesome|cool|nice|good|very good|excellent|wonderful|" +
+                @"sure|right|got it|understood|interesting|fair enough|i see|sounds good|that sounds good|makes sense|" +
+                @"that makes sense|thanks|thank you|thanks so much|thank you so much|wow|yeah|yes|mm hmm|uh huh|hmm|" +
+                @"(?:that's|that is) (?:great|good|helpful|really helpful|very helpful|really good|interesting|" +
+                @"really interesting|fair|perfect|awesome|clear)|" +
+                @"(?:that was|that's been) (?:great|helpful|really helpful|very helpful|a great answer|a good answer))" +
+                @"(?: for (?:that|sharing(?: that)?|explaining(?: that)?|the answer|your answer))?(?: |$))+$");
         }
 
         private static bool IsOpeningConversationFiller(string segment)

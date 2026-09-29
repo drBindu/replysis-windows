@@ -139,6 +139,9 @@ internal static class Program
         Console.WriteLine("\n9. Reading our answer aloud is not a question");
         _failed += ReadBackTests.Run();
 
+        Console.WriteLine("\n9b. What Auto treats as a question, and what it sends");
+        _failed += AutoQuestionTests.Run();
+
         Console.WriteLine("\n10. Punctuation that reads as AI generated");
         _failed += HumanVoiceTests.Run();
 

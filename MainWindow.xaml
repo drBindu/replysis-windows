@@ -1627,8 +1627,9 @@
                                         <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="20"
                                                    Foreground="#33FFFFFF" HorizontalAlignment="Center"
                                                    Margin="0,0,0,9"/>
-                                        <TextBlock Text="Conversation will appear here" Foreground="#44FFFFFF"
-                                                   FontSize="12" FontFamily="Segoe UI" HorizontalAlignment="Center"/>
+                                        <TextBlock x:Name="TranscriptHintText" Text="Conversation will appear here" Foreground="#66FFFFFF"
+                                                   FontSize="12" FontFamily="Segoe UI" HorizontalAlignment="Center"
+                                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"/>
                                     </StackPanel>
                                 </Grid>
                             </Grid>

@@ -1,3 +1,57 @@
+## Auto mode audit: seven faults, most of them silent (2026-09-28, Windows 1.0.26)
+
+Client-side only. Found by replaying realistic interviewer speech through the
+shipping rules, by the owner's own 1.0.25 debug log (18:30 to 19:02), and by a
+live run of a developer build. Every one of these is worth checking on the Mac.
+
+1. **Auto died after any engine crash.** The crash-restart path set
+   `isListening = false` but left `isMuted = false`. Auto starts only from muted
+   and ignores Space and the mic button, so it never listened again until the app
+   was restarted; the pill showed a red LISTENING. Fixed at the source, plus a
+   self-heal in `StartAutoListeningIfReady`. Reproduced live.
+2. **"Mic off. Nothing was heard." every 45 seconds.** Each Auto restart reset
+   "heard anything", and the 45 s stray-Space timeout then fired while the
+   candidate answered (inaudible in Interview mode); the Auto loop turned the mic
+   straight back on. Seen repeatedly in the owner's 1.0.25 log. Auto now has one
+   idle rule: 15 minutes of silence pauses Auto until the mic is clicked.
+3. **Acknowledgement in front of the question.** "Got it. So walk me through your
+   resume." was not a question (two sentences, starts with "So"). New:
+   `PromptBuilder.IsAcknowledgement`, `StripLeadingDiscourse`, and request phrases
+   ("let's talk about", "I'd like to hear about", "I'm curious about").
+4. **The system-audio boundary fallback could never fire on punctuated speech.**
+   It trusted the provider's UtteranceEnd for 1.5 s, but a punctuated question
+   must be quiet 2.8 s first and Deepgram sends the signal ~1 s after the last
+   word. It now counts if it arrived after the last transcript change. Because it
+   can now fire, it explicitly refuses acknowledgements and interviewer asides
+   ("let me pull up my notes", "one second").
+5. **Questions split at a pause lost their head.** Deepgram endpointing is 300 ms
+   and punctuates each piece: "What is the. Difference between...?" sent only
+   "Difference between...?", "Can you walk me. Through your last project?" sent
+   "Through your last project?". The normaliser now rejoins pieces that cannot
+   end a sentence, and keeps the one context sentence a question points back to
+   ("...led a team of six. Walk me through that.", "What is Python? And where
+   have you used it?").
+6. **One revised word brought back the whole interview.** In Auto the transcript
+   is never cleared, and the answered part was matched word for word; a
+   partial-to-final revision anywhere in it returned everything as new speech.
+   `UnconsumedTranscript` now tolerates a revision in the last 10 answered words
+   and cuts at the recogniser's punctuation.
+7. **Words already judged not a question blocked the next one.** A rejected prefix
+   (small talk, the candidate reading our answer aloud) stayed in front of every
+   later question. After a 3 s pause it is now set aside. Plus: a sentence the
+   provider never punctuated ("Why did you choose that") is answered after the
+   provider's end signal and 4 s of quiet instead of waiting forever, and the
+   continuation clock now starts when the tail was spoken, not when the answer
+   finished streaming.
+
+Also: Auto no longer shows the Manual hint ("Press SPACE...") or a red MUTED; it
+says STARTING, PAUSED or GETTING READY and explains what it is listening to.
+Tests: `tests/CleanerTests/AutoQuestionTests.cs`. Developer builds accept
+`REPLYSIS_AUTOTEST=1` to open straight into Auto and log each sent question;
+release builds do not contain it.
+
+---
+
 ## Practice-mode Auto ignored follow-up questions; Short / Detailed answers (2026-09-28, Windows 1.0.26)
 
 Client-side only, no backend change.

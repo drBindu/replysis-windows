@@ -300,6 +300,9 @@ namespace InterviewCopilot
 
             this.Loaded += async (s, e) =>
             {
+#if DEBUG
+                ArmAutoTestHarness();
+#endif
                 // Report presence to Firestore so the admin dashboard shows
                 // accurate Live/last-seen (self-guards while logged out)
                 PresenceTracker.Start();
@@ -1562,6 +1565,7 @@ namespace InterviewCopilot
             }
 
             _listeningMode = mode;
+            _autoPausedForIdle = false;
             _lastAutoSubmittedQuestion = "";
             _lastAutoRejectedTranscript = "";
             _lastAutoSubmitUtc = DateTime.MinValue;
@@ -1728,10 +1732,19 @@ namespace InterviewCopilot
             // pressing Start Interview - it must never itself begin listening
             // and snap the page into Interview. Only Start Interview, Space,
             // or the mic button count as that decision.
-            if (_inSetupStep) return;
+            if (_inSetupStep || _autoPausedForIdle) return;
             if (!AutoModeEnabled || !_engineOnline || isListening || isProcessing ||
                 _flushing || _isScreenAnalyzing)
                 return;
+
+            // Not listening and not muted is not a real state; it is what a
+            // path that forgot isMuted leaves behind. Auto starts only from muted,
+            // so without this it would wait forever. Heal it and carry on.
+            if (!isMuted)
+            {
+                DebugWindow.Log("MIC", "Found the mic neither listening nor muted; resetting so Auto can listen.");
+                isMuted = true;
+            }
 
             this.Focusable = true;
             System.Windows.Input.Keyboard.Focus(this);
@@ -1778,6 +1791,17 @@ namespace InterviewCopilot
         /// somebody was reading an answer with the microphone still open.
         /// </summary>
         private static readonly TimeSpan SilentSessionTimeout = TimeSpan.FromSeconds(45);
+
+        /// <summary>
+        /// Auto's only idle stop. Long, because a coding round can be ten silent
+        /// minutes of the candidate typing, and missing the interviewer's next
+        /// question is far worse than a few listening minutes. When it fires, Auto
+        /// stays paused until the mic is clicked, rather than restarting itself.
+        /// </summary>
+        private static readonly TimeSpan AutoIdleListeningTimeout = TimeSpan.FromMinutes(15);
+
+        // Auto stopped for an empty room and must not restart on its own.
+        private bool _autoPausedForIdle;
 
         // Whether anything was heard at all in the current listening session.
         private bool _heardAnythingThisSession;
@@ -1868,9 +1892,16 @@ namespace InterviewCopilot
 
             WarnIfHearingButNotTranscribing(now);
 
-            TimeSpan patience = _heardAnythingThisSession
-                ? IdleListeningTimeout
-                : SilentSessionTimeout;
+            // Auto listens by design and restarts itself after every answer, so
+            // the Space-press timeouts below cannot apply to it. They used to:
+            // each restart reset "heard anything" to false, and 45 seconds of
+            // the candidate answering (inaudible in Interview mode) stopped the
+            // mic, flashed "Mic off. Nothing was heard.", and the Auto loop
+            // turned it straight back on. Every 45 seconds, in every interview
+            // (2026-09-28 audit). Auto only stops for a genuinely empty room.
+            TimeSpan patience = AutoModeEnabled
+                ? AutoIdleListeningTimeout
+                : _heardAnythingThisSession ? IdleListeningTimeout : SilentSessionTimeout;
 
             if (now - _lastSpeechHeardUtc >= patience)
             {
@@ -1992,7 +2023,15 @@ namespace InterviewCopilot
             isListening = false;
             isMuted = true;
             WritePauseFlag();
-            if (AutoModeEnabled) _autoTurnSubmitting = false;
+            if (AutoModeEnabled)
+            {
+                _autoTurnSubmitting = false;
+                _autoPausedForIdle = true;
+                ShowListeningModeNotice($"Auto paused after {AutoIdleListeningTimeout.TotalMinutes:0} min of silence. Click the mic to resume.");
+                DebugWindow.Log("METER", "Auto paused after the idle timeout.");
+                UpdateMicUi();
+                return;
+            }
 
             // Said in the badge, not in the answer.
             //
@@ -2176,6 +2215,8 @@ namespace InterviewCopilot
         private void ResetAutoTurnDetection()
         {
             _autoTurnSubmitting = false;
+            _autoRejectedRaw = "";
+            _autoRejectedTranscript = "";
             _autoContinuationPrefix = "";
             _autoLastTranscript = "";
             _autoListeningStartedUtc = DateTime.UtcNow;
@@ -2449,6 +2490,29 @@ namespace InterviewCopilot
             return left + " " + right;
         }
 
+        // Words Auto already judged not to be a question (small talk, the
+        // candidate reading our answer aloud, an acknowledgement), and the raw
+        // transcript at that moment. After a real pause they are set aside, so
+        // they cannot sit in front of the next question and hide it. In a tester's
+        // Practice session they did exactly that for minutes (2026-09-28).
+        private string _autoRejectedRaw = "";
+        private string _autoRejectedTranscript = "";
+
+        private void NoteAutoRejected(string transcript, string candidate)
+        {
+            // A question still being spoken ("My next question is") is not
+            // rejected speech; it is waiting for the rest, and must be kept.
+            if (ClassifyTurnEnding(candidate) == TurnEnding.Unfinished ||
+                AutoTurnRules.EndsOnJoiningWord(candidate))
+            {
+                _autoRejectedRaw = "";
+                _autoRejectedTranscript = "";
+                return;
+            }
+            _autoRejectedRaw = _lastRawTranscriptRead;
+            _autoRejectedTranscript = transcript;
+        }
+
         private void TrySubmitAutomaticTurn(string transcript)
         {
             if (!AutoModeEnabled || _autoTurnSubmitting || !isListening ||
@@ -2463,8 +2527,14 @@ namespace InterviewCopilot
             string candidateQuestion = PromptBuilder.NormalizeInterviewerQuestion(question);
             bool isContinuation = LooksLikeContinuation(candidateQuestion, now);
             long boundaryTicks = Interlocked.Read(ref _lastUtteranceEndUtcTicks);
+            // The provider said the speaker stopped, and said it after the last
+            // words we have. This used to count only for 1.5s after the signal.
+            // Deepgram sends it about a second after the last word, and a
+            // punctuated question must then be quiet for 2.8s before it is sent,
+            // so by the time it could be sent the evidence had always expired and
+            // the fallback below never fired on punctuated speech (2026-09-28).
             bool providerConfirmedEnd = boundaryTicks > 0 &&
-                now - new DateTime(boundaryTicks, DateTimeKind.Utc) <= TimeSpan.FromSeconds(1.5);
+                boundaryTicks >= _autoTranscriptChangedUtc.Ticks;
             // This relaxed fallback is safe only when we hear the interviewer's system
             // audio alone. With the microphone mixed in, the candidate's own speech can
             // also end at a provider boundary and must continue through the stricter
@@ -2498,6 +2568,7 @@ namespace InterviewCopilot
                                       now - _lastAutoSubmitUtc < TimeSpan.FromSeconds(12));
             if (!isCompleteQuestion || isRecentDuplicate)
             {
+                NoteAutoRejected(transcript, candidateQuestion);
                 if (!isCompleteQuestion &&
                     !string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
                 {
@@ -2527,6 +2598,7 @@ namespace InterviewCopilot
             // follow-up shares vocabulary but not that much of it.
             if (CaptureMode() != "system" && IsReadingOurAnswerBack(candidateQuestion))
             {
+                NoteAutoRejected(transcript, candidateQuestion);
                 if (!string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
                 {
                     _lastAutoRejectedTranscript = question;
@@ -2537,6 +2609,19 @@ namespace InterviewCopilot
             }
 
             TurnEnding ending = ClassifyTurnEnding(candidateQuestion);
+            // "Why did you choose that" with no full stop ends on a word a
+            // sentence rarely ends on, and waits for the rest. If the provider
+            // then says the speaker stopped and four seconds pass with nothing
+            // more, the rest is not coming: answer what was asked rather than
+            // wait for the next question to push it along. A bare opener ("Can
+            // you tell me") has nothing to answer yet and still waits.
+            if (ending == TurnEnding.Unfinished && providerConfirmedEnd &&
+                now - _autoTranscriptChangedUtc >= TimeSpan.FromSeconds(4) &&
+                !AutoTurnRules.IsBareRequestOpener(candidateQuestion))
+            {
+                DebugWindow.Log("AUTO", "No punctuation, but the speaker stopped 4s ago; treating the question as finished.");
+                ending = TurnEnding.Unclear;
+            }
             if (ending == TurnEnding.Unfinished)
             {
                 if (!string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
@@ -2724,48 +2809,8 @@ namespace InterviewCopilot
             return TurnEnding.Unclear;
         }
 
-        private static bool IsLikelyCompleteAutomaticQuestion(string question)
-        {
-            if (string.IsNullOrWhiteSpace(question)) return false;
-
-            string[] words = Regex.Matches(question, @"[\p{L}\p{N}']+")
-                                  .Cast<Match>()
-                                  .Select(match => match.Value.ToLowerInvariant())
-                                  .ToArray();
-            if (words.Length == 0) return false;
-
-            string normalized = string.Join(" ", words);
-            if (normalized is "okay" or "okay sir" or "yes" or "yes sir" or "no" or
-                              "no sir" or "thanks" or "thank you" or "hello" or "hi" or
-                              "la la la")
-                return false;
-
-            bool hasQuestionMark = question.Contains('?');
-
-            string first = words[0];
-            bool isQuestionStarter = QuestionStarters.Contains(first);
-            if (isQuestionStarter)
-                return words.Length >= 2 || (hasQuestionMark && first is "what" or "why" or "how");
-
-            bool isInterviewCommand = InterviewCommands.Contains(first);
-            if (isInterviewCommand)
-            {
-                if (first == "tell" && words.Length == 2 && words[1] == "me") return false;
-                return words.Length >= 2;
-            }
-
-            if (hasQuestionMark) return words.Length >= 2;
-
-            // Multiple declarative sentences are normally background conversation, not
-            // a question. Question starters and coding/command requests returned above,
-            // so this guard no longer blocks a valid question followed by a constraint.
-            int periodCount = question.Count(character => character == '.');
-            if (periodCount >= 2) return false;
-
-            char last = question[^1];
-            bool hasClosingPunctuation = last is '.' or '!';
-            return words.Length >= 5 && question.Length >= 20 && hasClosingPunctuation;
-        }
+        private static bool IsLikelyCompleteAutomaticQuestion(string question) =>
+            AutoTurnRules.IsLikelyCompleteQuestion(question);
 
         // Push-to-talk: DOWN = start listening, UP = fire AI.
         // Toggle callers (button, in-app Space) call both in sequence.
@@ -3073,6 +3118,9 @@ namespace InterviewCopilot
             if (!_preserveAutoCapture) WritePauseFlag();
             _waitedForWordsMs = _turnStopwatch?.ElapsedMilliseconds ?? 0;
             DebugWindow.Log("MIC", $"[{source}] firing AI ({question.Length} chars)");
+#if DEBUG
+            if (_autoTestHarness) DebugWindow.Log("AUTOTEST", $"sent: {question}");
+#endif
 
             if (string.IsNullOrWhiteSpace(question))
             {
@@ -3110,6 +3158,13 @@ namespace InterviewCopilot
             // Auto owns the listening lifecycle. Global Space presses in an Auto mode used
             // to cancel the active answer and launch many tiny requests, exhausting Groq and
             // forcing a slow fallback. Manual Space behavior is unchanged in Manual mode.
+            if (AutoModeEnabled && source != "AUTO" && _autoPausedForIdle)
+            {
+                _autoPausedForIdle = false;
+                DebugWindow.Log("MODE", $"Auto resumed by {source}.");
+                StartAutoListeningIfReady();
+                return;
+            }
             if (AutoModeEnabled && source != "AUTO")
             {
                 ShowListeningModeNotice("Auto is on");
@@ -4836,6 +4891,62 @@ namespace InterviewCopilot
                 StartPreparedShots();
         }
 
+        private string _emptyHintKey = "";
+
+        /// <summary>
+        /// The words shown before the first question, in the answer area and the
+        /// Interviewer panel. They described Manual ("Press SPACE to start
+        /// listening") even with Auto on, where Space does nothing, so a tester
+        /// in Auto was told to do something that could not work.
+        /// </summary>
+        private void UpdateEmptyStateHints()
+        {
+            if (AiAnswerHint == null || TranscriptHintText == null) return;
+            bool practice = PracticeAudioOn;
+            string key = !AutoModeEnabled ? "manual"
+                       : _autoPausedForIdle ? "paused"
+                       : !_engineOnline ? "starting"
+                       : practice ? "auto-practice" : "auto-interview";
+            if (key == _emptyHintKey) return;
+            _emptyHintKey = key;
+
+            AiAnswerHint.Inlines.Clear();
+            var white = new SolidColorBrush(Colors.White);
+            switch (key)
+            {
+                case "manual":
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Press "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" to start listening, then "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" again to get your answer."));
+                    TranscriptHintText.Text = "Conversation will appear here";
+                    break;
+                case "paused":
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is paused after a long silence. "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Click the mic") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" to listen again."));
+                    TranscriptHintText.Text = "Paused";
+                    break;
+                case "starting":
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Starting the audio. Auto will begin listening in a moment."));
+                    TranscriptHintText.Text = "Connecting to your audio";
+                    break;
+                case "auto-practice":
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Ask a question out loud") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" or play one, and the answer appears here on its own. No keys needed."));
+                    TranscriptHintText.Text = "Listening to your microphone and computer audio";
+                    break;
+                default:
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. When the interviewer "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("asks a question in your meeting") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(", the answer appears here on its own. Your own voice is not picked up."));
+                    TranscriptHintText.Text = "Listening for the interviewer on your computer audio";
+                    break;
+            }
+        }
+
         private void UpdateMicUi()
         {
             Color c; string label;
@@ -4910,6 +5021,12 @@ namespace InterviewCopilot
                     + "that blocks it - a work, school, or shop network, or a VPN. "
                     + "Try a phone hotspot. Press Ctrl+Alt+F12 for details.";
             }
+            // Auto is never "muted" from the user's point of view: it is starting,
+            // paused, or about to listen again. A red MUTED after choosing
+            // Interview (the audio restarts for a moment) read as broken.
+            else if (AutoModeEnabled && _autoPausedForIdle) { c = Color.FromRgb(245, 178, 60); label = "PAUSED"; }
+            else if (AutoModeEnabled && !_engineOnline) { c = Color.FromRgb(245, 178, 60); label = "STARTING"; }
+            else if (AutoModeEnabled && !_inSetupStep) { c = Color.FromRgb(245, 178, 60); label = "GETTING READY"; }
             else if (!_engineOnline) { c = Color.FromRgb(239, 68, 68); label = "MUTED"; }
             else if (isMuted) { c = Color.FromRgb(239, 68, 68); label = "MUTED"; }
             else { c = Color.FromRgb(239, 68, 68); label = isRecording && _savingSessionAudio ? "RECORDING" : "LISTENING"; }
@@ -4919,6 +5036,7 @@ namespace InterviewCopilot
             MicGlow.Color = c;
             MicBtn.BorderBrush = brush;
             MicIndicatorText.Text = label;
+            UpdateEmptyStateHints();
 
             // Premium: tint the whole status pill + a soft halo to match the state color,
             // with state-coloured (lightened) text — so MUTED reads red, LISTENING green, etc.
@@ -5004,6 +5122,16 @@ namespace InterviewCopilot
                 return;
             }
 
+            // Capture stays open while an answer streams, but this loop only
+            // started reading again once the answer finished. The interviewer's
+            // "and full time", said a second after the question, was therefore
+            // timestamped several seconds late and no longer counted as the rest
+            // of the question. Note when new words first appear, even mid-answer.
+            if (AutoModeEnabled && !isListening && isProcessing && _preserveAutoCapture &&
+                _autoFirstWordsAfterSubmitUtc < _lastAutoSubmitUtc &&
+                !string.IsNullOrWhiteSpace(ReadLatestTxtSafe()))
+                _autoFirstWordsAfterSubmitUtc = DateTime.UtcNow;
+
             if (!isListening) return;
 
             // Briefly suppress stale engine output right after unmute so the tail of a
@@ -5024,6 +5152,17 @@ namespace InterviewCopilot
             try
             {
                 string text = ReadLatestTxtSafe();
+                if (AutoModeEnabled && text != _autoLastTranscript &&
+                    !string.IsNullOrEmpty(_autoRejectedRaw) &&
+                    string.Equals(_autoRejectedTranscript, _autoLastTranscript, StringComparison.Ordinal) &&
+                    DateTime.UtcNow - _autoTranscriptChangedUtc >= AutoTurnRules.StaleRejectedSpeechPause)
+                {
+                    _autoCaptureConsumedText = _autoRejectedRaw;
+                    _autoRejectedRaw = "";
+                    _autoRejectedTranscript = "";
+                    text = ReadLatestTxtSafe();
+                    DebugWindow.Log("AUTO", "New speech after a pause; set aside earlier words that were not a question.");
+                }
                 bool autoTranscriptChanged = AutoModeEnabled && text != _autoLastTranscript;
                 bool displayChanged = text != TranscriptTextBlock.Text;
                 bool holdCompletedAutoQuestion = AutoTurnRules.HoldCompletedQuestionOnEmptyRestart(
@@ -6133,9 +6272,21 @@ namespace InterviewCopilot
                 DebugWindow.Log("ENGINE", $"Engine stopped; retrying with {retrySeconds}-second backoff.");
                 if (isListening)
                 {
+                    // Muted as well as not listening. This cleared only isListening,
+                    // leaving a state that is neither: the pill showed a red
+                    // LISTENING, and Auto could never listen again, because it only
+                    // starts from muted and ignores Space and the mic button. After
+                    // one engine crash Auto stayed silent until the app was
+                    // restarted (2026-09-28 audit, reproduced in a live run).
                     isListening = false;
+                    isMuted = true;
                     try { File.WriteAllText(Path.Combine(AppDataFolder, "latest.txt"), ""); } catch { }
-                    Dispatcher.Invoke(() => UpdateMicUi());
+                    Dispatcher.Invoke(() =>
+                    {
+                        StopListeningMeter();
+                        if (AutoModeEnabled) ResetAutoTurnDetection();
+                        UpdateMicUi();
+                    });
                 }
                 StartSpeechmaticsEngine();
             }
@@ -7632,6 +7783,7 @@ namespace InterviewCopilot
         private void EnterInterviewStep(bool animate, bool collapseResumeColumn = true)
         {
             _inSetupStep = false;
+            _autoPausedForIdle = false;
             if (_interviewStarted && _watchScreenMode) StartPreparedShots();
             SetupPageTitle.Visibility = Visibility.Collapsed;
             MainContentColumn.Width = new GridLength(1, GridUnitType.Star);
@@ -7686,6 +7838,30 @@ namespace InterviewCopilot
             MainContentArea.BeginAnimation(UIElement.OpacityProperty, fadeIn);
             MainContentShift.BeginAnimation(TranslateTransform.XProperty, slideIn);
         }
+
+#if DEBUG
+        // Developer builds only: REPLYSIS_AUTOTEST=1 opens straight into an Auto,
+        // Interview-audio session and logs the exact question each turn sends,
+        // so Auto can be tested end to end with recorded speech and no clicks.
+        // Never compiled into a release build.
+        private bool _autoTestHarness;
+        private void ArmAutoTestHarness()
+        {
+            if (Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST") != "1") return;
+            _autoTestHarness = true;
+            var wait = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            wait.Tick += (_, _) =>
+            {
+                if (!_engineOnline) return;
+                wait.Stop();
+                SelectAudioSource(practice: Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST_PRACTICE") == "1");
+                SelectListeningMode(ListeningMode.Auto);
+                StartInterviewStep_Click(this, new RoutedEventArgs());
+                DebugWindow.Log("AUTOTEST", "armed: Auto, interview step");
+            };
+            wait.Start();
+        }
+#endif
 
         private async void StartInterviewStep_Click(object sender, RoutedEventArgs e)
         {

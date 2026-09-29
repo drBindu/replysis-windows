@@ -81,16 +81,105 @@ namespace InterviewCopilot
         private static string[] Words(string s) =>
             Regex.Matches((s ?? "").ToLowerInvariant(), @"[\p{L}\p{N}']+").Select(m => m.Value).ToArray();
 
+        /// <summary>How long a pause must be before words already judged not to be a question are set aside.</summary>
+        internal static readonly TimeSpan StaleRejectedSpeechPause = TimeSpan.FromSeconds(3);
+
+        private static readonly HashSet<string> JoiningWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "or", "and", "but", "nor", "to", "of", "for", "with", "without", "from", "into",
+            "in", "on", "at", "by", "about", "over", "between", "the", "a", "an", "my", "our",
+            "your", "their", "its", "than", "because", "while", "if", "like", "is", "are", "was",
+        };
+
+        /// <summary>Ends on a word no finished sentence ends on, punctuated or not.</summary>
+        internal static bool EndsOnJoiningWord(string text)
+        {
+            string[] w = Words(text);
+            return w.Length > 0 && JoiningWords.Contains(w[^1]);
+        }
+
+        /// <summary>
+        /// How many words at the end of what was already answered the recogniser
+        /// may still rewrite. The snapshot is taken while the last words can still
+        /// be a partial result; the final version often differs ("rest full"
+        /// becomes "RESTful").
+        /// </summary>
+        private const int RevisableTailWords = 10;
+
+        /// <summary>
+        /// What was said after the part already answered.
+        ///
+        /// In Auto the transcript is never cleared between turns, so it holds the
+        /// whole interview, and the answered part is found by matching words from
+        /// the start. That match used to be exact: one word revised by the
+        /// recogniser after the snapshot, and the whole interview so far came back
+        /// as "new" speech, old questions included (2026-09-28 audit). A mismatch
+        /// confined to the last few answered words is now treated as the revision
+        /// it is. A transcript that differs earlier than that is a fresh one (the
+        /// engine restarted) and is returned whole, as before.
+        /// </summary>
         internal static string UnconsumedTranscript(string captured, string consumed)
         {
             string[] done = Words(consumed);
             var matches = Regex.Matches(captured ?? "", @"[\p{L}\p{N}']+");
-            if (done.Length == 0 || matches.Count < done.Length) return captured ?? "";
-            for (int i = 0; i < done.Length; i++)
-                if (!string.Equals(matches[i].Value, done[i], StringComparison.OrdinalIgnoreCase))
-                    return captured ?? "";
-            if (matches.Count == done.Length) return "";
-            Match last = matches[done.Length - 1];
+            if (done.Length == 0) return captured ?? "";
+
+            int same = 0;
+            while (same < done.Length && same < matches.Count &&
+                   string.Equals(matches[same].Value, done[same], StringComparison.OrdinalIgnoreCase))
+                same++;
+
+            int cut;
+            if (same == done.Length)
+            {
+                cut = done.Length;
+            }
+            // A revision rewrites the end of what was answered, never most of it.
+            // Short answered text that barely matches is a fresh transcript.
+            else if (same >= done.Length - RevisableTailWords && same * 2 >= done.Length && same > 0)
+            {
+                // Align the revised tail: find each answered word a little further on.
+                int pos = same, lastFound = -1;
+                for (int i = same; i < done.Length; i++)
+                {
+                    for (int j = pos; j < Math.Min(matches.Count, pos + 3); j++)
+                    {
+                        if (string.Equals(matches[j].Value, done[i], StringComparison.OrdinalIgnoreCase))
+                        {
+                            lastFound = j;
+                            pos = j + 1;
+                            break;
+                        }
+                    }
+                }
+                int estimate = lastFound >= 0 ? lastFound + 1 : done.Length;
+
+                // The answered question ended where the recogniser put its full
+                // stop or question mark once it finalised. Prefer that boundary
+                // when it sits near the estimate: word counts change in a
+                // revision ("rest full" -> "RESTful"), punctuation does not lie.
+                int best = -1;
+                for (int j = Math.Max(0, same - 1); j < matches.Count; j++)
+                {
+                    int after = matches[j].Index + matches[j].Length;
+                    int next = j + 1 < matches.Count ? matches[j + 1].Index : captured!.Length;
+                    if (captured![after..next].IndexOfAny(new[] { '?', '.', '!' }) < 0) continue;
+                    int boundary = j + 1;
+                    if (Math.Abs(boundary - estimate) <= 2 &&
+                        (best < 0 || Math.Abs(boundary - estimate) < Math.Abs(best - estimate)))
+                        best = boundary;
+                    if (boundary > estimate + 2) break;
+                }
+                cut = Math.Min(best >= 0 ? best : estimate, matches.Count);
+            }
+            else
+            {
+                return captured ?? "";
+            }
+
+            if (cut >= matches.Count) return "";
+            if (cut == 0) return captured ?? "";
+            Match last = matches[cut - 1];
             return captured![(last.Index + last.Length)..].TrimStart(' ', '?', '.', '!', ',', ';', ':');
         }
 
@@ -113,7 +202,8 @@ namespace InterviewCopilot
                 @"^(?:so |and |okay |ok |now |alright )?" +
                 @"(?:(?:can|could|would|will) (?:you|u) (?:please )?)?" +
                 @"(?:tell|walk|describe|explain|talk|share|give|go over|go through|take)" +
-                @"(?: (?:me|us))?(?: (?:about|through|a bit about|more about|how|what|why))?$");
+                @"(?: (?:me|us))?(?: (?:about|through|a bit about|more about|how|what|why))?" +
+                @"(?: a time(?: when| where| that)?)?$");
 
         /// <summary>
         /// A recogniser-confirmed utterance that contains enough substance to answer even
@@ -135,6 +225,13 @@ namespace InterviewCopilot
             string normalized = string.Join(" ", words);
             if (normalized is "okay thank you" or "yes thank you" or "that is fine" or
                               "that sounds good" or "nice to meet you" or "thanks for that")
+                return false;
+            // This fallback only fired by luck until 2026-09-28: a timing race
+            // expired the provider's end-of-speech signal before a punctuated
+            // utterance could be sent. With that fixed it would have answered
+            // "Great, thanks for that." and "Let me pull up my notes.", replacing
+            // the answer the candidate was still reading.
+            if (PromptBuilder.IsAcknowledgement(value) || IsInterviewerAside(value))
                 return false;
 
             // An utterance boundary is useful evidence, not permission to answer a
@@ -178,6 +275,116 @@ namespace InterviewCopilot
         /// ("How I prioritize multiple concurrent tasks") is still first person
         /// straight after the opener, so it stays a read-back.
         /// </summary>
+        /// <summary>
+        /// Whether Auto should treat this as a question worth answering now.
+        ///
+        /// Moved here from MainWindow (2026-09-28) so it can be tested, and taught
+        /// what comes in front of a question in a real interview. "Got it. So walk
+        /// me through your resume." used to fail twice: two sentences read as
+        /// background talk, and "So" is not a question word. The only thing that
+        /// could rescue it was the system-audio boundary fallback, which a timing
+        /// race kept from firing on punctuated speech. So the interviewer's
+        /// acknowledgement and "So, / Now, / Next question," are set aside first,
+        /// and requests that are not phrased as questions ("Let's talk about your
+        /// Kubernetes work", "I'd like to hear about...") count as questions.
+        /// </summary>
+        internal static bool IsLikelyCompleteQuestion(string question)
+        {
+            if (string.IsNullOrWhiteSpace(question)) return false;
+
+            string core = PromptBuilder.StripLeadingDiscourse(DropLeadingAcknowledgements(question));
+            if (core.Length == 0) return false;
+            if (IsInterviewerAside(core)) return false;
+
+            string[] words = Words(core);
+            if (words.Length == 0) return false;
+
+            string normalized = string.Join(" ", words);
+            if (normalized is "okay" or "okay sir" or "yes" or "yes sir" or "no" or
+                              "no sir" or "thanks" or "thank you" or "hello" or "hi" or
+                              "la la la")
+                return false;
+
+            bool hasQuestionMark = core.Contains('?');
+            string first = words[0];
+
+            if (CompleteQuestionStarters.Contains(first))
+                return words.Length >= 2 || (hasQuestionMark && first is "what" or "why" or "how");
+
+            if (CompleteQuestionCommands.Contains(first))
+            {
+                if (first == "tell" && words.Length == 2 && words[1] == "me") return false;
+                return words.Length >= 2;
+            }
+
+            // Requests that are not phrased as questions, and are how many
+            // interviewers actually ask: "Let's talk about...", "I'd like to hear
+            // about...", "I'm curious about...".
+            if (words.Length >= 4 && Regex.IsMatch(normalized,
+                    @"^(?:let's|let us) (?:talk|discuss|move|go|dive|start|switch|turn|focus|look|get)\b|" +
+                    @"^(?:i'd|i would|i) (?:really )?(?:like|love|want|wanted) to (?:hear|know|understand|learn|see|talk|discuss|ask)\b|" +
+                    @"^(?:i'm|i am) (?:curious|interested)\b"))
+                return true;
+
+            if (hasQuestionMark) return words.Length >= 2;
+
+            // One sentence of context, then the question that leans on it: "Your
+            // resume says you led a team of six. Walk me through that." The
+            // normaliser keeps that sentence on purpose, so judge the last one.
+            string[] sentences = Regex.Split(core, @"(?<=[?.!])\s+")
+                                      .Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+            if (sentences.Length is >= 2 and <= 3 && Words(sentences[^1]).Length >= 3 &&
+                PromptBuilder.IsCompleteInterviewQuestion(sentences[^1]))
+                return true;
+
+            // Multiple declarative sentences are normally background conversation, not
+            // a question. Question starters and coding/command requests returned above,
+            // so this guard no longer blocks a valid question followed by a constraint.
+            int periodCount = core.Count(character => character == '.');
+            if (periodCount >= 2) return false;
+
+            char last = core.TrimEnd()[^1];
+            bool hasClosingPunctuation = last is '.' or '!';
+            return words.Length >= 5 && core.Length >= 20 && hasClosingPunctuation;
+        }
+
+        /// <summary>
+        /// The interviewer talking to themselves or asking for a moment: "Let me
+        /// pull up my notes", "One second", "Bear with me". Not a question, and
+        /// answering it replaces the answer on screen.
+        /// </summary>
+        internal static bool IsInterviewerAside(string text) =>
+            Regex.IsMatch(PromptBuilder.StripLeadingDiscourse(DropLeadingAcknowledgements(text ?? "")).ToLowerInvariant(),
+                @"^(?:let me (?:see|check|look|pull|find|open|share|just|grab|note|write|make)|" +
+                @"(?:one|just a|give me a|wait a) (?:second|sec|moment|minute)|hold on|bear with me|" +
+                @"sorry,? (?:one|just a|give me a) (?:second|sec|moment|minute)|i'm just|i am just|" +
+                @"my (?:dog|kid|internet|connection|camera|mic)\b)");
+
+        /// <summary>Removes "Got it.", "Great, thanks for that." and greetings from the front.</summary>
+        internal static string DropLeadingAcknowledgements(string text)
+        {
+            string[] sentences = Regex.Split((text ?? "").Trim(), @"(?<=[?.!])\s+");
+            int i = 0;
+            while (i < sentences.Length - 1 && PromptBuilder.IsAcknowledgement(sentences[i]))
+                i++;
+            return string.Join(" ", sentences.Skip(i)).Trim();
+        }
+
+        private static readonly HashSet<string> CompleteQuestionStarters = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "what", "why", "how", "when", "where", "who", "which", "can", "could",
+            "would", "will", "do", "does", "did", "are", "is", "was", "were",
+            "have", "has", "should", "what's", "whats", "how's", "where's", "who's",
+        };
+
+        private static readonly HashSet<string> CompleteQuestionCommands = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "tell", "explain", "describe", "walk", "share", "discuss", "design",
+            "implement", "compare", "define", "introduce", "summarize", "summarise", "write",
+            "create", "build", "code", "program", "solve", "develop", "generate", "show",
+            "talk", "take", "give", "elaborate", "list", "name",
+        };
+
         internal static bool IsQuestionToTheCandidate(string text)
         {
             string[] w = Words(text);
