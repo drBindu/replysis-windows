@@ -94,10 +94,18 @@ namespace InterviewCopilot
         /// <summary>The state the app is in, from the facts it already tracks. Null when nothing is wrong.</summary>
         internal static Kind? Detect(
             bool engineOnline, int speechStatusCode, bool outOfListeningTime,
-            bool waitingToRetry, bool fatalNoMicrophone, bool connectionStalled)
+            bool waitingToRetry, bool fatalNoMicrophone, bool connectionStalled,
+            bool outOfCredits = false)
         {
             if (engineOnline) return null;
-            if (speechStatusCode == 402) return outOfListeningTime ? Kind.NoListeningTime : Kind.NoCredits;
+
+            // A definite refusal outlives whatever the server said most recently. After a
+            // "no listening time" the app kept asking, hit the hourly request limit, and the
+            // latest status became "too many requests", which read as a passing reconnect:
+            // the person saw nothing wrong and nothing explaining it (2026-09-29).
+            if (outOfListeningTime) return Kind.NoListeningTime;
+            if (outOfCredits) return Kind.NoCredits;
+            if (speechStatusCode == 402) return Kind.NoCredits;
             if (speechStatusCode == 401) return Kind.SignInExpired;
             if (speechStatusCode is 502 or 503) return Kind.ServiceUnavailable;
             if (waitingToRetry) return Kind.WaitingToReconnect;

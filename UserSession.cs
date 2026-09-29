@@ -89,12 +89,35 @@ namespace InterviewCopilot
         /// </summary>
         public static bool SpeechmaticsOutOfListeningTime { get; private set; }
 
+        /// <summary>
+        /// The server said "no credits" (not "no listening time"). Like the flag above it
+        /// survives later failures, so a rate limit reply cannot hide the real reason.
+        /// </summary>
+        public static bool SpeechmaticsOutOfCredits { get; private set; }
+
+        /// <summary>
+        /// The person asked to try again (clicked the credits badge, or came back from
+        /// buying a plan). Forgets the refusal and the wait so the next attempt asks the
+        /// server instead of assuming.
+        /// </summary>
+        public static void ForceSpeechRetry()
+        {
+            lock (_smKeyLock)
+            {
+                _speechmaticsRetryAfterUtc = DateTime.MinValue;
+                SpeechmaticsLastStatusCode = 0;
+                SpeechmaticsOutOfListeningTime = false;
+                SpeechmaticsOutOfCredits = false;
+                _smKeyInFlight = null;
+            }
+        }
+
 #if DEBUG
         /// <summary>Developer builds only: see the out-of-listening-time screens without a real 402.</summary>
         internal static void SimulateOutOfListeningTime()
         {
             SpeechmaticsOutOfListeningTime = true;
-            SpeechmaticsLastStatusCode = 402;
+            SpeechmaticsLastStatusCode = 429;   // as in the tester's log: refused, then rate limited
         }
 #endif
         /// <summary>When the current transcription token stops working.</summary>
@@ -182,14 +205,25 @@ namespace InterviewCopilot
                         // limits existed.
                         bool audioLimit = body.Contains("audio-limit", StringComparison.OrdinalIgnoreCase)
                                        || body.Contains("listening time", StringComparison.OrdinalIgnoreCase);
-                        lock (_smKeyLock) SpeechmaticsOutOfListeningTime = audioLimit;
+                        lock (_smKeyLock)
+                        {
+                            SpeechmaticsOutOfListeningTime = audioLimit;
+                            SpeechmaticsOutOfCredits = !audioLimit;
+                        }
                         DebugWindow.Log("STT_KEY", audioLimit
                             ? "402: monthly listening time used up"
                             : "402: out of credits");
                     }
 
+                    // A 402 is an answer, not a glitch: asking again in 30 seconds gets the
+                    // same answer. The server allows a signed-in account only 12 key requests
+                    // an hour and counts refused ones too, so retrying every 30 seconds used
+                    // them all in six minutes and every later reply was a rate limit, which
+                    // then hid the real reason from the person (a tester, 2026-09-29). Wait
+                    // five minutes; the badge and the mic ask again on demand.
                     lock (_smKeyLock)
-                        _speechmaticsRetryAfterUtc = DateTime.UtcNow.AddSeconds(30);
+                        _speechmaticsRetryAfterUtc = DateTime.UtcNow.AddSeconds(
+                            (int)res.StatusCode == 402 ? 300 : 30);
                     DebugWindow.Log("STT_KEY", $"HTTP {(int)res.StatusCode}");
                     return false;
                 }
@@ -216,6 +250,7 @@ namespace InterviewCopilot
                     _speechmaticsRetryAfterUtc = DateTime.MinValue;
                     SpeechmaticsLastStatusCode = 0;
                     SpeechmaticsOutOfListeningTime = false;
+                    SpeechmaticsOutOfCredits = false;
                 }
                 SaveCachedSpeechmaticsKey();
                 DebugWindow.Log("STT_KEY", $"Temporary key fetched; valid for {expiresIn} seconds"

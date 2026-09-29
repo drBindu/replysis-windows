@@ -1,3 +1,24 @@
+## A rate limit reply hid "no listening time"; the app hammered the key endpoint (2026-09-29, Windows 1.0.28)
+
+A Free tester updated to 1.0.27 and still got nothing, and now not even the explanation.
+Her log: `STT_KEY Rate limited; retrying in 60 seconds`, `0 listening minutes left`.
+
+- **Cause 1, the server allows a signed-in account 12 speech-key requests an hour**
+  (`SttController.PER_IDENTITY_PER_HOUR`) and counts refused ones too (`SimpleRateLimiter`
+  increments before checking). After a 402 the client retried every 30 seconds, so the twelve
+  were gone in six minutes and every later answer was 429.
+- **Cause 2, the app forgot why.** Problem detection looked at the latest status code, so the 429
+  replaced the 402 and the screen fell back to "reconnecting", explaining nothing.
+- **Fix:** a definite refusal is remembered (`SpeechmaticsOutOfListeningTime`,
+  `SpeechmaticsOutOfCredits`) and beats the latest code in `ListeningProblems.Detect`. After a 402 the
+  client waits five minutes, not 30 seconds. Clicking the credits badge asks again
+  (`UserSession.ForceSpeechRetry`), so someone who just upgraded is not stuck. Tests in
+  `ListeningProblemTests`. The Mac client, if it retries on a short timer after 402, will do the same.
+- **Her allowance was already spent** under the old mic-open metering: 59 minutes recorded against
+  a limit of 15, for 9 answers. Only that one account was over its limit.
+
+---
+
 ## One meter: credits only. Listening counted as speech. Slower scrolling. (2026-09-29, Windows 1.0.27)
 
 **Owner's decisions, in his words:** the free tier is 20 questions, 5 credits each, so

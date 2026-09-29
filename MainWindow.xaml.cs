@@ -1052,6 +1052,16 @@ namespace InterviewCopilot
 
         private async void CreditsBadge_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
+            // Clicking the balance also asks the speech service again, so someone who has
+            // just upgraded or topped up does not have to restart the app or wait.
+            if (!_engineOnline && CurrentProblem() is { } p &&
+                p is ListeningProblems.Kind.NoListeningTime or ListeningProblems.Kind.NoCredits)
+            {
+                UserSession.ForceSpeechRetry();
+                _problemsShown.Clear();
+                DebugWindow.Log("MODE", "Balance clicked: asking the speech service again.");
+                _ = InitializeSpeechPipelineAsync();
+            }
             await OpenCreditsDetailsAsync();
         }
 
@@ -2124,6 +2134,7 @@ namespace InterviewCopilot
             _engineOnline,
             UserSession.SpeechmaticsLastStatusCode,
             UserSession.SpeechmaticsOutOfListeningTime,
+            outOfCredits: UserSession.SpeechmaticsOutOfCredits,
             waitingToRetry: DateTime.UtcNow < UserSession.SpeechmaticsRetryAfterUtc ||
                             (_engineRestartCount > 0 && DateTime.UtcNow < _nextEngineRestartUtc),
             fatalNoMicrophone: _engineAuthFailed &&

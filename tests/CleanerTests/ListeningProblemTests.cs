@@ -58,8 +58,8 @@ internal static class ListeningProblemTests
 
         // Detection
         ListeningProblems.Kind? D(bool online = false, int code = 0, bool audio = false, bool wait = false,
-                                  bool noMic = false, bool stalled = false) =>
-            ListeningProblems.Detect(online, code, audio, wait, noMic, stalled);
+                                  bool noMic = false, bool stalled = false, bool credits = false) =>
+            ListeningProblems.Detect(online, code, audio, wait, noMic, stalled, credits);
         Check(D(online: true, code: 402) is null, "nothing is wrong while it is hearing");
         Check(D(code: 402, audio: true) == ListeningProblems.Kind.NoListeningTime, "402 for listening time");
         Check(D(code: 402, audio: false) == ListeningProblems.Kind.NoCredits, "402 for credits");
@@ -69,6 +69,18 @@ internal static class ListeningProblemTests
         Check(D(noMic: true) == ListeningProblems.Kind.NoMicrophone, "no microphone");
         Check(D(stalled: true) == ListeningProblems.Kind.NoSpeechService, "a stalled connection");
         Check(D() is null, "just starting is not a problem");
+
+        // The bug a tester met: after "no listening time" the app kept asking, hit the
+        // hourly request limit, and the rate limit reply hid the real reason.
+        Check(D(code: 429, audio: true, wait: true) == ListeningProblems.Kind.NoListeningTime,
+            "a rate limit reply does not hide 'no listening time'");
+        Check(D(code: 429, credits: true, wait: true) == ListeningProblems.Kind.NoCredits,
+            "a rate limit reply does not hide 'no credits'");
+        Check(D(code: 0, audio: true) == ListeningProblems.Kind.NoListeningTime,
+            "the reason survives the status code being cleared");
+        Check(D(online: true, code: 429, audio: true) is null, "once it is hearing, nothing is wrong");
+        Check(D(code: 429, wait: true) == ListeningProblems.Kind.WaitingToReconnect,
+            "a rate limit with no known reason is just a reconnect");
 
         // What one answer costs in the words matches the server's number.
         Check(MainWindow.AnswerCreditCost == 5, "an answer costs 5 credits, as INTERVIEW_QUESTION_COST on the server");
