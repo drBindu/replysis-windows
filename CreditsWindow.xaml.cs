@@ -31,7 +31,7 @@ namespace InterviewCopilot
             }
             else
             {
-                CreditsAmountText.Text = $"{UserSession.Credits:N0} credits";
+                CreditsAmountText.Text = PlanFacts.AnswersLabel(UserSession.Credits);
                 // The numbers live in PlanFacts, which check-sync compares with the website
                 // and the server. lifetime/teams are retired plans, kept only so an existing
                 // account still shows its real allowance instead of silently falling to free.

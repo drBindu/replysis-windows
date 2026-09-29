@@ -38,7 +38,26 @@ namespace InterviewCopilot
         internal static bool IsFreeTrial(string? plan, bool signedIn) =>
             !signedIn || MonthlyCredits(plan) == FreeCredits;
 
+        /// <summary>What a balance can actually buy: rounded down, never overstated (12 credits is 2 answers).</summary>
         internal static int Answers(int credits) => Math.Max(0, credits) / AnswerCost;
+
+        /// <summary>"12", or "1.5k" on the badge.</summary>
+        internal static string AnswersShort(int credits)
+        {
+            int a = Answers(credits);
+            return a >= 1000 ? $"{a / 1000.0:F1}k" : a.ToString("N0");
+        }
+
+        /// <summary>"1 answer" or "12 answers".</summary>
+        internal static string AnswersLabel(int credits)
+        {
+            int a = Answers(credits);
+            return $"{a:N0} {(a == 1 ? "answer" : "answers")}";
+        }
+
+        /// <summary>The badge text at the top of the app: "12 answers", "1.5k answers".</summary>
+        internal static string BadgeText(int credits) =>
+            $"{AnswersShort(credits)} {(Answers(credits) == 1 ? "answer" : "answers")}";
 
         /// <summary>Interviews worth of answers, rounded down to a multiple of five, at least one.</summary>
         internal static int InterviewsFor(int credits) =>
@@ -48,8 +67,7 @@ namespace InterviewCopilot
         internal static string AllowanceText(string? plan, bool signedIn)
         {
             if (IsFreeTrial(plan, signedIn)) return $"{Answers(FreeCredits)} answers, one time";
-            int credits = MonthlyCredits(plan);
-            return $"{credits:N0} credits each month";
+            return $"{Answers(MonthlyCredits(plan)):N0} answers each month";
         }
     }
 }

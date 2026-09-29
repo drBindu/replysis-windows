@@ -717,8 +717,7 @@ namespace InterviewCopilot
             else
             {
                 int credits = UserSession.Credits;
-                string creditStr = credits >= 1000 ? $"{credits / 1000.0:F1}k credits" : credits > 0 ? $"{credits} credits" : "0 credits";
-                PopupCreditsAmount.Text = creditStr;
+                PopupCreditsAmount.Text = PlanFacts.BadgeText(credits);
                 string color = credits > 5 ? "#FFFFFF" : "#F87171";
                 PopupCreditsAmount.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
                 PopupCreditsPlan.Text = loggedIn ? $"{UserSession.Plan} plan" : "Free trial";
@@ -970,7 +969,7 @@ namespace InterviewCopilot
 
                 if (!res.IsSuccessStatusCode)
                 {
-                    Dispatcher.Invoke(() => { CreditsLabel.Text = "Credits"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
+                    Dispatcher.Invoke(() => { CreditsLabel.Text = "Answers"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
                     return;
                 }
 
@@ -1023,7 +1022,7 @@ namespace InterviewCopilot
                         // no hours, nothing". Listening is still limited on the server
                         // as a fair use guard, and says so in words only if it is ever hit.
                         bool limitReached = _audioMinutesRemaining == 0;
-                        CreditsLabel.Text = $"{display} credits";
+                        CreditsLabel.Text = PlanFacts.BadgeText(credits);
                         if (CreditsBadge != null)
                             CreditsBadge.ToolTip = ExplainCredits(credits, limitReached, OnFreeTrial());
                         CreditsIcon.Text = "";
@@ -1052,7 +1051,7 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => { CreditsLabel.Text = "Credits"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
+                Dispatcher.Invoke(() => { CreditsLabel.Text = "Answers"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
                 CLog($"EXCEPTION {ex.GetType().Name}: {ex.Message}");
             }
             }
@@ -2164,9 +2163,9 @@ namespace InterviewCopilot
             int answers = Math.Max(0, credits) / AnswerCreditCost;
             // The free answers are one time; saying "this month" would promise a refill that never comes.
             string line = freeTrial
-                ? $"{credits:N0} credits, about {answers:N0} free answers left. Free answers do not refresh."
-                : $"{credits:N0} credits, about {answers:N0} answers left this month.";
-            string cost = $"Each answer or screen read costs {AnswerCreditCost} credits.";
+                ? $"About {answers:N0} free answers left. Free answers do not refresh."
+                : $"About {answers:N0} answers left this month.";
+            string cost = "Each answer or screen read uses one answer.";
             return limitReached
                 ? $"{line}\n{cost}\nYou have reached this month's fair use limit for listening, so nothing more can be heard until it renews. Click for plans."
                 : $"{line}\n{cost}\nClick for plans.";
@@ -2204,15 +2203,21 @@ namespace InterviewCopilot
             if (!_problemsShown.Add(kind)) return;
             var d = ListeningProblems.Describe(kind, OnFreeTrial());
             DebugWindow.Log("MODE", $"Problem shown to the user: {kind}.");
+            // Out of answers goes to the account, where "Add more answers" (no subscription) and the
+            // plans are both offered; the listening limit goes to the plans.
+            string page = d.Step == ListeningProblems.NextStep.MoreAnswers
+                ? "https://replysis.com/account#add-answers"
+                : "https://replysis.com/pricing";
             ShowInAppAlert(
                 d.Title, d.Body, persist: true,
-                actionLabel: d.Step == ListeningProblems.NextStep.SeePlans ? "See plans" : null,
-                action: d.Step == ListeningProblems.NextStep.SeePlans
+                actionLabel: d.Step == ListeningProblems.NextStep.MoreAnswers ? "Get more answers"
+                           : d.Step == ListeningProblems.NextStep.SeePlans ? "See plans" : null,
+                action: d.Step != ListeningProblems.NextStep.None
                     ? () =>
                     {
                         try
                         {
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://replysis.com/pricing")
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(page)
                                 { UseShellExecute = true });
                         }
                         catch (Exception ex) { DebugWindow.Log("UPDATE", $"Could not open pricing: {ex.GetType().Name}"); }
@@ -3501,8 +3506,8 @@ namespace InterviewCopilot
                     // put a Windows dialog on screen in the middle of a live,
                     // possibly shared, interview. Shown in-app instead.
                     ShowInAppAlert(
-                        $"You have {UserSession.Credits} credit{(UserSession.Credits == 1 ? "" : "s")} left",
-                        "Open the Replysis pricing page to top up. Your session stays open.");
+                        $"You have {PlanFacts.AnswersLabel(UserSession.Credits)} left",
+                        "Open the answers badge at the top to add more. Your session stays open.");
                     isProcessing = false;
                     UpdateMicUi();
                     return;
@@ -4535,7 +4540,7 @@ namespace InterviewCopilot
             // ── 2. Handle non-200 status codes with plain yields (no try/catch) ─
             int status = (int)res.StatusCode;
             if (status == 402)
-                throw new BackendRequestException("Not enough credits. Open Replysis AI pricing to continue.");
+                throw new BackendRequestException("You are out of answers. Open the answers badge at the top to add more.");
             if (status == 401)
             {
                 UserSession.Clear();
@@ -6809,7 +6814,7 @@ namespace InterviewCopilot
             // "Add available transcription capacity, then restart the audio
             // service from Settings" is an instruction to an operator, and the
             // person reading it cannot do either. It is our capacity, not theirs.
-            const string message = "Speech is temporarily unavailable on our side, and nothing is wrong with your account or your credits. It usually clears within a few minutes. If it does not, please contact support.";
+            const string message = "Speech is temporarily unavailable on our side, and nothing is wrong with your account or your answers. It usually clears within a few minutes. If it does not, please contact support.";
             isListening = false;
             isMuted = true;
             MicIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF6B73"));
@@ -7886,17 +7891,17 @@ namespace InterviewCopilot
                 int remaining = UserSession.Credits;
                 bool isGuest = !UserSession.IsLoggedIn;
                 AiAnswerBox.Text = isGuest
-                    ? $"Your free answers are used ({remaining} credit{(remaining == 1 ? "" : "s")} left).\n\n" +
+                    ? "Your free answers are used.\n\n" +
                       $"Pro gives you {PlanFacts.Answers(PlanFacts.ProCredits):N0} answers a month, enough for about " +
                       $"{PlanFacts.InterviewsFor(PlanFacts.ProCredits)} interviews.\n" +
-                      "Open Plans from the credits badge to upgrade."
+                      "Click the answers count at the top to add answers or upgrade."
                     : OnFreeTrial()
                       ? "Your free answers are used.\n\n" +
                         $"That is what Replysis does in a real interview. Pro gives you {PlanFacts.Answers(PlanFacts.ProCredits):N0} answers a month, " +
                         $"enough for about {PlanFacts.InterviewsFor(PlanFacts.ProCredits)} interviews.\n" +
-                        "Open Plans from the credits badge to upgrade."
-                      : $"Insufficient credits ({remaining} remaining).\n\n" +
-                        "Upgrade your Replysis AI plan to continue\n" +
+                        "Click the answers count at the top to add answers or upgrade."
+                      : "You are out of answers.\n\n" +
+                        "Upgrade your plan or add answers to continue\n" +
                         "using Screen AI and other advanced features.";
                 return;
             }

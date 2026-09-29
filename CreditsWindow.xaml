@@ -1,7 +1,7 @@
 <Window x:Class="InterviewCopilot.CreditsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Replysis AI Credits"
+        Title="Replysis AI Answers"
         Width="420" SizeToContent="Height" MaxHeight="560"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
@@ -26,7 +26,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock Text="CREDITS" Foreground="#34E08A" FontSize="10"
+                    <TextBlock Text="ANSWERS" Foreground="#34E08A" FontSize="10"
                                FontWeight="Bold" FontFamily="Segoe UI"/>
                     <TextBlock Text="Usage and plan" Foreground="#FFFFFF" FontSize="21"
                                FontWeight="SemiBold" FontFamily="Segoe UI" Margin="0,4,0,0"/>
@@ -50,7 +50,7 @@
                                    VerticalAlignment="Center"/>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="CreditsAmountText" Text="25 credits" Foreground="#FFFFFF"
+                        <TextBlock x:Name="CreditsAmountText" Text="5 answers" Foreground="#FFFFFF"
                                    FontSize="22" FontWeight="Bold" FontFamily="Segoe UI"/>
                         <TextBlock x:Name="PlanText" Text="Guest plan" Foreground="#88A0B8"
                                    FontSize="12" FontFamily="Segoe UI" Margin="0,3,0,0"/>
@@ -64,8 +64,8 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="AI answer" Foreground="#9EADBE" FontSize="12.5" FontFamily="Segoe UI"/>
-                    <TextBlock Grid.Column="1" Text="5 credits" Foreground="#FFFFFF" FontSize="12.5"
+                    <TextBlock Text="AI answer or screen read" Foreground="#9EADBE" FontSize="12.5" FontFamily="Segoe UI"/>
+                    <TextBlock Grid.Column="1" Text="1 answer" Foreground="#FFFFFF" FontSize="12.5"
                                FontWeight="SemiBold" FontFamily="Segoe UI"/>
                 </Grid>
                 <Border Height="1" Background="#1B2A3E"/>

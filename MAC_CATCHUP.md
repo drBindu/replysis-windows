@@ -1,3 +1,26 @@
+## Customers see answers, never credits; the packs moved (2026-09-29, Windows 1.0.29)
+
+Owner: "don't expose the credits in detail". Credits stay inside the server and the code; anything a customer can read
+says ANSWERS (5 credits = 1 answer everywhere). The server needs no change.
+
+- **Wording.** The badge says "12 answers" (or "1.5k answers"), the credits window is the answers window, the
+  tooltip says "About 11 answers left this month" or, for the free trial, "About 3 free answers left. Free answers do
+  not refresh." No number of credits appears anywhere. `PlanFacts.BadgeText / AnswersLabel / Answers` is the pattern.
+- **Rounding.** What someone HAS rounds down (12 credits is 2 answers), so it never overstates. Costs are whole answers.
+- **The packs left the pricing page** (three plans and three packs side by side made Pro look like the worse deal). They
+  are offered only where someone has just run out, and in the account under "Add more answers"
+  (`https://replysis.com/account#add-answers`), for Free, Pro and Max alike, in rupees in India. Windows: running out
+  of answers shows a "Get more answers" button that opens that page (`NextStep.MoreAnswers`); the listening limit
+  still opens the plans. The account page offers Pro and the packs together.
+- **Stripe.** The pack products are renamed "Replysis Quick Boost - 100 answers", "Replysis Interview Sprint - 300
+  answers" and "Replysis Best Value - 1,000 answers", because that name is what Stripe's own checkout page shows.
+  A pack purchase now returns to `/account?answers=added`.
+- **Terms** say "Answers" where they said "Credits". Worth a lawyer's glance, since the unit changed.
+- `check-sync.mjs` now fails if a customer screen says a number of credits, or "credits left/remaining", or if the packs
+  come back to the pricing page. **A Mac app that still says credits fails the same test once it has a `PlanFacts`.**
+
+---
+
 ## New plans: 5 free answers once, Pro 500 a month, Max 1,500 a month (2026-09-29, Windows 1.0.29)
 
 Decided with the owner. The server enforces it (deploying it applies to every client, Mac included). The Mac

@@ -41,8 +41,11 @@ internal static class PlanFactsTests
         Check(PlanFacts.IsFreeTrial("free", true) && PlanFacts.IsFreeTrial(null, false) && !PlanFacts.IsFreeTrial("pro", true),
             "Free and guests are the trial; Pro is not");
         Check(PlanFacts.AllowanceText("free", true) == "5 answers, one time", "the credits window says one time for Free");
-        Check(PlanFacts.AllowanceText("pro", true) == "2,500 credits each month" && PlanFacts.AllowanceText("max", true) == "7,500 credits each month",
-            "the credits window says each month for paid plans");
+        Check(PlanFacts.AllowanceText("pro", true) == "500 answers each month" && PlanFacts.AllowanceText("max", true) == "1,500 answers each month",
+            "the answers window says each month for paid plans");
+        Check(PlanFacts.BadgeText(15) == "3 answers" && PlanFacts.BadgeText(5) == "1 answer" && PlanFacts.BadgeText(0) == "0 answers" &&
+              PlanFacts.BadgeText(7_500) == "1.5k answers" && PlanFacts.BadgeText(12) == "2 answers",
+            "the badge says answers, rounded down so it never overstates (12 credits is 2 answers)");
 
         var trial = MainWindow.ExplainCredits(15, false, freeTrial: true);
         Check(trial.Contains("3 free answers") && trial.Contains("do not refresh") && !trial.Contains("this month"),
@@ -54,14 +57,16 @@ internal static class PlanFactsTests
         // in words, with no number that could drift from the server.
         var end = ListeningProblems.Describe(ListeningProblems.Kind.NoCredits, freeTrial: true);
         Check(end.Title == "Your free answers are used", "the end of the trial is named as the end of a trial");
-        Check(end.Body.Contains("Pro") && end.Step == ListeningProblems.NextStep.SeePlans,
-            "and points to Pro with a See plans button");
+        Check(end.Body.Contains("Pro") && end.Step == ListeningProblems.NextStep.MoreAnswers,
+            "and points to Pro and to adding answers");
         Check(!Regex.IsMatch(end.Title + end.Body, @"\d"), "and states no number");
         Check(!end.Body.Contains("renew", StringComparison.OrdinalIgnoreCase),
             "and never says the answers will renew");
         Check(!(end.Title + end.Body).Any(ch => ch is '—' or '–' or '·' or '•'), "and follows the no dashes, no middle dots rule");
         Check(ListeningProblems.Describe(ListeningProblems.Kind.NoCredits).Body.Contains("renew"),
             "a paid plan that runs out is still told they renew");
+        Check(!Regex.IsMatch(ListeningProblems.Describe(ListeningProblems.Kind.NoCredits).Title + ListeningProblems.Describe(ListeningProblems.Kind.NoCredits).Body, "credit", RegexOptions.IgnoreCase),
+            "and no screen the app shows says credits");
 
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "plan facts: all passed" : $"plan facts: {failed} FAILED");

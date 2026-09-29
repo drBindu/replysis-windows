@@ -339,10 +339,10 @@
                         <TextBlock x:Name="AccountLabel" Foreground="#EAF1F8" FontSize="12" FontWeight="SemiBold" FontFamily="Segoe UI" HorizontalAlignment="Right"/>
                     </Grid>
                     <Grid Margin="0,0,0,14">
-                        <TextBlock Text="Credits"  Foreground="#7E90A8" FontSize="12" FontFamily="Segoe UI"/>
+                        <TextBlock Text="Answers"  Foreground="#7E90A8" FontSize="12" FontFamily="Segoe UI"/>
                         <TextBlock x:Name="CreditsAboutLabel" Foreground="#FFFFFF" FontSize="12" FontFamily="Segoe UI" FontWeight="SemiBold" HorizontalAlignment="Right"/>
                     </Grid>
-                    <Button x:Name="SignInSettingsBtn" Content="Sign in for more credits"
+                    <Button x:Name="SignInSettingsBtn" Content="Sign in for more answers"
                             Click="SignInSettingsBtn_Click"
                             Style="{StaticResource PremiumSecondaryButton}"
                             Height="36" MinWidth="0" Padding="14,0" Margin="0,0,0,8"

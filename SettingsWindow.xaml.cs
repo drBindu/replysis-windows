@@ -109,7 +109,7 @@ namespace InterviewCopilot
             if (UserSession.IsUnlimited)
                 CreditsAboutLabel.Text = "Unlimited";
             else if (UserSession.Credits > 0)
-                CreditsAboutLabel.Text = $"{UserSession.Credits} left";
+                CreditsAboutLabel.Text = $"{PlanFacts.Answers(UserSession.Credits)} left";
             else
                 CreditsAboutLabel.Text = UserSession.IsLoggedIn ? "0 left" : "Loading...";
             SignInSettingsBtn.Visibility = UserSession.IsLoggedIn

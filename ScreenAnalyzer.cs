@@ -1584,7 +1584,7 @@ namespace InterviewCopilot
         {
             System.Net.HttpStatusCode.Unauthorized => "Please sign in to use Screen AI.",
             System.Net.HttpStatusCode.PaymentRequired =>
-                "Insufficient credits.\n\nUpgrade your Replysis AI plan to continue using Screen AI.",
+                "You are out of answers.\n\nUpgrade your plan or add answers to continue using Screen AI.",
             System.Net.HttpStatusCode.BadRequest => "Could not analyze this screenshot. Please try again.",
             _ => "Screen AI is temporarily unavailable. Please try again."
         };

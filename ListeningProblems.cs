@@ -33,7 +33,7 @@ namespace InterviewCopilot
             NoSpeechService,
         }
 
-        internal enum NextStep { None, SeePlans }
+        internal enum NextStep { None, SeePlans, MoreAnswers }
 
         internal readonly record struct Description(string Label, string Title, string Body, NextStep Step);
 
@@ -45,25 +45,25 @@ namespace InterviewCopilot
         internal static Description Describe(Kind kind, bool freeTrial = false) => kind switch
         {
             Kind.NoCredits when freeTrial => new(
-                "NO CREDITS",
+                "NO ANSWERS",
                 "Your free answers are used",
                 "That is what Replysis does in a real interview. Pro gives you a whole month of answers, " +
-                "enough for many interviews, and you can cancel any time.",
-                NextStep.SeePlans),
+                "enough for many interviews, and you can cancel any time. Or add a few answers with no subscription.",
+                NextStep.MoreAnswers),
 
             Kind.NoListeningTime => new(
                 "MONTHLY LIMIT",
                 "Monthly listening limit reached",
-                "You have reached this month's fair use limit for listening. You still have credits, but nothing " +
+                "You have reached this month's fair use limit for listening. You still have answers left, but nothing " +
                 "more can be heard until the limit renews or you upgrade. Reading your screen with F8 still works.",
                 NextStep.SeePlans),
 
             Kind.NoCredits => new(
-                "NO CREDITS",
-                "No credits left this month",
-                "Credits pay for every answer and screen read. Yours are used up, so Replysis cannot answer " +
-                "until they renew or you upgrade.",
-                NextStep.SeePlans),
+                "NO ANSWERS",
+                "No answers left this month",
+                "Every answer and screen read uses one of your answers. You have used them all, so Replysis cannot answer " +
+                "until they renew, you add more, or you upgrade.",
+                NextStep.MoreAnswers),
 
             Kind.SignInExpired => new(
                 "SIGN IN",

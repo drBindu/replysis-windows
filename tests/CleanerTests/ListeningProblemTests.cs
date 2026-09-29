@@ -48,13 +48,13 @@ internal static class ListeningProblemTests
 
         // The limits are told apart, and the two meters are named.
         var time = ListeningProblems.Describe(ListeningProblems.Kind.NoListeningTime);
-        Check(time.Body.Contains("You still have credits"),
-            "monthly limit: says credits are fine, so credits left over is not a contradiction");
+        Check(time.Body.Contains("You still have answers left"),
+            "monthly limit: says answers are fine, so answers left over is not a contradiction");
         Check(time.Body.Contains("fair use"), "monthly limit: calls it a fair use limit");
         Check(time.Body.Contains("F8"), "no listening time: says what still works");
         Check(time.Step == ListeningProblems.NextStep.SeePlans, "no listening time: offers plans");
-        Check(ListeningProblems.Describe(ListeningProblems.Kind.NoCredits).Step == ListeningProblems.NextStep.SeePlans,
-            "no credits: offers plans");
+        Check(ListeningProblems.Describe(ListeningProblems.Kind.NoCredits).Step == ListeningProblems.NextStep.MoreAnswers,
+            "no answers: offers to add answers or upgrade");
 
         // Detection
         ListeningProblems.Kind? D(bool online = false, int code = 0, bool audio = false, bool wait = false,
@@ -84,12 +84,13 @@ internal static class ListeningProblemTests
 
         // What one answer costs in the words matches the server's number.
         Check(MainWindow.AnswerCreditCost == 5, "an answer costs 5 credits, as INTERVIEW_QUESTION_COST on the server");
-        Check(MainWindow.ExplainCredits(55, false).Contains("about 11 answers left"),
+        Check(MainWindow.ExplainCredits(55, false).Contains("About 11 answers left"),
             "55 credits reads as about 11 answers");
-        Check(MainWindow.ExplainCredits(100, false).Contains("about 20 answers"),
-            "a free account's 100 credits reads as 20 answers");
-        Check(MainWindow.ExplainCredits(55, false).Contains($"{MainWindow.AnswerCreditCost} credits"),
-            "the tooltip states the cost from the same constant");
+        Check(MainWindow.ExplainCredits(100, false).Contains("About 20 answers"),
+            "100 credits reads as 20 answers");
+        Check(MainWindow.ExplainCredits(55, false).Contains("uses one answer") &&
+              !Regex.IsMatch(MainWindow.ExplainCredits(55, false), "credits?", RegexOptions.IgnoreCase),
+            "the tooltip talks in answers and never says credits");
         Check(!Regex.IsMatch(MainWindow.ExplainCredits(55, true), @"\b(minutes?|hours?)\b"),
             "even at the limit, the tooltip never talks in minutes");
 
