@@ -1,3 +1,18 @@
+## Opened with no connection yet: the app threw people to the sign-in screen (2026-10-01, Windows 1.0.30)
+
+Found by the offline launch scenario, and it matches a tester's photo: the sign-in window with "Welcome back" and the saved email filled in.
+The id token lasts an hour. Opening the app later than that needs a refresh before the window can open, and if that refresh failed for ANY
+reason, including "the Wi-Fi is not up yet" or "the hotspot is still connecting", the app showed the sign-in screen. Anyone who opens the
+app within seconds of waking the laptop was asked to sign in again, every time. **Now:** Google refusing the saved sign-in (HTTP 400, 401
+or 403: revoked, disabled) is the only thing that asks for a new one (`UserSession.ClassifyRefreshStatus`). No connection, a timeout, a 429
+or any 5xx waits 3 s, asks once more, and then opens the app signed in with the saved sign-in; every request refreshes first and retries on
+a 401, so it catches up by itself when the network returns (`ContinueOfflineWithSavedSession`). **Check the Mac for the same: a failed
+silent refresh at launch must never show the sign-in screen unless the server refused the sign-in.** The wake scenarios also needed a fresh
+sign-in to run at all; the developer hook now fakes one at any age (`REPLYSIS_STALE_TOKEN`), and `wake-network-late` now keeps the fake
+server down for 25 s because launch itself now spends about 11 s retrying.
+
+---
+
 ## Choosing Practice while Auto was idle never opened the microphone (2026-10-01, Windows 1.0.30)
 
 A tester in Auto, Interview mode, clicked Practice and spoke; nothing happened, ever. Interview mode hears the meeting only. The switch

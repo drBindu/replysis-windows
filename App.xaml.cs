@@ -101,10 +101,36 @@ namespace InterviewCopilot
                 if (!sessionRestored && !string.IsNullOrEmpty(UserSession.RefreshToken))
                 {
                     DebugWindow.Log("AUTH", "Saved ID token expired - refreshing session before launch");
-                    sessionRestored = await UserSession.TryRefreshAsync(force: true);
-                    DebugWindow.Log("AUTH", sessionRestored
-                        ? "Saved session restored"
-                        : "Saved session could not be refreshed");
+                    var outcome = await UserSession.RefreshAsync(force: true);
+
+                    // A laptop opened before its Wi-Fi is up, a hotspot still connecting: wait a moment and ask
+                    // once more before deciding anything. Most of the time the network is back within seconds.
+                    if (outcome == UserSession.RefreshOutcome.NoConnection)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(3));
+                        outcome = await UserSession.RefreshAsync(force: true);
+                    }
+
+                    if (outcome == UserSession.RefreshOutcome.Refreshed)
+                    {
+                        sessionRestored = true;
+                        DebugWindow.Log("AUTH", "Saved session restored");
+                    }
+                    else if (outcome == UserSession.RefreshOutcome.NoConnection)
+                    {
+                        // No connection is not a sign-out. Open signed in with what was saved; every request
+                        // refreshes first and retries, so the app catches up by itself when the network is back.
+                        // Showing the sign-in screen here made people sign in again every time they opened the
+                        // app before their Wi-Fi had connected.
+                        sessionRestored = UserSession.ContinueOfflineWithSavedSession();
+                        DebugWindow.Log("AUTH", sessionRestored
+                            ? "No connection at launch; opening signed in and refreshing when the network is back"
+                            : "No connection at launch and no saved sign-in to continue with");
+                    }
+                    else
+                    {
+                        DebugWindow.Log("AUTH", "Saved session could not be refreshed: the sign-in was refused");
+                    }
                 }
 
                 bool interactiveLogin = !sessionRestored;

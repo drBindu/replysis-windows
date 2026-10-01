@@ -30,6 +30,19 @@ internal static class ClientErrorReporterTests
         for (int i = 0; i < 20; i++) if (ClientErrorReporter.ShouldSend("fault-" + i)) sent++;
         Check(sent + 1 <= ClientErrorReporter.MaxPerRun, "never more than a few a run");
 
+        // A sign-in refresh that fails for want of a connection is not a sign-out.
+        Check(UserSession.ClassifyRefreshStatus(200) == UserSession.RefreshOutcome.Refreshed, "a good reply refreshes");
+        Check(UserSession.ClassifyRefreshStatus(400) == UserSession.RefreshOutcome.Refused &&
+              UserSession.ClassifyRefreshStatus(401) == UserSession.RefreshOutcome.Refused &&
+              UserSession.ClassifyRefreshStatus(403) == UserSession.RefreshOutcome.Refused,
+            "Google refusing the saved sign-in (revoked, disabled) is the only thing that asks for a new one");
+        Check(UserSession.ClassifyRefreshStatus(500) == UserSession.RefreshOutcome.NoConnection &&
+              UserSession.ClassifyRefreshStatus(503) == UserSession.RefreshOutcome.NoConnection &&
+              UserSession.ClassifyRefreshStatus(429) == UserSession.RefreshOutcome.NoConnection &&
+              UserSession.ClassifyRefreshStatus(408) == UserSession.RefreshOutcome.NoConnection,
+            "an outage, a rate limit or a timeout never signs anybody out");
+        Check(!UserSession.ContinueOfflineWithSavedSession(), "with nothing saved there is nothing to continue with");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "client error reporter: all passed" : $"client error reporter: {failed} FAILED");
         return failed;

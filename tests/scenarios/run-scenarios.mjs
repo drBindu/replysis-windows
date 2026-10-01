@@ -44,7 +44,7 @@ const CASES = [
   // ... and the network is not up yet when the app first asks. It must keep asking, in seconds,
   // and reach the real answer once the server can be reached.
   { name: "wake-network-late", scenario: "no-listening", problem: "NoListeningTime", banner: true, words: ["fair use"],
-    startMockMs: 12_000, waitMs: 45_000, forbid: ["SignInExpired"] },
+    startMockMs: 25_000, waitMs: 60_000, forbid: ["SignInExpired"] },
 ];
 const only = process.argv[2];
 const cases = only ? CASES.filter((c) => c.name === only) : CASES;

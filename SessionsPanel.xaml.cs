@@ -822,8 +822,14 @@ namespace InterviewCopilot
                 // Was dumping the raw internal lines, so the exported file still
                 // carried the "SESSION n | model | date" header and Q:/A: prefixes.
                 File.WriteAllText(dlg.FileName, BuildTranscriptDocument(_selectedSession), Encoding.UTF8);
-                MessageBox.Show(Window.GetWindow(this), "Session exported successfully.", "Export Complete",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                // No "exported successfully" dialog: the person just chose where to save it and watched the
+                // dialog close. The button says so instead, the way Copy does.
+                var exportButton = ExportBtn;
+                object? original = exportButton.Content;
+                exportButton.Content = "Exported";
+                var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                timer.Tick += (_, _) => { exportButton.Content = original; timer.Stop(); };
+                timer.Start();
             }
             catch (Exception ex)
             {

@@ -1314,26 +1314,6 @@ namespace InterviewCopilot
 
         private DispatcherTimer? _alertTimer;
 
-        /// <summary>Routes an alert to whichever surface is currently on screen.</summary>
-        internal static void Alert(string title, string message)
-        {
-            var main = System.Windows.Application.Current?.MainWindow as MainWindow;
-            if (main == null)
-            {
-                // No window yet (startup faults). A dialog is the only option left,
-                // and nothing is being shared at this point anyway.
-                try
-                {
-                    MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch { }
-                return;
-            }
-
-            try { main.Dispatcher.Invoke(() => main.ShowInAppAlert(title, message)); }
-            catch { }
-        }
-
         /// <param name="persist">
         /// Keep the banner up until dismissed. Used for faults the user has to act
         /// on, which a timed banner would hide again before they had read it.

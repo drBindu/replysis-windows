@@ -33,6 +33,9 @@ namespace InterviewCopilot
         // ── Cached SavedAt — avoids reading disk on every IsTokenExpired() call ──
         private static DateTime _savedAt = DateTime.MinValue;
 
+        // The id token as saved, kept even when it is too old to trust, for an offline start (see ContinueOfflineWithSavedSession).
+        private static string _savedIdToken = "";
+
         // ── Refresh token concurrency guard — prevents double-POST on simultaneous expiry ──
         private static readonly SemaphoreSlim _refreshSem = new(1, 1);
         internal static readonly OperationEpoch Identity = new();
@@ -608,6 +611,7 @@ namespace InterviewCopilot
 
                 // Cache the SavedAt timestamp in memory so IsTokenExpired() never reads disk again
                 _savedAt = data.SavedAt;
+                _savedIdToken = data.IdToken ?? "";
 
                 // Always load identity fields + refresh token so caller can attempt silent refresh
                 RefreshToken = data.RefreshToken ?? "";
@@ -618,7 +622,16 @@ namespace InterviewCopilot
 
                 // Token expires after 1 hour — if saved > 55 min ago return false but keep
                 // RefreshToken so the caller can call TryRefreshAsync() without forcing re-login.
-                if ((DateTime.UtcNow - data.SavedAt).TotalMinutes > 55)
+                bool tooOldToTrust = (DateTime.UtcNow - data.SavedAt).TotalMinutes > 55;
+#if DEBUG
+                // The wake scenarios fake a stale token and so need a signed-in start at any age. Without this
+                // they only passed when the saved sign-in happened to be under an hour old, which is why they
+                // "failed" on a laptop that had been left overnight.
+                if (tooOldToTrust && TestTokenServerActive &&
+                    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("REPLYSIS_STALE_TOKEN")))
+                    tooOldToTrust = false;
+#endif
+                if (tooOldToTrust)
                     return false;
 
                 IdToken = data.IdToken ?? "";
@@ -706,18 +719,49 @@ namespace InterviewCopilot
         /// refreshing anything, so the token could never be repaired and the only
         /// remaining path was to sign the user out.
         /// </summary>
-        public static async Task<bool> TryRefreshAsync(bool force = false)
+        /// <summary>
+        /// How a sign-in refresh ended. "Refused" is Google saying the saved sign-in is no good (revoked, password
+        /// changed): only then is the person asked to sign in again. "NoConnection" is everything else: no network
+        /// yet, a slow hotspot, Google briefly unavailable. That must never throw someone to a sign-in screen
+        /// (2026-10-01: a laptop opened before its Wi-Fi was up showed "Welcome back, sign in" every morning).
+        /// </summary>
+        internal enum RefreshOutcome { Refreshed, Refused, NoConnection }
+
+        /// <summary>Classifies the HTTP status of a refresh reply.</summary>
+        internal static RefreshOutcome ClassifyRefreshStatus(int status) => status switch
+        {
+            >= 200 and < 300 => RefreshOutcome.Refreshed,
+            400 or 401 or 403 => RefreshOutcome.Refused,   // INVALID_REFRESH_TOKEN, TOKEN_EXPIRED, USER_DISABLED, USER_NOT_FOUND
+            _ => RefreshOutcome.NoConnection,             // 408, 429 and every 5xx are the service's trouble, not the person's
+        };
+
+        /// <summary>
+        /// Carries on with the saved sign-in when it could not be refreshed for want of a connection. The old id
+        /// token is expired, but it is non-empty, which is what "signed in" means here; every request refreshes
+        /// first and retries on a 401, so the app recovers by itself as soon as the network is back.
+        /// </summary>
+        public static bool ContinueOfflineWithSavedSession()
+        {
+            if (string.IsNullOrEmpty(RefreshToken) || string.IsNullOrEmpty(_savedIdToken)) return false;
+            IdToken = _savedIdToken;
+            return IsLoggedIn;
+        }
+
+        public static async Task<bool> TryRefreshAsync(bool force = false) =>
+            await RefreshAsync(force) == RefreshOutcome.Refreshed;
+
+        internal static async Task<RefreshOutcome> RefreshAsync(bool force = false)
         {
             long identity = Identity.Current;
-            if (string.IsNullOrEmpty(RefreshToken)) return false;
-            if (!force && !IsTokenExpired()) return true;
+            if (string.IsNullOrEmpty(RefreshToken)) return RefreshOutcome.Refused;
+            if (!force && !IsTokenExpired()) return RefreshOutcome.Refreshed;
             await _refreshSem.WaitAsync();
             try
             {
                 // Re-check after acquiring: a concurrent caller may have already refreshed
                 var snapshot = Identity.Capture(() => RefreshToken);
-                if (snapshot.Generation != identity || string.IsNullOrEmpty(snapshot.Value)) return false;
-                if (!force && !IsTokenExpired()) return true;
+                if (snapshot.Generation != identity || string.IsNullOrEmpty(snapshot.Value)) return RefreshOutcome.Refused;
+                if (!force && !IsTokenExpired()) return RefreshOutcome.Refreshed;
 
                 string url = $"https://securetoken.googleapis.com/v1/token?key={FirebaseApiKey}";
 #if DEBUG
@@ -736,15 +780,15 @@ namespace InterviewCopilot
                     // like a dead session rather than a refresh that did not happen.
                     DebugWindow.Log("AUTH",
                         $"Token refresh refused: HTTP {(int)res.StatusCode}");
-                    return false;
+                    return ClassifyRefreshStatus((int)res.StatusCode);
                 }
 
                 using var doc = JsonDocument.Parse(body);
                 string newIdToken  = doc.RootElement.TryGetProperty("id_token",      out var t)  ? t.GetString()  ?? "" : "";
                 string newRefresh  = doc.RootElement.TryGetProperty("refresh_token", out var rt) ? rt.GetString() ?? "" : "";
-                if (string.IsNullOrEmpty(newIdToken)) return false;
+                if (string.IsNullOrEmpty(newIdToken)) return RefreshOutcome.NoConnection;
 
-                return Identity.TryApply(identity, () =>
+                bool applied = Identity.TryApply(identity, () =>
                 {
                     IdToken = newIdToken;
                     if (!string.IsNullOrEmpty(newRefresh)) RefreshToken = newRefresh;
@@ -755,11 +799,12 @@ namespace InterviewCopilot
 #endif
                     SaveToDisk();
                 });
+                return applied ? RefreshOutcome.Refreshed : RefreshOutcome.Refused;
             }
             catch (Exception ex)
             {
                 DebugWindow.Log("AUTH", $"Token refresh failed: {ex.GetType().Name}: {ex.Message}");
-                return false;
+                return RefreshOutcome.NoConnection;
             }
             finally { _refreshSem.Release(); }
         }
