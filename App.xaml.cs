@@ -50,6 +50,10 @@ namespace InterviewCopilot
             // open - would shut the app down before it ever started.
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+            // Load the speech engine's files now, while the person is signing in or filling in Setup, so the real
+            // start does not pay for a new computer scanning them (see EngineWarmup).
+            EngineWarmup.Start();
+
             // The main window restores the saved Firebase session before requesting a
             // transcription credential. Do not prefetch here: doing so treats a returning
             // Pro user as a guest for a few milliseconds and can create a false 402 retry.

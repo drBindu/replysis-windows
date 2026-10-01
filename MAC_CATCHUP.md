@@ -1,3 +1,24 @@
+## The engine ready all day: the hourly pass was never renewed, and a new computer's first start is warmed up (2026-10-01, Windows 1.0.30)
+
+Owner: "the engine has to be ready every time, any time, any situation", after seeing "connecting" on a brand-new PC.
+1. **The hourly speech pass renewal never ran.** The pass is checked only when a connection is made, so a connection already open
+   carries on past the hour. But the engine holds the pass it was started with, so the first drop after the hour (a blip, a wake) reconnects
+   with an expired pass, is refused, and the app has to notice, fetch a new one and restart the engine: tens of seconds of deafness. The
+   code meant to swap it early hung off the listening-meter timer AND returned at once while listening, so it could never run. Now
+   (`SttRenewalRules`, own 30 s timer): with 8 minutes or less left, and nobody mid-question (no answer being produced, no words in the last
+   4 s, Manual not held), it fetches a new pass and restarts the engine; in Auto it stands down, restarts, and the engine coming online re-arms
+   Auto (about 1.3 s). At most one try per 10 minutes. Proven live with `REPLYSIS_STT_RENEW_WINDOW_MIN=59` (developer builds): renewed in the
+   first minute, Auto re-armed, 6 of 6 questions answered afterwards. **Check the Mac: does anything swap the pass before it expires, and does
+   it actually run while Auto is listening?**
+2. **The engine has a `--warmup` flag** (shared file, additive): it loads everything and exits (0.76 s the first time, 0.2 s after). The app
+   runs it once at launch in the background (`EngineWarmup`), so on a new computer Windows scans and caches the seventy-odd engine files while
+   the person signs in or fills in Setup, not while they wait for "connecting". Older engines just reject the flag and exit, harmlessly.
+   **Take the engine change on Mac too (keep the file shared) and warm it the same way.**
+3. The latency test used a hard-coded audio device number that moved when the owner's audio devices changed; it now finds the virtual cable by
+   name. Worth doing in any timing harness: a harness that plays into the wrong device reports "no answer" and looks like an app bug.
+
+---
+
 ## Opened with no connection yet: the app threw people to the sign-in screen (2026-10-01, Windows 1.0.30)
 
 Found by the offline launch scenario, and it matches a tester's photo: the sign-in window with "Welcome back" and the saved email filled in.

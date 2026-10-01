@@ -84,6 +84,25 @@ internal static class AudioSourceTests
         Check(!AudioSourceRules.SwitchMustWait(false, false, false, false, now, DateTime.MinValue),
             "not listening at all: switch now");
 
+        // The hourly speech pass is swapped in a quiet moment, so a reconnect after the hour does not meet an expired one.
+        var t0 = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
+        var window = SttRenewalRules.RenewWithin;
+        Check(!SttRenewalRules.ShouldRenew(t0, t0.AddMinutes(40), DateTime.MinValue, false, false, false, window),
+            "40 minutes left: nothing to do yet");
+        Check(SttRenewalRules.ShouldRenew(t0, t0.AddMinutes(7), DateTime.MinValue, false, false, false, window),
+            "7 minutes left and a quiet moment: renew");
+        Check(!SttRenewalRules.ShouldRenew(t0, t0.AddMinutes(7), DateTime.MinValue, false, true, false, window) &&
+              !SttRenewalRules.ShouldRenew(t0, t0.AddMinutes(7), DateTime.MinValue, false, false, true, window) &&
+              !SttRenewalRules.ShouldRenew(t0, t0.AddMinutes(7), DateTime.MinValue, true, false, false, window),
+            "never while an answer is produced, someone is mid-question, or the engine is starting");
+        Check(SttRenewalRules.ShouldRenew(t0, t0.AddMinutes(-3), DateTime.MinValue, false, false, false, window),
+            "a pass that has already expired is renewed too");
+        Check(!SttRenewalRules.ShouldRenew(t0, t0.AddMinutes(5), t0.AddMinutes(-3), false, false, false, window) &&
+              SttRenewalRules.ShouldRenew(t0, t0.AddMinutes(5), t0.AddMinutes(-11), false, false, false, window),
+            "if renewing keeps failing it waits ten minutes between tries, well under the server's twelve an hour");
+        Check(!SttRenewalRules.ShouldRenew(t0, DateTime.MinValue, DateTime.MinValue, false, false, false, window),
+            "with no pass at all the normal start fetches one");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "audio source: all passed" : $"audio source: {failed} FAILED");
         return failed;

@@ -734,6 +734,10 @@ parser.add_argument("--utterance-silence", type=float, default=0.8,
          "utterance, printed as '>>> UTTERANCE END'. Set to 0 to disable. The "
          "Mac client uses this to decide a turn is over; Windows currently "
          "classifies turn-end from the transcript text and ignores the line.")
+parser.add_argument("--warmup",     action="store_true",
+                    help="Load every module this engine uses and exit. The app runs this once at launch, in the "
+                         "background, so that the first real start on a new computer does not pay for Windows "
+                         "scanning and loading a hundred new files while the person is waiting for it to connect.")
 parser.add_argument("--language",   type=str,   default="en",
                     help="Speechmatics transcription language code (en, hi, te, ta, es, fr, de, ...). "
                          "The engine is forced to hear ONLY this language; audio in any other language is "
@@ -757,6 +761,17 @@ def _accept_single_dash(argv):
     return fixed
 
 args = parser.parse_args(_accept_single_dash(sys.argv[1:]))
+
+if args.warmup:
+    # Everything the real run imports, so every file is opened, scanned and cached now. No audio, no network.
+    try:
+        import websockets  # noqa: F401
+        import ssl  # noqa: F401
+        import asyncio  # noqa: F401
+    except Exception:
+        pass
+    print(">>> WARMUP OK", flush=True)
+    sys.exit(0)
 
 # Hard floor: the Speechmatics RT API rejects max_delay < 0.7 with a protocol_error
 # and refuses the connection entirely. Clamp so no caller can ever break transcription

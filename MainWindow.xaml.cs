@@ -1515,6 +1515,17 @@ namespace InterviewCopilot
         private void ApplyAudioSourceNow()
         {
             _audioSourceChangePending = false;
+            DebugWindow.Log("AUDIO", "Switching now; restarting the speech engine on the new source.");
+            RestartEngineBetweenQuestions();
+        }
+
+        /// <summary>
+        /// Restarts the speech engine at a moment when nobody is mid-question. In Auto the app is "listening"
+        /// between questions, so it stands down first; the engine coming back online re-arms Auto by itself.
+        /// Used for a new audio source and for swapping the hourly speech pass.
+        /// </summary>
+        private void RestartEngineBetweenQuestions()
+        {
             if (isListening)
             {
                 StopListeningMeter();
@@ -1525,7 +1536,6 @@ namespace InterviewCopilot
                 WritePauseFlag();
                 UpdateMicUi();
             }
-            DebugWindow.Log("AUDIO", "Switching now; restarting the speech engine on the new source.");
             StartSpeechmaticsEngine();
         }
 
@@ -1906,7 +1916,6 @@ namespace InterviewCopilot
             {
                 _listeningMeterTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
                 _listeningMeterTimer.Tick += (_, _) => ListeningMeterTick();
-                _listeningMeterTimer.Tick += (_, _) => _ = RenewSttTokenBeforeItExpiresAsync();
             }
             _listeningMeterTimer.Start();
         }
@@ -1939,31 +1948,49 @@ namespace InterviewCopilot
             if (minutes > 0) _ = ReportListeningMinutesAsync(minutes);
         }
 
-        /// <summary>
-        /// Replaces the transcription token before it expires.
-        ///
-        /// The token lasts an hour and the engine holds it for the life of the
-        /// process, so a long interview outlives it. Waiting for the failure costs
-        /// the seconds it takes to notice, refuse, fall back and restart, in the
-        /// middle of a question. Renewing early costs a restart nobody sees.
-        /// </summary>
+        // Swaps the hourly speech pass for a new one before it runs out, in a quiet moment, on its own timer.
+        // See SttRenewalRules for why this matters for an app left open for hours or days.
+        private DispatcherTimer? _sttRenewalTimer;
+
+        private void StartSttRenewalTimer()
+        {
+            if (_sttRenewalTimer != null) return;
+            TimeSpan every = TimeSpan.FromSeconds(30);
+#if DEBUG
+            if (SttRenewalWindowForTest() != null) every = TimeSpan.FromSeconds(5);
+#endif
+            _sttRenewalTimer = new DispatcherTimer { Interval = every };
+            _sttRenewalTimer.Tick += (_, _) => _ = RenewSttTokenBeforeItExpiresAsync();
+            _sttRenewalTimer.Start();
+        }
+
+#if DEBUG
+        /// <summary>Developer builds: REPLYSIS_STT_RENEW_WINDOW_MIN=59 makes the renewal happen about a minute after launch.</summary>
+        private static TimeSpan? SttRenewalWindowForTest() =>
+            int.TryParse(Environment.GetEnvironmentVariable("REPLYSIS_STT_RENEW_WINDOW_MIN"), out int minutes) && minutes > 0
+                ? TimeSpan.FromMinutes(minutes) : null;
+#endif
+
         private async Task RenewSttTokenBeforeItExpiresAsync()
         {
             try
             {
-                if (_engineStarting || _engineRecoveryInProgress || isListening || isProcessing) return;
-                DateTime expiry = UserSession.SttKeyExpiresAtUtc;
-                if (expiry == DateTime.MinValue) return;
-                if (expiry - DateTime.UtcNow > TimeSpan.FromMinutes(8)) return;
-                if (DateTime.UtcNow - _lastTokenRecoveryUtc < TimeSpan.FromMinutes(5)) return;
+                TimeSpan window = SttRenewalRules.RenewWithin;
+#if DEBUG
+                window = SttRenewalWindowForTest() ?? window;
+#endif
+                DateTime now = DateTime.UtcNow;
+                if (!SttRenewalRules.ShouldRenew(now, UserSession.SttKeyExpiresAtUtc, _lastTokenRecoveryUtc,
+                        _engineStarting || _engineRecoveryInProgress, isProcessing, AudioSwitchMustWait(), window))
+                    return;
 
-                _lastTokenRecoveryUtc = DateTime.UtcNow;
-                DebugWindow.Log("STT_KEY", "Token expires soon; renewing it before the next question.");
+                _lastTokenRecoveryUtc = now;
+                DebugWindow.Log("STT_KEY", "Speech pass expires soon; renewing it in a quiet moment.");
                 UserSession.InvalidateSpeechmaticsKey();
                 if (await UserSession.EnsureSpeechmaticsKeyAsync(DeviceIdentity.Current))
                 {
                     _nextEngineRestartUtc = DateTime.MinValue;
-                    StartSpeechmaticsEngine();
+                    RestartEngineBetweenQuestions();
                 }
             }
             catch (Exception ex) { DebugWindow.Log("STT_KEY", $"Early renewal skipped: {ex.Message}"); }
@@ -5739,6 +5766,7 @@ namespace InterviewCopilot
         {
             try
             {
+                StartSttRenewalTimer();
                 _engineAuthFailed = false;
                 _engineUsageLimitReached = false;
                 UpdateMicUi();
