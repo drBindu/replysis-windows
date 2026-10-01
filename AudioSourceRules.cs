@@ -73,6 +73,27 @@ namespace InterviewCopilot
             quietFor >= QuietBeforePracticeTip;
 
         /// <summary>What the toolbar says the app is hearing.</summary>
+        /// <summary>Words heard this recently mean someone is mid-question and the engine must not be restarted.</summary>
+        internal static readonly TimeSpan SpeakingRecently = TimeSpan.FromSeconds(4);
+
+        /// <summary>
+        /// Whether a switch between Interview and Practice has to wait for the current question.
+        ///
+        /// It used to wait whenever the app was listening. Auto is ALWAYS listening between questions, so
+        /// choosing Practice there showed "Practice starts after this question" and then never started: the
+        /// microphone stayed closed, the person spoke, and nothing happened (2026-10-01). Now only a question
+        /// actually in progress makes it wait: an answer being produced, a question being flushed, a person
+        /// speaking right now, or Manual mode after Space was pressed.
+        /// </summary>
+        internal static bool SwitchMustWait(bool autoMode, bool listening, bool answering, bool flushing,
+                                            DateTime now, DateTime lastWordsUtc)
+        {
+            if (answering || flushing) return true;
+            if (!listening) return false;
+            if (!autoMode) return true;                       // Manual: Space was pressed, a question is being taken
+            return lastWordsUtc != DateTime.MinValue && now - lastWordsUtc < SpeakingRecently;
+        }
+
         internal static string HearingLine(bool practiceOn) =>
             practiceOn ? "Hearing the meeting and your microphone" : "Hearing the meeting only";
     }

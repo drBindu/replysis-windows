@@ -1,3 +1,27 @@
+## Choosing Practice while Auto was idle never opened the microphone (2026-10-01, Windows 1.0.30)
+
+A tester in Auto, Interview mode, clicked Practice and spoke; nothing happened, ever. Interview mode hears the meeting only. The switch
+waited "until this question is over", and in Auto the app counts as "listening" at all times between questions, so with nobody asking
+anything the wait never ended and the engine was never restarted with the microphone (log: `MODE: system-audio-only -- mic never
+opened`, no restart after `[AUDIO] Practice: ...`). **Fixed:** the switch waits only for a question in progress (an answer being
+produced, a question being flushed, someone speaking in the last 4 s, or Manual with Space held); otherwise it applies at once, standing
+Auto down so the restarted engine re-arms it (`AudioSourceRules.SwitchMustWait`, `ApplyAudioSourceNow`). A deferred switch is also
+checked on the listening tick, not only when an answer ends. **Check the Mac's Interview/Practice switch for the same dead end.**
+
+---
+
+## No popup for a survivable fault; faults are reported quietly (2026-10-01, Windows 1.0.30)
+
+A new PC showed "Replysis recovered from an unexpected problem ... You can keep working" on every launch, as a dialog (before any
+window exists the in-app banner falls back to a MessageBox). It gave the person nothing to do. **Removed:** a fault the app survives
+is logged and reported, never shown. A fault the app cannot survive still says "Replysis has to close".
+**New server endpoint, usable by the Mac with no server work:** `POST /api/v1/diagnostics/client-error` (no sign in, 30 a hour per
+address, 8 KB) with `{version, os, source, type, message, frames}`; the server strips emails and user names in paths and writes one
+`[CLIENT_ERROR]` line to its log. Windows sends the method names from the stack, never paths, accounts, answers or resumes, at most 6
+a run, each fault once (`ClientErrorReporter`). **The Mac should report the same way and never show a dialog for a survivable fault.**
+
+---
+
 ## A slow connection: the screenshot sent ahead filled it, so answers waited and speech dropped (2026-10-01, Windows 1.0.30)
 
 Measured on the owner's phone hotspot, which uploads only 20 to 50 KB a second. Every 16 seconds Watch Screen captured a 500 KB

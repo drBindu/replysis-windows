@@ -14,9 +14,6 @@ namespace InterviewCopilot
 
         // Suppression window so a repeating fault (e.g. a timer throwing every
         // tick) cannot stack dozens of identical dialogs on top of each other.
-        private static DateTime _lastCrashNoticeUtc = DateTime.MinValue;
-        private static readonly TimeSpan CrashNoticeCooldown = TimeSpan.FromSeconds(30);
-        private static readonly object _crashNoticeLock = new();
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -191,8 +188,11 @@ namespace InterviewCopilot
 
             if (IsRecoverable(e.Exception))
             {
+                // Survived and logged, nothing shown. "Replysis recovered from an unexpected problem" gave the
+                // person nothing to do, and on a first launch (before any window exists) it was a dialog the
+                // owner's own testers saw on every start (2026-10-01). The report still goes to the server, so the
+                // cause gets fixed without anyone being interrupted.
                 e.Handled = true;
-                ShowRecoveryNotice();
                 return;
             }
 
@@ -288,34 +288,9 @@ namespace InterviewCopilot
             {
                 DebugWindow.Log("CRASH", $"[{source}] {ex?.GetType().Name}: {ex?.Message}");
                 if (ex?.StackTrace != null) DebugWindow.Log("CRASH", ex.StackTrace);
+                ClientErrorReporter.Report(source, ex);
             }
             catch { /* logging must never itself crash the handler */ }
-        }
-
-        // Calm, plain-language notice with no stack trace, exception text, or
-        // internal detail. The wording is deliberately limited to work that has
-        // already been written to disk: this handler cannot know whether the
-        // operation that just failed had persisted anything.
-        private static void ShowRecoveryNotice()
-        {
-            lock (_crashNoticeLock)
-            {
-                if (DateTime.UtcNow - _lastCrashNoticeUtc < CrashNoticeCooldown) return;
-                _lastCrashNoticeUtc = DateTime.UtcNow;
-            }
-
-            // Deliberately not a MessageBox. This can fire at any moment, including
-            // mid-interview: a dialog is a separate top-level window, so it never
-            // carries the exclude-from-capture flag and would appear on a screen
-            // share. MainWindow.Alert keeps the notice inside the hidden window,
-            // and falls back to a dialog only before any window exists.
-            try
-            {
-                InterviewCopilot.MainWindow.Alert(
-                    "Replysis recovered from an unexpected problem",
-                    "Anything already saved remains available. You can keep working.");
-            }
-            catch { /* a failed notice must not escalate into a second crash */ }
         }
 
         protected override void OnExit(ExitEventArgs e)

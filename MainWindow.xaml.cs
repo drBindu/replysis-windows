@@ -1514,7 +1514,7 @@ namespace InterviewCopilot
                 ? "Practice: hears the meeting and the microphone"
                 : "Interview: hears the meeting only");
 
-            if (isListening || isProcessing)
+            if (AudioSwitchMustWait())
             {
                 _audioSourceChangePending = true;
                 ShowListeningModeNotice(practice
@@ -1522,16 +1522,38 @@ namespace InterviewCopilot
                     : "Interview starts after this question");
                 return;
             }
+            ApplyAudioSourceNow();
+        }
+
+        private bool AudioSwitchMustWait() => AudioSourceRules.SwitchMustWait(
+            AutoModeEnabled, isListening, isProcessing, _flushing, DateTime.UtcNow, _lastWordsReceivedUtc);
+
+        /// <summary>
+        /// Restarts the engine on the new source. In Auto the app is "listening" between questions, so it
+        /// stands down first; the engine coming back online re-arms Auto by itself.
+        /// </summary>
+        private void ApplyAudioSourceNow()
+        {
             _audioSourceChangePending = false;
+            if (isListening)
+            {
+                StopListeningMeter();
+                isListening = false;
+                isMuted = true;
+                _autoTurnSubmitting = false;
+                ResetAutoTurnDetection();
+                WritePauseFlag();
+                UpdateMicUi();
+            }
+            DebugWindow.Log("AUDIO", "Switching now; restarting the speech engine on the new source.");
             StartSpeechmaticsEngine();
         }
 
-        /// <summary>Applies a switch that was asked for mid-question, once it is over.</summary>
+        /// <summary>Applies a switch that was asked for mid-question, as soon as the question is over.</summary>
         private void ApplyPendingAudioSourceChange()
         {
-            if (!_audioSourceChangePending || isListening || isProcessing) return;
-            _audioSourceChangePending = false;
-            StartSpeechmaticsEngine();
+            if (!_audioSourceChangePending || AudioSwitchMustWait()) return;
+            ApplyAudioSourceNow();
         }
 
         private void UpdateAudioSourceUi()
@@ -1974,6 +1996,9 @@ namespace InterviewCopilot
 
         private void ListeningMeterTick()
         {
+            // A switch to Practice or Interview asked for mid-question applies once the question is over.
+            // In Auto that can be while "listening", so this cannot wait for an answer to finish.
+            if (_audioSourceChangePending) ApplyPendingAudioSourceChange();
             if (!isListening) { StopListeningMeter(); return; }
 
             var now = DateTime.UtcNow;

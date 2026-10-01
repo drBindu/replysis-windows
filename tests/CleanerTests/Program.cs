@@ -157,6 +157,7 @@ internal static class Program
         Console.WriteLine("\n9f. Instant response: Auto does not wait on top of the wait, and words type in");
         _failed += InstantResponseTests.Run();
         _failed += UplinkGovernorTests.Run();
+        _failed += ClientErrorReporterTests.Run();
 
         Console.WriteLine("\n10. Punctuation that reads as AI generated");
         _failed += HumanVoiceTests.Run();

@@ -66,6 +66,24 @@ internal static class AudioSourceTests
         var defaults = new SettingsWindow.AppConfig();
         Check(!defaults.MicCaptureEnabled, "a new install starts in Interview, hearing the meeting only");
 
+        // Choosing Practice while Auto is idle must switch now. It used to wait "until this question is over",
+        // and in Auto nothing is ever a question while it sits silent, so the microphone never opened.
+        var now = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
+        Check(!AudioSourceRules.SwitchMustWait(true, true, false, false, now, now.AddSeconds(-30)),
+            "Auto, listening, nobody has spoken for a while: switch now");
+        Check(!AudioSourceRules.SwitchMustWait(true, true, false, false, now, DateTime.MinValue),
+            "Auto, listening, nothing has ever been heard: switch now");
+        Check(AudioSourceRules.SwitchMustWait(true, true, false, false, now, now.AddSeconds(-1)),
+            "Auto, somebody is speaking right now: wait for them");
+        Check(AudioSourceRules.SwitchMustWait(true, false, true, false, now, now.AddSeconds(-30)),
+            "an answer is being produced: wait");
+        Check(AudioSourceRules.SwitchMustWait(true, false, false, true, now, now.AddSeconds(-30)),
+            "a question is being flushed: wait");
+        Check(AudioSourceRules.SwitchMustWait(false, true, false, false, now, now.AddSeconds(-30)),
+            "Manual, Space is down: a question is being taken, wait");
+        Check(!AudioSourceRules.SwitchMustWait(false, false, false, false, now, DateTime.MinValue),
+            "not listening at all: switch now");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "audio source: all passed" : $"audio source: {failed} FAILED");
         return failed;
