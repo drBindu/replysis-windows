@@ -94,6 +94,19 @@ internal static class ListeningProblemTests
         Check(!Regex.IsMatch(MainWindow.ExplainCredits(55, true), @"\b(minutes?|hours?)\b"),
             "even at the limit, the tooltip never talks in minutes");
 
+        // A connection that was up and keeps breaking is named as that, not blamed on a VPN.
+        var now = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
+        Check(!SpeechHealth.ConnectionKeepsDropping(new[] { now.AddSeconds(-30) }, now), "one drop is a hiccup, not a pattern");
+        Check(SpeechHealth.ConnectionKeepsDropping(new[] { now.AddSeconds(-110), now.AddSeconds(-50) }, now), "two drops within minutes keep dropping");
+        Check(!SpeechHealth.ConnectionKeepsDropping(new[] { now.AddMinutes(-20), now.AddSeconds(-50) }, now), "an old drop does not count");
+        Check(ListeningProblems.Detect(false, 0, false, false, false, true, connectionKeepsDropping: true) == ListeningProblems.Kind.UnstableConnection,
+            "an engine that keeps dropping says so, instead of blaming a VPN");
+        Check(ListeningProblems.Detect(false, 402, true, false, false, false, connectionKeepsDropping: true) == ListeningProblems.Kind.NoListeningTime,
+            "a definite refusal still wins over a bad connection");
+        var unstable = ListeningProblems.Describe(ListeningProblems.Kind.UnstableConnection);
+        Check(!unstable.Body.Contains("VPN", StringComparison.OrdinalIgnoreCase) && unstable.Body.Contains("hotspot", StringComparison.OrdinalIgnoreCase),
+            "the text names the real cause and does not send someone to a hotspot they may already be on");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "listening problems: all passed" : $"listening problems: {failed} FAILED");
         return failed;

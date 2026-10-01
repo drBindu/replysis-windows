@@ -1,3 +1,24 @@
+## A slow connection: the screenshot sent ahead filled it, so answers waited and speech dropped (2026-10-01, Windows 1.0.30)
+
+Measured on the owner's phone hotspot, which uploads only 20 to 50 KB a second. Every 16 seconds Watch Screen captured a 500 KB
+screenshot and uploaded it to `/interview/screen-cache`, gave up after 15 seconds (HttpClient timeout), and started the next. The
+upload never finished and kept the connection full almost all the time. Results, same recorded questions, same connection:
+speech connection dropped (`keepalive ping timeout`, `no audio within the timeout window`) about every minute; ask to first word
+3.6 to 8.7 s instead of 0.3 to 0.8 s; one of six questions never answered; average last word to answer 22 s. The screen said
+"Cannot reach the speech service ... a VPN ... try a phone hotspot" to someone already on a hotspot.
+**Fix (`UplinkGovernor`):** one send ahead that fails or takes over 6 s pauses sending ahead for 60 s, doubling to a ceiling of
+10 minutes; one quick send trusts the connection again. A send ahead is given up after 8 s, not 15, and is cancelled the moment a
+question starts, so the question has the connection to itself. The next screen question reads the screen on demand. Same
+connection after the fix: no speech drops, 6 of 6 answered, first two questions answered in 1.4 and 2.0 s.
+**The Mac almost certainly has the same shape** (prepared shots on a timer). Check it on a throttled connection (`Network Link
+Conditioner`, 0.3 Mbps up). Also: live audio is 16 kHz PCM, about 32 KB a second, which a 0.3 Mbps uplink cannot always carry
+even with nothing else running. That needs a lower rate audio mode when sends back up; not built yet.
+**Wording:** a connection that was up and keeps breaking now says so ("Your connection keeps dropping", `ListeningProblems.Kind.UnstableConnection`,
+two drops within four minutes) instead of blaming a VPN. Using the same account on two devices is allowed and was not the cause;
+the only thing two devices share is the account's request limit and its answers.
+
+---
+
 ## A brand-new account was told "no credits" on its first sign-in (2026-10-01, fixed on the server, Windows 1.0.30)
 
 Found from the owner's sister's PC: a new Google sign-in, then "no credits" and no transcription, with five answers on the badge.

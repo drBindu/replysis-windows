@@ -31,6 +31,7 @@ namespace InterviewCopilot
             WaitingToReconnect,
             NoMicrophone,
             NoSpeechService,
+            UnstableConnection,
         }
 
         internal enum NextStep { None, SeePlans, MoreAnswers }
@@ -100,6 +101,14 @@ namespace InterviewCopilot
                 "Try a phone hotspot. Press Ctrl+Alt+F12 to see details.",
                 NextStep.None),
 
+            Kind.UnstableConnection => new(
+                "UNSTABLE CONNECTION",
+                "Your connection keeps dropping",
+                "The link to the speech service keeps breaking, which happens on a slow or weak connection, such as a phone " +
+                "hotspot with a weak signal. Replysis reconnects on its own, but words said while it is down are lost. " +
+                "Move closer to your router, or switch to Wi-Fi or a stronger signal.",
+                NextStep.None),
+
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Every problem needs a description."),
         };
 
@@ -107,7 +116,7 @@ namespace InterviewCopilot
         internal static Kind? Detect(
             bool engineOnline, int speechStatusCode, bool outOfListeningTime,
             bool waitingToRetry, bool fatalNoMicrophone, bool connectionStalled,
-            bool outOfCredits = false)
+            bool outOfCredits = false, bool connectionKeepsDropping = false)
         {
             if (engineOnline) return null;
 
@@ -120,6 +129,10 @@ namespace InterviewCopilot
             if (speechStatusCode == 402) return Kind.NoCredits;
             if (speechStatusCode == 401) return Kind.SignInExpired;
             if (speechStatusCode is 502 or 503) return Kind.ServiceUnavailable;
+            // A connection that was working and keeps breaking is a different thing from one that never
+            // worked, and from a short wait to reconnect. Saying "cannot reach the speech service" or "VPN"
+            // to someone already on a hotspot is wrong and sends them looking in the wrong place.
+            if (connectionKeepsDropping) return Kind.UnstableConnection;
             if (waitingToRetry) return Kind.WaitingToReconnect;
             if (fatalNoMicrophone) return Kind.NoMicrophone;
             if (connectionStalled) return Kind.NoSpeechService;

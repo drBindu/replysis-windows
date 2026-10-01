@@ -2188,6 +2188,15 @@ namespace InterviewCopilot
 
         private readonly System.Collections.Generic.HashSet<ListeningProblems.Kind> _problemsShown = new();
 
+        // When the speech connection dropped after being up. Two within a few minutes is "your connection
+        // keeps dropping", which is not the same as never reaching the service.
+        private readonly System.Collections.Generic.List<DateTime> _connectionDropsUtc = new();
+
+        private bool ConnectionKeepsDropping()
+        {
+            lock (_connectionDropsUtc) return SpeechHealth.ConnectionKeepsDropping(_connectionDropsUtc.ToArray(), DateTime.UtcNow);
+        }
+
         private ListeningProblems.Kind? CurrentProblem() => ListeningProblems.Detect(
             _engineOnline,
             UserSession.SpeechmaticsLastStatusCode,
@@ -2197,7 +2206,8 @@ namespace InterviewCopilot
                             (_engineRestartCount > 0 && DateTime.UtcNow < _nextEngineRestartUtc),
             fatalNoMicrophone: _engineAuthFailed &&
                                _engineFatalReason.StartsWith("No microphone", StringComparison.Ordinal),
-            connectionStalled: SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, _engineStartedUtc));
+            connectionStalled: SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, _engineStartedUtc),
+            connectionKeepsDropping: ConnectionKeepsDropping());
 
         /// <summary>
         /// Says, once per occurrence, in words, why nothing is being heard. Every
@@ -3471,6 +3481,7 @@ namespace InterviewCopilot
         {
             if (isProcessing) return;
             isProcessing = true; // guard: set before any await so no second call can sneak through
+            CancelPreparedUpload();
 
             // Reuse the caller's cancellation token when the voice flow already owns one
             // (so a single _aiCts.Cancel() interrupts flush + answer together); otherwise
@@ -3746,6 +3757,27 @@ namespace InterviewCopilot
         private DateTime _preparedShotUtc = DateTime.MinValue;
         private volatile bool _preparingShot;
 
+        // Keeps a picture sent ahead from clogging a slow connection. See UplinkGovernor.
+        private readonly UplinkGovernor _uplink = new();
+        private CancellationTokenSource? _preparedUploadCts;
+        private volatile bool _preparedUploadDroppedForQuestion;
+
+        /// <summary>
+        /// A question is about to be sent: stop any screenshot still going up, so the question has the
+        /// connection to itself. On a slow connection a half-sent 500 KB picture otherwise sits in front of it.
+        /// </summary>
+        private void CancelPreparedUpload()
+        {
+            try
+            {
+                var cts = _preparedUploadCts;
+                if (cts == null) return;
+                _preparedUploadDroppedForQuestion = true;
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException) { }
+        }
+
         // How recently the microphone must have been used for screen preparation
         // to be worth doing. Long enough to cover a gap between questions, short
         // enough that an app left open all afternoon captures nothing.
@@ -3818,6 +3850,11 @@ namespace InterviewCopilot
             if (_windowClosed || !_watchScreenMode || !_interviewStarted || _inSetupStep ||
                 SessionsPanelHost?.Visibility == Visibility.Visible ||
                 _preparingShot || isProcessing || _isScreenAnalyzing) return;
+
+            // Not while the connection cannot carry it. A picture that takes ten seconds to send is not
+            // "ahead" of anything and holds up everything behind it; the next screen question reads the
+            // screen on demand instead (see UplinkGovernor).
+            if (!_uplink.MayUpload(DateTime.UtcNow)) return;
 
             // And never when no interview is happening.
             //
@@ -4033,8 +4070,12 @@ namespace InterviewCopilot
                     JsonSerializer.Serialize(new { image = Convert.ToBase64String(shot) }),
                     System.Text.Encoding.UTF8, "application/json");
 
-                using var res = await _creditsClient.SendAsync(req);
+                using var uploadCts = new CancellationTokenSource(UplinkGovernor.UploadTimeout);
+                _preparedUploadDroppedForQuestion = false;
+                _preparedUploadCts = uploadCts;
+                using var res = await _creditsClient.SendAsync(req, uploadCts.Token);
                 if (_windowClosed || screenSession != _screenSessionGeneration) return;
+                NoteUplinkOutcome(true, sw.Elapsed, shot.Length);
                 if (!res.IsSuccessStatusCode)
                 {
                     // Not worth a word to the user: the next question simply
@@ -4085,9 +4126,33 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                DebugWindow.Log("SCREEN", $"Early upload failed: {ex.Message}");
+                if (ex is OperationCanceledException && _preparedUploadDroppedForQuestion)
+                {
+                    // A question needed the connection. Nothing is wrong with it, so no penalty.
+                    DebugWindow.Log("SCREEN", "Screenshot upload dropped so the question has the connection.");
+                }
+                else
+                {
+                    DebugWindow.Log("SCREEN", $"Early upload failed: {ex.Message}");
+                    NoteUplinkOutcome(false, UplinkGovernor.UploadTimeout, shot.Length);
+                }
                 if (screenSession == _screenSessionGeneration) _preparedShotId = "";
             }
+            finally
+            {
+                _preparedUploadCts = null;
+            }
+        }
+
+        /// <summary>Tells the governor how a picture sent ahead went, and says so once when it backs off.</summary>
+        private void NoteUplinkOutcome(bool succeeded, TimeSpan elapsed, int imageBytes)
+        {
+            TimeSpan quiet = _uplink.Record(DateTime.UtcNow, succeeded, elapsed);
+            if (quiet == TimeSpan.Zero) return;
+            DebugWindow.Log("SCREEN",
+                $"Sending the screenshot ahead is too slow on this connection ({imageBytes / 1024} KB, " +
+                $"{(succeeded ? $"took {elapsed.TotalSeconds:F0}s" : "gave up")}). Pausing it for " +
+                $"{quiet.TotalSeconds:F0}s so questions and speech keep the connection. F8 and screen questions still read the screen on demand.");
         }
 
         /// <summary>
@@ -5930,6 +5995,11 @@ namespace InterviewCopilot
                             {
                                 _engineOnline = false;
                                 DebugWindow.Log("ENGINE", "Speech connection lost; reconnecting.");
+                                lock (_connectionDropsUtc)
+                                {
+                                    _connectionDropsUtc.Add(DateTime.UtcNow);
+                                    if (_connectionDropsUtc.Count > 20) _connectionDropsUtc.RemoveAt(0);
+                                }
                                 _ = Dispatcher.BeginInvoke(new Action(UpdateMicUi));
                             }
 

@@ -115,6 +115,21 @@ namespace InterviewCopilot
         /// than it was a minute ago. The pattern is a state whose display is
         /// indistinguishable from its own failure.
         /// </summary>
+        /// <summary>
+        /// How many times, within how long, the connection must have dropped after being up before the
+        /// app says "your connection keeps dropping" instead of a vague wait. One drop is a hiccup.
+        /// </summary>
+        internal const int DropsThatMeanUnstable = 2;
+        internal static readonly TimeSpan DropWindow = TimeSpan.FromMinutes(4);
+
+        internal static bool ConnectionKeepsDropping(System.Collections.Generic.IReadOnlyList<DateTime> dropsUtc, DateTime now)
+        {
+            int recent = 0;
+            foreach (DateTime d in dropsUtc)
+                if (now - d >= TimeSpan.Zero && now - d <= DropWindow) recent++;
+            return recent >= DropsThatMeanUnstable;
+        }
+
         internal static bool ConnectionStalled(bool engineOnline, DateTime now, DateTime engineStartedUtc)
         {
             if (engineOnline) return false;
