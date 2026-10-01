@@ -2637,9 +2637,13 @@ def _deepgram_url() -> str:
         ("interim_results", "true"),
         ("smart_format", "true"),
         ("punctuate", "true"),
-        # Finalise after 300 ms of silence rather than the 10 ms default, so a
+        # Finalise after 200 ms of silence rather than the 10 ms default, so a
         # short pause mid-sentence does not split a question into two finals.
-        ("endpointing", "300"),
+        # 200, down from 300 (2026-10-01): streaming recorded questions with the engine's own settings, the time from
+        # the speaker's last sound to the service saying they stopped was 557 ms at 300 and 457 ms at 200. Auto does
+        # not act on a final alone (it needs a finished question and its own confirmation), so a few more finals at
+        # short pauses cost nothing; 150 measured 388 ms but starts to split ordinary phrasing.
+        ("endpointing", "200"),
     ]
     # UtteranceEnd is what ">>> UTTERANCE END" is printed from, the turn signal
     # the Mac client waits on. Deepgram will not go below 1000 ms.

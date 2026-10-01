@@ -192,6 +192,14 @@ internal static class InstantResponseTests
         Check(RecoveryPolicy.CredentialRenewalWaitSeconds(100) == 60 && RecoveryPolicy.CredentialRenewalWaitSeconds(-1) == 5,
             "there is always a next attempt: it never gives up, and never spins");
 
+        // The quick send wait is 450 ms, and goes back to 650 ms once an interviewer has added a tail to a question.
+        Check(AutoTurnRules.QuickSendWaitMs(false, 0, 2800, 0) == 450, "a finished question is sent 450 ms after the service says the speaker stopped");
+        Check(AutoTurnRules.QuickSendWaitMs(false, 0, 2800, 1) == 650 && AutoTurnRules.QuickSendWaitMs(false, 0, 2800, 3) == 650,
+            "after a tail has been merged this interview, it is cautious again");
+        Check(AutoTurnRules.QuickSendWaitMs(true, 0, 2800, 5) == AutoTurnRules.UtteranceEndConfirmMs,
+            "an utterance end is still the short wait whatever happened before");
+        Check(AutoTurnRules.QuickSendWaitMs(false, 1950, 2800, 0) == 1950, "a slow speaker's own pause still sets the floor");
+
         // A brand-new account's first speech key request was refused for credits (the server had not yet written the
         // account), and the app then said "no answers" with five answers on the badge and waited five minutes.
         Check(RecoveryPolicy.CreditsRefusalIsStale(true, false, 25, 5),

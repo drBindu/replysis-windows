@@ -2494,6 +2494,10 @@ namespace InterviewCopilot
         private DateTime _continuationChainStartedUtc = DateTime.MinValue;
         private int _continuationCount;
 
+        // Tails merged into a question already sent, over this whole interview. The first one means the interviewer
+        // tends to add to a question after a short pause, so the quick send wait goes back to the cautious value.
+        private int _tailMergesThisInterview;
+
         /// <summary>At most two merges onto one question, however well they score.</summary>
         private const int MaxContinuations = 2;
 
@@ -2869,7 +2873,7 @@ namespace InterviewCopilot
                 // on average, measured with recorded questions on 2026-09-29. Now a short
                 // confirmation, longer only for a speaker who pauses a lot.
                 int paceFloorMs = (int)Math.Round(_autoLongestMidTurnGapMs * 1.3);
-                requiredSilenceMs = AutoTurnRules.QuickSendWaitMs(providerConfirmedEnd, paceFloorMs, AutoTurnFinishedSilenceMs);
+                requiredSilenceMs = AutoTurnRules.QuickSendWaitMs(providerConfirmedEnd, paceFloorMs, AutoTurnFinishedSilenceMs, _tailMergesThisInterview);
             }
             else if (ending == TurnEnding.Finished)
             {
@@ -2902,6 +2906,7 @@ namespace InterviewCopilot
             if (isContinuation)
             {
                 _continuationCount++;
+                _tailMergesThisInterview++;   // this interviewer adds tails: stop sending quickly (AutoTurnRules)
             }
             else
             {
@@ -5153,6 +5158,7 @@ namespace InterviewCopilot
         {
             if (_interviewStarted) return;
             _interviewStarted = true;
+            _tailMergesThisInterview = 0;
             _wordsHeardThisInterview = false;
             _interviewSilentTipShown = false;
             if (_watchScreenMode) StartPreparedShots();

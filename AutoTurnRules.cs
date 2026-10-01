@@ -52,7 +52,15 @@ namespace InterviewCopilot
         // confirmation on top of either one. A speaker who pauses a lot mid sentence still
         // gets their own longer floor, and a tail that does arrive is merged as a
         // continuation, exactly as before.
-        internal const int SpeechFinalConfirmMs = 650;
+        //
+        // 450 ms, down from 650 (2026-10-01, owner: "as much speed as instant"). Measured with recorded questions, the
+        // time from the speaker's last word to the first word of the answer is the speech service saying they stopped
+        // (about 0.55 s), this confirmation, and the answer starting (0.25 to 0.4 s). The confirmation is the only
+        // part that is ours. The cost of too short a wait is a tail that arrives just after the question was sent,
+        // which re-answers the whole question, so the first time that happens in an interview the wait goes back to
+        // the cautious 650 ms for the rest of it (SpeechFinalConfirmAfterTailMs).
+        internal const int SpeechFinalConfirmMs = 450;
+        internal const int SpeechFinalConfirmAfterTailMs = 650;
         internal const int UtteranceEndConfirmMs = 250;
 
         /// <summary>
@@ -72,8 +80,11 @@ namespace InterviewCopilot
         /// <paramref name="paceFloorMs"/> is the speaker's own longest pause inside a sentence,
         /// so someone who talks slowly is not cut off; <paramref name="ceilingMs"/> caps it.
         /// </summary>
-        internal static int QuickSendWaitMs(bool utteranceEnded, int paceFloorMs, int ceilingMs) =>
-            Math.Min(ceilingMs, Math.Max(utteranceEnded ? UtteranceEndConfirmMs : SpeechFinalConfirmMs, paceFloorMs));
+        internal static int QuickSendWaitMs(bool utteranceEnded, int paceFloorMs, int ceilingMs, int tailMergesThisInterview = 0) =>
+            Math.Min(ceilingMs, Math.Max(
+                utteranceEnded ? UtteranceEndConfirmMs
+                               : (tailMergesThisInterview > 0 ? SpeechFinalConfirmAfterTailMs : SpeechFinalConfirmMs),
+                paceFloorMs));
 
         /// <summary>
         /// Whether a gap between two changes of the transcript was the speaker pausing.

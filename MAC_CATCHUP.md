@@ -1,3 +1,19 @@
+## Faster again: 450 ms confirmation, 200 ms endpointing, and where the rest of the delay lives (2026-10-01, Windows 1.0.30)
+
+Owner: "I want as much speed as instant." The server was not slower (provider first byte 108 to 290 ms all day). Measured with recorded
+questions, last spoken word to first word on screen was about 1.7 s, made of: the speech service saying the speaker stopped (557 ms,
+measured by streaming the same recordings straight to Deepgram with the engine's settings), Auto's own confirmation (650 ms), and the
+answer starting (0.2 to 0.4 s). Changes: **endpointing 300 to 200 ms** in the engine (457 ms; 150 ms measured 388 ms but starts splitting
+ordinary phrasing); **confirmation after a speech final 650 to 450 ms**, going back to 650 for the rest of the interview the first time a
+tail is merged into a question already sent (`AutoTurnRules.SpeechFinalConfirmAfterTailMs`, `_tailMergesThisInterview`), because a tail
+re-answers the whole question and is paid for twice. Result, same recordings: Auto's own wait 567 to 412 ms on average, total 1.34 to 1.6 s
+(was 1.7 to 1.8). The Mac shares the engine file, so it takes the endpointing change with it.
+**What it would take to go further:** the remaining floor is the service's 0.46 s, our 0.45 s and the answer start. Below about one second
+the answer has to START while the speaker is still finishing (prepare a free, uncharged answer from the interim text and charge only when
+the question is confirmed). That needs a server endpoint and careful billing, and is not built.
+
+---
+
 ## The engine ready all day: the hourly pass was never renewed, and a new computer's first start is warmed up (2026-10-01, Windows 1.0.30)
 
 Owner: "the engine has to be ready every time, any time, any situation", after seeing "connecting" on a brand-new PC.
