@@ -983,6 +983,14 @@ namespace InterviewCopilot
                 UserSession.IsUnlimited = isUnlimited;
                 CLog($"Parsed: {credits} credits | {plan} | unlimited={isUnlimited}");
 
+                // A refusal for credits that the balance contradicts is stale: forget it and ask for the
+                // speech key now, instead of sitting out the five minute wait (see CreditsRefusalIsStale).
+                if (RecoveryPolicy.CreditsRefusalIsStale(UserSession.SpeechmaticsOutOfCredits, isUnlimited, credits, AnswerCreditCost))
+                {
+                    CLog("The speech key was refused for credits, but the balance says otherwise; asking again now.");
+                    UserSession.ForceSpeechRetry();
+                }
+
                 Dispatcher.Invoke(() =>
                 {
                     CreditsPlanLabel.Visibility = Visibility.Collapsed;

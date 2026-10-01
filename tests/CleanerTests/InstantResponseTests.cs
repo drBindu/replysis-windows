@@ -192,6 +192,19 @@ internal static class InstantResponseTests
         Check(RecoveryPolicy.CredentialRenewalWaitSeconds(100) == 60 && RecoveryPolicy.CredentialRenewalWaitSeconds(-1) == 5,
             "there is always a next attempt: it never gives up, and never spins");
 
+        // A brand-new account's first speech key request was refused for credits (the server had not yet written the
+        // account), and the app then said "no answers" with five answers on the badge and waited five minutes.
+        Check(RecoveryPolicy.CreditsRefusalIsStale(true, false, 25, 5),
+            "refused for credits but the balance shows five answers: the refusal is stale, ask again now");
+        Check(RecoveryPolicy.CreditsRefusalIsStale(true, false, 5, 5),
+            "exactly one answer is enough to be stale");
+        Check(!RecoveryPolicy.CreditsRefusalIsStale(true, false, 0, 5) && !RecoveryPolicy.CreditsRefusalIsStale(true, false, 4, 5),
+            "a balance below one answer still believes the refusal, so a really empty account is not hammered");
+        Check(!RecoveryPolicy.CreditsRefusalIsStale(false, false, 25, 5),
+            "with no refusal remembered there is nothing to forget");
+        Check(RecoveryPolicy.CreditsRefusalIsStale(true, true, 0, 5),
+            "an unlimited account is never really out of credits");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "instant response: all passed" : $"instant response: {failed} FAILED");
         return failed;

@@ -50,5 +50,15 @@ namespace InterviewCopilot
                 2 => 30,
                 _ => 60,
             };
+
+        /// <summary>
+        /// Whether a remembered "no credits" refusal should be forgotten. The refusal is only believed
+        /// while the app's own balance agrees with it. A brand-new account's first speech key request
+        /// arrives before the server has written the account, so it was refused for credits and the app
+        /// then said "your answers are used" with five answers on the badge, and would not ask again for
+        /// five minutes (2026-10-01). When the balance shows at least one answer the refusal is stale.
+        /// </summary>
+        internal static bool CreditsRefusalIsStale(bool refusedForCredits, bool unlimited, int creditsHeld, int answerCost) =>
+            refusedForCredits && (unlimited || creditsHeld >= answerCost);
     }
 }

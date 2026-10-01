@@ -1,3 +1,21 @@
+## A brand-new account was told "no credits" on its first sign-in (2026-10-01, fixed on the server, Windows 1.0.30)
+
+Found from the owner's sister's PC: a new Google sign-in, then "no credits" and no transcription, with five answers on the badge.
+**Cause (server, affects every client including Mac):** a new account's first speech key request arrives about a second after sign-in,
+BEFORE the website has written the account record (`POST /api/auth/session` creates it). `getCredits` answered 0 for a missing record, so
+the key request got 402 "No credits remaining". The credits request a moment later was fine (25 credits). Nobody had tested a brand-new
+SIGNED-IN account; the earlier live test used a guest device.
+**Fixed on the server** (`FirestoreCreditsService.getCredits`): a missing record is created on the spot with the free trial, with the same
+fields the website writes; the website then only updates it, and now also fills in email and name if the backend made it first. Every
+installed client benefits, Mac included, with no client change.
+**Client (Windows):** a refusal for credits is now forgotten the moment the balance shows at least one answer
+(`RecoveryPolicy.CreditsRefusalIsStale`, applied in `FetchAndDisplayCreditsAsync`). Before this the 1.0.28 rule "wait five minutes after a
+402" made the false refusal stick, so the screen said "your free answers are used" next to "5 answers" for five minutes, and the mic did
+nothing. **The Mac must not believe a credits refusal that its own balance contradicts.** Test: sign up as a brand-new Free account on a clean
+machine and check the first launch hears and answers within seconds.
+
+---
+
 ## Customers see answers, never credits; the packs moved (2026-09-29, Windows 1.0.29)
 
 Owner: "don't expose the credits in detail". Credits stay inside the server and the code; anything a customer can read
