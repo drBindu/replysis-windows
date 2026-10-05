@@ -158,6 +158,7 @@ internal static class Program
         _failed += InstantResponseTests.Run();
         _failed += UplinkGovernorTests.Run();
         _failed += ClientErrorReporterTests.Run();
+        _failed += XamlTemplateTests.Run();
 
         Console.WriteLine("\n10. Punctuation that reads as AI generated");
         _failed += HumanVoiceTests.Run();
