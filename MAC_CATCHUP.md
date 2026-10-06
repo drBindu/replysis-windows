@@ -45,6 +45,14 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     still pass the test and time out on a full picture, which costs a second on a question now and then, no more.
 12. **The "Auto is on..." hint was drawn like an answer** (14 pt semibold). Now 12 pt regular and dimmer, so an empty screen is not mistaken for
     an answer that arrived.
+13. **Answers ended by handing the conversation back** ("Let me know if you'd like more detail", "Would you like me to go deeper?", "Does that
+    make sense?", or a question put to the interviewer such as "What does your team use?"). Owner: "it is asking a reverse question".
+    Nothing in the prompt said to stop on the last point. Now both: a rule in the prompt (never end with a question or an offer to say more;
+    the only time to ask is when the interviewer invites questions) and a net under it (`AnswerClosers`): the last sentence is dropped when it
+    STARTS like a hand-back, or is a question and the interviewer did not just invite questions (`IsCandidateQuestionInvitation`). Narrow on
+    purpose: "If you want fast lookups, use a hash map." stays, the only sentence of an answer stays, code is never touched, and the bullets
+    under MORE TO SAY lose only a trailing offer. Applied while streaming too, so a closer is never shown and then removed. **The Mac
+    prompt and answer cleaning need the same rule and filter.**
 
 ---
 

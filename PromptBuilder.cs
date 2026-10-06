@@ -1316,6 +1316,7 @@ namespace InterviewCopilot
             sb.AppendLine("Be specific and credible. Do not cut off a useful explanation, but never pad the answer with generic filler.");
             sb.AppendLine("Do not turn an answer into a tour of the resume. Use one relevant example, and name at most two tools unless the interviewer specifically asks for the stack.");
             sb.AppendLine("When the interviewer is explaining or wrapping up, react conversationally. Do not paraphrase their whole statement back to them.");
+            sb.AppendLine("Stop on your last point. Never end an answer with a question to the interviewer or an offer to say more, such as \"let me know if you want more detail\", \"would you like me to go deeper\", \"does that make sense\" or \"what does your team use\". The only time you ask anything is when the interviewer invites your questions.");
             sb.AppendLine();
 
             if (hasResume)

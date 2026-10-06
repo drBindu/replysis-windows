@@ -3666,6 +3666,7 @@ namespace InterviewCopilot
                     : customQuestion.Trim();
                 q = PromptBuilder.NormalizeInterviewerQuestion(rawQuestion);
                 if (string.IsNullOrWhiteSpace(q)) { isProcessing = false; UpdateMicUi(); return; }
+                bool allowClosingQuestion = PromptBuilder.IsCandidateQuestionInvitation(q);
                 if (!string.Equals(rawQuestion, q, StringComparison.Ordinal))
                     DebugWindow.Log("AI", $"Ignored opening transcript filler: {rawQuestion.Length - q.Length} chars");
                 var answerTimer = System.Diagnostics.Stopwatch.StartNew();
@@ -3731,14 +3732,14 @@ namespace InterviewCopilot
                         if ((tokenCount == 1 || tokenCount % 2 == 0 || token.Contains('\n'))
                             && !BrowsingOlderAnswer)
                         {
-                            string soFar = CleanAiOutput(streamedAnswer.ToString());
+                            string soFar = CleanAiOutput(streamedAnswer.ToString(), allowClosingQuestion);
                             ShowAnswer(soFar, scrollToEnd: true);
                             if (answerWindow != null) answerWindow.UpdateAnswer(soFar);
                         }
                     }
 
                 aiCt.ThrowIfCancellationRequested();
-                string final = CleanAiOutput(streamedAnswer.ToString());
+                string final = CleanAiOutput(streamedAnswer.ToString(), allowClosingQuestion);
                 if (!HasUsableAiAnswer(final))
                     throw new BackendRequestException("No answer was returned. Please try again.");
                 // Kept whatever happens next, so it can be returned to. Whether it
@@ -5116,7 +5117,7 @@ namespace InterviewCopilot
 
         // Static and internal so the test project can call this one, rather than
         // a second copy of its rules. It touches no instance state.
-        internal static string CleanAiOutput(string ans)
+        internal static string CleanAiOutput(string ans, bool allowClosingQuestion = false)
         {
             // Fences stay. They were stripped here because everything was shown in
             // one prose box and a stray ``` was just noise on screen. The code
@@ -5249,6 +5250,11 @@ namespace InterviewCopilot
                 ans = head + tail;
             }
             ans = Regex.Replace(ans, @"\n{3,}", "\n\n");
+
+            // An answer stops on its last point. "Let me know if you'd like more" and a question handed back to the
+            // interviewer are taken off the end (see AnswerClosers); a closing question stays only when the
+            // interviewer has just invited the candidate's questions.
+            ans = AnswerClosers.StripTrailingOffer(ans.Trim(), allowClosingQuestion);
             return ans.Trim();
         }
 
@@ -8508,7 +8514,8 @@ namespace InterviewCopilot
                 // PostProcess normalises section headers, removes stray markdown,
                 // and collapses excess blank lines — runs instantly on the final string.
                 if (screenCt.IsCancellationRequested || !ReferenceEquals(_aiCts, screenOwner)) return;
-                string finalResult = ScreenAnalyzer.PostProcess(sb.ToString());
+                // Offers to say more come off the end of a screen answer too (a question stays: here it is part of reading the screen).
+                string finalResult = AnswerClosers.StripTrailingOffer(ScreenAnalyzer.PostProcess(sb.ToString()), allowClosingQuestion: true);
                 if (string.IsNullOrWhiteSpace(finalResult))
                 {
                     AiAnswerBox.Text = "Screen AI returned no answer. Please try again.";
