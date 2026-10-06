@@ -532,6 +532,12 @@ namespace InterviewCopilot
         /// A tail that points back at what was just asked - "and where have you used
         /// it?", "with an example" - is a genuine addition, and still merges.
         /// </summary>
+        private static readonly Regex EmbeddedClause = new(
+            @"^(?:what|how|why|when|where|which|who)\s+" +
+            @"(?:(?!(?:am|is|are|was|were|do|does|did|have|has|had|can|could|will|would|shall|should|may|might|must)\b)[a-z'\-]+\s+){0,3}" +
+            @"(?:(?:i|you|we|they|he|she)(?:'d|'ll|'ve|'re)?|your team|the team|your company|the company)\s+[a-z']{2,}",
+            RegexOptions.Compiled);
+
         internal static bool AsksItsOwnQuestion(string tail)
         {
             string q = Regex.Replace((tail ?? "").Trim().ToLowerInvariant(),
@@ -540,6 +546,13 @@ namespace InterviewCopilot
 
             // Pointing back: the subject is the question before, not a new one.
             if (Regex.IsMatch(q, @"\b(it|that|this|them|those|these|there|the same)\b")) return false;
+
+            // A clause that is still part of the sentence before it. "Can you tell me how you would monitor a service
+            // ... and what alerts YOU WOULD set up?" is one question with a long pause in the middle, and the second
+            // half was being answered as a question of its own. The grammar tells them apart: a new question puts the
+            // verb ahead of its subject ("what alerts WOULD YOU set up?"), and only a clause inside a sentence can put
+            // the subject first ("what alerts you would set up").
+            if (EmbeddedClause.IsMatch(q.Replace('\u2019', '\'')) ) return false;
 
             // Interrogative opening with a word of its own after it.
             return Regex.IsMatch(q,

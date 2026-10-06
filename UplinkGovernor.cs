@@ -43,21 +43,22 @@ namespace InterviewCopilot
         // upload first, and pictures go ahead only once it has shown it can carry them in good time.
 
         /// <summary>
-        /// Size of the test upload. Big enough to run past the burst a mobile line allows at the start (a 32 KB test passed on
-        /// a hotspot that then could not finish a 480 KB picture in eight seconds), small enough to cost a slow line only two
-        /// or three seconds, once per pause.
+        /// Size of the test upload. A mobile line lets the first 64 KB or so through at full speed and then slows down:
+        /// measured on the hotspot this was written for, 64 KB went at 192 KB a second and everything after it at 66, so a
+        /// 64 KB test passed on a line that then could not finish a 480 KB picture in eight seconds. 160 KB runs well past
+        /// that burst, and costs a slow line about two seconds, once per pause.
         /// </summary>
-        internal const int ProbeBytes = 64 * 1024;
+        internal const int ProbeBytes = 160 * 1024;
 
         /// <summary>A test upload still going after this is a slow line.</summary>
         internal static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(4);
 
         /// <summary>
-        /// The test upload must be done within this, round trip included: 64 KB in 0.7 s is about 90 KB a second at
-        /// the very least, so a whole picture follows in about five seconds even on the worst line that passes, and in
-        /// a second or two on a normal one.
+        /// The test upload must be done within this, round trip included: 160 KB in 1.2 s is about 130 KB a second on
+        /// average, so a whole picture follows in about five seconds even on the worst line that passes, and in a second
+        /// or two on a normal one. The hotspot above needs about 2 s and fails, as it should.
         /// </summary>
-        internal static readonly TimeSpan ProbePassWithin = TimeSpan.FromMilliseconds(700);
+        internal static readonly TimeSpan ProbePassWithin = TimeSpan.FromMilliseconds(1200);
 
         private bool _verified;
 

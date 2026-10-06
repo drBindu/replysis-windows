@@ -54,23 +54,27 @@ internal static class UplinkGovernorTests
         Check(seconds > UplinkGovernor.MaxUsefulUpload.TotalSeconds, "on that connection a screenshot takes longer than is useful, so it is paused");
 
         // A small test upload decides whether pictures go ahead at all, so a slow line is found out for the price of
-        // 64 KB and not by losing a whole picture in front of the first question (2026-10-06: 9.8 s to the first word).
+        // 160 KB and not by losing a whole picture in front of the first question (2026-10-06: 9.8 s to the first word).
         var fresh = new UplinkGovernor();
         Check(!fresh.Verified && fresh.NeedsProbe(t0), "a new start knows nothing about the line, so it tests it first");
 
         quiet = fresh.RecordProbe(t0, true, TimeSpan.FromMilliseconds(180));
         Check(quiet == TimeSpan.Zero && fresh.Verified && !fresh.NeedsProbe(t0) && fresh.MayUpload(t0),
-            "a test that is back within 0.7 s trusts the line");
+            "a test that is back within 1.2 s trusts the line");
 
         var hotspot = new UplinkGovernor();
-        // 64 KB at 30 KB a second is about two seconds.
-        quiet = hotspot.RecordProbe(t0, true, TimeSpan.FromSeconds(2.1));
+        // 160 KB on the real hotspot (192 KB a second for the first 64 KB, then 66) is about two seconds.
+        quiet = hotspot.RecordProbe(t0, true, TimeSpan.FromSeconds(2.0));
         Check(quiet == TimeSpan.FromSeconds(60) && !hotspot.Verified && !hotspot.NeedsProbe(t0.AddSeconds(59)) && hotspot.NeedsProbe(t0.AddSeconds(60)),
             "the hotspot fails the test, no picture is sent, and the line is tested again a minute later");
         quiet = hotspot.RecordProbe(t0.AddSeconds(60), false, UplinkGovernor.ProbeTimeout);
         Check(quiet == TimeSpan.FromSeconds(120), "a test that does not finish doubles the pause, the same as a picture");
-        Check(UplinkGovernor.ProbeBytes * 6 < 500 * 1024,
-            "a test costs a sixth of a picture or less, so testing a slow line now and then does not clog it");
+        Check(UplinkGovernor.ProbeBytes * 3 < 500 * 1024,
+            "a test costs a third of a picture or less, so testing a slow line now and then does not clog it");
+        // The measured line: 64 KB at 192 KB a second, the rest at 66, so 160 KB takes about 1.7 s; a fast home line takes 0.2 s.
+        double hotspotSeconds = 64.0 / 192 + (160 - 64.0) / 66;
+        Check(hotspotSeconds > UplinkGovernor.ProbePassWithin.TotalSeconds && 160.0 / 1000 < UplinkGovernor.ProbePassWithin.TotalSeconds,
+            "the test is long enough to see past the burst: the hotspot fails it and a 1 MB-a-second line passes it");
 
         // A line that was fine and then loses a picture is in doubt again, and the way back is a test, not another picture.
         var wobble = new UplinkGovernor();

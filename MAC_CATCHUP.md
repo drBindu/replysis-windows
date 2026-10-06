@@ -38,9 +38,9 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
 11. **Slow-link protection that does not cost a question.** The screenshot sent ahead of a question (Screen live) is 300 to 500 KB; on a
     hotspot that uploads 20 to 50 KB a second it was still going when the first question was asked and the answer waited behind it (measured:
     9.8 s to the first word, with the server having answered in half a second; the provider answers in 100 to 300 ms). The governor only
-    learned the line was slow by losing a whole picture. Now a 64 KB throw-away test upload (to the same endpoint, no image in the body, so the
+    learned the line was slow by losing a whole picture. Now a 160 KB throw-away test upload (64 KB is not enough: a mobile line lets the first 64 KB through in a burst, 192 KB/s measured, then settles at 66 KB/s) (to the same endpoint, no image in the body, so the
     server answers 400 and keeps nothing) runs at launch and whenever the line is in doubt, and pictures go ahead only after it came back within
-    0.7 s; a failed picture makes the next step a small test, not another picture. A changed network resets it. Same recorded questions, this
+    1.2 s; a failed picture makes the next step a small test, not another picture. A changed network resets it. Same recorded questions, this
     PC: six answers averaged 1.4 to 1.7 s (worst 2.0 s) against 6.1 s (worst 11.1 s) in the bad run. A mobile line that allows a burst can
     still pass the test and time out on a full picture, which costs a second on a question now and then, no more.
 12. **The "Auto is on..." hint was drawn like an answer** (14 pt semibold). Now 12 pt regular and dimmer, so an empty screen is not mistaken for
@@ -53,6 +53,17 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     purpose: "If you want fast lookups, use a hash map." stays, the only sentence of an answer stays, code is never touched, and the bullets
     under MORE TO SAY lose only a trailing offer. Applied while streaming too, so a closer is never shown and then removed. **The Mac
     prompt and answer cleaning need the same rule and filter.**
+14. **A question with a long pause in the middle was answered as two questions.** "Can you tell me how you would monitor a service ... [2 s]
+    ... and what alerts you would set up?": the second half opens with "and what", which `AsksItsOwnQuestion` takes for a new question
+    (that rule exists so "And what is Python?" is not glued onto "What is Java?"). The grammar separates them: a new question puts the verb
+    before its subject ("what alerts WOULD YOU set up?"), only a clause inside a sentence puts the subject first ("what alerts YOU WOULD set
+    up"). Now the second kind is joined and the whole question re-answered once (live, 2.2 s and 1.0 s pauses: `Continuation 1/2 heard`).
+    The first half is still answered first, because it is complete and waiting for a tail that may never come would slow every question,
+    so a joined question still costs two answers. **Check the Mac's tail rule for the same embedded-clause case.**
+15. **Weak uplink: screen questions.** Measured on the hotspot this app is used on: 66 KB/s sustained, so a 480 KB screenshot (640 KB packaged)
+    is ten seconds before the model starts. On a line that has failed the upload test or lost a picture, captures are now kept under 200 KB
+    (palette 128, 64, 32 colours, then scaled down, never below legible: the real 255 KB capture of a busy screen came out at 178 KB). The
+    normal 700 KB budget returns as soon as the line proves itself again.
 
 ---
 

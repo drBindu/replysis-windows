@@ -91,6 +91,19 @@ internal static class AutoTurnTests
         Check(!AutoTurnRules.AsksItsOwnQuestion("or full time"), "a list of options is an addition");
         Check(!AutoTurnRules.AsksItsOwnQuestion("and that one too"), "'that one' points back");
 
+        // The second half of one question with a long pause in the middle (soak round 12, 2026-10-06): the subject comes
+        // before the verb, which only a clause inside a sentence can do. A new question puts the verb first.
+        Check(!AutoTurnRules.AsksItsOwnQuestion("and what alerts you would set up?"), "'and what alerts you would set up' is the rest of the sentence");
+        Check(!AutoTurnRules.AsksItsOwnQuestion("And how you would roll it back"), "'how you would roll it back' is the rest of the sentence");
+        Check(!AutoTurnRules.AsksItsOwnQuestion("and what kind of alerts you would set up"), "a longer noun phrase before the subject is still the rest of the sentence");
+        Check(!AutoTurnRules.AsksItsOwnQuestion("and how you'd handle failures"), "'you'd' counts as a subject");
+        Check(!AutoTurnRules.AsksItsOwnQuestion("and what your team would use"), "'your team' counts as a subject");
+        Check(AutoTurnRules.AsksItsOwnQuestion("and what alerts would you set up?"), "the same words with the verb first are a new question");
+        Check(AutoTurnRules.AsksItsOwnQuestion("And how do you handle conflict?"), "'how do you handle conflict' is a new question");
+        Check(AutoTurnRules.AsksItsOwnQuestion("and what would you do about it in production") == false,
+            "pointing back at 'it' still counts as an addition (unchanged)");
+        Check(AutoTurnRules.AsksItsOwnQuestion("and what can you tell me about caching?"), "'what can you tell me' is a new question");
+
         // A request's opening is not the request
         Check(AutoTurnRules.IsBareRequestOpener("Can you tell me"), "'Can you tell me' waits for the rest");
         Check(AutoTurnRules.IsBareRequestOpener("Could you walk me through"), "'Could you walk me through' waits");

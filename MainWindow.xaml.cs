@@ -524,7 +524,7 @@ namespace InterviewCopilot
                     // Test the upload line now, while Setup is on screen, so the first question of the interview never
                     // finds a picture still going up. And again whenever the network changes.
                     if (_watchScreenMode) _ = ProbeUplinkAsync();
-                    _networkChangedHandler = (_, _) => Dispatcher.BeginInvoke(new Action(() => _uplink.Reset()));
+                    _networkChangedHandler = (_, _) => Dispatcher.BeginInvoke(new Action(() => { _uplink.Reset(); ApplyLineSpeedToCaptures(); }));
                     System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += _networkChangedHandler;
 
                     PromptBuilder.DetailedAnswers = SettingsWindow.GetDetailedAnswers();
@@ -4318,6 +4318,9 @@ namespace InterviewCopilot
 
         private int _uplinkProbeRunning;
 
+        /// <summary>A line that has failed a test or lost a picture gets lighter screenshots until it proves itself again.</summary>
+        private void ApplyLineSpeedToCaptures() => ScreenAnalyzer.SetSlowLine(_uplink.FailureStreak > 0);
+
         /// <summary>
         /// Times a small upload to the same server the pictures go to. The server reads the body, finds no image in
         /// it, answers 400 and keeps nothing, so the only thing measured is how fast this line carries 32 KB. Run
@@ -4355,6 +4358,7 @@ namespace InterviewCopilot
                 // which it cannot be. Anything else says the server, not the line, is the problem.
                 bool reached = status is 400 or 200;
                 TimeSpan quiet = _uplink.RecordProbe(DateTime.UtcNow, reached, sw.Elapsed);
+                ApplyLineSpeedToCaptures();
                 DebugWindow.Log("SCREEN", quiet == TimeSpan.Zero
                     ? $"Upload test: {UplinkGovernor.ProbeBytes / 1024} KB in {sw.ElapsedMilliseconds}ms; this line can carry screenshots ahead of a question."
                     : $"Upload test: {UplinkGovernor.ProbeBytes / 1024} KB took {sw.ElapsedMilliseconds}ms (HTTP {status}); no screenshots ahead of questions for " +
@@ -4369,6 +4373,7 @@ namespace InterviewCopilot
                 if (_windowClosed) return;
                 // The test could not even be sent: no connection, or too slow to finish in four seconds.
                 TimeSpan quiet = _uplink.RecordProbe(DateTime.UtcNow, false, UplinkGovernor.ProbeTimeout);
+                ApplyLineSpeedToCaptures();
                 DebugWindow.Log("SCREEN", $"Upload test failed ({ex.GetType().Name}); no screenshots ahead of questions for {quiet.TotalSeconds:F0}s.");
             }
             finally { Interlocked.Exchange(ref _uplinkProbeRunning, 0); }
@@ -4378,6 +4383,7 @@ namespace InterviewCopilot
         private void NoteUplinkOutcome(bool succeeded, TimeSpan elapsed, int imageBytes)
         {
             TimeSpan quiet = _uplink.Record(DateTime.UtcNow, succeeded, elapsed);
+            ApplyLineSpeedToCaptures();
             if (quiet == TimeSpan.Zero) return;
             DebugWindow.Log("SCREEN",
                 $"Sending the screenshot ahead is too slow on this connection ({imageBytes / 1024} KB, " +

@@ -567,6 +567,27 @@ namespace InterviewCopilot
         private const int MaxUploadBytes = 700 * 1024;
 
         /// <summary>
+        /// What a picture may weigh on a line known to be slow. On a hotspot that settles at about 66 KB a second a
+        /// 480 KB capture (640 KB once packaged) is ten seconds of waiting before the model even starts, for a screen
+        /// question. 200 KB is about four seconds there. The palette is squeezed first and the picture is scaled down
+        /// only after that, exactly as for the normal budget, so what changes is how far it goes before it stops.
+        /// </summary>
+        internal const int SlowLineUploadBytes = 200 * 1024;
+
+        private static volatile int _uploadBudgetBytes = MaxUploadBytes;
+
+        /// <summary>Tells the capture whether the line is known to be slow (see UplinkGovernor), so it sends a lighter picture.</summary>
+        internal static void SetSlowLine(bool slow)
+        {
+            int wanted = slow ? SlowLineUploadBytes : MaxUploadBytes;
+            if (_uploadBudgetBytes == wanted) return;
+            _uploadBudgetBytes = wanted;
+            DebugWindow.Log("SCREEN", slow
+                ? $"Slow connection: screenshots are kept under {SlowLineUploadBytes / 1024} KB so a screen question does not wait on the upload."
+                : "Connection is fast again: screenshots are sent at full quality.");
+        }
+
+        /// <summary>
         /// Brings an oversized capture under the budget, giving up resolution
         /// only when there is nothing else left to give.
         ///
@@ -582,16 +603,17 @@ namespace InterviewCopilot
         /// </summary>
         private static byte[] WithinUploadBudget(BitmapSource bmp, byte[] encoded)
         {
-            if (encoded.Length <= MaxUploadBytes) return encoded;
+            int budget = _uploadBudgetBytes;
+            if (encoded.Length <= budget) return encoded;
 
             DebugWindow.Log("SCREEN",
-                $"Capture {encoded.Length / 1024} KB exceeds the {MaxUploadBytes / 1024} KB "
-                + "upload budget; reducing before the server refuses it.");
+                $"Capture {encoded.Length / 1024} KB exceeds the {budget / 1024} KB "
+                + "upload budget; reducing before it is sent.");
 
-            foreach (int colours in new[] { 128, 64 })
+            foreach (int colours in new[] { 128, 64, 32 })
             {
                 byte[]? fewer = TryEncodeIndexedPng(bmp, colours);
-                if (fewer != null && fewer.Length > 0 && fewer.Length <= MaxUploadBytes)
+                if (fewer != null && fewer.Length > 0 && fewer.Length <= budget)
                 {
                     DebugWindow.Log("SCREEN", $"  {colours} colours -> {fewer.Length / 1024} KB");
                     return fewer;
@@ -621,7 +643,7 @@ namespace InterviewCopilot
                 if (paletted != null && paletted.Length > 0 && paletted.Length < smaller.Length)
                     smaller = paletted;
 
-                if (smaller.Length <= MaxUploadBytes)
+                if (smaller.Length <= budget)
                 {
                     DebugWindow.Log("SCREEN",
                         $"  scaled to {w}x{h} -> {smaller.Length / 1024} KB. Text may be "
