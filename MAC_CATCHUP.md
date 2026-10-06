@@ -64,6 +64,31 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     is ten seconds before the model starts. On a line that has failed the upload test or lost a picture, captures are now kept under 200 KB
     (palette 128, 64, 32 colours, then scaled down, never below legible: the real 255 KB capture of a busy screen came out at 178 KB). The
     normal 700 KB budget returns as soon as the line proves itself again.
+16. **Screen answers now look exactly like spoken answers, and no longer stack.** Before: every screen read was put on top of the previous
+    ones under a "SCREEN 3:41 PM" banner, with only the newest answer's code in the code panel (older answers lost their code), and the
+    prose was shown raw while it streamed (fences and headings visible, then jumping into place at the end). Now: the answer box is
+    cleared, one quiet line says what was read ("From your screen: LeetCode, Two Sum"), and the answer is in the same shape as any other:
+    the part to say, the code in its own panel, the complexity under it. The text is cleaned while it streams with the same pipeline the
+    finished answer gets (`ScreenAnalyzer.PostProcess` then the closer filter), so nothing jumps. The finished answer goes into the
+    answer history (`_answers.Append`, `JumpToNewest`), so Ctrl+Alt+Left / Right reach older screen answers like any other. A screen answer
+    keeps `allowClosingQuestion: true` for the closer filter (a candidate may end a design answer with a clarifying question).
+17. **The complexity bar took the wrong line.** Any line containing `O(...)` went to the small bar under the code, including the spoken
+    sentence itself ("I'll use a hash map; this gives O(n) time and O(n) space"), so the one thing to say was missing from the answer box.
+    A complexity line now has to START with Time, Space, Runtime, Complexity, Overall or Total (or with `O(` itself), and the bar joins up
+    to two of them ("Time O(n)   Space O(1)"; before, only the first). Found live on the screen test. `ComplexityOf` is unit tested.
+18. **"NEED" on a problem that runs past the bottom of the screen.** The model replies with one sentence and a line `NEED` plus what is
+    missing; the heading was stripped and a stray "The constraints section." was left under it. It now reads "Still need to see: The
+    constraints section." (`RewriteNeedHeading`, shared by the streaming and the finished text).
+19. **A dialog in front of the problem was captured instead of the problem.** "Save changes?", an error box or a sign-in prompt belongs to
+    a window behind it, and that window is what the question is about. The foreground window is now resolved to its root owner
+    (`GetAncestor(GA_ROOTOWNER)`) and that frame is captured, with the dialog on top of it. Our own windows and minimised owners are
+    skipped. **Check what the Mac does when a sheet or alert is frontmost: use the parent window.**
+20. **Copy code failed silently** when another program (clipboard manager, remote desktop client) held the clipboard: the button logged it
+    and the candidate pasted old text into the editor. Copying now retries for about a second (`Clipboard.SetDataObject(text, true)`) and
+    the button says "Copy failed, try again" if it still could not.
+21. **The "pick an area" overlay did not cover the whole desktop** when a second monitor had different scaling (150% next to 100%): the
+    window came out the wrong size and part of the screen could not be selected. It is now placed in real pixels over the whole virtual
+    screen once it exists (`SetWindowPos` with the `SM_*VIRTUALSCREEN` metrics).
 
 ---
 

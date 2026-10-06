@@ -27,6 +27,32 @@ namespace InterviewCopilot
             Top = SystemParameters.VirtualScreenTop;
             Width = SystemParameters.VirtualScreenWidth;
             Height = SystemParameters.VirtualScreenHeight;
+
+            // The numbers above are device-independent units at the main screen's scaling. A window that starts on a
+            // second monitor with different scaling (150% beside 100%) is laid out at THAT monitor's scaling, so it
+            // came out the wrong size and did not cover the whole desktop: part of the screen could not be picked.
+            // Once the window exists it is placed in real pixels, which have no scaling to get wrong.
+            SourceInitialized += (_, _) => CoverVirtualScreenInPixels();
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+        private void CoverVirtualScreenInPixels()
+        {
+            try
+            {
+                const int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77, SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
+                const uint SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
+                IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd == IntPtr.Zero) return;
+                SetWindowPos(hwnd, IntPtr.Zero,
+                    GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN),
+                    GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN),
+                    SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            catch (Exception ex) { DebugWindow.Log("SCREEN", $"Could not size the area picker in pixels: {ex.GetType().Name}"); }
         }
 
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

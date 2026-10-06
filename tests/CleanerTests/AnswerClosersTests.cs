@@ -72,6 +72,29 @@ internal static class AnswerClosersTests
               cleaned.Contains("MORE TO SAY") && cleaned.Contains("I added retries with backoff."),
             "offers come off the spoken part and off the last bullet, the real bullets stay");
 
+        // The complexity bar takes a line that states the complexity, and never the spoken sentence that mentions it
+        // (live, 2026-10-06: the whole "I'll use a hash map ... O(n) time" sentence left the answer box for the small bar).
+        string spoken = "I'll use a hash map to store each number's index as we iterate; this gives O(n) time and O(n) extra space.";
+        Check(MainWindow.ComplexityOf(spoken + "\n\nTime O(n), space O(n).") == "Time O(n), space O(n).",
+            "the spoken sentence stays in the answer and only the complexity line goes to the bar");
+        Check(MainWindow.ComplexityOf(spoken) == null, "a sentence that merely mentions O(n) is not a complexity line");
+        Check(MainWindow.ComplexityOf("Time: O(n)\nSpace: O(1)") == "Time: O(n)   Space: O(1)",
+            "time and space on two lines both reach the bar, not just the first");
+        Check(MainWindow.ComplexityOf("- Time complexity O(n log n)") == "Time complexity O(n log n)", "a bullet is trimmed");
+        Check(MainWindow.ComplexityOf("O(n^2) time, O(1) space") == "O(n^2) time, O(1) space", "a line that opens with the figure counts");
+        Check(MainWindow.ComplexityOf("Sorting first costs O(n log n), then one pass.") == null,
+            "advice that happens to contain a figure is not a complexity line");
+
+        // The reply to a problem that runs past the bottom of the screen reads as a sentence, not a stray fragment.
+        Check(MainWindow.RewriteNeedHeading("Let me scroll down and read the constraints before I answer.\n\nNEED\nThe constraints section.") ==
+              "Let me scroll down and read the constraints before I answer.\n\nStill need to see: The constraints section.",
+            "\"NEED\" on its own line becomes \"Still need to see: ...\" with what is missing after it");
+        Check(MainWindow.RewriteNeedHeading("Let me scroll.\nNEED: the constraints and the third example.") ==
+              "Let me scroll.\nStill need to see: the constraints and the third example.",
+            "\"NEED: ...\" on one line reads the same way");
+        Check(MainWindow.RewriteNeedHeading("I need to see how you handled it.") == "I need to see how you handled it.",
+            "the word need inside a sentence is left alone");
+
         // The invitation flow itself still works: when the interviewer asks for questions, the answer is one.
         Check(PromptBuilder.IsCandidateQuestionInvitation("Do you have any questions for me?"),
             "\"do you have any questions\" is recognised as an invitation, so a closing question is allowed there");

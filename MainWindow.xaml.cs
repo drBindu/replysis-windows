@@ -4319,7 +4319,16 @@ namespace InterviewCopilot
         private int _uplinkProbeRunning;
 
         /// <summary>A line that has failed a test or lost a picture gets lighter screenshots until it proves itself again.</summary>
-        private void ApplyLineSpeedToCaptures() => ScreenAnalyzer.SetSlowLine(_uplink.FailureStreak > 0);
+        private void ApplyLineSpeedToCaptures()
+        {
+            bool slow = _uplink.FailureStreak > 0;
+#if DEBUG
+            // Developer builds only: compare screen answers at the normal and the slow-line picture size on the same screen.
+            string force = Environment.GetEnvironmentVariable("REPLYSIS_LINE") ?? "";
+            if (force == "fast") slow = false; else if (force == "slow") slow = true;
+#endif
+            ScreenAnalyzer.SetSlowLine(slow);
+        }
 
         /// <summary>
         /// Times a small upload to the same server the pictures go to. The server reads the body, finds no image in
@@ -7466,20 +7475,28 @@ namespace InterviewCopilot
             StealthDialog.Show(this, "Resume Facts Preview", facts);
         }
 
-        private void Copy_Click(object sender, RoutedEventArgs e)
+        /// <summary>Puts text on the clipboard, waiting out another program that has it for a moment. False if it never opened.</summary>
+        private static bool TryCopyToClipboard(string text)
         {
-            try { Clipboard.SetText(AiAnswerBox.Text); }
-            catch (Exception ex) { DebugWindow.Log("CLIPBOARD", ex.Message); }
+            try
+            {
+                Clipboard.SetDataObject(text, copy: true);   // retries internally for about a second
+                return true;
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("CLIPBOARD", $"Copy failed: {ex.GetType().Name}");
+                return false;
+            }
         }
+
+        private void Copy_Click(object sender, RoutedEventArgs e) => TryCopyToClipboard(AiAnswerBox.Text);
 
         // ── Toolbar: Copy answer ──────────────────────────────────────────────
         private void CopyAnswerBtn_Click(object sender, RoutedEventArgs e)
         {
             if (!string.IsNullOrWhiteSpace(AiAnswerBox.Text))
-            {
-                try { Clipboard.SetText(AiAnswerBox.Text); }
-                catch (Exception ex) { DebugWindow.Log("CLIPBOARD", ex.Message); }
-            }
+                TryCopyToClipboard(AiAnswerBox.Text);
         }
 
         // ── Toolbar: Clear transcript + answer ───────────────────────────────
@@ -7592,9 +7609,27 @@ namespace InterviewCopilot
         /// write it every way there is: "O(n)", "Time: O(n log n)", "time
         /// complexity is O(1) space".
         /// </summary>
+        // A line that IS the complexity statement: it starts with Time, Space, Runtime or Complexity (or with O( itself)
+        // and gives the figure. This used to be any line containing "O(...)", which took the spoken answer's own sentence
+        // ("I'll use a hash map; this gives O(n) time and O(n) space") out of the answer box and left it in the small
+        // complexity bar, so the one thing the candidate has to say was missing from where they were reading.
         private static readonly Regex ComplexityLine =
-            new(@"^.*\bO\s*\(\s*[^)]{1,24}\)\s*.*$",
-                RegexOptions.Multiline | RegexOptions.Compiled);
+            new(@"^[ \t\u2022*\-]*(?:(?:time|space|runtime|complexity|overall|total)\b[^\n]*?\bO\s*\(\s*[^)\n]{1,24}\)[^\n]*|O\s*\(\s*[^)\n]{1,24}\)[^\n]*)$",
+                RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>The complexity lines of an answer joined for the bar ("Time O(n)   Space O(1)"), or null when it states none.</summary>
+        internal static string? ComplexityOf(string prose)
+        {
+            var found = new List<string>();
+            foreach (Match m in ComplexityLine.Matches(prose ?? ""))
+            {
+                string line = m.Value.Trim(' ', '\t', '-', '*', '\u2022', '\r');
+                if (line.Length is < 4 or > 160) continue;
+                found.Add(line);
+                if (found.Count == 2) break;   // time and space; the bar is one line
+            }
+            return found.Count == 0 ? null : string.Join("   ", found);
+        }
 
         /// <summary>Clears both halves, so no answer is shown beside older code.</summary>
         private void ClearAnswer()
@@ -7655,6 +7690,13 @@ namespace InterviewCopilot
         /// SOLUTION, so after the fence is lifted out the word is left pointing
         /// at nothing.
         /// </summary>
+        /// <summary>"NEED" + what is missing, as a sentence a person reads.</summary>
+        internal static string RewriteNeedHeading(string prose) => NeedHeading.Replace(prose, "Still need to see: ");
+
+        private static readonly Regex NeedHeading =
+            new(@"^[ \t]*NEED[ \t]*:?[ \t]*(?:\r?\n[ \t]*)?(?=\S)",
+                RegexOptions.Multiline | RegexOptions.Compiled);
+
         private static readonly Regex ScaffoldHeading =
             new(@"^[ \t]*(SAY THIS|DETAIL|NEED|CAUSE|FIX|APPROACH|SOLUTION|COMPLEXITY)[ \t]*:?[ \t]*\r?$",
                 RegexOptions.Multiline | RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -7679,7 +7721,10 @@ namespace InterviewCopilot
         {
             if (string.IsNullOrWhiteSpace(prose)) return "";
 
-            string cleaned = ScaffoldHeading.Replace(prose, "");
+            // "NEED" followed by what is missing is the reply to a problem that runs past the bottom of the screen. With
+            // the heading taken off, all that was left was a stray "The constraints section." under "Let me scroll down".
+            string cleaned = RewriteNeedHeading(prose);
+            cleaned = ScaffoldHeading.Replace(cleaned, "");
 
             // Only when the bar is actually showing it — otherwise removing it
             // here would lose it altogether.
@@ -7697,12 +7742,10 @@ namespace InterviewCopilot
         /// </summary>
         private void ShowComplexity(string prose)
         {
-            foreach (Match m in ComplexityLine.Matches(prose))
+            string? complexity = ComplexityOf(prose);
+            if (complexity != null)
             {
-                string line = m.Value.Trim(' ', '\t', '-', '*', '\u2022');
-                if (line.Length is < 4 or > 160) continue;
-
-                ComplexityLabel.Text = line;
+                ComplexityLabel.Text = complexity;
                 ComplexityBar.Visibility = Visibility.Visible;
                 return;
             }
@@ -7712,15 +7755,14 @@ namespace InterviewCopilot
         private void CopyCodeBtn_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(_currentAnswerCode)) return;
-            try
-            {
-                Clipboard.SetText(_currentAnswerCode);
-                CopyCodeBtn.Content = "Copied";
-                var revert = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-                revert.Tick += (_, _) => { revert.Stop(); CopyCodeBtn.Content = "Copy code"; };
-                revert.Start();
-            }
-            catch (Exception ex) { DebugWindow.Log("UI", $"Copy failed: {ex.Message}"); }
+            // Another program (a clipboard manager, a remote-desktop client) often holds the clipboard for a moment;
+            // the first attempt then fails with "Clipboard can't open". The button used to log that and stay silent, so
+            // the candidate pasted old text into the editor. SetDataObject retries, and the label says if it still failed.
+            bool copied = TryCopyToClipboard(_currentAnswerCode);
+            CopyCodeBtn.Content = copied ? "Copied" : "Copy failed, try again";
+            var revert = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            revert.Tick += (_, _) => { revert.Stop(); CopyCodeBtn.Content = "Copy code"; };
+            revert.Start();
         }
 
         private void AiAnswerBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -8420,6 +8462,10 @@ namespace InterviewCopilot
                         ? ScreenAnalyzer.CapturePrimaryScreen()
                         : ScreenAnalyzer.CaptureScreen());
                 _lastCaptureKb = imageBytes.Length / 1024;
+#if DEBUG
+                // Developer builds only: keep what the model is sent, to look at it.
+                try { File.WriteAllBytes(Path.Combine(Path.GetTempPath(), "replysis-last-capture.png"), imageBytes); } catch { }
+#endif
                 DebugWindow.Log("SCREEN", $"Captured {_lastCaptureKb} KB from {ScreenAnalyzer.LastCaptureTarget}");
             }
             catch (Exception ex)
@@ -8452,7 +8498,6 @@ namespace InterviewCopilot
             ThinkingLabel.Text = "Reading your screen...";
 
             string resumeCtx  = ResumeParser.ExtractFacts(ResumeTextBox.Text);
-            string timestamp  = DateTime.Now.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
 
             // Name what was captured. An answer about the wrong window used to be
             // indistinguishable from a bad answer about the right one, so the only
@@ -8460,19 +8505,31 @@ namespace InterviewCopilot
             // when the key was pressed. Saying it outright turns that into a
             // mistake the user spots instantly.
             string target     = ScreenAnalyzer.LastCaptureTarget;
+            // One quiet line saying what was read, then the answer in exactly the shape a spoken answer has: the part to
+            // say, the code in its own panel, the complexity under it. It used to stack every screen answer on top of
+            // the one before, with the code of only the newest in the panel, so older answers lost their code; those
+            // are now one step back with Ctrl+Alt+Left, like every other answer.
             string header     = string.IsNullOrWhiteSpace(target)
-                ? $"SCREEN   {timestamp}\n\n"
-                : $"SCREEN   {timestamp}   {target}\n\n";
+                ? "From your screen\n\n"
+                : $"From your screen: {target}\n\n";
 
-            // A hairline between this answer and the ones before it. A rule of 45
-            // box characters read as the start of another section rather than the
-            // end of one, and it competed with the answer for attention.
-            string sep        = "\n\n";
+            // What the screen shows for the text so far: the same cleaning a finished answer gets, so headings and
+            // fences never show raw while it streams and then jump into place at the end.
+            string ComposeScreenAnswer(string raw)
+            {
+                try { return AnswerClosers.StripTrailingOffer(ScreenAnalyzer.PostProcess(raw), allowClosingQuestion: true); }
+                catch { return raw; }
+            }
 
-            // Save previous answers so we can prepend the new one on top.
-            // Treat placeholder/welcome messages as "empty" so they aren't carried forward.
-            bool isDefaultText = string.IsNullOrWhiteSpace(AiAnswerBox.Text);
-            string previousAnswers = isDefaultText ? "" : AiAnswerBox.Text;
+            void ShowScreenAnswer(string composed, bool scrollToEnd)
+            {
+                ShowAnswer(composed, scrollToEnd);
+                AiAnswerBox.Text = header + AiAnswerBox.Text;
+                if (scrollToEnd) AiAnswerBox.ScrollToEnd();
+            }
+
+            // Nothing of the previous answer stays up beside the new one (its code panel least of all).
+            ClearAnswer();
 
             var sb = new StringBuilder();
             int tokenCount = 0;
@@ -8498,10 +8555,10 @@ namespace InterviewCopilot
                         // part that looked emptiest.
                         if (tokenCount <= 3 || tokenCount % 3 == 0 || token.Contains('\n'))
                         {
-                            AiAnswerBox.Text = $"{header}{sb}";
-                            AiAnswerBox.ScrollToEnd();
+                            string soFar = ComposeScreenAnswer(sb.ToString());
+                            ShowScreenAnswer(soFar, scrollToEnd: true);
                             if (_isCameraMode && answerWindow != null)
-                                answerWindow.UpdateAnswer(sb.ToString());
+                                answerWindow.UpdateAnswer(soFar);
                         }
                     }
                 }
@@ -8539,23 +8596,36 @@ namespace InterviewCopilot
                 // all, guessing where the code started and stopped. The panel
                 // has existed the whole time; F8 simply never reached it.
                 //
-                // ShowAnswer fills the panel and leaves the prose behind, so the
-                // header and the earlier answers are put back around that prose
-                // afterwards rather than being fed through it — passing the whole
-                // composed string in would pull code out of previous answers too.
-                ShowAnswer(finalResult, scrollToEnd: false);
-
-                string prose = AiAnswerBox.Text;
-                AiAnswerBox.Text = string.IsNullOrWhiteSpace(previousAnswers)
-                    ? $"{header}{prose}"
-                    : $"{header}{prose}\n{sep}{previousAnswers}";
+                // ShowAnswer fills the panel and leaves the prose behind; the one-line
+                // header goes in front of that prose.
+                ShowScreenAnswer(finalResult, scrollToEnd: false);
                 AiAnswerBox.ScrollToHome();
+#if DEBUG
+                // Developer builds only: write down exactly what the screen answer shows, to read it back.
+                try
+                {
+                    string nl = Environment.NewLine;
+                    File.WriteAllText(Path.Combine(Path.GetTempPath(), "replysis-last-screen-answer.txt"),
+                        "=== RAW FROM THE MODEL ===" + nl + sb + nl + nl +
+                        "=== ANSWER BOX ===" + nl + AiAnswerBox.Text + nl + nl +
+                        "=== CODE PANEL (" + (CodePanel.Visibility == Visibility.Visible ? "visible" : "hidden") + ", " + CodeLanguageLabel.Text + ") ===" + nl + _currentAnswerCode + nl + nl +
+                        "=== COMPLEXITY (" + (ComplexityBar.Visibility == Visibility.Visible ? "visible" : "hidden") + ") ===" + nl + ComplexityLabel.Text);
+                }
+                catch { }
+#endif
 
+                string screenLabel = string.IsNullOrWhiteSpace(target) ? "From your screen" : $"From your screen: {target}";
                 if (_isCameraMode && answerWindow != null)
                 {
                     answerWindow.UpdateAnswer(finalResult);
-                    answerWindow.UpdateQuestion("[Screen Analysis]");
+                    answerWindow.UpdateQuestion(screenLabel);
                 }
+
+                // Kept like every other answer, so Ctrl+Alt+Left / Right reach it. Pressing the screen key is a
+                // deliberate act, so it is shown even if an older answer was being read.
+                _answers.Append(screenLabel, finalResult);
+                _answers.JumpToNewest();
+                UpdateHistoryNav();
 
                 // Persist to session log + history for smart follow-up voice questions
                 AppendToSessionLog("[Screen Analysis]", finalResult);
@@ -8746,6 +8816,24 @@ namespace InterviewCopilot
         }
         private void ArmAutoTestHarness()
         {
+            // Developer builds only: REPLYSIS_AUTOTEST_SCREEN=<seconds> presses the screen-read key (F8) that long after
+            // launch, with the interview view showing, so the screen answer can be tested and photographed without
+            // anyone at the keyboard (the real hook ignores synthetic keys on purpose). REPLYSIS_AUTOTEST_SCREEN_REPEAT=<seconds>
+            // presses it again at that interval. Never compiled into a release build.
+            if (int.TryParse(Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST_SCREEN"), out int screenAfter) && screenAfter > 0)
+            {
+                int.TryParse(Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST_SCREEN_REPEAT"), out int screenRepeat);
+                var press = new DispatcherTimer { Interval = TimeSpan.FromSeconds(screenAfter) };
+                press.Tick += (_, _) =>
+                {
+                    if (screenRepeat > 0) press.Interval = TimeSpan.FromSeconds(screenRepeat); else press.Stop();
+                    if (_inSetupStep) StartInterviewStep_Click(this, new RoutedEventArgs());
+                    DebugWindow.Log("AUTOTEST", "pressing F8 (screen read)");
+                    _ = HandleScreenAnalysisAsync();
+                };
+                press.Start();
+            }
+
             if (Environment.GetEnvironmentVariable("REPLYSIS_SHOW_NOLISTEN") == "1")
             {
                 // Screenshot aid: show the out-of-listening-time screens.

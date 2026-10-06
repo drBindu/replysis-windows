@@ -50,6 +50,8 @@ namespace InterviewCopilot
         [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
         [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+        private const uint GA_ROOTOWNER = 3;
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
@@ -314,6 +316,18 @@ namespace InterviewCopilot
 
                 GetWindowThreadProcessId(hwnd, out pid);
                 if (pid == (uint)Environment.ProcessId) return false;
+
+                // A dialog in front ("Save changes?", an error box, a sign-in prompt) belongs to a window behind it, and
+                // that window is what the question is about. Reading only the dialog sent the model a picture of a
+                // message box and nothing of the problem under it (seen live: "Cannot find the file" in front of the
+                // page being asked about). The owner's frame is captured instead, with the dialog on top of it, so the
+                // model sees both. A window that is minimised, ours, or has no owner is read as before.
+                IntPtr owner = GetAncestor(hwnd, GA_ROOTOWNER);
+                if (owner != IntPtr.Zero && owner != hwnd && IsWindow(owner) && !IsIconic(owner))
+                {
+                    GetWindowThreadProcessId(owner, out uint ownerPid);
+                    if (ownerPid != (uint)Environment.ProcessId) hwnd = owner;
+                }
 
                 // The window's own frame, not the invisible resize border Windows
                 // draws around it. GetWindowRect includes that padding, which puts
