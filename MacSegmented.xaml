@@ -5,19 +5,19 @@
              SnapsToDevicePixels="True" UseLayoutRounding="True">
     <!-- A macOS style segmented switch: a dark rounded track and one raised thumb that SLIDES to the chosen side. The
          thumb is a separate element rather than a restyled segment, which is what makes it slide instead of flip. -->
-    <Border x:Name="Track" CornerRadius="9" Background="#151A21" BorderBrush="#2B323D" BorderThickness="1" Padding="2">
+    <Border x:Name="Track" CornerRadius="9" Background="#12FFFFFF" BorderBrush="#26FFFFFF" BorderThickness="1" Padding="2">
         <Grid x:Name="Host" SizeChanged="Host_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="Thumb" Grid.Column="0" CornerRadius="7" BorderThickness="1" BorderBrush="#66788A"
+            <Border x:Name="Thumb" Grid.Column="0" CornerRadius="7" BorderThickness="1" BorderBrush="#55FFFFFF"
                     HorizontalAlignment="Stretch" IsHitTestVisible="False">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#4C586A" Offset="0"/>
-                        <GradientStop Color="#3C4657" Offset="1"/>
+                        <GradientStop Color="#44FFFFFF" Offset="0"/>
+                        <GradientStop Color="#2CFFFFFF" Offset="1"/>
                     </LinearGradientBrush>
                 </Border.Background>
                 <Border.Effect>

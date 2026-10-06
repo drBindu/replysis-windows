@@ -368,13 +368,13 @@
          MAIN CONTAINER  &#183;  pure glass on near-black
     ===================================================================== -->
     <Border x:Name="MainAppBorder" CornerRadius="18"
-            BorderBrush="#55FFFFFF" BorderThickness="1"
+            BorderBrush="#28384E" BorderThickness="1"
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <Border.Background>
             <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                <GradientStop Color="#080C14" Offset="0"/>
-                <GradientStop Color="#0D1117" Offset="0.58"/>
-                <GradientStop Color="#080C14" Offset="1"/>
+                <GradientStop Color="#0B0F17" Offset="0"/>
+                <GradientStop Color="#0A0D14" Offset="0.58"/>
+                <GradientStop Color="#070A10" Offset="1"/>
             </LinearGradientBrush>
         </Border.Background>
         <Border.Effect>
@@ -393,8 +393,8 @@
 
                 <!-- ================= HEADER ================= -->
                 <Border Grid.Row="0" CornerRadius="18,18,0,0"
-                        BorderBrush="#33FFFFFF" BorderThickness="0,0,0,1"
-                        Background="#CC0D1117">
+                        BorderBrush="#26364A" BorderThickness="0,0,0,1"
+                        Background="#08FFFFFF">
                     <Grid Margin="14,0,10,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -756,8 +756,8 @@
                          SIDE PANEL  &#183;  Interview Setup (tab-less, no dead space)
                     ========================================================== -->
                     <Border x:Name="ResumePanel" Grid.Column="0"
-                            CornerRadius="18" BorderBrush="#22FFFFFF" BorderThickness="1"
-                            Background="#CC0D1117" Padding="14" ClipToBounds="True">
+                            CornerRadius="16" BorderBrush="#26364A" BorderThickness="1"
+                            Background="#D90F141E" Padding="14" ClipToBounds="True">
                         <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
@@ -815,7 +815,7 @@
                                  so it reads as the primary action on the page rather
                                  than one field among several. -->
                             <Border Grid.Row="1" Grid.RowSpan="3" CornerRadius="12"
-                                    Background="#12151C" BorderBrush="#2A2F3A" BorderThickness="1"
+                                    Background="#111823" BorderBrush="#253449" BorderThickness="1"
                                     Padding="13,12" Margin="0,0,0,14">
                                 <Border.Effect>
                                     <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.28"/>
@@ -942,7 +942,7 @@
 
                             <!-- TARGET ROLE - its own card, same treatment as Resume. -->
                             <Border Grid.Row="4" Grid.RowSpan="4" CornerRadius="12"
-                                    Background="#12151C" BorderBrush="#2A2F3A" BorderThickness="1"
+                                    Background="#111823" BorderBrush="#253449" BorderThickness="1"
                                     Padding="13" Margin="0,0,0,14">
                                 <Border.Effect>
                                     <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.28"/>
@@ -1007,7 +1007,7 @@
                                  sections read as one consistent system rather than three
                                  different attempts at a layout. -->
                             <Border Grid.Row="8" CornerRadius="12"
-                                    Background="#12151C" BorderBrush="#2A2F3A" BorderThickness="1"
+                                    Background="#111823" BorderBrush="#253449" BorderThickness="1"
                                     Padding="13">
                                 <Border.Effect>
                                     <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.28"/>
@@ -1131,7 +1131,7 @@
                                 <!-- Compact preference rows. The options stay small and
                                      aligned to the right, like a native Mac settings pane,
                                      rather than expanding into full-width feature cards. -->
-                                <Border Background="#CC0D1117" BorderBrush="#22FFFFFF" BorderThickness="1"
+                                <Border Background="#13FFFFFF" BorderBrush="#2A3A52" BorderThickness="1"
                                         CornerRadius="11" Padding="13,11" Margin="0,0,0,9">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1150,7 +1150,7 @@
                                     </Grid>
                                 </Border>
 
-                                <Border Background="#CC0D1117" BorderBrush="#22FFFFFF" BorderThickness="1"
+                                <Border Background="#13FFFFFF" BorderBrush="#2A3A52" BorderThickness="1"
                                         CornerRadius="11" Padding="13,11" Margin="0,0,0,9">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1169,7 +1169,7 @@
                                     </Grid>
                                 </Border>
 
-                                <Border Background="#CC0D1117" BorderBrush="#22FFFFFF" BorderThickness="1"
+                                <Border Background="#13FFFFFF" BorderBrush="#2A3A52" BorderThickness="1"
                                         CornerRadius="11" Padding="13,11">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1197,7 +1197,7 @@
                              never moves with that content. -->
                         <Border x:Name="StartInterviewPin" Grid.Row="1" HorizontalAlignment="Stretch"
                                 Margin="0,14,0,0" Padding="0,13,0,0" Panel.ZIndex="10"
-                                BorderBrush="#1E232D" BorderThickness="0,1,0,0">
+                                BorderBrush="#253449" BorderThickness="0,1,0,0">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -1220,8 +1220,8 @@
                                             <Border x:Name="StartBd" CornerRadius="10" BorderBrush="#32A864" BorderThickness="1" Padding="{TemplateBinding Padding}">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                        <GradientStop Color="#1A6B3A" Offset="0"/>
-                                                        <GradientStop Color="#22C55E" Offset="1"/>
+                                                        <GradientStop Color="#1D8A4B" Offset="0"/>
+                                                        <GradientStop Color="#27A85C" Offset="1"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -1268,7 +1268,7 @@
 
                         <!-- AI ANSWER -->
                         <Border Grid.Row="0" CornerRadius="15"
-                                BorderBrush="#22FFFFFF" BorderThickness="1" Background="#CC0D1117">
+                                BorderBrush="#2A3A52" BorderThickness="1" Background="#13FFFFFF">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="26" ShadowDepth="7" Opacity="0.42" Color="#000000"/>
                             </Border.Effect>
@@ -1280,8 +1280,8 @@
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <Border Grid.Row="0" Background="#1A1F2E" CornerRadius="15,15,0,0"
-                                        BorderBrush="#22FFFFFF" BorderThickness="0,0,0,1" Padding="16,11">
+                                <Border Grid.Row="0" Background="#16FFFFFF" CornerRadius="15,15,0,0"
+                                        BorderBrush="#12FFFFFF" BorderThickness="0,0,0,1" Padding="16,11">
                                     <DockPanel>
                                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
                                                     VerticalAlignment="Center">
@@ -1496,7 +1496,7 @@
 
                         <!-- TRANSCRIPT -->
                         <Border Grid.Row="2" CornerRadius="15"
-                                BorderBrush="#22FFFFFF" BorderThickness="1" Background="#CC0D1117">
+                                BorderBrush="#2A3A52" BorderThickness="1" Background="#13FFFFFF">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="26" ShadowDepth="7" Opacity="0.42" Color="#000000"/>
                             </Border.Effect>
@@ -1506,8 +1506,8 @@
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
 
-                                <Border Grid.Row="0" Background="#1A1F2E" CornerRadius="15,15,0,0"
-                                        BorderBrush="#22FFFFFF" BorderThickness="0,0,0,1" Padding="16,9">
+                                <Border Grid.Row="0" Background="#16FFFFFF" CornerRadius="15,15,0,0"
+                                        BorderBrush="#12FFFFFF" BorderThickness="0,0,0,1" Padding="16,9">
                                     <DockPanel>
                                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
                                                     VerticalAlignment="Center">
@@ -1671,7 +1671,7 @@
             <Popup x:Name="ProfileDropdownPopup" Placement="Bottom" StaysOpen="True"
                    AllowsTransparency="True" PopupAnimation="Fade"
                    HorizontalOffset="-200" VerticalOffset="6">
-                <Border Background="#0D1117" BorderBrush="#2A2F3A" BorderThickness="1"
+                <Border Background="#0B1320" BorderBrush="#26354A" BorderThickness="1"
                         CornerRadius="14" Width="296" Margin="0,0,0,12">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="34" ShadowDepth="9" Opacity="0.62" Color="#000000"/>
@@ -1686,12 +1686,12 @@
                                     Margin="0,0,13,0" VerticalAlignment="Center">
                                 <Border.Background>
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="#1E3A5F" Offset="0"/>
-                                        <GradientStop Color="#2563EB" Offset="1"/>
+                                        <GradientStop Color="#3B6FE0" Offset="0"/>
+                                        <GradientStop Color="#5A3FD6" Offset="1"/>
                                     </LinearGradientBrush>
                                 </Border.Background>
                                 <Border.Effect>
-                                    <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.5" Color="#2563EB"/>
+                                    <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.5" Color="#3B6FE0"/>
                                 </Border.Effect>
                                 <Grid>
                                     <TextBlock x:Name="PopupAvatarInitials" Text="GU" Foreground="White"
@@ -1709,7 +1709,7 @@
                             </StackPanel>
                         </Grid>
 
-                        <Border Height="1" Background="#1E232D" Margin="14,0"/>
+                        <Border Height="1" Background="#182338" Margin="14,0"/>
 
                         <Border x:Name="PopupCreditsCard" Margin="12,12,12,8" CornerRadius="12"
                                 BorderThickness="1" Padding="13,12" Cursor="Hand"
@@ -1745,7 +1745,7 @@
                                             <Border x:Name="Bd" CornerRadius="8" Padding="15,7" BorderThickness="1"
                                                     Background="{DynamicResource ScreenActionSurface}" BorderBrush="{DynamicResource ScreenActionStroke}">
                                                 <Border.Effect>
-                                                    <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.45" Color="#2563EB"/>
+                                                    <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.45" Color="#2E6BE0"/>
                                                 </Border.Effect>
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>

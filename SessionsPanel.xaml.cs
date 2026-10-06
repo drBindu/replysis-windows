@@ -556,8 +556,8 @@ namespace InterviewCopilot
         {
             var chip = new Border
             {
-                Background      = new SolidColorBrush(Color.FromArgb(204, 13, 17, 23)),
-                BorderBrush     = new SolidColorBrush(Color.FromArgb(75, 255, 255, 255)),
+                Background      = new SolidColorBrush(Color.FromArgb(150, 16, 24, 36)),
+                BorderBrush     = new SolidColorBrush(Color.FromArgb(75, 80, 106, 137)),
                 BorderThickness = new Thickness(1),
                 CornerRadius    = new CornerRadius(5),
                 Padding         = new Thickness(7, 2, 7, 2),
@@ -584,7 +584,7 @@ namespace InterviewCopilot
 
             if (pairs.Count == 0)
             {
-                AddTextBlock("No Q&A recorded in this session.", "#6B7280", 13, false);
+                AddTextBlock("No Q&A recorded in this session.", "#7E90A8", 13, false);
                 return;
             }
 
@@ -604,8 +604,8 @@ namespace InterviewCopilot
 
                 var badge = new Border
                 {
-                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E3A5F")),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(70, 96, 165, 250)),
+                    Background = new SolidColorBrush(Color.FromArgb(180, 18, 28, 42)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(70, 76, 101, 133)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(5),
                     Padding = new Thickness(7, 2, 7, 2),
@@ -637,9 +637,9 @@ namespace InterviewCopilot
                 // Question block
                 var qBorder = new Border
                 {
-                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0D1117")),
+                    Background = new SolidColorBrush(Color.FromArgb(218, 11, 17, 28)),
                     CornerRadius = new CornerRadius(12),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(85, 255, 255, 255)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(115, 46, 66, 91)),
                     BorderThickness = new Thickness(1),
                     Padding = new Thickness(13, 9, 13, 9),
                     Margin = new Thickness(0, 0, 0, 6)
@@ -648,7 +648,7 @@ namespace InterviewCopilot
                 qStack.Children.Add(new TextBlock
                 {
                     Text = "INTERVIEWER",
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6B7280")),
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7E90A8")),
                     FontSize = 9,
                     FontWeight = FontWeights.Bold,
                     FontFamily = new FontFamily("Segoe UI"),
@@ -657,7 +657,7 @@ namespace InterviewCopilot
                 qStack.Children.Add(new TextBlock
                 {
                     Text = q,
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CBD5E1")),
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#C6D4E8")),
                     FontSize = 12.5,
                     FontWeight = FontWeights.SemiBold,
                     FontFamily = new FontFamily("Segoe UI"),
@@ -672,9 +672,9 @@ namespace InterviewCopilot
                 {
                     var aBorder = new Border
                     {
-                        Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#12151C")),
+                        Background = new SolidColorBrush(Color.FromArgb(185, 16, 25, 37)),
                         CornerRadius = new CornerRadius(12),
-                        BorderBrush = new SolidColorBrush(Color.FromArgb(85, 30, 58, 138)),
+                        BorderBrush = new SolidColorBrush(Color.FromArgb(90, 43, 65, 88)),
                         BorderThickness = new Thickness(1),
                         Padding = new Thickness(13, 9, 13, 9),
                         Margin = new Thickness(12, 0, 0, 14)
@@ -683,7 +683,7 @@ namespace InterviewCopilot
                     aStack.Children.Add(new TextBlock
                     {
                         Text = "AI ANSWER",
-                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4ADE80")),
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#84E7B6")),
                         FontSize = 9,
                         FontWeight = FontWeights.Bold,
                         FontFamily = new FontFamily("Segoe UI"),
@@ -692,7 +692,7 @@ namespace InterviewCopilot
                     aStack.Children.Add(new TextBlock
                     {
                         Text = a,
-                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E2E8F0")),
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#EAF1F8")),
                         FontSize = 12.5,
                         FontWeight = FontWeights.Medium,
                         FontFamily = new FontFamily("Segoe UI"),

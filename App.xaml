@@ -3,15 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Startup="OnStartupHook">
     <Application.Resources>
-        <Color x:Key="AppCanvasColor">#080C14</Color>
-        <Color x:Key="AppSurfaceColor">#0D1117</Color>
-        <Color x:Key="AppSurfaceRaisedColor">#12151C</Color>
-        <Color x:Key="AppStrokeColor">#2A2F3A</Color>
-        <Color x:Key="AppTextColor">#E2E8F0</Color>
-        <Color x:Key="AppMutedTextColor">#94A3B8</Color>
-        <Color x:Key="AppAccentColor">#4ADE80</Color>
-        <Color x:Key="AppAccentHoverColor">#22C55E</Color>
-        <Color x:Key="AppSuccessColor">#4ADE80</Color>
+        <Color x:Key="AppCanvasColor">#070B14</Color>
+        <Color x:Key="AppSurfaceColor">#0D1422</Color>
+        <Color x:Key="AppSurfaceRaisedColor">#121C2D</Color>
+        <Color x:Key="AppStrokeColor">#26354A</Color>
+        <Color x:Key="AppTextColor">#F4F7FB</Color>
+        <Color x:Key="AppMutedTextColor">#93A4BA</Color>
+        <Color x:Key="AppAccentColor">#34E08A</Color>
+        <Color x:Key="AppAccentHoverColor">#84E7B6</Color>
+        <Color x:Key="AppSuccessColor">#57D68D</Color>
         <Color x:Key="AppDangerColor">#FF6B73</Color>
 
         <SolidColorBrush x:Key="AppCanvasBrush" Color="{StaticResource AppCanvasColor}"/>
@@ -26,32 +26,32 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate>
-                        <Border BorderBrush="#9960A5FA" BorderThickness="2" CornerRadius="8" Margin="-3"/>
+                        <Border BorderBrush="#99A9D2FF" BorderThickness="2" CornerRadius="8" Margin="-3"/>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
         <!-- Screen actions share their surface palette in both window sizes. -->
-        <SolidColorBrush x:Key="ScreenActionSurface" Color="#1A1F2E"/>
-        <SolidColorBrush x:Key="ScreenActionStroke" Color="#33FFFFFF"/>
-        <SolidColorBrush x:Key="ScreenActionHoverSurface" Color="#2D3748"/>
-        <SolidColorBrush x:Key="ActionGraphiteSurface" Color="#1A1F2E"/>
-        <SolidColorBrush x:Key="ActionGraphiteStroke" Color="#33FFFFFF"/>
-        <SolidColorBrush x:Key="ActionSilverSurface" Color="#1E3A5F"/>
-        <SolidColorBrush x:Key="GlassButtonHoverSurface" Color="#2D3748"/>
-        <SolidColorBrush x:Key="GlassButtonPressedSurface" Color="#151A24"/>
-        <SolidColorBrush x:Key="GlassButtonHoverStroke" Color="#45617F"/>
-        <SolidColorBrush x:Key="GlassButtonDisabledSurface" Color="#10141C"/>
+        <SolidColorBrush x:Key="ScreenActionSurface" Color="#1AEBF2FF"/>
+        <SolidColorBrush x:Key="ScreenActionStroke" Color="#31EBF2FF"/>
+        <SolidColorBrush x:Key="ScreenActionHoverSurface" Color="#27EBF2FF"/>
+        <SolidColorBrush x:Key="ActionGraphiteSurface" Color="#0DEBF2FF"/>
+        <SolidColorBrush x:Key="ActionGraphiteStroke" Color="#1FEBF2FF"/>
+        <SolidColorBrush x:Key="ActionSilverSurface" Color="#1AEBF2FF"/>
+        <SolidColorBrush x:Key="GlassButtonHoverSurface" Color="#1CEBF2FF"/>
+        <SolidColorBrush x:Key="GlassButtonPressedSurface" Color="#09EBF2FF"/>
+        <SolidColorBrush x:Key="GlassButtonHoverStroke" Color="#41EBF2FF"/>
+        <SolidColorBrush x:Key="GlassButtonDisabledSurface" Color="#05EBF2FF"/>
         <SolidColorBrush x:Key="GlassButtonDangerSurface" Color="#12F87171"/>
         <SolidColorBrush x:Key="GlassButtonDangerHoverSurface" Color="#22F87171"/>
         <SolidColorBrush x:Key="GlassButtonDangerStroke" Color="#31F87171"/>
-        <SolidColorBrush x:Key="GlassButtonSelectedSurface" Color="#1E3A5F"/>
+        <SolidColorBrush x:Key="GlassButtonSelectedSurface" Color="#1AEBF2FF"/>
 
         <Style x:Key="ScreenActionButton" TargetType="Button">
             <Setter Property="Background" Value="{DynamicResource ScreenActionSurface}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource ScreenActionStroke}"/>
-            <Setter Property="Foreground" Value="#E2E8F0"/>
+            <Setter Property="Foreground" Value="#F4F7FC"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="9,3"/>
             <Setter Property="MinHeight" Value="28"/>
@@ -82,12 +82,12 @@
                                 <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ScreenActionStroke}"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Surface" Property="BorderBrush" Value="#60A5FA"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#8E9EFF"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
                                 <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
-                                <Setter Property="Foreground" Value="#6B7280"/>
+                                <Setter Property="Foreground" Value="#7F8A9A"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -102,7 +102,7 @@
             <Setter Property="MinWidth" Value="96"/>
             <Setter Property="Padding" Value="18,0"/>
             <Setter Property="Background" Value="{DynamicResource ActionSilverSurface}"/>
-            <Setter Property="Foreground" Value="#E2E8F0"/>
+            <Setter Property="Foreground" Value="#F4F7FC"/>
             <Setter Property="BorderBrush" Value="{DynamicResource ScreenActionStroke}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -154,7 +154,7 @@
             <Setter Property="MinWidth" Value="96"/>
             <Setter Property="Padding" Value="18,0"/>
             <Setter Property="Background" Value="{DynamicResource ActionGraphiteSurface}"/>
-            <Setter Property="Foreground" Value="#CBD5E1"/>
+            <Setter Property="Foreground" Value="#DDDDE3"/>
             <Setter Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -188,12 +188,12 @@
                                 <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Surface" Property="BorderBrush" Value="#64748B"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#B4C0D0"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
                                 <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
-                                <Setter Property="Foreground" Value="#4B5563"/>
+                                <Setter Property="Foreground" Value="#536276"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -207,7 +207,7 @@
             <Setter Property="Height" Value="32"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Background" Value="{DynamicResource ActionGraphiteSurface}"/>
-            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="Foreground" Value="#BDBDC8"/>
             <Setter Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -238,7 +238,7 @@
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Surface" Property="Background" Value="{DynamicResource GlassButtonDisabledSurface}"/>
                                 <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource ActionGraphiteStroke}"/>
-                                <Setter Property="Foreground" Value="#4B5563"/>
+                                <Setter Property="Foreground" Value="#4D5D70"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -248,9 +248,9 @@
         </Style>
 
         <Style TargetType="ToolTip">
-            <Setter Property="Background" Value="#F00D1117"/>
-            <Setter Property="Foreground" Value="#E2E8F0"/>
-            <Setter Property="BorderBrush" Value="#3D4D5F"/>
+            <Setter Property="Background" Value="#E9141F31"/>
+            <Setter Property="Foreground" Value="#EAF2FF"/>
+            <Setter Property="BorderBrush" Value="#3A5372"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10,7"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -280,13 +280,13 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Border x:Name="Th" CornerRadius="4" Background="#334155" Margin="2"/>
+                        <Border x:Name="Th" CornerRadius="4" Background="#33455E" Margin="2"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Th" Property="Background" Value="#475569"/>
+                                <Setter TargetName="Th" Property="Background" Value="#4C627F"/>
                             </Trigger>
                             <Trigger Property="IsDragging" Value="True">
-                                <Setter TargetName="Th" Property="Background" Value="#64748B"/>
+                                <Setter TargetName="Th" Property="Background" Value="#5E7699"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

@@ -6,8 +6,8 @@
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" Topmost="True">
-    <Border Background="#12151C" BorderBrush="#2A2F3A" BorderThickness="1"
-            CornerRadius="20" Padding="26">
+    <Border Background="#0B1320" BorderBrush="#26354A" BorderThickness="1"
+            CornerRadius="18" Padding="26">
         <Border.Effect>
             <DropShadowEffect BlurRadius="34" ShadowDepth="8" Opacity="0.62" Color="#000000"/>
         </Border.Effect>
@@ -18,9 +18,9 @@
                        Source="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
                        Stretch="Uniform" SnapsToDevicePixels="True"/>
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Replysis AI" Foreground="#E2E8F0" FontSize="16"
+                    <TextBlock Text="Replysis AI" Foreground="#F4F7FB" FontSize="16"
                                FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                    <TextBlock x:Name="VersionLine" Foreground="#94A3B8" FontSize="11"
+                    <TextBlock x:Name="VersionLine" Foreground="#93A4BA" FontSize="11"
                                FontFamily="Segoe UI" Margin="0,2,0,0"/>
                 </StackPanel>
             </StackPanel>
@@ -28,7 +28,7 @@
             <TextBlock Text="Update required" Foreground="#FFFFFF" FontSize="22"
                        FontWeight="SemiBold" FontFamily="Segoe UI" Margin="0,22,0,0"/>
 
-            <TextBlock x:Name="BodyText" Foreground="#CBD5E1" FontSize="13"
+            <TextBlock x:Name="BodyText" Foreground="#C3D0E0" FontSize="13"
                        FontFamily="Segoe UI" TextWrapping="Wrap" Margin="0,10,0,0"
                        Text="This version is out of date. Updating takes about a minute and keeps your sessions, resume and settings exactly as they are."/>
 
@@ -36,8 +36,8 @@
                  empty progress bar sitting under a button reads as a hang. -->
             <StackPanel x:Name="ProgressArea" Visibility="Collapsed" Margin="0,18,0,0">
                 <ProgressBar x:Name="Bar" Height="6" Minimum="0" Maximum="1"
-                             Background="#0D1117" BorderThickness="0" Foreground="#4ADE80"/>
-                <TextBlock x:Name="ProgressText" Foreground="#94A3B8" FontSize="11"
+                             Background="#101D2D" BorderThickness="0" Foreground="#34E08A"/>
+                <TextBlock x:Name="ProgressText" Foreground="#93A4BA" FontSize="11"
                            FontFamily="Segoe UI" Margin="0,8,0,0" Text="Downloading"/>
             </StackPanel>
 
