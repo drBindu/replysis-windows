@@ -28,6 +28,23 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
 8. **The global keyboard hook had no safety net**; an exception there ends the whole process. It now passes the key on and logs.
 9. **A screen answer could die on a stream line with no "choices"** ("the given key was not present"), after being charged; and a server error
    sent as an object could surface as a .NET type message. Both now parse safely (screen path and spoken path).
+10. **"Cannot reach the speech service ... a work or school network or a VPN" appeared the instant a long-running session dropped, and
+    never went away.** The wait for a connection was counted from when the engine process STARTED, so in a session older than 25 seconds any
+    drop (or an engine that exited) was already "stalled" at the moment it happened; and the banner was persistent with nothing to take it
+    down, so it sat above a transcript that was working. Seen live: engine killed at 01:08:11, back online 1.4 s later, banner on screen
+    anyway. Now the wait is counted from when the connection went away, and a banner that explains a speech problem comes down by itself the
+    moment nothing is wrong any more. **Check the Mac for both: what the "stalled" clock is measured from, and whether its problem notices
+    clear themselves.**
+11. **Slow-link protection that does not cost a question.** The screenshot sent ahead of a question (Screen live) is 300 to 500 KB; on a
+    hotspot that uploads 20 to 50 KB a second it was still going when the first question was asked and the answer waited behind it (measured:
+    9.8 s to the first word, with the server having answered in half a second; the provider answers in 100 to 300 ms). The governor only
+    learned the line was slow by losing a whole picture. Now a 64 KB throw-away test upload (to the same endpoint, no image in the body, so the
+    server answers 400 and keeps nothing) runs at launch and whenever the line is in doubt, and pictures go ahead only after it came back within
+    0.7 s; a failed picture makes the next step a small test, not another picture. A changed network resets it. Same recorded questions, this
+    PC: six answers averaged 1.4 to 1.7 s (worst 2.0 s) against 6.1 s (worst 11.1 s) in the bad run. A mobile line that allows a burst can
+    still pass the test and time out on a full picture, which costs a second on a question now and then, no more.
+12. **The "Auto is on..." hint was drawn like an answer** (14 pt semibold). Now 12 pt regular and dimmer, so an empty screen is not mistaken for
+    an answer that arrived.
 
 ---
 

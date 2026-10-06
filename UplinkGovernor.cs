@@ -33,6 +33,56 @@ namespace InterviewCopilot
         internal static readonly TimeSpan FirstBackoff = TimeSpan.FromSeconds(60);
         internal static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(10);
 
+        // ── Testing the line before a picture is trusted to it ───────────────────────────
+        //
+        // The governor above only learned the line was slow by losing a whole 300 to 450 KB picture on it: the first
+        // picture of every launch went up on a slow hotspot, was still going 8 seconds later when the first question
+        // was asked, and the question's answer waited behind it (measured 2026-10-06: 9.8 s to the first word, the
+        // server having answered in half a second). The same happened again at the end of every pause, because the
+        // test of whether the line had recovered was another full picture. So a line is tested with a small, throwaway
+        // upload first, and pictures go ahead only once it has shown it can carry them in good time.
+
+        /// <summary>
+        /// Size of the test upload. Big enough to run past the burst a mobile line allows at the start (a 32 KB test passed on
+        /// a hotspot that then could not finish a 480 KB picture in eight seconds), small enough to cost a slow line only two
+        /// or three seconds, once per pause.
+        /// </summary>
+        internal const int ProbeBytes = 64 * 1024;
+
+        /// <summary>A test upload still going after this is a slow line.</summary>
+        internal static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(4);
+
+        /// <summary>
+        /// The test upload must be done within this, round trip included: 64 KB in 0.7 s is about 90 KB a second at
+        /// the very least, so a whole picture follows in about five seconds even on the worst line that passes, and in
+        /// a second or two on a normal one.
+        /// </summary>
+        internal static readonly TimeSpan ProbePassWithin = TimeSpan.FromMilliseconds(700);
+
+        private bool _verified;
+
+        /// <summary>The line has shown it can carry a picture in good time since it was last in doubt.</summary>
+        internal bool Verified => _verified;
+
+        /// <summary>Pictures wait until a test has passed; this is true when one should be run now.</summary>
+        internal bool NeedsProbe(DateTime nowUtc) => !_verified && nowUtc >= _quietUntilUtc;
+
+        /// <summary>
+        /// Records how a test upload went. A pass trusts the line; anything else starts the same growing pause as a
+        /// failed picture, and returns it.
+        /// </summary>
+        internal TimeSpan RecordProbe(DateTime nowUtc, bool succeeded, TimeSpan elapsed)
+        {
+            if (succeeded && elapsed <= ProbePassWithin)
+            {
+                _verified = true;
+                _failureStreak = 0;
+                _quietUntilUtc = DateTime.MinValue;
+                return TimeSpan.Zero;
+            }
+            return StartPause(nowUtc);
+        }
+
         private DateTime _quietUntilUtc = DateTime.MinValue;
         private int _failureStreak;
 
@@ -56,11 +106,19 @@ namespace InterviewCopilot
         {
             if (succeeded && elapsed <= MaxUsefulUpload)
             {
+                _verified = true;
                 _failureStreak = 0;
                 _quietUntilUtc = DateTime.MinValue;
                 return TimeSpan.Zero;
             }
 
+            return StartPause(nowUtc);
+        }
+
+        private TimeSpan StartPause(DateTime nowUtc)
+        {
+            // In doubt again: the next thing sent is a small test, not another full picture.
+            _verified = false;
             _failureStreak++;
             double seconds = FirstBackoff.TotalSeconds * Math.Pow(2, Math.Min(_failureStreak - 1, 10));
             TimeSpan backoff = TimeSpan.FromSeconds(Math.Min(seconds, MaxBackoff.TotalSeconds));
@@ -71,6 +129,7 @@ namespace InterviewCopilot
         /// <summary>Forget everything, for a new session or a changed network.</summary>
         internal void Reset()
         {
+            _verified = false;
             _failureStreak = 0;
             _quietUntilUtc = DateTime.MinValue;
         }

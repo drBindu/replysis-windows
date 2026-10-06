@@ -53,6 +53,37 @@ internal static class UplinkGovernorTests
         double seconds = 500.0 / 30.0;
         Check(seconds > UplinkGovernor.MaxUsefulUpload.TotalSeconds, "on that connection a screenshot takes longer than is useful, so it is paused");
 
+        // A small test upload decides whether pictures go ahead at all, so a slow line is found out for the price of
+        // 64 KB and not by losing a whole picture in front of the first question (2026-10-06: 9.8 s to the first word).
+        var fresh = new UplinkGovernor();
+        Check(!fresh.Verified && fresh.NeedsProbe(t0), "a new start knows nothing about the line, so it tests it first");
+
+        quiet = fresh.RecordProbe(t0, true, TimeSpan.FromMilliseconds(180));
+        Check(quiet == TimeSpan.Zero && fresh.Verified && !fresh.NeedsProbe(t0) && fresh.MayUpload(t0),
+            "a test that is back within 0.7 s trusts the line");
+
+        var hotspot = new UplinkGovernor();
+        // 64 KB at 30 KB a second is about two seconds.
+        quiet = hotspot.RecordProbe(t0, true, TimeSpan.FromSeconds(2.1));
+        Check(quiet == TimeSpan.FromSeconds(60) && !hotspot.Verified && !hotspot.NeedsProbe(t0.AddSeconds(59)) && hotspot.NeedsProbe(t0.AddSeconds(60)),
+            "the hotspot fails the test, no picture is sent, and the line is tested again a minute later");
+        quiet = hotspot.RecordProbe(t0.AddSeconds(60), false, UplinkGovernor.ProbeTimeout);
+        Check(quiet == TimeSpan.FromSeconds(120), "a test that does not finish doubles the pause, the same as a picture");
+        Check(UplinkGovernor.ProbeBytes * 6 < 500 * 1024,
+            "a test costs a sixth of a picture or less, so testing a slow line now and then does not clog it");
+
+        // A line that was fine and then loses a picture is in doubt again, and the way back is a test, not another picture.
+        var wobble = new UplinkGovernor();
+        wobble.RecordProbe(t0, true, TimeSpan.FromMilliseconds(150));
+        wobble.Record(t0.AddMinutes(5), false, UplinkGovernor.UploadTimeout);
+        Check(!wobble.Verified && !wobble.NeedsProbe(t0.AddMinutes(5)) && wobble.NeedsProbe(t0.AddMinutes(6)),
+            "after a lost picture the line is in doubt and gets a small test when the pause ends");
+        wobble.RecordProbe(t0.AddMinutes(6), true, TimeSpan.FromMilliseconds(200));
+        Check(wobble.Verified && wobble.FailureStreak == 0, "and one good test brings pictures back");
+
+        wobble.Reset();
+        Check(!wobble.Verified && wobble.NeedsProbe(t0), "a changed network is tested again from scratch");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "uplink governor: all passed" : $"uplink governor: {failed} FAILED");
         return failed;

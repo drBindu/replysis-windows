@@ -521,6 +521,11 @@ namespace InterviewCopilot
                     // so nothing is captured on Setup or Past Sessions.
                     _watchScreenMode = SettingsWindow.GetWatchScreenEnabled();
                     UpdateWatchScreenUi();
+                    // Test the upload line now, while Setup is on screen, so the first question of the interview never
+                    // finds a picture still going up. And again whenever the network changes.
+                    if (_watchScreenMode) _ = ProbeUplinkAsync();
+                    _networkChangedHandler = (_, _) => Dispatcher.BeginInvoke(new Action(() => _uplink.Reset()));
+                    System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += _networkChangedHandler;
 
                     PromptBuilder.DetailedAnswers = SettingsWindow.GetDetailedAnswers();
 #if DEBUG
@@ -1383,9 +1388,24 @@ namespace InterviewCopilot
         /// </param>
         private bool _bannerIsUpdate;
 
+        // True while the banner on screen is the explanation of a speech problem (see ShowProblemOnce), which is
+        // taken down by itself when the problem goes away. Any other banner is never touched by that.
+        private bool _bannerIsProblem;
+
+        private void HideProblemBannerIfShowing()
+        {
+            if (!_bannerIsProblem) return;
+            _bannerIsProblem = false;
+            _alertTimer?.Stop();
+            _inAppAlertAction = null;
+            if (InAppAlert != null) InAppAlert.Visibility = Visibility.Collapsed;
+            DebugWindow.Log("MODE", "The problem is over; its notice was taken down.");
+        }
+
         internal void ShowInAppAlert(string title, string message, bool persist = false,
                                     string? actionLabel = null, Action? action = null, bool isUpdate = false)
         {
+            _bannerIsProblem = false;
             _bannerIsUpdate = isUpdate;
             // In compact overlay the main window is hidden, so the banner would
             // never be seen. The overlay is the visible surface there.
@@ -2195,6 +2215,13 @@ namespace InterviewCopilot
         // When the engine process last started. MinValue until it has.
         private DateTime _engineStartedUtc = DateTime.MinValue;
 
+        // When a connection that had been working went away (a dropped session, an engine that exited). The wait for a
+        // connection is counted from the later of this and the engine's start, so a long-running session is not
+        // "stalled" the instant it drops.
+        private DateTime _engineOfflineSinceUtc = DateTime.MinValue;
+        private DateTime ConnectionWaitBeganUtc =>
+            _engineStartedUtc > _engineOfflineSinceUtc ? _engineStartedUtc : _engineOfflineSinceUtc;
+
         private DateTime _lastSpeechDetectedUtc = DateTime.MinValue;
         private DateTime _lastWordsReceivedUtc = DateTime.MinValue;
         private DateTime _lastDeafnessWarningUtc = DateTime.MinValue;
@@ -2327,7 +2354,7 @@ namespace InterviewCopilot
                             (_engineRestartCount > 0 && DateTime.UtcNow < _nextEngineRestartUtc),
             fatalNoMicrophone: _engineAuthFailed &&
                                _engineFatalReason.StartsWith("No microphone", StringComparison.Ordinal),
-            connectionStalled: SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, _engineStartedUtc),
+            connectionStalled: SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, ConnectionWaitBeganUtc),
             connectionKeepsDropping: ConnectionKeepsDropping());
 
         /// <summary>
@@ -2362,6 +2389,9 @@ namespace InterviewCopilot
                         catch (Exception ex) { DebugWindow.Log("UPDATE", $"Could not open pricing: {ex.GetType().Name}"); }
                     }
                     : null);
+            // It stayed on screen after the problem was over, so "Cannot reach the speech service" sat above a transcript
+            // that was plainly working. Now it comes down by itself when nothing is wrong any more (UpdateMicUi).
+            _bannerIsProblem = !_isCameraMode;
         }
 
         /// <summary>
@@ -3885,6 +3915,7 @@ namespace InterviewCopilot
 
         // Keeps a picture sent ahead from clogging a slow connection. See UplinkGovernor.
         private readonly UplinkGovernor _uplink = new();
+        private System.Net.NetworkInformation.NetworkAddressChangedEventHandler? _networkChangedHandler;
         private CancellationTokenSource? _preparedUploadCts;
         private volatile bool _preparedUploadDroppedForQuestion;
 
@@ -3981,6 +4012,14 @@ namespace InterviewCopilot
             // "ahead" of anything and holds up everything behind it; the next screen question reads the
             // screen on demand instead (see UplinkGovernor).
             if (!_uplink.MayUpload(DateTime.UtcNow)) return;
+
+            // Nor before the line has shown it can carry a picture in good time. A small test upload decides that,
+            // so a slow line costs one cheap test instead of the first question's answer (see UplinkGovernor).
+            if (!_uplink.Verified)
+            {
+                if (_uplink.NeedsProbe(DateTime.UtcNow)) _ = ProbeUplinkAsync();
+                return;
+            }
 
             // And never when no interview is happening.
             //
@@ -4268,6 +4307,70 @@ namespace InterviewCopilot
             {
                 _preparedUploadCts = null;
             }
+        }
+
+        // Incompressible filler of the test size, made once. Repeating letters would be squeezed to nothing by anything
+        // on the way that compresses, and the test would measure nothing.
+        private static readonly Lazy<string> UplinkProbeBody = new(() =>
+            "{\"probe\":\"" + Convert.ToBase64String(
+                System.Security.Cryptography.RandomNumberGenerator.GetBytes(UplinkGovernor.ProbeBytes * 3 / 4)) + "\"}");
+
+        private int _uplinkProbeRunning;
+
+        /// <summary>
+        /// Times a small upload to the same server the pictures go to. The server reads the body, finds no image in
+        /// it, answers 400 and keeps nothing, so the only thing measured is how fast this line carries 32 KB. Run
+        /// at launch (while Setup is on screen) and again whenever the line is in doubt, never with a picture.
+        /// </summary>
+        private async Task ProbeUplinkAsync()
+        {
+            if (Interlocked.Exchange(ref _uplinkProbeRunning, 1) == 1) return;
+            try
+            {
+                if (_windowClosed || !UserSession.IsLoggedIn) return;
+
+                var sw = Stopwatch.StartNew();
+                using var req = new HttpRequestMessage(HttpMethod.Post,
+                    $"{BackendUrl}/api/v1/interview/screen-cache");
+                if (!string.IsNullOrEmpty(UserSession.IdToken))
+                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
+                req.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
+                req.Content = new StringContent(UplinkProbeBody.Value, System.Text.Encoding.UTF8, "application/json");
+
+                using var timeout = new CancellationTokenSource(UplinkGovernor.ProbeTimeout);
+                // A question that is about to be asked takes the line: the test stops and counts for nothing.
+                _preparedUploadDroppedForQuestion = false;
+                _preparedUploadCts = timeout;
+                int status;
+                try
+                {
+                    using var res = await _creditsClient.SendAsync(req, timeout.Token);
+                    status = (int)res.StatusCode;
+                }
+                finally { _preparedUploadCts = null; }
+                if (_windowClosed) return;
+
+                // 400 is the expected answer (no picture in the body). 200 would mean the server took it as a picture,
+                // which it cannot be. Anything else says the server, not the line, is the problem.
+                bool reached = status is 400 or 200;
+                TimeSpan quiet = _uplink.RecordProbe(DateTime.UtcNow, reached, sw.Elapsed);
+                DebugWindow.Log("SCREEN", quiet == TimeSpan.Zero
+                    ? $"Upload test: {UplinkGovernor.ProbeBytes / 1024} KB in {sw.ElapsedMilliseconds}ms; this line can carry screenshots ahead of a question."
+                    : $"Upload test: {UplinkGovernor.ProbeBytes / 1024} KB took {sw.ElapsedMilliseconds}ms (HTTP {status}); no screenshots ahead of questions for " +
+                      $"{quiet.TotalSeconds:F0}s, so answers do not wait behind a picture. F8 and screen questions still read the screen on demand.");
+            }
+            catch (OperationCanceledException) when (_preparedUploadDroppedForQuestion)
+            {
+                DebugWindow.Log("SCREEN", "Upload test dropped so the question has the connection.");
+            }
+            catch (Exception ex)
+            {
+                if (_windowClosed) return;
+                // The test could not even be sent: no connection, or too slow to finish in four seconds.
+                TimeSpan quiet = _uplink.RecordProbe(DateTime.UtcNow, false, UplinkGovernor.ProbeTimeout);
+                DebugWindow.Log("SCREEN", $"Upload test failed ({ex.GetType().Name}); no screenshots ahead of questions for {quiet.TotalSeconds:F0}s.");
+            }
+            finally { Interlocked.Exchange(ref _uplinkProbeRunning, 0); }
         }
 
         /// <summary>Tells the governor how a picture sent ahead went, and says so once when it backs off.</summary>
@@ -5498,28 +5601,29 @@ namespace InterviewCopilot
             _emptyHintKey = key;
 
             AiAnswerHint.Inlines.Clear();
-            var white = new SolidColorBrush(Colors.White);
+            // Dimmer than an answer on purpose: this is a hint, and must never be mistaken for one.
+            var white = new SolidColorBrush(Color.FromRgb(0xB4, 0xC0, 0xD0));
             switch (key)
             {
                 case var k when k.StartsWith("problem:", StringComparison.Ordinal):
                 {
                     var d = ListeningProblems.Describe(problem!.Value);
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(d.Title + ". ") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(d.Title + ". ") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(d.Body));
                     TranscriptHintText.Text = d.Label.Substring(0, 1) + d.Label.Substring(1).ToLowerInvariant();
                     break;
                 }
                 case "manual":
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Press "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" to start listening, then "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" again to get your answer."));
                     TranscriptHintText.Text = "Conversation will appear here";
                     break;
                 case "paused":
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is paused after a long silence. "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Click the mic") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Click the mic") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" to listen again."));
                     TranscriptHintText.Text = "Paused";
                     break;
@@ -5529,19 +5633,19 @@ namespace InterviewCopilot
                     break;
                 case "auto-practice":
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Ask a question out loud") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Ask a question out loud") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" or play one, and the answer appears here on its own. If it has not answered, press "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" to answer right away."));
                     TranscriptHintText.Text = "Listening to your microphone and computer audio";
                     break;
                 default:
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. When the interviewer "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("asks a question in your meeting") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("asks a question in your meeting") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(", the answer appears here on its own. Interview mode does not pick up your own voice. To try it by speaking, choose "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Practice") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Practice") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" above. If an answer does not come, press "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.Bold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("."));
                     TranscriptHintText.Text = "Listening for the interviewer on your computer audio";
                     break;
@@ -5613,7 +5717,7 @@ namespace InterviewCopilot
             // four seconds and at four minutes. On a shop-floor machine whose
             // network blocked the websocket it simply said connecting, forever,
             // and there was no way to find out that it never would.
-            else if (SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, _engineStartedUtc))
+            else if (SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, ConnectionWaitBeganUtc))
             {
                 c = Color.FromRgb(239, 68, 68);
                 label = "NO SPEECH SERVICE";
@@ -5641,7 +5745,7 @@ namespace InterviewCopilot
             // Anything that stops it hearing gets an explanation in words, once.
             // A transient reconnect does not: it clears itself in seconds.
             var problem = CurrentProblem();
-            if (problem is null) _problemsShown.Clear();
+            if (problem is null) { _problemsShown.Clear(); HideProblemBannerIfShowing(); }
             else if (problem != ListeningProblems.Kind.WaitingToReconnect) ShowProblemOnce(problem.Value);
             UpdateEmptyStateHints();
 
@@ -5983,6 +6087,7 @@ namespace InterviewCopilot
                     // Another restart was asked for while this one waited; that one owns the start now.
                     if (generation != Volatile.Read(ref _engineStartGeneration)) return;
                 }
+                if (_engineOnline) _engineOfflineSinceUtc = DateTime.UtcNow;   // a deliberate restart: the wait starts now
                 _engineOnline      = false; // fresh process: not ready to transcribe yet
                 _engineReportsEndpoints = false;   // until its start-up line says which service it is on
                 _engineAuthFailed  = false; // reset so MonitorEngine can restart after a key change
@@ -6224,6 +6329,10 @@ namespace InterviewCopilot
                             if (_engineOnline && line.Contains("STATUS: OFFLINE"))
                             {
                                 _engineOnline = false;
+                                // The wait for a connection starts now, not when the engine process was started. Counted
+                                // from the start, any drop in a session older than 25 s was already "stalled" the
+                                // instant it happened and showed "Cannot reach the speech service" for a hiccup.
+                                _engineOfflineSinceUtc = DateTime.UtcNow;
                                 DebugWindow.Log("ENGINE", "Speech connection lost; reconnecting.");
                                 lock (_connectionDropsUtc)
                                 {
@@ -6976,6 +7085,7 @@ namespace InterviewCopilot
                 if (_engineOnline)
                 {
                     _engineOnline = false;
+                    _engineOfflineSinceUtc = DateTime.UtcNow;   // the wait for a connection starts now (see the STATUS: OFFLINE handler)
                     Dispatcher.Invoke(UpdateMicUi);
                 }
 
@@ -8825,6 +8935,11 @@ namespace InterviewCopilot
             _audioSourceWatchTimer?.Stop();
             _listeningMeterTimer?.Stop();
             _preparedShotTimer?.Stop();
+            if (_networkChangedHandler != null)
+            {
+                System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged -= _networkChangedHandler;
+                _networkChangedHandler = null;
+            }
 
             // Listening time accumulates between reports, and closing the app
             // mid-interview would have thrown that away. Reporting as you go

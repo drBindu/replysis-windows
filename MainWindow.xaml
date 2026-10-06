@@ -1417,11 +1417,13 @@
                                                  TextWrapping="Wrap" IsReadOnly="True"
                                                  SelectionBrush="#55FFFFFF"
                                                  TextChanged="AiAnswerBox_TextChanged"/>
-                                        <TextBlock x:Name="AiAnswerHint" Foreground="#94A3B8" FontSize="14"
-                                                   FontFamily="Segoe UI" FontWeight="SemiBold" TextWrapping="Wrap"
+                                        <!-- A hint, not an answer: smaller, lighter and dimmer than the answer text above, so
+                                             an empty screen is never mistaken for an answer that has arrived. -->
+                                        <TextBlock x:Name="AiAnswerHint" Foreground="#76849A" FontSize="12"
+                                                   FontFamily="Segoe UI" FontWeight="Normal" TextWrapping="Wrap"
                                                    IsHitTestVisible="False" VerticalAlignment="Top"
                                                    HorizontalAlignment="Left" Visibility="Visible">
-                                            Press <Run FontWeight="Bold" Foreground="#FFFFFF">SPACE</Run> to start listening, then <Run FontWeight="Bold" Foreground="#FFFFFF">SPACE</Run> again to get your answer.
+                                            Press <Run FontWeight="SemiBold" Foreground="#B4C0D0">SPACE</Run> to start listening, then <Run FontWeight="SemiBold" Foreground="#B4C0D0">SPACE</Run> again to get your answer.
                                         </TextBlock>
                                     </Grid>
                                 </ScrollViewer>
