@@ -869,6 +869,8 @@ namespace InterviewCopilot
         private ImageBrush? _avatarBrush;
         private string      _avatarBrushUrl = "";
 
+        private string _avatarLoadingUrl = "";
+
         private void ApplyAvatarPhoto()
         {
             string url = UserSession.IsLoggedIn ? (UserSession.PhotoUrl ?? "") : "";
@@ -879,29 +881,65 @@ namespace InterviewCopilot
                 HideAvatarPhoto();
                 return;
             }
+
+            if (_avatarBrush != null && _avatarBrushUrl == url)
+            {
+                ShowAvatarBrush(_avatarBrush);
+                return;
+            }
+
+            // The initials stand in until the picture is here. The picture is fetched in the background: loading it
+            // straight from the address here made the whole window wait for the network, and on a slow or captive
+            // connection the app showed "Not responding" at launch for as long as the request took.
+            HideAvatarPhoto();
+            if (_avatarLoadingUrl == url) return;
+            _avatarLoadingUrl = url;
+            _ = LoadAvatarPhotoAsync(url, uri);
+        }
+
+        private async Task LoadAvatarPhotoAsync(string url, Uri uri)
+        {
             try
             {
-                if (_avatarBrush == null || _avatarBrushUrl != url)
+                byte[] bytes;
+                using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+                    bytes = await SharedHttpClient.HttpShort.GetByteArrayAsync(uri, timeout.Token);
+                // Resumes here on the window's own thread. Dropped when the window is gone or a different account is
+                // signed in by now, and when the file is not a sensible size for a profile picture.
+                if (_windowClosed || !UserSession.IsLoggedIn || (UserSession.PhotoUrl ?? "") != url) return;
+                if (bytes.Length == 0 || bytes.Length > 4 * 1024 * 1024) return;
+
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                using (var stream = new MemoryStream(bytes))
                 {
-                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
                     bmp.BeginInit();
                     bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
                     bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreColorProfile;
-                    bmp.UriSource = uri;
+                    bmp.StreamSource = stream;
                     bmp.EndInit();
-                    _avatarBrush = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
-                    _avatarBrushUrl = url;
                 }
-                if (AvatarPhoto != null)        { AvatarPhoto.Fill = _avatarBrush;      AvatarPhoto.Visibility = Visibility.Visible; }
-                if (PopupAvatarPhoto != null)   { PopupAvatarPhoto.Fill = _avatarBrush; PopupAvatarPhoto.Visibility = Visibility.Visible; }
-                if (AvatarInitials != null)      AvatarInitials.Visibility = Visibility.Hidden;
-                if (PopupAvatarInitials != null) PopupAvatarInitials.Visibility = Visibility.Hidden;
+                bmp.Freeze();
+                _avatarBrush = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
+                _avatarBrushUrl = url;
+                ShowAvatarBrush(_avatarBrush);
             }
             catch (Exception ex)
             {
-                DebugWindow.Log("AVATAR", $"photo load failed: {ex.Message}");
-                HideAvatarPhoto();
+                DebugWindow.Log("AVATAR", $"photo load failed: {ex.GetType().Name}");
+                if (!_windowClosed) HideAvatarPhoto();
             }
+            finally
+            {
+                if (_avatarLoadingUrl == url) _avatarLoadingUrl = "";
+            }
+        }
+
+        private void ShowAvatarBrush(ImageBrush brush)
+        {
+            if (AvatarPhoto != null)        { AvatarPhoto.Fill = brush;      AvatarPhoto.Visibility = Visibility.Visible; }
+            if (PopupAvatarPhoto != null)   { PopupAvatarPhoto.Fill = brush; PopupAvatarPhoto.Visibility = Visibility.Visible; }
+            if (AvatarInitials != null)      AvatarInitials.Visibility = Visibility.Hidden;
+            if (PopupAvatarInitials != null) PopupAvatarInitials.Visibility = Visibility.Hidden;
         }
 
         private void HideAvatarPhoto()
@@ -927,7 +965,8 @@ namespace InterviewCopilot
 
             // Never fetch a device-scoped guest balance; accounts have one server
             // balance that follows them across both desktop and website.
-            CreditsLabel.Text           = "Credits";
+            CreditsLabel.Text           = "Answers";
+            CreditsPlanLabel.Text       = "";
             CreditsPlanLabel.Visibility = Visibility.Collapsed;
             CreditsIcon.Text            = "";
             CreditsLabel.Foreground     = new SolidColorBrush(
@@ -982,7 +1021,7 @@ namespace InterviewCopilot
 
                 if (!res.IsSuccessStatusCode)
                 {
-                    Dispatcher.Invoke(() => { CreditsLabel.Text = "Answers"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
+                    KeepLastKnownBalanceOnFailedRefresh();
                     return;
                 }
 
@@ -1017,6 +1056,8 @@ namespace InterviewCopilot
                             ? "Pro"
                             : char.ToUpperInvariant(plan[0]) + plan[1..];
                         CreditsLabel.Text = $"{planName}, unlimited";
+                        // The Setup summary shows this text beside the label, and it used to carry the XAML's " left".
+                        CreditsPlanLabel.Text = "";
                         CreditsIcon.Text = "";
                         SetCreditsBadgeStyle("", "");
                         CreditsLabel.Foreground = new SolidColorBrush(
@@ -1069,7 +1110,7 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => { CreditsLabel.Text = "Answers"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
+                KeepLastKnownBalanceOnFailedRefresh();
                 CLog($"EXCEPTION {ex.GetType().Name}: {ex.Message}");
             }
             }
@@ -1077,6 +1118,18 @@ namespace InterviewCopilot
             {
                 _creditsFetchGate.Release();
             }
+        }
+
+        /// <summary>
+        /// A refresh that fails (a dropped connection, a server hiccup) must not wipe a balance that was already
+        /// on screen. It used to replace "1,358 answers" with the bare word "Answers" until the next refresh five
+        /// minutes later, which looks exactly like "where are my answers". Only when no balance has ever been
+        /// shown is there nothing to keep, and the neutral word stays.
+        /// </summary>
+        private void KeepLastKnownBalanceOnFailedRefresh()
+        {
+            if (_creditsFetched) return;
+            Dispatcher.Invoke(() => { CreditsLabel.Text = "Answers"; CreditsPlanLabel.Visibility = Visibility.Collapsed; });
         }
 
         private void SetCreditsBadgeStyle(string bg, string border)
@@ -4901,8 +4954,12 @@ namespace InterviewCopilot
                 using var doc = JsonDocument.Parse(data);
                 if (doc.RootElement.TryGetProperty("error", out var error))
                 {
-                    throw new BackendRequestException(error.GetString()
-                        ?? "The answer service could not complete this request.");
+                    // Words only when the server sent words (see ScreenAnalyzer.ParseSseToken).
+                    string? said = error.ValueKind == JsonValueKind.String ? error.GetString()
+                        : error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var msg)
+                          && msg.ValueKind == JsonValueKind.String ? msg.GetString() : null;
+                    throw new BackendRequestException(string.IsNullOrWhiteSpace(said)
+                        ? "The answer service could not complete this request." : said);
                 }
 
                 if (!doc.RootElement.TryGetProperty("choices", out var choices) ||
@@ -5503,7 +5560,7 @@ namespace InterviewCopilot
                 c = Color.FromRgb(239, 68, 68);
                 label = UserSession.SpeechmaticsOutOfListeningTime
                     ? "MONTHLY LIMIT"
-                    : "NO CREDITS";
+                    : "NO ANSWERS";
             }
             else if (!_engineOnline && UserSession.SpeechmaticsLastStatusCode == 401)
             {
@@ -5891,19 +5948,41 @@ namespace InterviewCopilot
             }
         }
 
+        // Only one start may be at work at a time. Two were: on a launch where the speech key had to be fetched (the
+        // first start of the day, a new computer) the 3-second engine check and the launch's own start both waited
+        // for the same key, both saw it arrive in the same millisecond, and both launched an engine. Measured: two
+        // engines started 6 ms apart, one of them forgotten by the app, so it kept listening, kept a speech
+        // connection open and kept writing the transcript file until the computer was restarted.
+        private readonly SemaphoreSlim _engineStartGate = new(1, 1);
+
         private async void StartSpeechmaticsEngine()
         {
             int generation = Interlocked.Increment(ref _engineStartGeneration);
             _engineStarting = true;
+            bool haveStartGate = false;
             try
             {
+                await _engineStartGate.WaitAsync();
+                haveStartGate = true;
+                // A newer start was asked for while this one waited its turn; that one does the work.
+                if (generation != Volatile.Read(ref _engineStartGeneration) || _windowClosed) return;
+
                 // Cancel any existing stream-reader tasks, then issue a fresh token
                 _engineCts.Cancel();
                 _engineCts.Dispose();
                 _engineCts = new CancellationTokenSource();
                 var ct = _engineCts.Token;
 
-                KillAndDisposeEngine();
+                // Closing a running engine politely means waiting for it to end its speech session, which takes a
+                // couple of seconds and up to six. Done on this thread it froze the whole window for that long on
+                // every restart (a new audio source, a Settings change, the hourly speech pass). Done in the
+                // background instead, and still finished before the next engine starts, so two never overlap.
+                if (EngineCloseNeeded())
+                {
+                    await Task.Run(KillAndDisposeEngine).ConfigureAwait(false);
+                    // Another restart was asked for while this one waited; that one owns the start now.
+                    if (generation != Volatile.Read(ref _engineStartGeneration)) return;
+                }
                 _engineOnline      = false; // fresh process: not ready to transcribe yet
                 _engineReportsEndpoints = false;   // until its start-up line says which service it is on
                 _engineAuthFailed  = false; // reset so MonitorEngine can restart after a key change
@@ -5934,6 +6013,9 @@ namespace InterviewCopilot
                     // serialized round-trip; usually already complete by now.
                     await UserSession.EnsureSpeechmaticsKeyAsync(DeviceIdentity.Current).ConfigureAwait(false);
                     smKey = UserSession.SpeechmaticsKey;
+                    // A newer start began while the key was being fetched. Two engines must never run at once: both
+                    // would listen, and both would write the same transcript file.
+                    if (generation != Volatile.Read(ref _engineStartGeneration)) return;
                 }
                 if (string.IsNullOrWhiteSpace(smKey))
                 {
@@ -6022,6 +6104,15 @@ namespace InterviewCopilot
                 // it has stopped being true.
                 _engineStartedUtc = DateTime.UtcNow;
                 DebugWindow.Log("ENGINE", $"STARTED | PID: {speechmaticsProcess.Id}");
+
+                // The window closed while this engine was being launched. The close has already looked for an engine
+                // to stop and found none, so nobody else will stop this one.
+                if (_windowClosed)
+                {
+                    DebugWindow.Log("ENGINE", "The window closed while the engine was starting; stopping it.");
+                    KillAndDisposeEngine();
+                    return;
+                }
 
                 // Save PID so NuclearKillOldProcesses can target only this process on next startup
                 try
@@ -6244,6 +6335,7 @@ namespace InterviewCopilot
             catch (Exception ex) { DebugWindow.Log("ENGINE_ERR", ex.Message); }
             finally
             {
+                if (haveStartGate) _engineStartGate.Release();
                 if (generation == Volatile.Read(ref _engineStartGeneration))
                     _engineStarting = false;
             }
@@ -6431,7 +6523,25 @@ namespace InterviewCopilot
         /// past that it is killed as before, which is no worse than what
         /// happened every time.
         /// </summary>
+        // One close at a time. A restart asked for while the previous engine is still closing waits for it here,
+        // so the shutdown flag written for the old engine can never be read by the new one.
+        private readonly object _engineKillLock = new();
+
         private void KillAndDisposeEngine()
+        {
+            lock (_engineKillLock) KillAndDisposeEngineCore();
+        }
+
+        /// <summary>True when there is a running engine to close, or another restart is still closing one.</summary>
+        private bool EngineCloseNeeded()
+        {
+            if (speechmaticsProcess != null) return true;
+            if (!Monitor.TryEnter(_engineKillLock)) return true;
+            Monitor.Exit(_engineKillLock);
+            return false;
+        }
+
+        private void KillAndDisposeEngineCore()
         {
             var proc = speechmaticsProcess;
             speechmaticsProcess = null;

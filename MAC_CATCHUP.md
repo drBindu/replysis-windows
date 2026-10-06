@@ -1,3 +1,36 @@
+## Deep audit of the whole Windows app: what was found and fixed (2026-10-06, Windows 1.0.30)
+
+Owner: "do a deep audit, find more bugs, so many users will use this, no crashes, no stopping." Every file was read. What mattered, and what to
+check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are Windows-specific):
+1. **A failed balance refresh wiped the balance.** One dropped connection replaced "1,358 answers" with the bare word "Answers" until the next
+   refresh five minutes later, which reads as "where are my answers". Now the last known balance stays; the neutral word shows only before any
+   balance has ever been shown. **Check the Mac badge does the same.**
+2. **A fake balance at launch.** The balance label shipped with a design-time "70" and " left", shown on the Setup page until the first reply
+   (or forever offline). Now neutral. Also "NO CREDITS" on the mic pill is "NO ANSWERS" and the signed-out badge says "Answers": customers only
+   ever see answers.
+3. **The profile photo could freeze the whole window.** It was loaded straight from Google's address on the window's own thread, so a slow or
+   captive network showed "Not responding" at launch. Now fetched in the background with a 10 s limit; the initials stand in meanwhile.
+4. **Restarting the speech engine froze the window for up to 6 s** (waiting for the old engine to end its session). Now done in the background
+   and still finished before the new engine starts.
+   **Two engines at launch (found by a live run, present for a long time).** On a launch where the speech key had to be fetched (the first
+   start of the day, a new computer) the 3-second engine check and the launch's own start both waited for the same key, both saw it arrive in
+   the same millisecond, and both launched an engine: two processes 6 ms apart, one forgotten by the app, so it kept listening, kept a speech
+   connection open and kept writing the transcript file until the computer was restarted. Now one start at a time (a gate), the newest request
+   wins, and a close during a start stops the engine it was starting. Measured after: one engine at start and one after a restart, window never
+   stalled more than 85 ms. **Check the Mac: can its engine be started from two places, and is the one it forgets ever stopped?**
+5. **"Already running" for a copy that was closing.** Closing and reopening right away (a restart to fix something) hit the single-copy lock held
+   by the copy still saving. The new copy now waits up to 8 s for it.
+6. **The log file had no size cap.** It grew without limit in a long session (one measured session reached 1.6 GB earlier). Capped at 20 MB, then
+   set aside as the "previous" log.
+7. **Google sign-in took the first connection as the answer.** Browsers open spare connections and ask for an icon; a silent spare made sign-in
+   time out and an icon request made it fail. It now keeps listening and ignores anything that is not this attempt's answer (tested over real
+   sockets). **If the Mac uses a loopback redirect, check it does the same.**
+8. **The global keyboard hook had no safety net**; an exception there ends the whole process. It now passes the key on and logs.
+9. **A screen answer could die on a stream line with no "choices"** ("the given key was not present"), after being charged; and a server error
+   sent as an object could surface as a .NET type message. Both now parse safely (screen path and spoken path).
+
+---
+
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
 
 Owner: "we removed that completely, we only put the credits and answers." A banner and a red label next to the answers badge still said

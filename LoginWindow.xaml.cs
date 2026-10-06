@@ -362,52 +362,24 @@ namespace InterviewCopilot
                 return;
             }
 
-            // 4. Accept redirect (120s timeout)
+            // 4. Wait for this attempt's answer (120s). Anything else that connects, such as a browser's spare
+            // connection or its request for an icon, is ignored; see OAuthCallbackReader.WaitForAnswerAsync.
             string? code = null;
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(_windowToken);
             cts.CancelAfter(TimeSpan.FromSeconds(120));
             try
             {
-                using var client = await tcpListener.AcceptTcpClientAsync(cts.Token);
-                DebugWindow.Log("GOOGLE", "S4 callback connection accepted");
-                using var stream = client.GetStream();
+                var answer = await OAuthCallbackReader.WaitForAnswerAsync(
+                    tcpListener, state, cts.Token, m => DebugWindow.Log("GOOGLE", "S4 " + m));
+                DebugWindow.Log("GOOGLE", $"S5 callback accepted={answer.Result == OAuthCallbackReader.Answer.Code}; callback values omitted.");
 
-                string req = await OAuthCallbackReader.ReadAsync(stream, cts.Token);
-                bool ok = OAuthCallbackReader.TryGetCode(req, state, out string returnedCode);
-                code = ok ? returnedCode : null;
-                DebugWindow.Log("GOOGLE", $"S5 callback accepted={ok}; callback values omitted.");
-                // Browsers only permit window.close() when their security model
-                // considers the tab script-opened. A native app opens the system
-                // browser through ShellExecute, so some browsers close this tab and
-                // others deliberately refuse. Attempt the safe close, then leave a
-                // calm fallback while Replysis brings itself back to the foreground.
-                string html = ok
-                    ? "<!doctype html><html><head><meta charset='utf-8'><title>Replysis</title></head>" +
-                      "<body style='margin:0;background:#FEFEFC;color:#16150F;font-family:Segoe UI,sans-serif;display:grid;place-items:center;height:100vh'>" +
-                      "<div style='text-align:center'><h2 style='color:#1C7A3E'>Signed in to Replysis</h2>" +
-                      "<p>Returning to the Replysis desktop app...</p></div>" +
-                      "<script>setTimeout(function(){window.open('','_self');window.close();},150);</script></body></html>"
-                    : "<!doctype html><html><body style='margin:0;background:#FEFEFC;color:#9A2E24;font-family:Segoe UI,sans-serif;display:grid;place-items:center;height:100vh'>" +
-                      "<h2>Sign-in was not completed. Return to Replysis and try again.</h2></body></html>";
-                // Content-Length counts bytes, not characters. Both bodies above
-                // are ASCII today — the tick is written as an entity — so the two
-                // agree by luck rather than by construction, and the first
-                // non-ASCII character anyone adds would understate the length and
-                // truncate the page in the browser. Measuring the encoded bytes
-                // costs nothing and cannot drift.
-                byte[] bodyBytes = Encoding.UTF8.GetBytes(html);
-                byte[] headerBytes = Encoding.ASCII.GetBytes(
-                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
-                    + $"Content-Length: {bodyBytes.Length}\r\nConnection: close\r\n\r\n");
-                await stream.WriteAsync(headerBytes, 0, headerBytes.Length, cts.Token);
-                await stream.WriteAsync(bodyBytes, 0, bodyBytes.Length, cts.Token);
-
-                if (!ok)
+                if (answer.Result != OAuthCallbackReader.Answer.Code)
                 {
-                    DebugWindow.Log("GOOGLE", "S5 rejected: state mismatch or missing code");
+                    DebugWindow.Log("GOOGLE", "S5 declined: Google sent this attempt back without a code");
                     ShowError("Sign-in was not completed. Please try again. (E5)");
                     return;
                 }
+                code = answer.Code;
 
                 // Do not leave the user looking at localhost. The browser may
                 // keep the tab because of its own close-tab policy, but Replysis

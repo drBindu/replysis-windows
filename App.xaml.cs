@@ -37,6 +37,15 @@ namespace InterviewCopilot
             _ownsSingleInstanceMutex = createdNew;
             if (!createdNew)
             {
+                // The copy that was just closed may still be finishing: it saves the interview, tells the speech
+                // service goodbye and only then lets go of this lock, which takes a few seconds. Closing Replysis
+                // and opening it again straight away (a restart to fix something, or "Restart and update") was
+                // told it was "already running" by a copy that was on its way out. Wait for it to finish first.
+                // Only a copy that is genuinely still open leaves this waiting out, and then the message below.
+                _ownsSingleInstanceMutex = WaitForPreviousCopyToFinish(_singleInstanceMutex);
+            }
+            if (!_ownsSingleInstanceMutex)
+            {
                 MessageBox.Show(
                     "Replysis AI is already running.\n\nCheck your system tray or taskbar.",
                     "Already Running", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -64,6 +73,26 @@ namespace InterviewCopilot
             // instead, after the gate, because a mandatory update can only be
             // installed while nobody is using the app.
             _ = OpenMainWindowAsync();
+        }
+
+        /// <summary>How long a new copy waits for one that is closing. Closing takes a few seconds, a hung one is not waited on for ever.</summary>
+        internal static readonly TimeSpan PreviousCopyGrace = TimeSpan.FromSeconds(8);
+
+        private static bool WaitForPreviousCopyToFinish(Mutex mutex)
+        {
+            try
+            {
+                return mutex.WaitOne(PreviousCopyGrace);
+            }
+            catch (AbandonedMutexException)
+            {
+                // The previous copy was ended without releasing the lock (Task Manager, a crash). The lock is ours now.
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         /// <summary>

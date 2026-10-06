@@ -57,6 +57,27 @@ namespace InterviewCopilot
                 // A log that cannot be rotated is not a reason to fail a launch.
             }
         }
+        /// <summary>The most one log file may hold before it is set aside and a new one begins.</summary>
+        internal const long MaxLogBytes = 20L * 1024 * 1024;
+
+        // Approximate (characters, not bytes), counted since this file was started. Guarded by _fileLock.
+        private static long _logBytesThisFile;
+
+        private static void RotateLogWhileLocked()
+        {
+            _logBytesThisFile = 0;
+            try
+            {
+                try { File.Delete(PreviousLogPath); } catch { }
+                File.Move(LogFilePath, PreviousLogPath);
+            }
+            catch
+            {
+                // Could not move it (something has it open). Truncating is better than growing without limit.
+                try { File.WriteAllText(LogFilePath, ""); } catch { }
+            }
+        }
+
         private static volatile DebugWindow? _instance;
         private readonly List<string> _logs = new List<string>();
         private readonly DispatcherTimer _refreshTimer;
@@ -243,6 +264,13 @@ namespace InterviewCopilot
                         _logDirReady = true;
                     }
                     File.AppendAllText(LogFilePath, line + Environment.NewLine);
+
+                    // The log was only ever started fresh at launch, so an app left open for days (which is the
+                    // point of it) grew it without limit. One measured session had already reached 1.6 GB. Past
+                    // the cap the current log becomes the "previous" one and a new one starts, so at most about
+                    // twice the cap is ever on disk.
+                    _logBytesThisFile += line.Length + 2;
+                    if (_logBytesThisFile > MaxLogBytes) RotateLogWhileLocked();
                 }
             }
             catch { }

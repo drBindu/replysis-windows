@@ -187,7 +187,25 @@ namespace InterviewCopilot
         private const int LLKHF_INJECTED = 0x10;
         private const int LLKHF_LOWER_IL_INJECTED = 0x2;
 
+        /// <summary>
+        /// Windows calls this for every key pressed anywhere on the computer. An exception leaving it cannot be
+        /// caught by anything above it and ends the whole process, so nothing is allowed to leave: whatever goes
+        /// wrong, the key is passed on to the program that should have it and the fault is written to the log.
+        /// </summary>
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            try
+            {
+                return HookCallbackCore(nCode, wParam, lParam);
+            }
+            catch (Exception ex)
+            {
+                try { DebugWindow.Log("HOOK", $"Key handler fault, key passed on: {ex.GetType().Name}: {ex.Message}"); } catch { }
+                return CallNextHookEx(_hookId, nCode, wParam, lParam);
+            }
+        }
+
+        private IntPtr HookCallbackCore(int nCode, IntPtr wParam, IntPtr lParam)
         {
             if (nCode < 0) return CallNextHookEx(_hookId, nCode, wParam, lParam);
 

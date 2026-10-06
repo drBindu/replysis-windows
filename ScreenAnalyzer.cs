@@ -1606,12 +1606,22 @@ namespace InterviewCopilot
             {
                 using var doc = JsonDocument.Parse(data);
                 if (doc.RootElement.TryGetProperty("error", out var errProp))
-                    throw new InvalidOperationException(errProp.GetString()
-                        ?? "Screen AI could not complete this request.");
-                var choices = doc.RootElement.GetProperty("choices");
-                if (choices.GetArrayLength() == 0) return "";
-                var delta = choices[0].GetProperty("delta");
-                if (delta.TryGetProperty("content", out var cp))
+                {
+                    // Words only when the server sent words. An error that arrives as an object must not turn into a
+                    // .NET type-mismatch message on the customer's screen.
+                    string? said = errProp.ValueKind == JsonValueKind.String ? errProp.GetString()
+                        : errProp.ValueKind == JsonValueKind.Object && errProp.TryGetProperty("message", out var m)
+                          && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+                    throw new InvalidOperationException(string.IsNullOrWhiteSpace(said)
+                        ? "Screen AI could not complete this request." : said);
+                }
+                // TryGetProperty all the way down. GetProperty throws a KeyNotFoundException for a line that simply
+                // has no "choices" (a usage or keep-alive line), which is not a JsonException, so it escaped this
+                // method and ended a screen answer, already paid for, with "The given key was not present".
+                if (!doc.RootElement.TryGetProperty("choices", out var choices) ||
+                    choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0) return "";
+                if (!choices[0].TryGetProperty("delta", out var delta)) return "";
+                if (delta.TryGetProperty("content", out var cp) && cp.ValueKind == JsonValueKind.String)
                     return cp.GetString() ?? "";
                 return "";
             }
