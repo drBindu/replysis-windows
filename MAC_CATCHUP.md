@@ -89,6 +89,25 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
 21. **The "pick an area" overlay did not cover the whole desktop** when a second monitor had different scaling (150% next to 100%): the
     window came out the wrong size and part of the screen could not be selected. It is now placed in real pixels over the whole virtual
     screen once it exists (`SetWindowPos` with the `SM_*VIRTUALSCREEN` metrics).
+22. **Screen questions answered in about a second on any line (server, deployed 2026-10-06; works for 1.0.29 and the Mac too).**
+    The screen read (stage one) used to start when the question arrived. It now starts when the picture reaches `/screen-cache`, so
+    the question waits only for the answer model: warm, a question reaches its first word in 0.2 to 0.45 s (it was 2 to 4 s). The
+    coding answer also streams its spoken part (SAY THIS) as it is written and holds back only the code, because the signature
+    correction needs the whole code. Nothing to change in the Mac app to get this, as long as it already sends the picture ahead.
+    The backend logs `[SCREEN_TIME]` lines for the read, the charge and the first words.
+23. **A line too slow for pictures sends the screen's WORDS instead (Windows 1.0.30; the server side already accepts it).**
+    `/screen-cache` takes `{"text": "..."}` instead of `{"image": ...}`, and `/analyze-screen` takes `imageIds` that point at it (or an
+    inline `screenText`). 3 KB instead of 150 to 500 KB: measured on a hotspot that carries 66 KB/s, first word 0.94 s against 7.8 s
+    (light picture) and 18.7 s (normal picture). Windows reads the words with `Windows.Media.Ocr` at 1.5x size, lays them out by panel
+    (`ScreenOcrLayout`: the page is cut at empty vertical gutters and each panel is read down on its own, indentation kept), and
+    uses it only when the line has not passed the upload test (`LineCarriesPictures`). A fast line keeps sending the picture. **The
+    Mac can do the same with the Vision framework (`VNRecognizeTextRequest`), which is more accurate on code than the Windows
+    reader (it loses digits in small monospace type and symbols such as ^ and ->).** The server tells the models to repair
+    reading noise silently and never say that anything was misread.
+24. **The glass look is back.** Commit 509eb42 had swept a parallel restyle into the repo (translucent white-alpha glass replaced by
+    near-opaque slate). Restored in ca77b35: App.xaml brushes, the Credits, Settings, Sessions and Update windows, the main window's
+    colours and the sessions list's code-built colours. The sizes, layout and the new segmented switches were kept; the switch now
+    uses white-alpha too. Nothing for the Mac, but if either app is restyled again, check translucency first.
 
 ---
 

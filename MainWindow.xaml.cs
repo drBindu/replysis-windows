@@ -3903,6 +3903,7 @@ namespace InterviewCopilot
             _preparedShotUtc = DateTime.MinValue;
             _preparedShotId = "";
             _preparedShotIdUtc = DateTime.MinValue;
+            _preparedWords = "";
             _recentShotIds.Clear();
             _uploadedShotFingerprint = "";
             _lastKeptSignature = "";
@@ -4009,17 +4010,19 @@ namespace InterviewCopilot
                 SessionsPanelHost?.Visibility == Visibility.Visible ||
                 _preparingShot || isProcessing || _isScreenAnalyzing) return;
 
-            // Not while the connection cannot carry it. A picture that takes ten seconds to send is not
-            // "ahead" of anything and holds up everything behind it; the next screen question reads the
-            // screen on demand instead (see UplinkGovernor).
-            if (!_uplink.MayUpload(DateTime.UtcNow)) return;
-
-            // Nor before the line has shown it can carry a picture in good time. A small test upload decides that,
-            // so a slow line costs one cheap test instead of the first question's answer (see UplinkGovernor).
-            if (!_uplink.Verified)
+            // A picture goes ahead only on a line that has shown it can carry one in good time: a picture that takes ten
+            // seconds to send is not "ahead" of anything and holds up everything behind it. A small test upload decides
+            // that, so a slow line costs one cheap test instead of the first question's answer (see UplinkGovernor).
+            //
+            // On any other line the words on the screen go instead: a few kilobytes, which cost neither the question nor
+            // the speech anything, so a screen question is still answered from a screen that was read before it was
+            // asked. Where there is no way to read the words, the question reads the screen on demand as before.
+            bool pictureLine = LineCarriesPictures();
+            if (!pictureLine)
             {
-                if (_uplink.NeedsProbe(DateTime.UtcNow)) _ = ProbeUplinkAsync();
-                return;
+                if (_uplink.MayUpload(DateTime.UtcNow) && !_uplink.Verified && _uplink.NeedsProbe(DateTime.UtcNow))
+                    _ = ProbeUplinkAsync();
+                if (!ScreenOcr.IsAvailable) return;
             }
 
             // And never when no interview is happening.
@@ -4080,6 +4083,12 @@ namespace InterviewCopilot
                     && !string.IsNullOrEmpty(signature)
                     && SignatureDistance(signature, lastFingerprint) < MinSignatureChange;
 
+                if (!pictureLine)
+                {
+                    await PrepareWordsAsync(skipEncodeIfUnchanged, screenSession);
+                    return;
+                }
+
                 byte[]? shot = await CaptureScreenUnseenAsync(skipEncodeIfUnchanged);
                 if (_windowClosed || screenSession != _screenSessionGeneration) return;
 
@@ -4114,6 +4123,9 @@ namespace InterviewCopilot
         // to the identity that sent it, and gives it back exactly once.
         private string _preparedShotId = "";
         private DateTime _preparedShotIdUtc = DateTime.MinValue;
+
+        // The words last sent ahead in place of a picture, kept so the request can be repeated once if the answer is a refusal.
+        private string _preparedWords = "";
 
         // The last few views of the screen, oldest first.
         //
@@ -4307,6 +4319,175 @@ namespace InterviewCopilot
             finally
             {
                 _preparedUploadCts = null;
+            }
+        }
+
+        // ── The screen's words, sent ahead in place of a picture ───────────────────────────────────────────────────
+        // Used on a line that cannot carry a picture in good time. Same ids, same server stash, same one-question life;
+        // what is held is a few kilobytes of text instead of a few hundred of image, and the server starts reading it
+        // the moment it arrives, so the question lands on a finished read.
+
+        /// <summary>Whether this line has shown it can carry a picture in good time. When not, the screen's words go instead.</summary>
+        private bool LineCarriesPictures()
+        {
+#if DEBUG
+            // Developer builds only: REPLYSIS_LINE=slow sends words, fast sends pictures, whatever the line really is.
+            string force = Environment.GetEnvironmentVariable("REPLYSIS_LINE") ?? "";
+            if (force == "slow") return false;
+            if (force == "fast") return true;
+#endif
+            return _uplink.MayUpload(DateTime.UtcNow) && _uplink.Verified;
+        }
+
+        private async Task PrepareWordsAsync(Func<string, bool> skipIfUnchanged, long screenSession)
+        {
+            var sw = Stopwatch.StartNew();
+            ScreenAnalyzer.ScreenWords words = await CaptureWordsUnseenAsync(skipIfUnchanged);
+            if (_windowClosed || screenSession != _screenSessionGeneration) return;
+
+            if (words.Outcome == ScreenAnalyzer.ScreenWordsOutcome.Unchanged) { _preparedShotUtc = DateTime.UtcNow; return; }
+            if (words.Outcome != ScreenAnalyzer.ScreenWordsOutcome.Words) return;
+
+            _preparedShotUtc = DateTime.UtcNow;
+            DebugWindow.Log("SCREEN", $"Read {words.Text.Length} characters from the screen in {sw.ElapsedMilliseconds}ms.");
+            await UploadPreparedWordsAsync(words.Text, screenSession);
+        }
+
+        private async Task UploadPreparedWordsAsync(string words, long screenSession)
+        {
+            try
+            {
+                string fingerprint = ScreenAnalyzer.LastCaptureSignature;
+                var sw = Stopwatch.StartNew();
+                using var req = new HttpRequestMessage(HttpMethod.Post, $"{BackendUrl}/api/v1/interview/screen-cache");
+                if (!string.IsNullOrEmpty(UserSession.IdToken))
+                    req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
+                req.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
+                req.Content = new StringContent(JsonSerializer.Serialize(new { text = words }),
+                    System.Text.Encoding.UTF8, "application/json");
+
+                using var uploadCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                _preparedUploadDroppedForQuestion = false;
+                _preparedUploadCts = uploadCts;
+                using var res = await _creditsClient.SendAsync(req, uploadCts.Token);
+                if (_windowClosed || screenSession != _screenSessionGeneration) return;
+
+                if (!res.IsSuccessStatusCode)
+                {
+                    DebugWindow.Log("SCREEN", $"Words sent ahead were declined: HTTP {(int)res.StatusCode}");
+                    _preparedShotId = "";
+                    _uploadedShotFingerprint = "";
+                    return;
+                }
+
+                using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+                if (_windowClosed || screenSession != _screenSessionGeneration) return;
+                string id = doc.RootElement.TryGetProperty("imageId", out var idEl) ? idEl.GetString() ?? "" : "";
+                RememberPreparedId(id, words.Length, fingerprint);
+                if (!string.IsNullOrEmpty(id)) _preparedWords = words;
+                DebugWindow.Log("SCREEN", $"Words sent ahead in {sw.ElapsedMilliseconds}ms ({words.Length} characters); the question now carries an id.");
+            }
+            catch (Exception ex)
+            {
+                if (ex is OperationCanceledException && _preparedUploadDroppedForQuestion)
+                    DebugWindow.Log("SCREEN", "Words upload dropped so the question has the connection.");
+                else
+                    DebugWindow.Log("SCREEN", $"Sending the words ahead failed: {ex.GetType().Name}");
+                if (screenSession == _screenSessionGeneration) _preparedShotId = "";
+            }
+            finally
+            {
+                _preparedUploadCts = null;
+            }
+        }
+
+        /// <summary>Remembers an id the server gave for what was sent ahead, the same way a picture's id is remembered.</summary>
+        private void RememberPreparedId(string id, int size, string fingerprint)
+        {
+            _preparedShotId = id;
+            _preparedShotIdUtc = DateTime.UtcNow;
+            _uploadedShotFingerprint = fingerprint;
+            if (string.IsNullOrEmpty(id)) return;
+
+            // Only a screen that moved is a second view worth keeping (a ticking counter moves none of the cells).
+            string signature = ScreenAnalyzer.LastCaptureSignature;
+            bool pageMoved = SignatureDistance(signature, _lastKeptSignature) >= MinSignatureChange;
+            if (pageMoved || _recentShotIds.Count == 0)
+            {
+                _lastKeptSignature = signature;
+                _recentShotIds.Add((id, size));
+                Dispatcher.Invoke(RescanAfterScrollIfArmed);
+            }
+            else
+            {
+                _recentShotIds[^1] = (id, size);
+            }
+            while (_recentShotIds.Count > MaxShotsPerQuestion)
+                _recentShotIds.RemoveAt(0);
+        }
+
+        /// <summary>The words on the screen right now, for a question asked before any were sent ahead. Null if none could be read.</summary>
+        private async Task<string?> ReadScreenWordsNowAsync()
+        {
+            var sw = Stopwatch.StartNew();
+            ScreenAnalyzer.ScreenWords words = await CaptureWordsUnseenAsync(null);
+            if (words.Outcome != ScreenAnalyzer.ScreenWordsOutcome.Words)
+            {
+                DebugWindow.Log("SCREEN", "No words could be read from the screen; sending a picture instead.");
+                return null;
+            }
+            DebugWindow.Log("SCREEN", $"Read {words.Text.Length} characters from the screen in {sw.ElapsedMilliseconds}ms; no picture to upload.");
+            return words.Text;
+        }
+
+        /// <summary>
+        /// The same hiding of our own windows as <see cref="CaptureScreenUnseenAsync"/>, around reading the screen's
+        /// words instead of encoding a picture.
+        /// </summary>
+        private async Task<ScreenAnalyzer.ScreenWords> CaptureWordsUnseenAsync(Func<string, bool>? skipIfUnchanged)
+        {
+            bool answerWasVisible = answerWindow?.IsVisible == true;
+            AnswerWindow? cloakedAnswer = answerWasVisible ? answerWindow : null;
+
+            bool mainCloaked = WindowStealth.TryBeginCaptureHidden(this, out bool mainWasExcluded);
+            bool answerCloaked = true, answerWasExcluded = true;
+            if (cloakedAnswer != null)
+                answerCloaked = WindowStealth.TryBeginCaptureHidden(cloakedAnswer, out answerWasExcluded);
+
+            bool cloaked = mainCloaked && answerCloaked;
+            double savedOpacity = this.Opacity;
+
+            if (!cloaked)
+            {
+                this.Opacity = 0;
+                if (cloakedAnswer != null) cloakedAnswer.Opacity = 0;
+                await WaitForRenderedFrameAsync();
+                await Task.Delay(90);
+            }
+            else if (!mainWasExcluded || !answerWasExcluded)
+            {
+                await WaitForRenderedFrameAsync();
+            }
+
+            try
+            {
+                bool wholeScreen = _watchScreenMode;
+                return await Task.Run(() => ScreenAnalyzer.CaptureScreenWords(wholeScreen, skipIfUnchanged));
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("SCREEN_ERR", ex.Message);
+                return new ScreenAnalyzer.ScreenWords(ScreenAnalyzer.ScreenWordsOutcome.Failed, "");
+            }
+            finally
+            {
+                WindowStealth.EndCaptureHidden(this, mainWasExcluded);
+                WindowStealth.EndCaptureHidden(cloakedAnswer, answerWasExcluded);
+                if (!cloaked)
+                {
+                    this.Opacity = savedOpacity;
+                    if (cloakedAnswer != null) cloakedAnswer.Opacity = 1.0;
+                }
             }
         }
 
@@ -4756,12 +4937,22 @@ namespace InterviewCopilot
 
             if (aboutTheScreen)
             {
-                byte[]? shot = await GetScreenshotForAnswerAsync();
-                if (shot != null)
+                // A line that cannot carry a picture sends the screen's words instead (see PrepareWordsAsync): the ones
+                // already sent ahead if there are any, otherwise the screen is read now. The picture is the fallback.
+                bool wordsLine = ScreenOcr.IsAvailable && !LineCarriesPictures();
+                List<string> wordIds = wordsLine ? TakePreparedShotIds() : new List<string>();
+                string? inlineWords = null;
+                byte[]? shot = null;
+                if (wordsLine && wordIds.Count == 0) inlineWords = await ReadScreenWordsNowAsync();
+                if (wordIds.Count == 0 && string.IsNullOrEmpty(inlineWords)) shot = await GetScreenshotForAnswerAsync();
+
+                if (shot != null || wordIds.Count > 0 || !string.IsNullOrEmpty(inlineWords))
                 {
-                    DebugWindow.Log("SCREEN",
-                        $"Question is about the screen; answering from a {shot.Length / 1024} KB capture " +
-                        $"of {ScreenAnalyzer.LastCaptureTarget}");
+                    DebugWindow.Log("SCREEN", shot != null
+                        ? $"Question is about the screen; answering from a {shot.Length / 1024} KB capture " +
+                          $"of {ScreenAnalyzer.LastCaptureTarget}"
+                        : $"Question is about the screen; answering from the words on it " +
+                          $"({(wordIds.Count > 0 ? "sent ahead" : $"read just now, {inlineWords!.Length} characters")})");
 
                     // SCREEN NOTES is the model's private record of what was on
                     // screen, kept so the next question has something to work
@@ -4778,8 +4969,9 @@ namespace InterviewCopilot
                     const int NotesMarkerHoldback = 16;
 
                     await foreach (var visionToken in
-                        ScreenAnalyzer.AnalyzeStreamAsync(shot, ResumeParser.ExtractFacts(resume), question,
-                                                          TakePreparedShotIds(), ct))
+                        ScreenAnalyzer.AnalyzeStreamAsync(shot ?? Array.Empty<byte>(), ResumeParser.ExtractFacts(resume), question,
+                                                          wordsLine ? wordIds : TakePreparedShotIds(), ct,
+                                                          screenText: wordsLine ? (inlineWords ?? _preparedWords) : null))
                     {
                         if (reachedNotes) continue;
 

@@ -233,6 +233,41 @@ namespace InterviewCopilot
 
         public static byte[] CaptureScreen(bool wholeScreen) => CaptureScreen(wholeScreen, null);
 
+        internal enum ScreenWordsOutcome { Unchanged, Words, Failed }
+        internal readonly record struct ScreenWords(ScreenWordsOutcome Outcome, string Text);
+
+        [ThreadStatic] private static bool _textOnly;
+        [ThreadStatic] private static bool _textRan;
+        [ThreadStatic] private static string? _textResult;
+
+        /// <summary>
+        /// The words on the screen instead of a picture of it: the same capture, read by the text reader that ships with
+        /// Windows and never encoded or uploaded as an image. Unchanged when <paramref name="skipIfUnchanged"/> says the
+        /// screen is the one already sent. Failed when nothing readable was found or the reader is not available.
+        /// </summary>
+        internal static ScreenWords CaptureScreenWords(bool wholeScreen, Func<string, bool>? skipIfUnchanged)
+        {
+            _skipEncodeIfUnchanged = skipIfUnchanged;
+            _textOnly = true;
+            _textRan = false;
+            _textResult = null;
+            try
+            {
+                CaptureScreenCore(wholeScreen);
+                if (!_textRan) return new ScreenWords(ScreenWordsOutcome.Unchanged, "");
+                return string.IsNullOrEmpty(_textResult)
+                    ? new ScreenWords(ScreenWordsOutcome.Failed, "")
+                    : new ScreenWords(ScreenWordsOutcome.Words, _textResult);
+            }
+            finally
+            {
+                _skipEncodeIfUnchanged = null;
+                _textOnly = false;
+                _textRan = false;
+                _textResult = null;
+            }
+        }
+
         /// <summary>
         /// Captures the screen, but skips the PNG encode entirely when
         /// <paramref name="skipEncodeIfUnchanged"/> says the screen is the same
@@ -501,7 +536,7 @@ namespace InterviewCopilot
             double longCap  = _capturingWholeScreen ? MaxLongEdgeFullScreen  : MaxLongEdge;
             double scale = Math.Min(shortCap / shortEdge, longCap / longEdge);
 
-            if (scale < 1.0)
+            if (scale < 1.0 && !_textOnly)
             {
                 int dstW = Math.Max(1, (int)Math.Round(srcW * scale));
                 int dstH = Math.Max(1, (int)Math.Round(srcH * scale));
@@ -528,6 +563,15 @@ namespace InterviewCopilot
             // here, before the encode that was the whole cost.
             if (_skipEncodeIfUnchanged != null && _skipEncodeIfUnchanged(LastCaptureSignature))
                 return Array.Empty<byte>();
+
+            // The screen's words, not a picture: read it at its own size and stop here, before any encoding. This is
+            // what a connection too slow for pictures sends (see CaptureScreenWords).
+            if (_textOnly)
+            {
+                _textResult = ScreenOcr.Read(bmp);
+                _textRan = true;
+                return Array.Empty<byte>();
+            }
 
             byte[] full = EncodePng(bmp);
 
@@ -1431,7 +1475,8 @@ namespace InterviewCopilot
         public static async IAsyncEnumerable<string> AnalyzeStreamAsync(
             byte[] imageBytes, string? resumeContext = null, string? spokenQuestion = null,
             System.Collections.Generic.IReadOnlyList<string>? preparedImageIds = null,
-            [EnumeratorCancellation] CancellationToken ct = default)
+            [EnumeratorCancellation] CancellationToken ct = default,
+            string? screenText = null)
         {
             var held = new List<string>();
             var head = new StringBuilder();
@@ -1439,7 +1484,7 @@ namespace InterviewCopilot
 
             await foreach (string token in
                 StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: false,
-                                preparedImageIds, ct))
+                                preparedImageIds, ct, screenText))
             {
                 if (released) { yield return token; continue; }
 
@@ -1464,7 +1509,7 @@ namespace InterviewCopilot
             DebugWindow.Log("SCREEN", "Model declined; asking again in plainer words.");
             await foreach (string token in
                 StreamOnceAsync(imageBytes, resumeContext, spokenQuestion, plainly: true,
-                                preparedImageIds: null, ct))
+                                preparedImageIds: null, ct, screenText))
                 yield return token;
         }
 
@@ -1489,7 +1534,8 @@ namespace InterviewCopilot
         private static async IAsyncEnumerable<string> StreamOnceAsync(
             byte[] imageBytes, string? resumeContext, string? spokenQuestion, bool plainly,
             System.Collections.Generic.IReadOnlyList<string>? preparedImageIds = null,
-            [EnumeratorCancellation] CancellationToken ct = default)
+            [EnumeratorCancellation] CancellationToken ct = default,
+            string? screenText = null)
         {
             string prompt = plainly
                 ? BuildPlainPrompt(spokenQuestion)
@@ -1507,13 +1553,17 @@ namespace InterviewCopilot
             // When the picture went up before the question, send the id instead.
             // The bytes are still carried on the fallback path, and on a retry,
             // because an id is spent the moment the server hands it back.
+            //
+            // No picture at all (a connection too slow to carry one) sends the words on the screen instead.
             string payloadJson = preparedImageIds is { Count: > 0 }
                 ? JsonSerializer.Serialize(new { imageIds = preparedImageIds, prompt })
-                : JsonSerializer.Serialize(new
-                  {
-                      image = Convert.ToBase64String(imageBytes),
-                      prompt
-                  });
+                : imageBytes.Length == 0 && !string.IsNullOrEmpty(screenText)
+                    ? JsonSerializer.Serialize(new { screenText, prompt })
+                    : JsonSerializer.Serialize(new
+                      {
+                          image = Convert.ToBase64String(imageBytes),
+                          prompt
+                      });
 
             // â”€â”€ Send request via helper (never throws) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             var (res, sendError) = await SendVisionRequestSafeAsync(payloadJson, ct);
