@@ -527,6 +527,25 @@ namespace InterviewCopilot
                     _networkChangedHandler = (_, _) => Dispatcher.BeginInvoke(new Action(() => { _uplink.Reset(); ApplyLineSpeedToCaptures(); }));
                     System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += _networkChangedHandler;
 
+                    // Ready the moment the computer wakes. A connection that was open when the lid closed is dead after it,
+                    // and left alone the speech engine finds that out by timing out (twenty seconds) and then backing off,
+                    // so the first question after opening the lid met a deaf app. Reconnect as soon as the network is back.
+                    _powerHandler = (_, args) =>
+                    {
+                        if (args.Mode != Microsoft.Win32.PowerModes.Resume) return;
+                        Dispatcher.BeginInvoke(new Action(async () =>
+                        {
+                            await Task.Delay(2500);   // the network adapter needs a moment to come back
+                            if (_windowClosed) return;
+                            DebugWindow.Log("ENGINE", "The computer woke up; reconnecting speech now instead of waiting for the old connection to time out.");
+                            _nextEngineRestartUtc = DateTime.MinValue;
+                            StartSpeechmaticsEngine();
+                            _uplink.Reset();
+                            ApplyLineSpeedToCaptures();
+                        }));
+                    };
+                    Microsoft.Win32.SystemEvents.PowerModeChanged += _powerHandler;
+
                     PromptBuilder.DetailedAnswers = SettingsWindow.GetDetailedAnswers();
 #if DEBUG
                     ApplyAutoTestLengthOverride();
@@ -3918,6 +3937,7 @@ namespace InterviewCopilot
         // Keeps a picture sent ahead from clogging a slow connection. See UplinkGovernor.
         private readonly UplinkGovernor _uplink = new();
         private System.Net.NetworkInformation.NetworkAddressChangedEventHandler? _networkChangedHandler;
+        private Microsoft.Win32.PowerModeChangedEventHandler? _powerHandler;
         private CancellationTokenSource? _preparedUploadCts;
         private volatile bool _preparedUploadDroppedForQuestion;
 
@@ -9232,6 +9252,11 @@ namespace InterviewCopilot
             {
                 System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged -= _networkChangedHandler;
                 _networkChangedHandler = null;
+            }
+            if (_powerHandler != null)
+            {
+                Microsoft.Win32.SystemEvents.PowerModeChanged -= _powerHandler;
+                _powerHandler = null;
             }
 
             // Listening time accumulates between reports, and closing the app

@@ -108,6 +108,10 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     near-opaque slate). Restored in ca77b35: App.xaml brushes, the Credits, Settings, Sessions and Update windows, the main window's
     colours and the sessions list's code-built colours. The sizes, layout and the new segmented switches were kept; the switch now
     uses white-alpha too. Nothing for the Mac, but if either app is restyled again, check translucency first.
+25. **Ready the moment the computer wakes (Windows 1.0.30).** A speech connection that was open when the lid closed is dead after it,
+    and the engine only finds that out by timing out (about 20 s) and then backing off, so the first question after opening the lid met a
+    deaf app. `SystemEvents.PowerModeChanged` with `PowerModes.Resume` now restarts the engine 2.5 s after waking (the network adapter
+    needs a moment). **The Mac equivalent is `NSWorkspace.didWakeNotification`.**
 
 ---
 
