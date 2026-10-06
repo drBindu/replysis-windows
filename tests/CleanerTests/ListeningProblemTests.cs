@@ -48,11 +48,20 @@ internal static class ListeningProblemTests
 
         // The limits are told apart, and the two meters are named.
         var time = ListeningProblems.Describe(ListeningProblems.Kind.NoListeningTime);
-        Check(time.Body.Contains("You still have answers left"),
-            "monthly limit: says answers are fine, so answers left over is not a contradiction");
-        Check(time.Body.Contains("fair use"), "monthly limit: calls it a fair use limit");
-        Check(time.Body.Contains("F8"), "no listening time: says what still works");
-        Check(time.Step == ListeningProblems.NextStep.SeePlans, "no listening time: offers plans");
+        var trialOver = ListeningProblems.Describe(ListeningProblems.Kind.NoListeningTime, freeTrial: true);
+        Check(time.Body.Contains("answers are safe"), "monthly limit: says answers are fine, so answers left over is not a contradiction");
+        Check(time.Body.Contains("F8"), "monthly limit: says what still works");
+        Check(time.Step == ListeningProblems.NextStep.None && time.Body.Contains("contact support"),
+            "monthly limit: a paid plan is told to contact support, not sent to plans");
+        Check(trialOver.Title == "Your free trial is over" && trialOver.Step == ListeningProblems.NextStep.MoreAnswers,
+            "on the free trial the same limit is simply the end of the trial, with the way to continue");
+        // The customer is told about answers and nothing else: no listening, minutes, hours or fair use, anywhere in it.
+        foreach (var d in new[] { time, trialOver })
+        {
+            string all = d.Label + " " + d.Title + " " + d.Body;
+            Check(!System.Text.RegularExpressions.Regex.IsMatch(all, @"listening|minute|hour|fair use", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+                $"\"{d.Title}\" never mentions listening, minutes, hours or fair use");
+        }
         Check(ListeningProblems.Describe(ListeningProblems.Kind.NoCredits).Step == ListeningProblems.NextStep.MoreAnswers,
             "no answers: offers to add answers or upgrade");
 

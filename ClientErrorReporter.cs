@@ -30,6 +30,10 @@ namespace InterviewCopilot
         private static int _sent;
 
         private static readonly Regex FrameName = new(@"^\s*at\s+([^\s(]+)", RegexOptions.Compiled);
+        private static readonly Regex WindowsPath = new(@"(?i)\b[a-z]:\\[^\r\n\t\""<>|]+", RegexOptions.Compiled);
+        private static readonly Regex Email = new(@"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex BearerOrToken = new(@"(?i)\b(bearer|token|api[_-]?key|password)\s*[:=]?\s*[^\s,;]+", RegexOptions.Compiled);
+        private static readonly Regex Jwt = new(@"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", RegexOptions.Compiled);
 
         /// <summary>The method names from a stack trace, innermost first, and nothing else (no paths, no line text).</summary>
         internal static string Frames(string? stackTrace, int max = 8)
@@ -49,6 +53,16 @@ namespace InterviewCopilot
         /// <summary>One fault is one fingerprint: its type and where it came from. Used to send each only once a run.</summary>
         internal static string Fingerprint(Exception ex) =>
             ex.GetType().Name + "|" + Frames(ex.StackTrace, 2);
+
+        internal static string SanitizeMessage(string? message)
+        {
+            string safe = message ?? "";
+            safe = WindowsPath.Replace(safe, "[path]");
+            safe = Email.Replace(safe, "[email]");
+            safe = BearerOrToken.Replace(safe, "$1 [redacted]");
+            safe = Jwt.Replace(safe, "[token]");
+            return safe.Length > 200 ? safe[..200] : safe;
+        }
 
         /// <summary>Whether this fault should be sent now. At most <see cref="MaxPerRun"/>, each fault once.</summary>
         internal static bool ShouldSend(string fingerprint)
@@ -81,7 +95,7 @@ namespace InterviewCopilot
                     os = $"{Environment.OSVersion.Version} {System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}",
                     source,
                     type = ex.GetType().FullName ?? ex.GetType().Name,
-                    message = ex.Message.Length > 200 ? ex.Message[..200] : ex.Message,
+                    message = SanitizeMessage(ex.Message),
                     frames = Frames(ex.StackTrace),
                 };
                 string url = SettingsWindow.GetBackendUrl().TrimEnd('/') + "/api/v1/diagnostics/client-error";

@@ -30,20 +30,20 @@ if (!existsSync(exe)) { console.error("Build the Debug app first:\n  dotnet buil
 //   tokenCalls / keyCalls   exact number of token refreshes / speech key requests expected
 const TOKEN_PORT = (i) => 18100 + i;
 const CASES = [
-  { name: "no-listening",  problem: "NoListeningTime",    banner: true,  words: ["fair use", "still have credits", "F8"] },
+  { name: "no-listening",  problem: "NoListeningTime",    banner: true,  words: ["this month's limit", "answers are safe", "F8"] },
   { name: "no-credits",    problem: "NoCredits",          banner: true,  words: ["used up", "upgrade"] },
   { name: "signed-out",    problem: "SignInExpired",      banner: true,  words: ["sign in", "Sign out"] },
   { name: "service-down",  problem: "ServiceUnavailable", banner: true,  words: ["temporarily unavailable", "nothing needs to be done"] },
   { name: "rate-limited",  problem: "WaitingToReconnect", banner: false, words: [] },
   // A laptop wakes from sleep holding a stale sign-in. It must refresh and ask again, and end up
   // at the real answer (no listening time), never at "sign in again".
-  { name: "wake-token-rejected", problem: "NoListeningTime", banner: true, words: ["fair use"],
+  { name: "wake-token-rejected", problem: "NoListeningTime", banner: true, words: ["this month's limit"],
     env: { REPLYSIS_STALE_TOKEN: "rejected" }, forbid: ["SignInExpired"], tokenCalls: 1, keyCalls: 2 },
-  { name: "wake-token-expired", problem: "NoListeningTime", banner: true, words: ["fair use"],
+  { name: "wake-token-expired", problem: "NoListeningTime", banner: true, words: ["this month's limit"],
     env: { REPLYSIS_STALE_TOKEN: "expired" }, forbid: ["SignInExpired"], tokenCalls: 1, keyCalls: 1 },
   // ... and the network is not up yet when the app first asks. It must keep asking, in seconds,
   // and reach the real answer once the server can be reached.
-  { name: "wake-network-late", scenario: "no-listening", problem: "NoListeningTime", banner: true, words: ["fair use"],
+  { name: "wake-network-late", scenario: "no-listening", problem: "NoListeningTime", banner: true, words: ["this month's limit"],
     startMockMs: 25_000, waitMs: 60_000, forbid: ["SignInExpired"] },
 ];
 const only = process.argv[2];

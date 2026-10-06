@@ -462,6 +462,17 @@ namespace InterviewCopilot
                     // retried until they gave up. It is what asks for the speech key again.
                     _engineMonitorTimer.Start();
 
+                    // Warm the answer connection immediately. Profile and usage
+                    // refreshes below are independent network calls and must not
+                    // delay first-answer readiness.
+                    _ = WarmBackendAsync();
+                    // Every 25 s: shorter than the time a proxy or a home router keeps a quiet connection, so the
+                    // next question never has to open a new one. (60 s measured worse: the first question after a
+                    // quiet minute paid for DNS, TCP and TLS again.)
+                    warmupTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(25) };
+                    warmupTimer.Tick += (s2, e2) => _ = WarmBackendAsync();
+                    warmupTimer.Start();
+
                     // Also repairs accounts restored from disk that have never
                     // signed in through replysis.com. Both calls are deliberately
                     // after local session readiness because they require network I/O.
@@ -481,13 +492,6 @@ namespace InterviewCopilot
                     // first question after a quiet gap pays a 2-3s cold start ("thinking so long
                     // sometimes"). Ping it every 75s — well under the idle timeout — so the
                     // container stays hot and first-token stays at its ~0.7s warm number.
-                    _ = WarmBackendAsync();
-                    // Every 25 s: shorter than the time a proxy or a home router keeps a quiet
-                    // connection, so the next question never has to open a new one.
-                    warmupTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(25) };
-                    warmupTimer.Tick += (s2, e2) => _ = WarmBackendAsync();
-                    warmupTimer.Start();
-
                     // Defense-in-depth for the "Space does nothing until I click in the app"
                     // bug: after ALL startup work settles, if keyboard focus still landed in
                     // one of the text fields, move it to the window itself so the global Space
@@ -530,7 +534,10 @@ namespace InterviewCopilot
                 }
                 catch (Exception ex)
                 {
+                    // Logged and reported, and the app carries on: what failed is almost always one optional piece of the
+                    // window, and closing the whole app behind a dialog turned any of them into a crash.
                     DebugWindow.Log("STARTUP_ERR", $"Window load failed: {ex.Message}");
+                    ClientErrorReporter.Report("WINDOW-STARTUP", ex);
                 }
             };
 
@@ -564,6 +571,9 @@ namespace InterviewCopilot
         {
             try
             {
+                if (isRecording)
+                    await FinalizeSessionAsync();
+
                 var loginWin = new LoginWindow();
                 // AnswerWindow is Topmost=True; lower it so the login dialog isn't hidden behind it.
                 bool wasTopmost = answerWindow != null && answerWindow.Topmost;
@@ -578,7 +588,6 @@ namespace InterviewCopilot
                     UpdateProfileUI();
                     await FetchAndDisplayCreditsAsync();
                     _ = InitializeSpeechPipelineAsync();
-                    if (isRecording) EndSession();
                     await StartNewSessionAsync();
                     // Do not persist account PII in the local diagnostic log.
                     DebugWindow.Log("AUTH", "Signed-in account ready");
@@ -780,6 +789,8 @@ namespace InterviewCopilot
         private async void PopupSignOut_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             ProfileDropdownPopup.IsOpen = false;
+            if (isRecording)
+                await FinalizeSessionAsync();
             UserSession.Clear();
             _creditsFetched = false;
             SetLoggedOutUI();
@@ -793,6 +804,9 @@ namespace InterviewCopilot
             _guestTransitionInProgress = true;
             try
             {
+                if (isRecording)
+                    await FinalizeSessionAsync();
+                UserSession.Clear();
                 _creditsFetched = false;
                 SetLoggedOutUI();
                 // Kept as the recovery call site for an expired Firebase token,
@@ -922,7 +936,6 @@ namespace InterviewCopilot
 
             UserSession.IsGuestSession = false;
 
-            if (isRecording) EndSession();
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -1043,13 +1056,10 @@ namespace InterviewCopilot
                         CreditsLabel.Foreground = new SolidColorBrush(
                             (Color)ColorConverter.ConvertFromString(creditColor));
 
-                        CreditsPlanLabel.Text = _audioMinutesRemaining == 0
-                            ? "  Monthly listening limit reached"
-                            : "";
-                        CreditsPlanLabel.Foreground = new SolidColorBrush(
-                            (Color)ColorConverter.ConvertFromString(_audioMinutesRemaining == 0 ? "#F87171" : "#A0A0A4"));
-                        CreditsPlanLabel.Visibility = _audioMinutesRemaining == 0
-                            ? Visibility.Visible : Visibility.Collapsed;
+                        // Nothing next to the answers badge. It used to say "Monthly listening limit reached" in red; the
+                        // banner explains a limit in words when there is one, and the badge only ever talks about answers.
+                        CreditsPlanLabel.Text = "";
+                        CreditsPlanLabel.Visibility = Visibility.Collapsed;
                     }
                     CLog($"Badge set to: {CreditsLabel.Text}");
                 });
@@ -1556,10 +1566,8 @@ namespace InterviewCopilot
             var onFg = Tone("#FAFAFC");
             var offFg = Tone("#92929F");
 
-            if (practice) SegPractice.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "GlassButtonSelectedSurface");
-            else SegPractice.Background = Brushes.Transparent;
-            if (!practice) SegInterview.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "GlassButtonSelectedSurface");
-            else SegInterview.Background = Brushes.Transparent;
+            SegPractice.Background = Brushes.Transparent;     // the sliding thumb shows the selection
+            SegInterview.Background = Brushes.Transparent;
 
             SegInterviewText.Foreground = practice ? offFg : onFg;
             SegPracticeText.Foreground = practice ? onFg : offFg;
@@ -1567,8 +1575,11 @@ namespace InterviewCopilot
             SegPracticeIcon.Foreground = practice ? onFg : offFg;
             if (ModeSegments != null) ModeSegments.ToolTip = AudioSourceRules.HearingLine(practice);
 
-            PaintSetupCard(SetupInterview, SetupInterviewTitle, !practice);
-            PaintSetupCard(SetupPractice, SetupPracticeTitle, practice);
+            SetupSource.SetSelected(practice ? 1 : 0);
+            SetupSourceHint.Text = practice
+                ? "Hears the meeting and your microphone. For practising on your own or with someone nearby."
+                : "Hears the meeting only. Your own voice is not picked up. Best for real interviews.";
+            UpdateHeaderThumbs(animate: true);
         }
 
         /// <summary>
@@ -1728,50 +1739,71 @@ namespace InterviewCopilot
             ModeNoticeText.Visibility = Visibility.Collapsed;
             ModeSegments.ToolTip      = null;
 
-            if (auto) SegAuto.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "GlassButtonSelectedSurface");
-            else SegAuto.Background = Brushes.Transparent;
+            SegAuto.Background = Brushes.Transparent;         // the sliding thumb shows the selection
+            SegManual.Background = Brushes.Transparent;
             SegAutoText.Foreground   = auto ? onFg : offFg;
-            if (!auto) SegManual.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "GlassButtonSelectedSurface");
-            else SegManual.Background = Brushes.Transparent;
             SegManualText.Foreground = auto ? offFg : onFg;
 
-            PaintSetupCard(SetupAuto, SetupAutoTitle, auto);
-            PaintSetupCard(SetupManual, SetupManualTitle, !auto);
+            SetupTrigger.SetSelected(auto ? 0 : 1);
+            SetupTriggerHint.Text = auto
+                ? "Answers on its own after each complete question."
+                : "Press Space to listen, then Space again to answer.";
+            UpdateHeaderThumbs(animate: true);
         }
 
-        /// <summary>
-        /// Shared look for every explained choice card in the setup sidebar -
-        /// selected gets the green accent, everything else stays neutral
-        /// graphite so only one card per group ever reads as "on".
-        /// </summary>
-        private static void PaintSetupCard(System.Windows.Controls.Border card,
-                                            System.Windows.Controls.TextBlock title, bool selected)
+        // ── The header switch's sliding thumbs ─────────────────────────────────────
+        private void ModeSegmentsLayer_Loaded(object sender, RoutedEventArgs e) => UpdateHeaderThumbs(animate: false);
+        private void ModeSegmentsLayer_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateHeaderThumbs(animate: false);
+
+        /// <summary>Puts each thumb under the chosen segment of its group, sliding when the choice changed.</summary>
+        private void UpdateHeaderThumbs(bool animate)
         {
-            if (card == null || title == null) return;
-            if (selected)
+            if (ModeSegmentsLayer == null || ThumbMode == null || ThumbSource == null) return;
+            PlaceHeaderThumb(ThumbMode, _listeningMode == ListeningMode.Auto ? SegAuto : SegManual, animate);
+            PlaceHeaderThumb(ThumbSource, PracticeAudioOn ? SegPractice : SegInterview, animate);
+        }
+
+        private void PlaceHeaderThumb(System.Windows.Controls.Border thumb, System.Windows.Controls.Border segment, bool animate)
+        {
+            // A segment that is not on screen (a status message is standing in for the switch, or the header is
+            // narrow) has no place to put a thumb.
+            if (!segment.IsLoaded || segment.Visibility != Visibility.Visible || segment.ActualWidth <= 0)
             {
-                card.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1421924A"));
-                card.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#5021924A"));
-                title.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F4F7FC"));
+                thumb.Visibility = Visibility.Collapsed;
+                return;
             }
-            else
+
+            Point origin = segment.TranslatePoint(new Point(0, 0), ModeSegmentsLayer);
+            bool wasHidden = thumb.Visibility != Visibility.Visible;
+            thumb.Visibility = Visibility.Visible;
+            thumb.Height = segment.ActualHeight;
+            System.Windows.Controls.Canvas.SetTop(thumb, origin.Y);
+
+            if (!animate || wasHidden || !SystemParameters.ClientAreaAnimation)
             {
-                card.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "ActionGraphiteSurface");
-                card.SetResourceReference(System.Windows.Controls.Border.BorderBrushProperty, "ActionGraphiteStroke");
-                title.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#92929F"));
+                thumb.BeginAnimation(System.Windows.Controls.Canvas.LeftProperty, null);
+                thumb.BeginAnimation(FrameworkElement.WidthProperty, null);
+                System.Windows.Controls.Canvas.SetLeft(thumb, origin.X);
+                thumb.Width = segment.ActualWidth;
+                return;
             }
+
+            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+            var time = TimeSpan.FromMilliseconds(170);
+            thumb.BeginAnimation(System.Windows.Controls.Canvas.LeftProperty,
+                new System.Windows.Media.Animation.DoubleAnimation(origin.X, time) { EasingFunction = ease });
+            thumb.BeginAnimation(FrameworkElement.WidthProperty,
+                new System.Windows.Media.Animation.DoubleAnimation(segment.ActualWidth, time) { EasingFunction = ease });
         }
 
         // The setup sidebar's explained cards are a second entry point to the
         // exact same state as the toolbar switch - same methods, same effects,
         // just reached from where a candidate is reading what each choice
         // does instead of from a tooltip.
-        private void SetupAuto_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectListeningMode(ListeningMode.Auto);
-        private void SetupManual_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectListeningMode(ListeningMode.Manual);
-        private void SetupInterview_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAudioSource(practice: false);
-        private void SetupPractice_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAudioSource(practice: true);
-        private void SetupShort_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAnswerLength(detailed: false);
-        private void SetupDetailed_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectAnswerLength(detailed: true);
+        private void SetupTrigger_Requested(object? sender, int index) =>
+            SelectListeningMode(index == 0 ? ListeningMode.Auto : ListeningMode.Manual);
+        private void SetupSource_Requested(object? sender, int index) => SelectAudioSource(practice: index == 1);
+        private void SetupLength_Requested(object? sender, int index) => SelectAnswerLength(detailed: index == 1);
 
         // Applies from the next question; an answer already streaming keeps the
         // length it was asked for.
@@ -1787,8 +1819,11 @@ namespace InterviewCopilot
 
         private void UpdateAnswerLengthUi()
         {
-            PaintSetupCard(SetupShort, SetupShortTitle, !PromptBuilder.DetailedAnswers);
-            PaintSetupCard(SetupDetailed, SetupDetailedTitle, PromptBuilder.DetailedAnswers);
+            bool detailed = PromptBuilder.DetailedAnswers;
+            SetupLength.SetSelected(detailed ? 1 : 0);
+            SetupLengthHint.Text = detailed
+                ? "Fuller answers with more depth and an example, about a minute to say."
+                : "Fits the question. Quick ones get a sentence or two, easy to say fast.";
         }
 
 
@@ -1807,6 +1842,7 @@ namespace InterviewCopilot
             ModeNoticeText.Text = message;
             ModeNoticeText.Visibility = Visibility.Visible;
             ModeSegments.ToolTip = message;
+            UpdateHeaderThumbs(animate: false);
 
             // Four seconds rather than 2.5: several of these are instructions,
             // and 2.5s was not long enough to read "Restart the app" and act.
@@ -2207,7 +2243,7 @@ namespace InterviewCopilot
                 : $"About {answers:N0} answers left this month.";
             string cost = "Each answer or screen read uses one answer.";
             return limitReached
-                ? $"{line}\n{cost}\nYou have reached this month's fair use limit for listening, so nothing more can be heard until it renews. Click for plans."
+                ? $"{line}\n{cost}\nYou have reached this month's limit, so nothing more can be heard until it renews. Click for plans."
                 : $"{line}\n{cost}\nClick for plans.";
         }
 
@@ -4566,6 +4602,8 @@ namespace InterviewCopilot
                     var visionClock = Stopwatch.StartNew();
                     long visionFirstTokenMs = -1;
                     bool reachedNotes = false;
+                    int visionCharsShown = 0;
+                    const int NotesMarkerHoldback = 16;
 
                     await foreach (var visionToken in
                         ScreenAnalyzer.AnalyzeStreamAsync(shot, ResumeParser.ExtractFacts(resume), question,
@@ -4592,17 +4630,29 @@ namespace InterviewCopilot
                         int notesAt = IndexOfNotesHeading(visionSoFar);
                         if (notesAt < 0)
                         {
-                            yield return visionToken;
+                            // Keep a short suffix private until the next token.
+                            // Otherwise a marker split as "SC" + "REEN NOTES"
+                            // shows its first fragment before it can be detected.
+                            int safeThrough = Math.Max(visionCharsShown,
+                                visionSoFar.Length - NotesMarkerHoldback);
+                            if (safeThrough > visionCharsShown)
+                            {
+                                yield return visionSoFar.ToString(
+                                    visionCharsShown, safeThrough - visionCharsShown);
+                                visionCharsShown = safeThrough;
+                            }
                             continue;
                         }
 
                         // The marker can arrive split across tokens, so trim from
                         // the accumulated text rather than from this token alone.
                         reachedNotes = true;
-                        int alreadyShown = visionSoFar.Length - visionToken.Length;
-                        if (notesAt > alreadyShown)
-                            yield return visionSoFar.ToString(alreadyShown, notesAt - alreadyShown);
+                        if (notesAt > visionCharsShown)
+                            yield return visionSoFar.ToString(visionCharsShown, notesAt - visionCharsShown);
                     }
+
+                    if (!reachedNotes && visionCharsShown < visionSoFar.Length)
+                        yield return visionSoFar.ToString(visionCharsShown, visionSoFar.Length - visionCharsShown);
 
                     ArmRescanIfAnswerAskedToScroll(visionSoFar.ToString(), question);
                     DebugWindow.Log("SCREEN",
@@ -4653,7 +4703,6 @@ namespace InterviewCopilot
                 throw new BackendRequestException("You are out of answers. Open the answers badge at the top to add more.");
             if (status == 401)
             {
-                UserSession.Clear();
                 Dispatcher.Invoke(() => { _ = SwitchToGuestSessionAsync(); });
                 throw new BackendRequestException("Your sign-in expired. Sign in again to continue.");
             }
@@ -5262,6 +5311,57 @@ namespace InterviewCopilot
             PromptBuilder.ClearHistory();
             UnlockResume();
             DebugWindow.Log("SESSION", "Session ended");
+        }
+
+        private readonly record struct SessionFinalizationResult(
+            int SessionNumber,
+            bool HadSession,
+            bool TranscriptSaved,
+            bool AudioExpected,
+            bool AudioSaved,
+            bool CloudFinished);
+
+        /// <summary>
+        /// The single session-finalization path. Session state is captured before
+        /// EndSession clears it, then transcript, audio and queued cloud writes are
+        /// allowed to finish before callers move to another session or identity.
+        /// </summary>
+        private async Task<SessionFinalizationResult> FinalizeSessionAsync(
+            int recordingTimeoutMs = RecordingSaveTimeoutMs,
+            int cloudTimeoutMs = 5_000)
+        {
+            int completedSession = sessionNumber;
+            bool hadSession = isRecording;
+            bool audioExpected = isRecording && _savingSessionAudio;
+            string recordingId = _recordingSessionId;
+
+            EndSession();
+
+            bool transcriptSaved = await Task.Run(
+                () => _sessionWriter.Drain(TimeSpan.FromSeconds(5)));
+
+            bool audioSaved = !audioExpected;
+            if (audioExpected && await WaitForRecordingSaveAsync(recordingId, recordingTimeoutMs))
+            {
+                ProtectRecording(completedSession);
+                audioSaved = !File.Exists(Path.Combine(AppDataFolder, $"interview_{completedSession}.wav"));
+            }
+
+            bool cloudFinished = false;
+            try
+            {
+                using var timeout = new CancellationTokenSource(cloudTimeoutMs);
+                await CloudSessionSync.DrainAsync(timeout.Token);
+                cloudFinished = true;
+            }
+            catch (OperationCanceledException)
+            {
+                DebugWindow.Log("CLOUD_SYNC", "Timed out waiting for queued session backup.");
+            }
+
+            return new SessionFinalizationResult(
+                completedSession, hadSession, transcriptSaved,
+                audioExpected, audioSaved, cloudFinished);
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -7131,7 +7231,7 @@ namespace InterviewCopilot
         private void VerifyResume_Click(object sender, RoutedEventArgs e)
         {
             string facts = ResumeParser.ExtractFacts(ResumeTextBox.Text);
-            MessageBox.Show(this, facts, "Resume Facts Preview", MessageBoxButton.OK, MessageBoxImage.Information);
+            StealthDialog.Show(this, "Resume Facts Preview", facts);
         }
 
         private void Copy_Click(object sender, RoutedEventArgs e)
@@ -7450,24 +7550,23 @@ namespace InterviewCopilot
                     UpdateMicUi();
                 }
 
-                int completedSession = sessionNumber;
-                bool hadSession = isRecording;
-                EndSession();
-
-                // The transcript is encrypted as a whole and writes are ordered.
-                // Wait off the UI thread so Past Sessions never opens on a file
-                // whose final answer or duration is still queued behind it.
-                bool saved = await Task.Run(() => _sessionWriter.Drain(TimeSpan.FromSeconds(5)));
-                if (!saved)
+                SessionFinalizationResult result = await FinalizeSessionAsync();
+                if (!result.TranscriptSaved)
                 {
                     ShowInAppAlert(
                         "Still saving",
                         "The interview is finished, but its final local write is taking longer than expected. Past Sessions will refresh when you open it again.");
                 }
-                else if (hadSession)
+                else if (result.HadSession)
                 {
-                    DebugWindow.Log("SESSION", $"Session {completedSession} finished and opened in Past Sessions");
+                    DebugWindow.Log("SESSION", $"Session {result.SessionNumber} finished and opened in Past Sessions");
                 }
+                if (result.AudioExpected && !result.AudioSaved)
+                    ShowInAppAlert("Audio still saving", "The transcript is safe, but the optional audio recording could not be protected. Check disk space and permissions.");
+                // No popup for a slow cloud backup: the local transcript is safe and Past Sessions shows it. Said in the log
+                // only, because a notice here appeared on every Finish over a weak connection and gave the person nothing to do.
+                if (!result.CloudFinished)
+                    DebugWindow.Log("CLOUD_SYNC", "Cloud backup did not finish before the timeout; the local transcript is safe.");
 
                 SessionsBtn_Click(sender, new RoutedEventArgs());
             }
@@ -7501,16 +7600,8 @@ namespace InterviewCopilot
             }
             try
             {
-            string recordingId = _recordingSessionId;
-            bool hadActiveRecording = isRecording && _savingSessionAudio;
-            int previousSessionNumber = sessionNumber;
-            bool previousSessionSaved = false;
-            EndSession();
-            if (hadActiveRecording && await WaitForRecordingSaveAsync(recordingId, RecordingSaveTimeoutMs))
-            {
-                ProtectRecording(sessionNumber);
-                previousSessionSaved = true;
-            }
+            SessionFinalizationResult previous = await FinalizeSessionAsync();
+            int previousSessionNumber = previous.SessionNumber;
             // Don't increment here — StartNewSession's while(File.Exists) scan is the sole source of truth
             SetTranscript("");
             TranscriptHint.Visibility = Visibility.Visible;
@@ -7525,9 +7616,9 @@ namespace InterviewCopilot
 
             if (!isRecording)
                 AiAnswerBox.Text = "We could not start a new session. Please try again.";
-            else if (previousSessionSaved)
+            else if (previous.AudioExpected && previous.AudioSaved)
                 AiAnswerBox.Text = $"Session {previousSessionNumber} saved. You are now in session {sessionNumber}, with your resume and role still loaded.";
-            else if (hadActiveRecording)
+            else if (previous.AudioExpected)
                 AiAnswerBox.Text = $"Session {sessionNumber} started. The previous audio recording could not be confirmed saved. Check disk space and permissions. Transcript saving is separate from audio.";
             else
                 AiAnswerBox.Text = $"Session {sessionNumber} started. Your resume and role are still loaded.";
@@ -7595,7 +7686,7 @@ namespace InterviewCopilot
             if (wasTopmost && answerWindow != null) answerWindow.Topmost = false;
             try
             {
-                if (dlg.ShowDialog(this) == true)
+                if (WindowStealth.ShowNativeDialogProtected(() => dlg.ShowDialog(this)) == true)
                     LoadResumeFromFile(dlg.FileName);
             }
             finally
@@ -7617,8 +7708,7 @@ namespace InterviewCopilot
                 var fileInfo = new FileInfo(filePath);
                 if (!fileInfo.Exists || fileInfo.Length > MaxResumeFileBytes)
                 {
-                    MessageBox.Show(this, "Choose a resume smaller than 10 MB.",
-                                    "File Too Large", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    StealthDialog.Show(this, "File Too Large", "Choose a resume smaller than 10 MB.");
                     return;
                 }
 
@@ -7639,22 +7729,19 @@ namespace InterviewCopilot
 
                 if (text == null)
                 {
-                    MessageBox.Show(this, "Unsupported file type. Please upload a PDF, DOCX, or TXT file.",
-                                    "Unsupported Format", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    StealthDialog.Show(this, "Unsupported Format", "Unsupported file type. Please upload a PDF, DOCX, or TXT file.");
                     return;
                 }
 
                 if (string.IsNullOrWhiteSpace(text))
                 {
-                    MessageBox.Show(this, "No readable text was found in the file. The document may be image-based or protected.\n\nPlease paste your resume text manually.",
-                                    "No Text Found", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    StealthDialog.Show(this, "No Text Found", "No readable text was found in the file. The document may be image-based or protected.\n\nPlease paste your resume text manually.");
                     return;
                 }
 
                 if (text.Length > MaxResumeTextChars)
                 {
-                    MessageBox.Show(this, "The extracted resume text is too large. Please upload a shorter document.",
-                                    "Document Too Large", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    StealthDialog.Show(this, "Document Too Large", "The extracted resume text is too large. Please upload a shorter document.");
                     return;
                 }
 
@@ -7674,7 +7761,7 @@ namespace InterviewCopilot
             {
                 DebugWindow.Log("RESUME", $"File load failed: {ex.Message}");
                 if (_windowClosed || !UserSession.Identity.IsCurrent(identity)) return;
-                MessageBox.Show(this, $"Could not load file: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                StealthDialog.Show(this, "Could not load file", ex.Message);
             }
             finally { _resumeImportInProgress = false; }
         }
@@ -8592,15 +8679,14 @@ namespace InterviewCopilot
                 return;
             }
 
-            var answer = MessageBox.Show(
+            bool closeAnyway = StealthDialog.Confirm(
                 this,
-                "Replysis is still working.\n\nClose it anyway? Any unfinished answer will stop. Completed answers are saved locally when storage is available.",
-                "Replysis AI",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning,
-                MessageBoxResult.No);
+                "Replysis is still working",
+                "Close it anyway? Any unfinished answer will stop. Completed answers are saved on this computer.",
+                "Close anyway",
+                "Keep running");
 
-            if (answer == MessageBoxResult.No)
+            if (!closeAnyway)
             {
                 e.Cancel = true;
                 UpdateService.RestartAfterExit = false;
@@ -8685,6 +8771,16 @@ namespace InterviewCopilot
             PresenceTracker.Stop();
             if (!_sessionWriter.Drain(TimeSpan.FromSeconds(5)))
                 DebugWindow.Log("SESSION", "Session writes did not finish within the shutdown deadline.");
+
+            try
+            {
+                if (!CloudSessionSync.DrainAsync().Wait(TimeSpan.FromSeconds(3)))
+                    DebugWindow.Log("CLOUD_SYNC", "Cloud backup did not drain before shutdown.");
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("CLOUD_SYNC", $"Shutdown drain failed: {ex.GetBaseException().Message}");
+            }
 
             // Let the engine finish writing the current recording before killing it.
             // This used to be fire-and-forget running alongside the kill below, which
@@ -9124,7 +9220,7 @@ namespace InterviewCopilot
             string content = ResumeTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(content))
             {
-                MessageBox.Show(this, "No resume text to save.", "Save Resume", MessageBoxButton.OK, MessageBoxImage.Information);
+                StealthDialog.Show(this, "Save Resume", "No resume text to save.");
                 return;
             }
             string name = string.IsNullOrWhiteSpace(_loadedResumeName)

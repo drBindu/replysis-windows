@@ -271,12 +271,11 @@ namespace InterviewCopilot
             {
                 try
                 {
-                    MessageBox.Show(this,
+                    StealthDialog.Show(this, "Replysis AI",
                         $"Replysis {AppUpdates.CurrentVersion} is installed.\n\n" +
                         "Updates are installed by the Microsoft Store, and a required " +
                         "update is offered the next time you open Replysis. Nothing " +
-                        "will interrupt you while the app is open.",
-                        "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Information);
+                        "will interrupt you while the app is open.");
                 }
                 finally
                 {
@@ -300,9 +299,8 @@ namespace InterviewCopilot
                     if (outcome == UpdateService.UpdateCheckOutcome.Failed || staged == null)
                     {
                         if (outcome == UpdateService.UpdateCheckOutcome.UpToDate)
-                            MessageBox.Show(this,
-                                $"You are up to date ({UpdateService.CurrentVersion}).",
-                                "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Information);
+                            StealthDialog.Show(this, "Replysis AI",
+                                $"You are up to date ({UpdateService.CurrentVersion}).");
                         else
                             ShowUpdateCheckFailed(UpdateService.CurrentVersion);
                         return;
@@ -310,13 +308,13 @@ namespace InterviewCopilot
 
                     // Restarting is offered, never taken. Someone may be sitting in
                     // an interview with this window open.
-                    var answer = MessageBox.Show(this,
+                    bool restart = StealthDialog.Confirm(this,
+                        "Update Ready",
                         $"Replysis {staged} has been downloaded and is ready.\n\n" +
                         "Restart Replysis now to update? If not, it installs by itself " +
-                        "the next time you open Replysis.",
-                        "Update Ready", MessageBoxButton.YesNo, MessageBoxImage.Information);
+                        "the next time you open Replysis.", "Restart now", "Later");
 
-                    if (answer == MessageBoxResult.Yes)
+                    if (restart)
                     {
                         Close();
                         AppUpdates.RestartToUpdate();
@@ -365,17 +363,15 @@ namespace InterviewCopilot
 
                 if (IsVersionNewer(latest, current))
                 {
-                    var open = MessageBox.Show(this,
+                    bool open = StealthDialog.Confirm(this,
+                        "Update Available",
                         $"A new version is available: {latest}\nYou have {current}.\n\n" +
-                        "Open the download page now?",
-                        "Update Available", MessageBoxButton.YesNo, MessageBoxImage.Information);
-                    if (open == MessageBoxResult.Yes) AppUpdates.OpenDownloadPage();
+                        "Open the download page now?", "Open page", "Later");
+                    if (open) AppUpdates.OpenDownloadPage();
                 }
                 else
                 {
-                    MessageBox.Show(this,
-                        $"You are up to date ({current}).",
-                        "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Information);
+                    StealthDialog.Show(this, "Replysis AI", $"You are up to date ({current}).");
                 }
             }
             catch (Exception ex)
@@ -392,10 +388,9 @@ namespace InterviewCopilot
         // Never claims a verdict it does not have.
         private void ShowUpdateCheckFailed(string current)
         {
-            MessageBox.Show(this,
+            StealthDialog.Show(this, "Replysis AI",
                 $"We could not check for updates just now. You have {current}.\n\n" +
-                "Replysis is still fully usable. Please try again later.",
-                "Replysis AI", MessageBoxButton.OK, MessageBoxImage.Warning);
+                "Replysis is still fully usable. Please try again later.");
         }
 
         /// <summary>
@@ -478,9 +473,8 @@ namespace InterviewCopilot
             };
             if (!SaveConfig(cfg))
             {
-                MessageBox.Show(this,
-                    "Your settings could not be saved. Nothing was changed. Please check that the InterviewCopilot folder in Local AppData is writable, then try again.",
-                    "Settings Not Saved", MessageBoxButton.OK, MessageBoxImage.Warning);
+                StealthDialog.Show(this, "Settings Not Saved",
+                    "Your settings could not be saved. Nothing was changed. Please check that the InterviewCopilot folder in Local AppData is writable, then try again.");
                 return;
             }
             SettingsChanged = true;

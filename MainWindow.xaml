@@ -368,13 +368,13 @@
          MAIN CONTAINER  &#183;  pure glass on near-black
     ===================================================================== -->
     <Border x:Name="MainAppBorder" CornerRadius="18"
-            BorderBrush="#28384E" BorderThickness="1"
+            BorderBrush="#55FFFFFF" BorderThickness="1"
             MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <Border.Background>
             <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                <GradientStop Color="#0B0F17" Offset="0"/>
-                <GradientStop Color="#0A0D14" Offset="0.58"/>
-                <GradientStop Color="#070A10" Offset="1"/>
+                <GradientStop Color="#080C14" Offset="0"/>
+                <GradientStop Color="#0D1117" Offset="0.58"/>
+                <GradientStop Color="#080C14" Offset="1"/>
             </LinearGradientBrush>
         </Border.Background>
         <Border.Effect>
@@ -393,8 +393,8 @@
 
                 <!-- ================= HEADER ================= -->
                 <Border Grid.Row="0" CornerRadius="18,18,0,0"
-                        BorderBrush="#26364A" BorderThickness="0,0,0,1"
-                        Background="#08FFFFFF">
+                        BorderBrush="#33FFFFFF" BorderThickness="0,0,0,1"
+                        Background="#CC0D1117">
                     <Grid Margin="14,0,10,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -464,6 +464,15 @@
                                     Background="{DynamicResource ActionGraphiteSurface}" BorderBrush="{DynamicResource ActionGraphiteStroke}"
                                     BorderThickness="1" CornerRadius="6" Padding="3"
                                     VerticalAlignment="Center">
+                                <Grid x:Name="ModeSegmentsLayer" SizeChanged="ModeSegmentsLayer_SizeChanged" Loaded="ModeSegmentsLayer_Loaded">
+                                <!-- The raised thumbs. One per group, behind the labels, SLIDING to the chosen segment like a macOS
+                                     segmented control instead of the highlight jumping. Positioned in code (PlaceHeaderThumb). -->
+                                <Canvas IsHitTestVisible="False">
+                                    <Border x:Name="ThumbMode" Visibility="Collapsed" CornerRadius="4"
+                                            Background="{DynamicResource GlassButtonSelectedSurface}"/>
+                                    <Border x:Name="ThumbSource" Visibility="Collapsed" CornerRadius="4"
+                                            Background="{DynamicResource GlassButtonSelectedSurface}"/>
+                                </Canvas>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <!-- Group 1: when to answer. Group 2, past the hairline: what to hear. -->
                                     <Border x:Name="SegAuto" CornerRadius="4" Padding="6,5" Cursor="Hand"
@@ -515,6 +524,7 @@
                                                Foreground="#E6EDF5" VerticalAlignment="Center"
                                                Margin="10,5,10,5"/>
                                 </StackPanel>
+                                </Grid>
                             </Border>
 
                         </StackPanel>
@@ -746,8 +756,8 @@
                          SIDE PANEL  &#183;  Interview Setup (tab-less, no dead space)
                     ========================================================== -->
                     <Border x:Name="ResumePanel" Grid.Column="0"
-                            CornerRadius="16" BorderBrush="#26364A" BorderThickness="1"
-                            Background="#D90F141E" Padding="14" ClipToBounds="True">
+                            CornerRadius="18" BorderBrush="#22FFFFFF" BorderThickness="1"
+                            Background="#CC0D1117" Padding="14" ClipToBounds="True">
                         <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
@@ -805,7 +815,7 @@
                                  so it reads as the primary action on the page rather
                                  than one field among several. -->
                             <Border Grid.Row="1" Grid.RowSpan="3" CornerRadius="12"
-                                    Background="#111823" BorderBrush="#253449" BorderThickness="1"
+                                    Background="#12151C" BorderBrush="#2A2F3A" BorderThickness="1"
                                     Padding="13,12" Margin="0,0,0,14">
                                 <Border.Effect>
                                     <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.28"/>
@@ -932,7 +942,7 @@
 
                             <!-- TARGET ROLE - its own card, same treatment as Resume. -->
                             <Border Grid.Row="4" Grid.RowSpan="4" CornerRadius="12"
-                                    Background="#111823" BorderBrush="#253449" BorderThickness="1"
+                                    Background="#12151C" BorderBrush="#2A2F3A" BorderThickness="1"
                                     Padding="13" Margin="0,0,0,14">
                                 <Border.Effect>
                                     <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.28"/>
@@ -997,7 +1007,7 @@
                                  sections read as one consistent system rather than three
                                  different attempts at a layout. -->
                             <Border Grid.Row="8" CornerRadius="12"
-                                    Background="#111823" BorderBrush="#253449" BorderThickness="1"
+                                    Background="#12151C" BorderBrush="#2A2F3A" BorderThickness="1"
                                     Padding="13">
                                 <Border.Effect>
                                     <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.28"/>
@@ -1114,176 +1124,69 @@
                                            Foreground="#8393A8" FontSize="11" FontFamily="Segoe UI"
                                            TextWrapping="Wrap" Margin="12,0,0,14"/>
 
-                                <!-- Two square-ish cards per row rather than four stacked
-                                     rectangles - reads as a real choice, not a wall of text,
-                                     and matches the density of an enterprise settings page. -->
-                                <TextBlock Text="WHEN TO ANSWER" Foreground="#7E90A8" FontSize="9.5"
-                                           FontWeight="Bold" FontFamily="Segoe UI" Margin="1,0,0,7"/>
-                                <Grid Margin="0,0,0,14">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="9"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
+                                <!-- Compact macOS-style segmented choices. These keep the
+                                     existing named borders and click handlers, so this is a
+                                     presentation-only change: all settings behave exactly as
+                                     they did when the options were large cards. -->
+                                <!-- Compact preference rows. The options stay small and
+                                     aligned to the right, like a native Mac settings pane,
+                                     rather than expanding into full-width feature cards. -->
+                                <Border Background="#CC0D1117" BorderBrush="#22FFFFFF" BorderThickness="1"
+                                        CornerRadius="11" Padding="13,11" Margin="0,0,0,9">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="214"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <TextBlock Text="Answer trigger" Foreground="#E2E8F0" FontSize="12"
+                                                       FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                            <TextBlock x:Name="SetupTriggerHint" Text="Automatically, or when you press Space"
+                                                       Foreground="#8A97A8" FontSize="10.5" FontFamily="Segoe UI"
+                                                       TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="14"/>
+                                        </StackPanel>
+                                        <local:MacSegmented x:Name="SetupTrigger" Grid.Column="1" VerticalAlignment="Center" LeftText="Auto" RightText="Manual"
+                                                            SelectionRequested="SetupTrigger_Requested"/>
+                                    </Grid>
+                                </Border>
 
-                                    <Border x:Name="SetupAuto" Grid.Column="0" CornerRadius="11" BorderThickness="1.2"
-                                            Cursor="Hand" MinHeight="94" MouseLeftButtonDown="SetupAuto_Click">
-                                        <Grid Margin="12,10">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
-                                            <Border x:Name="SetupAutoChip" Width="26" Height="26" CornerRadius="7"
-                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
-                                                <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock x:Name="SetupAutoTitle" Grid.Row="1" Text="Auto" FontSize="13"
-                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,7,0,2"/>
-                                            <TextBlock Grid.Row="2" Text="Answers after each complete question."
-                                                       Foreground="#93A4BA" FontSize="10" FontFamily="Segoe UI"
-                                                       LineHeight="13.5" TextWrapping="Wrap"/>
-                                        </Grid>
-                                    </Border>
+                                <Border Background="#CC0D1117" BorderBrush="#22FFFFFF" BorderThickness="1"
+                                        CornerRadius="11" Padding="13,11" Margin="0,0,0,9">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="214"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <TextBlock Text="Audio source" Foreground="#E2E8F0" FontSize="12"
+                                                       FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                            <TextBlock x:Name="SetupSourceHint" Text="Meeting only, or meeting plus microphone"
+                                                       Foreground="#8A97A8" FontSize="10.5" FontFamily="Segoe UI"
+                                                       TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="14"/>
+                                        </StackPanel>
+                                        <local:MacSegmented x:Name="SetupSource" Grid.Column="1" VerticalAlignment="Center" LeftText="Interview" RightText="Practice"
+                                                            SelectionRequested="SetupSource_Requested"/>
+                                    </Grid>
+                                </Border>
 
-                                    <Border x:Name="SetupManual" Grid.Column="2" CornerRadius="11" BorderThickness="1.2"
-                                            Cursor="Hand" MinHeight="94" MouseLeftButtonDown="SetupManual_Click">
-                                        <Grid Margin="12,10">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
-                                            <Border x:Name="SetupManualChip" Width="26" Height="26" CornerRadius="7"
-                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
-                                                <TextBlock Text="&#xE92E;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock x:Name="SetupManualTitle" Grid.Row="1" Text="Manual" FontSize="13"
-                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,7,0,2"/>
-                                            <TextBlock Grid.Row="2" Text="Press Space to listen, then Space to answer."
-                                                       Foreground="#93A4BA" FontSize="10" FontFamily="Segoe UI"
-                                                       LineHeight="13.5" TextWrapping="Wrap"/>
-                                        </Grid>
-                                    </Border>
-                                </Grid>
-
-                                <TextBlock Text="WHAT IT HEARS" Foreground="#7E90A8" FontSize="9.5"
-                                           FontWeight="Bold" FontFamily="Segoe UI" Margin="1,0,0,7"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="9"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Border x:Name="SetupInterview" Grid.Column="0" CornerRadius="11" BorderThickness="1.2"
-                                            Cursor="Hand" MinHeight="140" MouseLeftButtonDown="SetupInterview_Click">
-                                        <Grid Margin="12,10">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
-                                            <Border x:Name="SetupInterviewChip" Width="26" Height="26" CornerRadius="7"
-                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
-                                                <TextBlock Text="&#xE7F5;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock x:Name="SetupInterviewTitle" Grid.Row="1" Text="Interview" FontSize="13.5"
-                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,8,0,3"/>
-                                            <StackPanel Grid.Row="2">
-                                                <TextBlock Foreground="#B9C4D6" FontSize="10.5" FontFamily="Segoe UI"
-                                                           LineHeight="14.5" TextWrapping="Wrap">
-                                                    <Run Text="Hears "/><Run Text="system audio only" FontWeight="SemiBold" Foreground="#DDE4EE"/><Run Text=" from the meeting. Your microphone stays off, preventing your answer from becoming a new question."/>
-                                                </TextBlock>
-                                                <TextBlock Text="Recommended for real interviews" Foreground="#5FC98E"
-                                                           FontSize="10" FontWeight="SemiBold" FontFamily="Segoe UI"
-                                                           TextWrapping="Wrap" Margin="0,5,0,0"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-
-                                    <Border x:Name="SetupPractice" Grid.Column="2" CornerRadius="11" BorderThickness="1.2"
-                                            Cursor="Hand" MinHeight="140" MouseLeftButtonDown="SetupPractice_Click">
-                                        <Grid Margin="12,10">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
-                                            <Border x:Name="SetupPracticeChip" Width="26" Height="26" CornerRadius="7"
-                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
-                                                <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock x:Name="SetupPracticeTitle" Grid.Row="1" Text="Practice" FontSize="13.5"
-                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,8,0,3"/>
-                                            <StackPanel Grid.Row="2">
-                                                <TextBlock Foreground="#B9C4D6" FontSize="10.5" FontFamily="Segoe UI"
-                                                           LineHeight="14.5" TextWrapping="Wrap">
-                                                    <Run Text="Hears "/><Run Text="system audio and microphone" FontWeight="SemiBold" Foreground="#DDE4EE"/><Run Text=" together, ideal for rehearsing aloud or practising with someone nearby."/>
-                                                </TextBlock>
-                                                <TextBlock Text="Practice environment only" Foreground="#D99B7C"
-                                                           FontSize="10" FontWeight="SemiBold" FontFamily="Segoe UI"
-                                                           TextWrapping="Wrap" Margin="0,5,0,0"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </Grid>
-
-                                <TextBlock Text="ANSWER LENGTH" Foreground="#7E90A8" FontSize="9.5"
-                                           FontWeight="Bold" FontFamily="Segoe UI" Margin="1,14,0,7"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="9"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Border x:Name="SetupShort" Grid.Column="0" CornerRadius="11" BorderThickness="1.2"
-                                            Cursor="Hand" MinHeight="94" MouseLeftButtonDown="SetupShort_Click">
-                                        <Grid Margin="12,10">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
-                                            <Border Width="26" Height="26" CornerRadius="7"
-                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
-                                                <TextBlock Text="&#xE8C4;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock x:Name="SetupShortTitle" Grid.Row="1" Text="Short" FontSize="13"
-                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,7,0,2"/>
-                                            <TextBlock Grid.Row="2" Text="Fits the question. Quick ones get a sentence or two, easy to say fast."
-                                                       Foreground="#93A4BA" FontSize="10" FontFamily="Segoe UI"
-                                                       LineHeight="13.5" TextWrapping="Wrap"/>
-                                        </Grid>
-                                    </Border>
-
-                                    <Border x:Name="SetupDetailed" Grid.Column="2" CornerRadius="11" BorderThickness="1.2"
-                                            Cursor="Hand" MinHeight="94" MouseLeftButtonDown="SetupDetailed_Click">
-                                        <Grid Margin="12,10">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
-                                            <Border Width="26" Height="26" CornerRadius="7"
-                                                    Background="#1AFFFFFF" HorizontalAlignment="Left">
-                                                <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                           Foreground="#C7D4E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock x:Name="SetupDetailedTitle" Grid.Row="1" Text="Detailed" FontSize="13"
-                                                       FontWeight="Bold" FontFamily="Segoe UI" Margin="0,7,0,2"/>
-                                            <TextBlock Grid.Row="2" Text="Fuller answers with more depth and an example, about a minute to say."
-                                                       Foreground="#93A4BA" FontSize="10" FontFamily="Segoe UI"
-                                                       LineHeight="13.5" TextWrapping="Wrap"/>
-                                        </Grid>
-                                    </Border>
-                                </Grid>
+                                <Border Background="#CC0D1117" BorderBrush="#22FFFFFF" BorderThickness="1"
+                                        CornerRadius="11" Padding="13,11">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="214"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <TextBlock Text="Answer length" Foreground="#E2E8F0" FontSize="12"
+                                                       FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                            <TextBlock x:Name="SetupLengthHint" Text="Adaptive and concise, or more detailed"
+                                                       Foreground="#8A97A8" FontSize="10.5" FontFamily="Segoe UI"
+                                                       TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="14"/>
+                                        </StackPanel>
+                                        <local:MacSegmented x:Name="SetupLength" Grid.Column="1" VerticalAlignment="Center" LeftText="Short" RightText="Detailed"
+                                                            SelectionRequested="SetupLength_Requested"/>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
                         </ScrollViewer>
                         </Grid>
@@ -1294,7 +1197,7 @@
                              never moves with that content. -->
                         <Border x:Name="StartInterviewPin" Grid.Row="1" HorizontalAlignment="Stretch"
                                 Margin="0,14,0,0" Padding="0,13,0,0" Panel.ZIndex="10"
-                                BorderBrush="#253449" BorderThickness="0,1,0,0">
+                                BorderBrush="#1E232D" BorderThickness="0,1,0,0">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -1317,8 +1220,8 @@
                                             <Border x:Name="StartBd" CornerRadius="10" BorderBrush="#32A864" BorderThickness="1" Padding="{TemplateBinding Padding}">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                        <GradientStop Color="#1D8A4B" Offset="0"/>
-                                                        <GradientStop Color="#27A85C" Offset="1"/>
+                                                        <GradientStop Color="#1A6B3A" Offset="0"/>
+                                                        <GradientStop Color="#22C55E" Offset="1"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -1365,7 +1268,7 @@
 
                         <!-- AI ANSWER -->
                         <Border Grid.Row="0" CornerRadius="15"
-                                BorderBrush="#2A3A52" BorderThickness="1" Background="#13FFFFFF">
+                                BorderBrush="#22FFFFFF" BorderThickness="1" Background="#CC0D1117">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="26" ShadowDepth="7" Opacity="0.42" Color="#000000"/>
                             </Border.Effect>
@@ -1377,8 +1280,8 @@
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <Border Grid.Row="0" Background="#16FFFFFF" CornerRadius="15,15,0,0"
-                                        BorderBrush="#12FFFFFF" BorderThickness="0,0,0,1" Padding="16,11">
+                                <Border Grid.Row="0" Background="#1A1F2E" CornerRadius="15,15,0,0"
+                                        BorderBrush="#22FFFFFF" BorderThickness="0,0,0,1" Padding="16,11">
                                     <DockPanel>
                                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
                                                     VerticalAlignment="Center">
@@ -1591,7 +1494,7 @@
 
                         <!-- TRANSCRIPT -->
                         <Border Grid.Row="2" CornerRadius="15"
-                                BorderBrush="#2A3A52" BorderThickness="1" Background="#13FFFFFF">
+                                BorderBrush="#22FFFFFF" BorderThickness="1" Background="#CC0D1117">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="26" ShadowDepth="7" Opacity="0.42" Color="#000000"/>
                             </Border.Effect>
@@ -1601,8 +1504,8 @@
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
 
-                                <Border Grid.Row="0" Background="#16FFFFFF" CornerRadius="15,15,0,0"
-                                        BorderBrush="#12FFFFFF" BorderThickness="0,0,0,1" Padding="16,9">
+                                <Border Grid.Row="0" Background="#1A1F2E" CornerRadius="15,15,0,0"
+                                        BorderBrush="#22FFFFFF" BorderThickness="0,0,0,1" Padding="16,9">
                                     <DockPanel>
                                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
                                                     VerticalAlignment="Center">
@@ -1766,7 +1669,7 @@
             <Popup x:Name="ProfileDropdownPopup" Placement="Bottom" StaysOpen="True"
                    AllowsTransparency="True" PopupAnimation="Fade"
                    HorizontalOffset="-200" VerticalOffset="6">
-                <Border Background="#0B1320" BorderBrush="#26354A" BorderThickness="1"
+                <Border Background="#0D1117" BorderBrush="#2A2F3A" BorderThickness="1"
                         CornerRadius="14" Width="296" Margin="0,0,0,12">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="34" ShadowDepth="9" Opacity="0.62" Color="#000000"/>
@@ -1781,12 +1684,12 @@
                                     Margin="0,0,13,0" VerticalAlignment="Center">
                                 <Border.Background>
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="#3B6FE0" Offset="0"/>
-                                        <GradientStop Color="#5A3FD6" Offset="1"/>
+                                        <GradientStop Color="#1E3A5F" Offset="0"/>
+                                        <GradientStop Color="#2563EB" Offset="1"/>
                                     </LinearGradientBrush>
                                 </Border.Background>
                                 <Border.Effect>
-                                    <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.5" Color="#3B6FE0"/>
+                                    <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.5" Color="#2563EB"/>
                                 </Border.Effect>
                                 <Grid>
                                     <TextBlock x:Name="PopupAvatarInitials" Text="GU" Foreground="White"
@@ -1804,7 +1707,7 @@
                             </StackPanel>
                         </Grid>
 
-                        <Border Height="1" Background="#182338" Margin="14,0"/>
+                        <Border Height="1" Background="#1E232D" Margin="14,0"/>
 
                         <Border x:Name="PopupCreditsCard" Margin="12,12,12,8" CornerRadius="12"
                                 BorderThickness="1" Padding="13,12" Cursor="Hand"
@@ -1840,7 +1743,7 @@
                                             <Border x:Name="Bd" CornerRadius="8" Padding="15,7" BorderThickness="1"
                                                     Background="{DynamicResource ScreenActionSurface}" BorderBrush="{DynamicResource ScreenActionStroke}">
                                                 <Border.Effect>
-                                                    <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.45" Color="#2E6BE0"/>
+                                                    <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.45" Color="#2563EB"/>
                                                 </Border.Effect>
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
@@ -1922,7 +1825,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Settings" Foreground="#FFFFFF" FontSize="12"
                                                FontWeight="SemiBold" FontFamily="Segoe UI"/>
-                                    <TextBlock Text="Settings" Foreground="#66FFFFFF"
+                                    <TextBlock Text="Privacy, network and screen options" Foreground="#66FFFFFF"
                                                FontSize="10.5" FontFamily="Segoe UI" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </StackPanel>

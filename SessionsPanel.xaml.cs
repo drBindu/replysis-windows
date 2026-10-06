@@ -27,6 +27,7 @@ namespace InterviewCopilot
         private readonly System.Threading.CancellationTokenSource _cts = new();
         private long _loadGeneration;
         private long _identityGeneration = -1;
+        private int _localLoadErrors;
 
         public void ResetForIdentityChange()
         {
@@ -36,6 +37,7 @@ namespace InterviewCopilot
             _loadGeneration++;
             _sessions.Clear();
             SessionsList.Items.Clear();
+            _localLoadErrors = 0;
             _selectedSession = null;
             TranscriptPanel.Children.Clear();
             TranscriptScroll.Visibility = Visibility.Collapsed;
@@ -110,7 +112,11 @@ namespace InterviewCopilot
                     _sessions.Add(info);
                     SessionsList.Items.Add(info);
                 }
-                catch { /* skip corrupted file */ }
+                catch (Exception ex)
+                {
+                    _localLoadErrors++;
+                    DebugWindow.Log("SESSIONS", $"Could not read {Path.GetFileName(file)}: {ex.Message}");
+                }
             }
 
             if (_sessions.Count == 0)
@@ -119,8 +125,16 @@ namespace InterviewCopilot
                 return;
             }
 
-            SubtitleLabel.Text = $"{_sessions.Count} session{(_sessions.Count != 1 ? "s" : "")} recorded";
+            SubtitleLabel.Text = SessionCountLabel();
             SessionsList.SelectedIndex = 0;
+        }
+
+        private string SessionCountLabel()
+        {
+            string count = $"{_sessions.Count} session{(_sessions.Count != 1 ? "s" : "")} recorded";
+            return _localLoadErrors > 0
+                ? count + $", {_localLoadErrors} local file{(_localLoadErrors == 1 ? "" : "s")} could not be opened"
+                : count;
         }
 
         private void ShowEmptyState()
@@ -140,6 +154,7 @@ namespace InterviewCopilot
             long load = _loadGeneration;
             bool IsCurrent() => !_cts.IsCancellationRequested &&
                 load == _loadGeneration && UserSession.Identity.IsCurrent(identity);
+            string? cloudError = null;
             try
             {
                 Dispatcher.Invoke(() =>
@@ -154,10 +169,10 @@ namespace InterviewCopilot
                 if (!IsCurrent()) return;
 
                 string token = UserSession.IdToken;
-                if (string.IsNullOrEmpty(token)) return;
+                if (string.IsNullOrEmpty(token)) { cloudError = "Cloud backup needs sign-in"; return; }
 
                 string? rawEmail = UserSession.Email;
-                if (string.IsNullOrEmpty(rawEmail)) return;
+                if (string.IsNullOrEmpty(rawEmail)) { cloudError = "Cloud backup has no account email"; return; }
                 string email = Uri.EscapeDataString(rawEmail);
                 using var req = new HttpRequestMessage(
                     HttpMethod.Get,
@@ -165,7 +180,11 @@ namespace InterviewCopilot
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                 using var res = await SharedHttpClient.HttpShort.SendAsync(req, _cts.Token);
-                if (!res.IsSuccessStatusCode) return;
+                if (!res.IsSuccessStatusCode)
+                {
+                    cloudError = $"Cloud backup unavailable (HTTP {(int)res.StatusCode})";
+                    return;
+                }
 
                 string body = await res.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(body);
@@ -209,14 +228,16 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
+                cloudError = "Cloud backup could not be reached";
                 System.Diagnostics.Debug.WriteLine($"[SESSIONS_CLOUD] fetch failed: {ex.Message}");
+                DebugWindow.Log("SESSIONS_CLOUD", $"fetch failed: {ex.Message}");
             }
             finally
             {
                 if (IsCurrent())
-                    Dispatcher.Invoke(() => SubtitleLabel.Text = _sessions.Count == 0
-                        ? "No sessions yet"
-                        : $"{_sessions.Count} session{(_sessions.Count != 1 ? "s" : "")} recorded");
+                    Dispatcher.Invoke(() => SubtitleLabel.Text = cloudError ?? (_sessions.Count == 0
+                        ? (_localLoadErrors > 0 ? $"{_localLoadErrors} local session file{(_localLoadErrors == 1 ? "" : "s")} could not be opened" : "No sessions yet")
+                        : SessionCountLabel()));
             }
         }
 
@@ -232,7 +253,7 @@ namespace InterviewCopilot
 
                 DateTime createdAt = createdSeconds > 0
                     ? DateTimeOffset.FromUnixTimeSeconds(createdSeconds).LocalDateTime
-                    : DateTime.UtcNow;
+                    : DateTime.Now;
 
                 // Rebuild the turns into the same Q:/A: line format as local .txt files
                 // so all existing parsing / rendering code works unchanged.
@@ -262,7 +283,13 @@ namespace InterviewCopilot
                     { lineList.Add($"Q: {pendingQ}"); lineList.Add("A: "); lineList.Add(""); }
                 }
 
-                int qCount = s.TryGetProperty("questionCount", out var qc) ? qc.GetInt32() : 0;
+                int parsedQuestions = lineList.Count(line => line.StartsWith("Q: ", StringComparison.Ordinal));
+                int parsedAnswers = lineList.Count(line =>
+                    line.StartsWith("A: ", StringComparison.Ordinal) &&
+                    !string.IsNullOrWhiteSpace(line[3..]));
+                int qCount = s.TryGetProperty("questionCount", out var qc) && qc.TryGetInt32(out int apiCount)
+                    ? Math.Max(apiCount, parsedQuestions)
+                    : parsedQuestions;
 
                 return new SessionInfo
                 {
@@ -272,7 +299,7 @@ namespace InterviewCopilot
                     CloudSessionId = s.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "",
                     CreatedAt     = createdAt,
                     QuestionCount = qCount,
-                    AnswerCount   = qCount,
+                    AnswerCount   = parsedAnswers,
                     ModelName     = "Web",
                     AllLines      = lineList.ToArray(),
                 };
@@ -310,7 +337,7 @@ namespace InterviewCopilot
             }
 
             int qCount = lines.Count(l => l.StartsWith("Q: "));
-            int aCount = lines.Count(l => l.StartsWith("A: "));
+            int aCount = lines.Count(l => l.StartsWith("A: ") && !string.IsNullOrWhiteSpace(l[3..]));
 
             // Present only on sessions ended by a build that records it.
             int durationSeconds = 0;
@@ -450,13 +477,16 @@ namespace InterviewCopilot
 
             for (int index = 0; index < firstPairs.Count; index++)
             {
-                if (!string.Equals(firstPairs[index].Q, secondPairs[index].Q, StringComparison.Ordinal) ||
-                    !string.Equals(firstPairs[index].A, secondPairs[index].A, StringComparison.Ordinal))
+                if (!string.Equals(NormalizeForMatch(firstPairs[index].Q), NormalizeForMatch(secondPairs[index].Q), StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(NormalizeForMatch(firstPairs[index].A), NormalizeForMatch(secondPairs[index].A), StringComparison.OrdinalIgnoreCase))
                     return false;
             }
 
             return true;
         }
+
+        private static string NormalizeForMatch(string value) =>
+            System.Text.RegularExpressions.Regex.Replace(value ?? "", @"\s+", " ").Trim();
 
         // ══════════════════════════════════════════════════════════════════════
         // TRANSCRIPT RENDERING
@@ -526,8 +556,8 @@ namespace InterviewCopilot
         {
             var chip = new Border
             {
-                Background      = new SolidColorBrush(Color.FromArgb(150, 16, 24, 36)),
-                BorderBrush     = new SolidColorBrush(Color.FromArgb(75, 80, 106, 137)),
+                Background      = new SolidColorBrush(Color.FromArgb(204, 13, 17, 23)),
+                BorderBrush     = new SolidColorBrush(Color.FromArgb(75, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
                 CornerRadius    = new CornerRadius(5),
                 Padding         = new Thickness(7, 2, 7, 2),
@@ -554,7 +584,7 @@ namespace InterviewCopilot
 
             if (pairs.Count == 0)
             {
-                AddTextBlock("No Q&A recorded in this session.", "#7E90A8", 13, false);
+                AddTextBlock("No Q&A recorded in this session.", "#6B7280", 13, false);
                 return;
             }
 
@@ -574,8 +604,8 @@ namespace InterviewCopilot
 
                 var badge = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(180, 18, 28, 42)),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(70, 76, 101, 133)),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E3A5F")),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(70, 96, 165, 250)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(5),
                     Padding = new Thickness(7, 2, 7, 2),
@@ -607,9 +637,9 @@ namespace InterviewCopilot
                 // Question block
                 var qBorder = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(218, 11, 17, 28)),
-                    CornerRadius = new CornerRadius(10),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(115, 46, 66, 91)),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0D1117")),
+                    CornerRadius = new CornerRadius(12),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(85, 255, 255, 255)),
                     BorderThickness = new Thickness(1),
                     Padding = new Thickness(13, 9, 13, 9),
                     Margin = new Thickness(0, 0, 0, 6)
@@ -618,7 +648,7 @@ namespace InterviewCopilot
                 qStack.Children.Add(new TextBlock
                 {
                     Text = "INTERVIEWER",
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7E90A8")),
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6B7280")),
                     FontSize = 9,
                     FontWeight = FontWeights.Bold,
                     FontFamily = new FontFamily("Segoe UI"),
@@ -627,7 +657,7 @@ namespace InterviewCopilot
                 qStack.Children.Add(new TextBlock
                 {
                     Text = q,
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#C6D4E8")),
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CBD5E1")),
                     FontSize = 12.5,
                     FontWeight = FontWeights.SemiBold,
                     FontFamily = new FontFamily("Segoe UI"),
@@ -642,9 +672,9 @@ namespace InterviewCopilot
                 {
                     var aBorder = new Border
                     {
-                        Background = new SolidColorBrush(Color.FromArgb(185, 16, 25, 37)),
-                        CornerRadius = new CornerRadius(10),
-                        BorderBrush = new SolidColorBrush(Color.FromArgb(90, 43, 65, 88)),
+                        Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#12151C")),
+                        CornerRadius = new CornerRadius(12),
+                        BorderBrush = new SolidColorBrush(Color.FromArgb(85, 30, 58, 138)),
                         BorderThickness = new Thickness(1),
                         Padding = new Thickness(13, 9, 13, 9),
                         Margin = new Thickness(12, 0, 0, 14)
@@ -653,7 +683,7 @@ namespace InterviewCopilot
                     aStack.Children.Add(new TextBlock
                     {
                         Text = "AI ANSWER",
-                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#84E7B6")),
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4ADE80")),
                         FontSize = 9,
                         FontWeight = FontWeights.Bold,
                         FontFamily = new FontFamily("Segoe UI"),
@@ -662,7 +692,7 @@ namespace InterviewCopilot
                     aStack.Children.Add(new TextBlock
                     {
                         Text = a,
-                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#EAF1F8")),
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E2E8F0")),
                         FontSize = 12.5,
                         FontWeight = FontWeights.Medium,
                         FontFamily = new FontFamily("Segoe UI"),
@@ -700,11 +730,12 @@ namespace InterviewCopilot
         {
             if (_selectedSession == null || _selectedSession.IsCloud) return;
 
-            var result = MessageBox.Show(Window.GetWindow(this),
+            bool confirmed = StealthDialog.Confirm(Window.GetWindow(this),
+                "Delete Local Copy",
                 $"Delete the local copy of \"{_selectedSession.DisplayTitle}\" ({_selectedSession.DisplayDate})?\n\nThis removes this device's transcript and audio. Any cloud backup is kept and may appear again in this list. Local deletion cannot be undone.",
-                "Delete Local Copy", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                "Delete", "Cancel");
 
-            if (result != MessageBoxResult.Yes) return;
+            if (!confirmed) return;
 
             try
             {
@@ -728,11 +759,11 @@ namespace InterviewCopilot
 
                 // Reload list
                 LoadSessions();
+                _ = FetchCloudSessionsAsync();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), $"Could not delete session: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StealthDialog.Show(Window.GetWindow(this), "Could not delete session", ex.Message);
             }
         }
 
@@ -794,8 +825,7 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), $"Copy failed: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StealthDialog.Show(Window.GetWindow(this), "Copy failed", ex.Message);
             }
         }
 
@@ -807,21 +837,34 @@ namespace InterviewCopilot
         {
             if (_selectedSession == null) return;
 
-            var dlg = new SaveFileDialog
+            string fileName = $"InterviewSession_{_selectedSession.SessionNumber}_{_selectedSession.CreatedAt:yyyy-MM-dd}.txt";
+            string exportPath;
+            if (SettingsWindow.GetStealthMode())
             {
-                Title = "Export Session Transcript",
-                Filter = "Text File (*.txt)|*.txt",
-                FileName = $"InterviewSession_{_selectedSession.SessionNumber}_{_selectedSession.CreatedAt:yyyy-MM-dd}.txt",
-                DefaultExt = ".txt"
-            };
-
-            if (dlg.ShowDialog() != true) return;
+                string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Replysis Exports");
+                Directory.CreateDirectory(folder);
+                exportPath = Path.Combine(folder, fileName);
+                for (int suffix = 2; File.Exists(exportPath); suffix++)
+                    exportPath = Path.Combine(folder, Path.GetFileNameWithoutExtension(fileName) + $"_{suffix}.txt");
+            }
+            else
+            {
+                var dlg = new SaveFileDialog
+                {
+                    Title = "Export Session Transcript",
+                    Filter = "Text File (*.txt)|*.txt",
+                    FileName = fileName,
+                    DefaultExt = ".txt"
+                };
+                if (dlg.ShowDialog() != true) return;
+                exportPath = dlg.FileName;
+            }
 
             try
             {
                 // Was dumping the raw internal lines, so the exported file still
                 // carried the "SESSION n | model | date" header and Q:/A: prefixes.
-                File.WriteAllText(dlg.FileName, BuildTranscriptDocument(_selectedSession), Encoding.UTF8);
+                File.WriteAllText(exportPath, BuildTranscriptDocument(_selectedSession), Encoding.UTF8);
                 // No "exported successfully" dialog: the person just chose where to save it and watched the
                 // dialog close. The button says so instead, the way Copy does.
                 var exportButton = ExportBtn;
@@ -833,8 +876,7 @@ namespace InterviewCopilot
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), $"Export failed: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StealthDialog.Show(Window.GetWindow(this), "Export failed", ex.Message);
             }
         }
 
@@ -864,7 +906,7 @@ namespace InterviewCopilot
 
         // ── Formatted display properties (used by XAML DataTemplate bindings) ──
         public string DisplayTitle =>
-            IsCloud ? "Web session" :
+            IsCloud ? $"Cloud session, {CreatedAt:MMM d}" :
             SessionNumber > 0 ? $"Session #{SessionNumber}" : "Session";
 
         public string DisplayDate =>

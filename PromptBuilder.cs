@@ -2009,11 +2009,7 @@ namespace InterviewCopilot
             // conversation; this block repeated the most recent one again.
             if (hasHistory)
             {
-                var (lastQ, lastA) = History.Last();
-                string preview = lastA.Length > 250 ? lastA.Substring(0, 250) + "..." : lastA;
                 historyHint =
-                    $"[Last question was: \"{lastQ}\"]\n" +
-                    $"[Your last answer: {preview}]\n\n" +
                     "CHECK BEFORE ANSWERING:\n" +
                     "  - Already answered this topic? -> reuse that answer consistently.\n" +
                     "  - Drill-down on last answer? -> MICRO: pull exact fact, 1-2 sentences.\n" +
@@ -2060,9 +2056,7 @@ namespace InterviewCopilot
         }
 
         // =====================================================================
-        // BUILD ENHANCED QUESTION — injected into the `question` field of the
-        // payload so the backend model ALWAYS sees context, locked facts, and
-        // format rules — regardless of whether the backend uses `messages`.
+        // SHARED CONTEXT HELPERS
         // =====================================================================
 
         private static string Truncate(string value, int maxChars) =>
@@ -2095,119 +2089,6 @@ namespace InterviewCopilot
                    "analysis happened to focus on, so do not repeat that instead. If " +
                    "the notes above do not cover what they are asking, say which part " +
                    "you cannot make out and offer to look again.\n\n";
-        }
-
-        public static string BuildEnhancedQuestion(string rawQuestion, string resumeFacts)
-        {
-            rawQuestion = Truncate(rawQuestion, MaxHistoryQuestionChars);
-            resumeFacts = Truncate(resumeFacts, 12_000);
-            var sb       = new StringBuilder();
-            var qType    = DetectType(rawQuestion);
-            bool isDrill = IsDrillDown(rawQuestion);
-            bool hasResume = !string.IsNullOrWhiteSpace(resumeFacts)
-                             && resumeFacts != "No resume provided.";
-
-            // ── 0. CANDIDATE IDENTITY ──────────────────────────────────────────
-            // Always first so the model knows who it is before anything else.
-            sb.AppendLine("=== ROLE: YOU ARE THE JOB CANDIDATE SPEAKING IN A LIVE INTERVIEW. ===");
-            sb.AppendLine();
-
-            if (hasResume)
-            {
-                // Ground the model entirely in the pasted resume
-                sb.AppendLine("YOUR BACKGROUND (from your resume — answer only from these facts):");
-                sb.AppendLine(resumeFacts);
-                sb.AppendLine();
-                sb.AppendLine("RULES:");
-                sb.AppendLine("  - Only mention companies, roles, and skills that appear in YOUR BACKGROUND above.");
-                sb.AppendLine("  - Never invent experience, projects, or employers not listed above.");
-                sb.AppendLine("  - Do NOT start answers with: Great question / Absolutely / Of course / Certainly.");
-                sb.AppendLine("  - Use contractions naturally: I'm, I've, I'd, didn't, wasn't, it's.");
-                sb.AppendLine("  - Sound like a real professional in conversation, not a bot reading a document.");
-            }
-            else
-            {
-                // No resume — remain capable without inventing personal history.
-                sb.AppendLine("NO RESUME PROVIDED. Missing resume context does not mean missing skill or expertise.");
-                sb.AppendLine("RULES:");
-                sb.AppendLine("  - Answer technical and coding questions confidently. Never apologize, refuse, or say you are not a programmer or expert.");
-                sb.AppendLine("  - For coding requests, output complete runnable code immediately; if vague, choose a sensible compact example.");
-                sb.AppendLine("  - Do NOT invent specific employers, specific project names, or specific salary numbers.");
-                sb.AppendLine("  - Use neutral phrases such as 'my current team' or 'a product I worked on'; do not invent an industry or employer.");
-                sb.AppendLine("  - Do not name a technology, specialism or industry as yours. Their field is unknown and guessing invents their career.");
-                sb.AppendLine("  - Follow the interviewer's own words for tools and stack; otherwise say 'the systems I have worked on'. Answer the technical content in full either way.");
-                sb.AppendLine("  - For salary, visa, location, and other personal facts, stay neutral unless the candidate supplied the detail.");
-                sb.AppendLine("  - Do NOT start answers with: Great question / Absolutely / Of course / Certainly.");
-                sb.AppendLine("  - Use contractions naturally: I'm, I've, I'd, didn't, wasn't, it's.");
-            }
-            sb.AppendLine();
-
-            // ── 0b. Target role + live hints ──────────────────────────────────
-            if (!string.IsNullOrWhiteSpace(CompanyName) || !string.IsNullOrWhiteSpace(JobDesc))
-            {
-                sb.AppendLine("=== TARGET ROLE ===");
-                if (!string.IsNullOrWhiteSpace(CompanyName))
-                    sb.AppendLine($"Company: {CompanyName}");
-                if (!string.IsNullOrWhiteSpace(JobDesc))
-                    sb.AppendLine($"Job: {(JobDesc.Length > 400 ? JobDesc[..400] + "..." : JobDesc)}");
-                sb.AppendLine("Tailor this specific answer to the role and company above — mention them by name.");
-                sb.AppendLine();
-            }
-            if (!string.IsNullOrWhiteSpace(LiveHints))
-            {
-                sb.AppendLine("=== LIVE HINTS ===");
-                sb.AppendLine(LiveHints);
-                sb.AppendLine("Work these hints naturally into your answer.");
-                sb.AppendLine();
-            }
-
-            // ── 1. CONVERSATION HISTORY (last 5 turns) ────────────────────────
-            if (History.Count > 0)
-            {
-                bool hasScreenCtx = LastEntryWasScreenAnalysis();
-
-                if (hasScreenCtx)
-                {
-                    sb.AppendLine("=== SCREEN ANALYSIS CONTEXT (from the most recent screen capture) ===");
-                    var (_, screenResult) = History[^1];
-                    sb.AppendLine(screenResult.Length > 600 ? screenResult.Substring(0, 600) + "..." : screenResult);
-                    sb.AppendLine();
-                    sb.AppendLine("NOTE: The interviewer may be asking a follow-up question about this screen content.");
-                    sb.AppendLine("Refer to the screen analysis above when relevant.");
-                    sb.AppendLine();
-                }
-
-                sb.AppendLine("=== WHAT YOU HAVE ALREADY SAID IN THIS INTERVIEW ===");
-                int start = Math.Max(0, History.Count - 3);
-                for (int i = start; i < History.Count; i++)
-                {
-                    var (q, a) = History[i];
-                    // Skip the screen analysis entry since we already showed it above
-                    if (hasScreenCtx && i == History.Count - 1) continue;
-                    string aShort = a.Length > 300 ? a.Substring(0, 300) + "..." : a;
-                    sb.AppendLine($"Q: {q}");
-                    sb.AppendLine($"YOUR ANSWER: {aShort}");
-                    sb.AppendLine();
-                }
-                sb.AppendLine("CONSISTENCY RULE: Your answers above are locked. If asked the same topic again,");
-                sb.AppendLine("give the same answer naturally rephrased. Do NOT contradict yourself.");
-                sb.AppendLine();
-            }
-
-            // ── 2. LOCKED FACTS + CONFLICT DETECTION ─────────────────────────
-            string lockBlock = BuildLockedConstraintBlock(rawQuestion);
-            if (!string.IsNullOrEmpty(lockBlock))
-                sb.AppendLine(lockBlock);
-
-            // ── 3. FORMAT RULE (before the question so model commits first) ───
-            string fmt = BuildFormatReminder(qType, rawQuestion, isDrill, resumeFacts);
-            sb.AppendLine($"FORMAT RULE (obey exactly): {fmt}");
-            sb.AppendLine();
-
-            // ── 4. THE QUESTION ───────────────────────────────────────────────
-            sb.AppendLine($"NOW ANSWER THIS QUESTION: {rawQuestion}");
-
-            return sb.ToString().Trim();
         }
 
         // =====================================================================

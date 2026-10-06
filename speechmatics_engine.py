@@ -1871,13 +1871,20 @@ threading.Thread(target=_pause_flag_watchdog, daemon=True).start()
 # Fully independent of the Speechmatics path below — reuses only the already-open
 # audio streams, the resampler, and the pause/reset/shutdown flags.
 # ══════════════════════════════════════════════════════════════════════════════
+_extra_vocab_cache = None
+
+
 def _load_extra_vocab():
     """Interview-specific terms (company name, the role's tech stack, names/projects from
     the resume) that C# writes to vocab.txt. Feeding these to Speechmatics makes it far
     more accurate on exactly the words that matter in THIS interview instead of guessing."""
+    global _extra_vocab_cache
+    if _extra_vocab_cache is not None:
+        return list(_extra_vocab_cache)
+
     terms = []
+    path = os.path.join(APP_DATA, "vocab.txt")
     try:
-        path = os.path.join(APP_DATA, "vocab.txt")
         if os.path.exists(path):
             seen = set()
             with open(path, "r", encoding="utf-8") as f:
@@ -1891,9 +1898,19 @@ def _load_extra_vocab():
                         break
     except Exception as e:
         print(f">>> vocab.txt load skipped: {e}", flush=True)
+    finally:
+        # This file contains company/project terms derived from the resume. Keep
+        # them in this process for reconnects, but do not leave the plaintext
+        # handoff on disk after it has been consumed.
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception as e:
+            print(f">>> vocab.txt cleanup skipped: {e}", flush=True)
+    _extra_vocab_cache = tuple(terms)
     if terms:
         print(f">>> Loaded {len(terms)} interview-specific vocab terms for accuracy", flush=True)
-    return terms
+    return list(_extra_vocab_cache)
 
 
 def _write_latest(text):

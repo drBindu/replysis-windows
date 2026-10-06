@@ -1,0 +1,41 @@
+<UserControl x:Class="InterviewCopilot.MacSegmented"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="True" Cursor="Hand" Height="34" FocusVisualStyle="{x:Null}"
+             SnapsToDevicePixels="True" UseLayoutRounding="True">
+    <!-- A macOS style segmented switch: a dark rounded track and one raised thumb that SLIDES to the chosen side. The
+         thumb is a separate element rather than a restyled segment, which is what makes it slide instead of flip. -->
+    <Border x:Name="Track" CornerRadius="9" Background="#151A21" BorderBrush="#2B323D" BorderThickness="1" Padding="2">
+        <Grid x:Name="Host" SizeChanged="Host_SizeChanged">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border x:Name="Thumb" Grid.Column="0" CornerRadius="7" BorderThickness="1" BorderBrush="#66788A"
+                    HorizontalAlignment="Stretch" IsHitTestVisible="False">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#4C586A" Offset="0"/>
+                        <GradientStop Color="#3C4657" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.Effect>
+                    <DropShadowEffect Color="#000000" Direction="270" ShadowDepth="1" BlurRadius="5" Opacity="0.45"/>
+                </Border.Effect>
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="ThumbMove" X="0"/>
+                </Border.RenderTransform>
+            </Border>
+
+            <Border x:Name="LeftHit" Grid.Column="0" Background="Transparent" MouseLeftButtonDown="Left_Down" MouseEnter="Hit_Enter" MouseLeave="Hit_Leave">
+                <TextBlock x:Name="LeftLabel" FontSize="11.5" FontWeight="SemiBold" FontFamily="Segoe UI"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <Border x:Name="RightHit" Grid.Column="1" Background="Transparent" MouseLeftButtonDown="Right_Down" MouseEnter="Hit_Enter" MouseLeave="Hit_Leave">
+                <TextBlock x:Name="RightLabel" FontSize="11.5" FontWeight="SemiBold" FontFamily="Segoe UI"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

@@ -52,12 +52,23 @@ namespace InterviewCopilot
                 "enough for many interviews, and you can cancel any time. Or add a few answers with no subscription.",
                 NextStep.MoreAnswers),
 
+            // The server keeps a hidden ceiling on how much a month can be used, so that an open microphone cannot cost money
+            // (Free 15 minutes of speech, far more on paid plans). Customers are told about ANSWERS and nothing else (owner,
+            // 2026-10-05: "we removed that completely"), so this never says listening, minutes or fair use. On the free trial it is
+            // simply the end of the trial; on a paid plan it is a monthly limit that renews.
+            Kind.NoListeningTime when freeTrial => new(
+                "TRIAL OVER",
+                "Your free trial is over",
+                "That is what Replysis does in a real interview. Pro gives you a whole month, enough for many interviews, " +
+                "and you can cancel any time. Or add a few answers with no subscription.",
+                NextStep.MoreAnswers),
+
             Kind.NoListeningTime => new(
                 "MONTHLY LIMIT",
-                "Monthly listening limit reached",
-                "You have reached this month's fair use limit for listening. You still have answers left, but nothing " +
-                "more can be heard until the limit renews or you upgrade. Reading your screen with F8 still works.",
-                NextStep.SeePlans),
+                "You have reached this month's limit",
+                "This month's allowance is used up, so Replysis cannot hear more until it renews on the first of next month. " +
+                "Your answers are safe, and reading your screen with F8 still works. If you need more, contact support.",
+                NextStep.None),
 
             Kind.NoCredits => new(
                 "NO ANSWERS",

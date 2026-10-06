@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Interop;
 
@@ -20,12 +21,27 @@ namespace InterviewCopilot
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint GetWindowDisplayAffinity(IntPtr hwnd, out uint pdwAffinity);
 
+        private delegate void WinEventDelegate(IntPtr hook, uint eventType, IntPtr hwnd,
+            int objectId, int childId, uint eventThread, uint eventTime);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module,
+            WinEventDelegate callback, uint processId, uint threadId, uint flags);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnhookWinEvent(IntPtr hook);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+
         private const uint WDA_NONE = 0x00000000;
         private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
 
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_TOOLWINDOW = 0x00000080;
         private const int WS_EX_APPWINDOW = 0x00040000;
+        private const uint EVENT_OBJECT_SHOW = 0x8002;
+        private const uint WINEVENT_OUTOFCONTEXT = 0;
         #endregion
 
         /// <summary>
@@ -52,6 +68,31 @@ namespace InterviewCopilot
 
         public static void SetCaptureExclusion(IntPtr hwnd, bool enable)
             => TrySetCaptureExclusion(hwnd, enable);
+
+        /// <summary>
+        /// Runs a native common dialog while applying capture exclusion to every
+        /// top-level window this process shows during the call.
+        /// </summary>
+        public static T ShowNativeDialogProtected<T>(Func<T> show)
+        {
+            if (!SettingsWindow.GetStealthMode()) return show();
+
+            uint thisProcess = (uint)Process.GetCurrentProcess().Id;
+            WinEventDelegate callback = (_, _, hwnd, objectId, _, _, _) =>
+            {
+                if (hwnd == IntPtr.Zero || objectId != 0) return;
+                GetWindowThreadProcessId(hwnd, out uint ownerProcess);
+                if (ownerProcess == thisProcess) TrySetCaptureExclusion(hwnd, true);
+            };
+            IntPtr hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, IntPtr.Zero,
+                callback, thisProcess, 0, WINEVENT_OUTOFCONTEXT);
+            try { return show(); }
+            finally
+            {
+                if (hook != IntPtr.Zero) UnhookWinEvent(hook);
+                GC.KeepAlive(callback);
+            }
+        }
 
         /// <summary>
         /// Makes a window invisible to screen capture so a screenshot can be taken

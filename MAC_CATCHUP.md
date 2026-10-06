@@ -1,3 +1,15 @@
+## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
+
+Owner: "we removed that completely, we only put the credits and answers." A banner and a red label next to the answers badge still said
+"Monthly listening limit reached" and "fair use limit for listening". The server still keeps a hidden ceiling (Free 15, Pro 900, Max 1,800
+minutes of speech a month, so an open microphone cannot cost money), but customers are told about ANSWERS only. **Now:** on the free trial
+that ceiling is simply "Your free trial is over" (same way forward as running out: add answers or Pro); on a paid plan it says "You have reached
+this month's limit ... renews on the first of next month ... contact support"; the red label beside the badge is gone; the badge tooltip and the
+server's own 402 text say "this month's limit". A test fails if either message ever contains listening, minute, hour or fair use. **Check the Mac
+for the same phrases** (and for any text it shows straight from the server's 402 body, which now says "You have reached this month's limit.").
+
+---
+
 ## Faster again: 450 ms confirmation, 200 ms endpointing, and where the rest of the delay lives (2026-10-01, Windows 1.0.30)
 
 Owner: "I want as much speed as instant." The server was not slower (provider first byte 108 to 290 ms all day). Measured with recorded

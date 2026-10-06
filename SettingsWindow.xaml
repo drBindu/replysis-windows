@@ -17,7 +17,7 @@
             </Setter>
         </Style>
         <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#93A9C4"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -32,7 +32,7 @@
                     <ControlTemplate TargetType="CheckBox">
                         <Grid Width="44" Height="24">
                             <Border x:Name="Track" CornerRadius="12" BorderThickness="1"
-                                    Background="#22FFFFFF" BorderBrush="#28FFFFFF"/>
+                                    Background="#1E222A" BorderBrush="#333842"/>
                             <Ellipse x:Name="Thumb" Width="18" Height="18" Fill="#F8FAFC"
                                      HorizontalAlignment="Left" Margin="3,0,0,0">
                                 <Ellipse.Effect>
@@ -45,12 +45,12 @@
                                 <Setter TargetName="Track" Property="Background">
                                     <Setter.Value>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#25B978" Offset="0"/>
-                                            <GradientStop Color="#1E9E63" Offset="1"/>
+                                            <GradientStop Color="#2563EB" Offset="0"/>
+                                            <GradientStop Color="#1E3A8A" Offset="1"/>
                                         </LinearGradientBrush>
                                     </Setter.Value>
                                 </Setter>
-                                <Setter TargetName="Track" Property="BorderBrush" Value="#84E7B6"/>
+                                <Setter TargetName="Track" Property="BorderBrush" Value="#60A5FA"/>
                                 <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
                                 <Setter TargetName="Thumb" Property="Margin" Value="0,0,3,0"/>
                             </Trigger>
@@ -62,15 +62,15 @@
 
         <!-- Card wrapper for a privacy/toggle row (icon + title + description + switch) -->
         <Style x:Key="ToggleCard" TargetType="Border">
-            <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="Padding" Value="14,12"/>
-            <Setter Property="Background" Value="#0AFFFFFF"/>
-            <Setter Property="BorderBrush" Value="#18FFFFFF"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="15,13"/>
+            <Setter Property="Background" Value="#1A1F2E"/>
+            <Setter Property="BorderBrush" Value="#333842"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
     </Window.Resources>
 
-    <Border x:Name="RootGlass" Background="#0B1220" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="18">
+    <Border x:Name="RootGlass" Background="#12151C" BorderBrush="#2A2F3A" BorderThickness="1" CornerRadius="20">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -89,7 +89,7 @@
                         HorizontalAlignment="Right" VerticalAlignment="Center"
                         Height="34" MinWidth="72" Padding="16,0" FontSize="12"/>
             </Grid>
-            <Border Grid.Row="1" Background="#18FFFFFF"/>
+            <Border Grid.Row="1" Background="#1E232D"/>
 
             <!-- CONTENT -->
             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
@@ -144,7 +144,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xEA18;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#60A5FA" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Stealth mode" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Hides the app from screen sharing, the taskbar and Alt-Tab. Test it in your meeting app first."
@@ -157,11 +157,24 @@
                 </Border>
 
                 <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,8">
-                    <StackPanel>
-                        <CheckBox x:Name="SystemProxyCheckBox" Content="Use the Windows system proxy" Foreground="White"/>
-                        <TextBlock Text="For networks that require a proxy. Restart Replysis after changing this. Speech-provider connections may need separate network approval."
-                                   Foreground="#7E90A8" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
-                    </StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="&#xE774;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                   Foreground="#60A5FA" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Use the Windows system proxy" Foreground="White" FontSize="13"
+                                       FontWeight="Bold" FontFamily="Segoe UI"/>
+                            <TextBlock Text="For networks that require a proxy. Restart Replysis after changing this. Speech-provider connections may need separate network approval."
+                                       Foreground="#7E90A8" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="2" x:Name="SystemProxyCheckBox"
+                                  Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center" Margin="10,0,0,0"
+                                  AutomationProperties.Name="Use the Windows system proxy"/>
+                    </Grid>
                 </Border>
                 <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,20">
                     <Grid>
@@ -171,7 +184,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="17"
-                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#60A5FA" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Answer from the shared screen" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Questions about your screen are answered from it. Questions about you are answered as usual. Only runs during an interview, never in Setup or Past Sessions. Press F8 to read the screen any time."
@@ -191,7 +204,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#60A5FA" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Save session audio (up to 90 minutes)" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Keeps an encrypted copy of each session's audio on this computer for 7 days. Nothing is uploaded. Off by default, and takes effect from your next session."
@@ -226,7 +239,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xE765;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#60A5FA" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Screen keys work in every app" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="F8 reads the window you are in, F9 your main screen, F7 a part you select, from any app. Turn this off if another app needs those keys, such as an IDE, and use Ctrl+Alt+F7, F8 or F9 instead."
@@ -246,7 +259,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="&#xE753;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Foreground="#84E7B6" Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                   Foreground="#60A5FA" Margin="0,0,12,0" VerticalAlignment="Top"/>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Back up session history" Foreground="White" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI"/>
                             <TextBlock Text="Syncs questions, answers and a short part of your resume to your other signed-in devices."
@@ -273,8 +286,8 @@
                      not want their microphone opened at all. -->
                 <TextBlock Text="LISTENING" Style="{StaticResource SectionLabel}"/>
 
-                <Border Background="#0E1A2A" BorderBrush="#243449" BorderThickness="1"
-                        CornerRadius="10" Padding="14,12" Margin="0,0,0,12">
+                <Border Background="#0A1628" BorderBrush="#1E3A5F" BorderThickness="1"
+                        CornerRadius="12" Padding="15,13" Margin="0,0,0,12">
                     <StackPanel>
                         <TextBlock Text="Works for interviews and practice"
                                    Foreground="White" FontSize="13" FontWeight="Bold"
@@ -285,8 +298,8 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="#0AFFFFFF" BorderBrush="#16FFFFFF" BorderThickness="1"
-                        CornerRadius="10" Padding="14,12" Margin="0,0,0,20">
+                <Border Background="#1A1F2E" BorderBrush="#333842" BorderThickness="1"
+                        CornerRadius="12" Padding="15,13" Margin="0,0,0,20">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -321,7 +334,7 @@
                            Foreground="#6B7280" FontSize="10.5" FontWeight="SemiBold"
                            FontFamily="Segoe UI" TextWrapping="Wrap" Margin="2,0,0,20"/>
 
-                <Border Height="1" Background="#18FFFFFF" Margin="0,0,0,20"/>
+                <Border Height="1" Background="#1E232D" Margin="0,0,0,20"/>
 
                 <!-- ── ABOUT ──────────────────────────────────────── -->
                 <TextBlock Text="ABOUT" Style="{StaticResource SectionLabel}"/>

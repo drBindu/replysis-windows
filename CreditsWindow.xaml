@@ -6,8 +6,8 @@
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False">
-    <Border x:Name="RootGlass" Background="#0B1320" BorderBrush="#26354A" BorderThickness="1"
-            CornerRadius="18" Padding="22">
+    <Border x:Name="RootGlass" Background="#12151C" BorderBrush="#2A2F3A" BorderThickness="1"
+            CornerRadius="20" Padding="22">
         <Border.Effect>
             <DropShadowEffect BlurRadius="34" ShadowDepth="8" Opacity="0.62" Color="#000000"/>
         </Border.Effect>
@@ -26,7 +26,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock Text="ANSWERS" Foreground="#34E08A" FontSize="10"
+                    <TextBlock Text="ANSWERS" Foreground="#4ADE80" FontSize="10"
                                FontWeight="Bold" FontFamily="Segoe UI"/>
                     <TextBlock Text="Usage and plan" Foreground="#FFFFFF" FontSize="21"
                                FontWeight="SemiBold" FontFamily="Segoe UI" Margin="0,4,0,0"/>
@@ -37,22 +37,22 @@
                         ToolTip="Close" Content="&#xE711;"/>
             </Grid>
 
-            <Border Grid.Row="1" Margin="0,20,0,14" Background="#101D2D"
-                    BorderBrush="#25415A" BorderThickness="1" CornerRadius="14" Padding="17">
+            <Border Grid.Row="1" Margin="0,20,0,14" Background="#0D1117"
+                    BorderBrush="#2A2F3A" BorderThickness="1" CornerRadius="16" Padding="17">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Width="48" Height="48" CornerRadius="24" Background="#143523"
-                            BorderBrush="#2E8A52" BorderThickness="1" Margin="0,0,14,0">
+                    <Border Width="48" Height="48" CornerRadius="15" Background="#0F2A1A"
+                            BorderBrush="#1A6B3A" BorderThickness="1" Margin="0,0,14,0">
                         <TextBlock Text="&#x26A1;" FontSize="20" HorizontalAlignment="Center"
                                    VerticalAlignment="Center"/>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="CreditsAmountText" Text="5 answers" Foreground="#FFFFFF"
                                    FontSize="22" FontWeight="Bold" FontFamily="Segoe UI"/>
-                        <TextBlock x:Name="PlanText" Text="Guest plan" Foreground="#88A0B8"
+                        <TextBlock x:Name="PlanText" Text="Guest plan" Foreground="#6B7280"
                                    FontSize="12" FontFamily="Segoe UI" Margin="0,3,0,0"/>
                     </StackPanel>
                 </Grid>
@@ -64,33 +64,33 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="AI answer or screen read" Foreground="#9EADBE" FontSize="12.5" FontFamily="Segoe UI"/>
+                    <TextBlock Text="AI answer or screen read" Foreground="#94A3B8" FontSize="12.5" FontFamily="Segoe UI"/>
                     <TextBlock Grid.Column="1" Text="1 answer" Foreground="#FFFFFF" FontSize="12.5"
                                FontWeight="SemiBold" FontFamily="Segoe UI"/>
                 </Grid>
-                <Border Height="1" Background="#1B2A3E"/>
+                <Border Height="1" Background="#1E232D"/>
                 <Grid Margin="0,10,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Allowance" Foreground="#9EADBE" FontSize="12.5" FontFamily="Segoe UI"/>
+                    <TextBlock Text="Allowance" Foreground="#94A3B8" FontSize="12.5" FontFamily="Segoe UI"/>
                     <TextBlock x:Name="AllowanceText" Grid.Column="1" Text="5 answers, one time"
                                Foreground="#FFFFFF" FontSize="12.5" FontWeight="SemiBold" FontFamily="Segoe UI"/>
                 </Grid>
-                <Border Height="1" Background="#1B2A3E"/>
+                <Border Height="1" Background="#1E232D"/>
                 <Grid Margin="0,10,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Next refresh" Foreground="#9EADBE" FontSize="12.5" FontFamily="Segoe UI"/>
+                    <TextBlock Text="Next refresh" Foreground="#94A3B8" FontSize="12.5" FontFamily="Segoe UI"/>
                     <TextBlock x:Name="ResetText" Grid.Column="1" Foreground="#FFFFFF" FontSize="12.5"
                                FontWeight="SemiBold" FontFamily="Segoe UI"/>
                 </Grid>
                 <TextBlock x:Name="DeviceNoteText" Margin="0,15,0,0" TextWrapping="Wrap"
                            Text="Your guest balance stays linked to this Windows device, including after restarting or reinstalling the app."
-                           Foreground="#72859B" FontSize="11.5" LineHeight="18" FontFamily="Segoe UI"/>
+                           Foreground="#6B7280" FontSize="11.5" LineHeight="18" FontFamily="Segoe UI"/>
             </StackPanel>
 
             <Grid Grid.Row="3">

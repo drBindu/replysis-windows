@@ -33,15 +33,35 @@ namespace InterviewCopilot
         private const int MaxTurns = 200;
 
         // ── Reset when a new local session starts ────────────────────────────
-        public static Task ResetSessionAsync()
+        public static async Task ResetSessionAsync()
         {
-            lock (StateLock)
+            // A completed local turn must not disappear merely because the user
+            // pressed New Session while its cloud request was still in flight.
+            // Queue the reset behind every earlier sync before clearing state.
+            await SyncGate.WaitAsync().ConfigureAwait(false);
+            try
             {
-                _sessionGeneration++;
-                _cloudSessionId = null;
-                _turns.Clear();
+                lock (StateLock)
+                {
+                    _sessionGeneration++;
+                    _cloudSessionId = null;
+                    _turns.Clear();
+                }
             }
-            return Task.CompletedTask;
+            finally
+            {
+                SyncGate.Release();
+            }
+        }
+
+        /// <summary>
+        /// Waits until every cloud write queued before this call has completed.
+        /// Finish/New Session use this before presenting a session as saved.
+        /// </summary>
+        public static async Task DrainAsync(CancellationToken cancellationToken = default)
+        {
+            await SyncGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            SyncGate.Release();
         }
 
         // ── Called after every Q&A pair — fire and forget ────────────────────
