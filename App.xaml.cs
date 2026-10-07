@@ -63,6 +63,10 @@ namespace InterviewCopilot
             // start does not pay for a new computer scanning them (see EngineWarmup).
             EngineWarmup.Start();
 
+            // Never run in Windows' "efficiency mode": a hidden or covered interview app is exactly what it throttles, and the
+            // speech engine then answers late for no visible reason (see AlwaysReady).
+            AlwaysReady.OptOutOfThrottling(System.Diagnostics.Process.GetCurrentProcess());
+
             // The main window restores the saved Firebase session before requesting a
             // transcription credential. Do not prefetch here: doing so treats a returning
             // Pro user as a guest for a few milliseconds and can create a false 402 retry.

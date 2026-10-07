@@ -533,16 +533,7 @@ namespace InterviewCopilot
                     _powerHandler = (_, args) =>
                     {
                         if (args.Mode != Microsoft.Win32.PowerModes.Resume) return;
-                        Dispatcher.BeginInvoke(new Action(async () =>
-                        {
-                            await Task.Delay(2500);   // the network adapter needs a moment to come back
-                            if (_windowClosed) return;
-                            DebugWindow.Log("ENGINE", "The computer woke up; reconnecting speech now instead of waiting for the old connection to time out.");
-                            _nextEngineRestartUtc = DateTime.MinValue;
-                            StartSpeechmaticsEngine();
-                            _uplink.Reset();
-                            ApplyLineSpeedToCaptures();
-                        }));
+                        Dispatcher.BeginInvoke(new Action(async () => await ReconnectAfterWakeAsync(2500)));
                     };
                     Microsoft.Win32.SystemEvents.PowerModeChanged += _powerHandler;
 
@@ -3938,6 +3929,21 @@ namespace InterviewCopilot
         private readonly UplinkGovernor _uplink = new();
         private System.Net.NetworkInformation.NetworkAddressChangedEventHandler? _networkChangedHandler;
         private Microsoft.Win32.PowerModeChangedEventHandler? _powerHandler;
+
+        /// <summary>
+        /// What the app does when the computer wakes: wait a moment for the network adapter, then reconnect speech at once instead
+        /// of waiting for the dead connection to time out. A method of its own so a test can run it without sleeping the computer.
+        /// </summary>
+        private async Task ReconnectAfterWakeAsync(int waitMs)
+        {
+            await Task.Delay(waitMs);
+            if (_windowClosed) return;
+            DebugWindow.Log("ENGINE", "The computer woke up; reconnecting speech now instead of waiting for the old connection to time out.");
+            _nextEngineRestartUtc = DateTime.MinValue;
+            StartSpeechmaticsEngine();
+            _uplink.Reset();
+            ApplyLineSpeedToCaptures();
+        }
         private CancellationTokenSource? _preparedUploadCts;
         private volatile bool _preparedUploadDroppedForQuestion;
 
@@ -5561,6 +5567,7 @@ namespace InterviewCopilot
             SessionTimerBadge.Visibility = Visibility.Collapsed;
             _sessionTimer?.Stop();
             _interviewStarted = false;
+            AlwaysReady.HoldAwake(false);
             ApplyKeepOnTop();
             DebugWindow.Log("SESSION", $"Prepared session #{sessionNumber}");
         }
@@ -5600,6 +5607,7 @@ namespace InterviewCopilot
         {
             if (_interviewStarted) return;
             _interviewStarted = true;
+            AlwaysReady.HoldAwake(true);
             _tailMergesThisInterview = 0;
             _wordsHeardThisInterview = false;
             _interviewSilentTipShown = false;
@@ -5700,6 +5708,7 @@ namespace InterviewCopilot
             _sessionTimer?.Stop();
             SessionTimerBadge.Visibility = Visibility.Collapsed;
             _interviewStarted = false;
+            AlwaysReady.HoldAwake(false);
             ApplyKeepOnTop();
             PromptBuilder.ClearHistory();
             UnlockResume();
@@ -6438,6 +6447,7 @@ namespace InterviewCopilot
                 speechmaticsProcess.StartInfo.StandardOutputEncoding = Encoding.UTF8;
                 speechmaticsProcess.StartInfo.StandardErrorEncoding = Encoding.UTF8;
                 speechmaticsProcess.Start();
+                AlwaysReady.OptOutOfThrottling(speechmaticsProcess);
                 // When the wait began, so "CONNECTING" can stop being shown once
                 // it has stopped being true.
                 _engineStartedUtc = DateTime.UtcNow;
@@ -9028,6 +9038,21 @@ namespace InterviewCopilot
         }
         private void ArmAutoTestHarness()
         {
+            // Developer builds only: REPLYSIS_AUTOTEST_WAKE=<seconds> runs what the app does when the computer wakes, that long after
+            // launch, so the reconnect can be tested without putting the computer to sleep. The operating system's own wake
+            // notification is the one part this cannot cover.
+            if (int.TryParse(Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST_WAKE"), out int wakeAfter) && wakeAfter > 0)
+            {
+                var wake = new DispatcherTimer { Interval = TimeSpan.FromSeconds(wakeAfter) };
+                wake.Tick += (_, _) =>
+                {
+                    wake.Stop();
+                    DebugWindow.Log("AUTOTEST", "pretending the computer just woke up");
+                    _ = ReconnectAfterWakeAsync(0);
+                };
+                wake.Start();
+            }
+
             // Developer builds only: REPLYSIS_AUTOTEST_SCREEN=<seconds> presses the screen-read key (F8) that long after
             // launch, with the interview view showing, so the screen answer can be tested and photographed without
             // anyone at the keyboard (the real hook ignores synthetic keys on purpose). REPLYSIS_AUTOTEST_SCREEN_REPEAT=<seconds>
@@ -9258,6 +9283,7 @@ namespace InterviewCopilot
                 Microsoft.Win32.SystemEvents.PowerModeChanged -= _powerHandler;
                 _powerHandler = null;
             }
+            AlwaysReady.HoldAwake(false);
 
             // Listening time accumulates between reports, and closing the app
             // mid-interview would have thrown that away. Reporting as you go

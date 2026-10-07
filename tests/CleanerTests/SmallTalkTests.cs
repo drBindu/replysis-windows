@@ -53,6 +53,17 @@ internal static class SmallTalkTests
         Case("how are you doing today",
             PromptBuilder.IsSmallTalk("How are you doing today?"), true);
         Case("how's it going", PromptBuilder.IsSmallTalk("How's it going?"), true);
+
+        // "What's up?" opens a call. It reached the model and got a paragraph about the Unix "up" command.
+        Case("hello, what's up", PromptBuilder.IsSmallTalk("Hello. What's up?"), true);
+        Case("what's up", PromptBuilder.IsSmallTalk("What's up?"), true);
+        Case("what is up", PromptBuilder.IsSmallTalk("What is up?"), true);
+        Case("what's up with a curly apostrophe", PromptBuilder.IsSmallTalk("Hey, what\u2019s up?"), true);
+        Case("good to see you", PromptBuilder.IsSmallTalk("Good to see you."), true);
+        Case("what's up, but a real question follows",
+            PromptBuilder.IsSmallTalk("What's up with this memory leak in the service?"), false);
+        Case("what's up, then the interview starts",
+            PromptBuilder.IsSmallTalk("What's up, tell me about your last project."), false);
         Case("hi, how are you", PromptBuilder.IsSmallTalk("Hi, how are you?"), true);
         Case("nice to meet you", PromptBuilder.IsSmallTalk("Nice to meet you."), true);
         Case("nice to meet you too, thanks",

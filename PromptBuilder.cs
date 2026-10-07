@@ -359,6 +359,11 @@ namespace InterviewCopilot
             "how was your day", "how is your evening", "how's your evening",
             "how is your night", "nice to meet", "thanks for coming",
             "pleasure to meet",
+            // "What's up?" is how many people open a call. It used to reach the model, which answered it as a question about
+            // the Unix "up" command (seen live: a paragraph on process tables in reply to "Hello. What's up?").
+            "what's up", "whats up", "what is up", "wassup", "what's new", "what's going on", "how's everything",
+            "how is everything", "how are things", "how's life", "good to see you", "nice to see you",
+            "good to meet", "great to meet", "hope you're doing well", "hope you are doing well",
         };
 
         /// <summary>
@@ -381,11 +386,13 @@ namespace InterviewCopilot
             "how", "hope", "glad", "happy", "nice", "meet", "meeting",
             "pleasure", "coming", "come", "in", "for", "to", "the", "a", "an",
             "yeah", "yes", "yep", "no", "um", "uh", "er", "oh", "hmm",
+            "see", "everything", "things", "life", "hope", "re",
         };
 
         public static bool IsSmallTalk(string q)
         {
-            string t = q.Trim().ToLower();
+            // A speech recogniser may write the curly apostrophe; the phrases above use the straight one.
+            string t = q.Trim().ToLower().Replace('\u2019', '\'');
 
             // Only treat as pure small talk when the whole utterance is SHORT. A real
             // interview question that merely contains "how are you" (or follows a
@@ -885,6 +892,7 @@ namespace InterviewCopilot
             return text is "hi" or "hello" or "hey" or "hi there" or "hey there" or
                 "good morning" or "good afternoon" or "good evening" or "greetings" or
                 "how are you" or "how's it going" or "how you doing" or "how have you been" or
+                "what's up" or "whats up" or "what is up" or "wassup" or "how are things" or "good to see you" or
                 "i'm fine" or "i am fine" or "i'm good" or "i am good" or
                 "fine thank you" or "good thanks" or "doing well" or
                 "sorry" or "no sorry" or "okay" or "okay sir" or "yes" or "yes sir" or

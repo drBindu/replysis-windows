@@ -112,6 +112,19 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     and the engine only finds that out by timing out (about 20 s) and then backing off, so the first question after opening the lid met a
     deaf app. `SystemEvents.PowerModeChanged` with `PowerModes.Resume` now restarts the engine 2.5 s after waking (the network adapter
     needs a moment). **The Mac equivalent is `NSWorkspace.didWakeNotification`.**
+26. **Never asleep, even when nobody is using it (server deployed 2026-10-07, Windows 1.0.31).**
+    Server (nothing to do on the Mac): every 30 s the backend makes one tiny real request to the answer model, the screen model, the
+    database (as a transaction, which is what a charge is), the website, and every 60 s a throwaway token from each speech provider
+    through the speech controller's own connections. So no connection goes cold, and `GET /api/v1/health/ready` says whether each part is
+    awake, slow or down. Both speech tokens are now requested at once when listening starts (they were one after the other).
+    Windows: `AlwaysReady` opts the app and its speech engine out of Windows' efficiency mode (`SetProcessInformation` with
+    `ProcessPowerThrottling`, execution speed and timer resolution), and holds the computer awake only while an interview session runs
+    (`SetThreadExecutionState`, released when it ends). **The Mac equivalent: `ProcessInfo.beginActivity(options: [.userInitiated,
+    .idleSystemSleepDisabled], reason:)` for the session, and `.latencyCritical` so App Nap never slows it.**
+27. **"Hello. What's up?" was answered with a lecture about the Unix "up" command.** "What's up", "what is up", "wassup", "what's new",
+    "what's going on", "how are things", "good to see you" and similar are small talk now, answered with the short canned line and never sent
+    to the model, with the curly apostrophe a speech recogniser may write handled too. A real question after it (anything not filler) is
+    still a question. **Check the Mac's small talk list for the same gap.**
 
 ---
 
