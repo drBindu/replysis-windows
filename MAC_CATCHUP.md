@@ -131,6 +131,15 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     are `windows` and `mac`; anything else is ignored, and they are labels only (nothing is granted, charged or limited from them). On Windows
     this is a `DelegatingHandler` (`AppIdentityHandler`) that adds them only when the request host equals our backend host. **On the Mac add
     the same to the shared HttpClient for our backend calls.** Until a Mac build sends them, a Mac user shows as "App, older version".
+29. **Tell the server you are open, once a minute (server deployed 2026-10-08, Windows 1.0.31).** Found the same day by the owner: he had the admin
+    page open in Chrome and had closed the Mac app, and the panel still showed "Mac 1.0.248, open". The website tab and the apps all write the same
+    `lastActive` field, which says somebody is here but not where, so a closed app was kept looking live by an open tab. Each surface now also
+    pings the server: `POST https://replysis.com/api/v1/presence` with `Authorization: Bearer <the Firebase ID token>` and the same two headers as
+    item 28 (`X-App-Platform: mac`, `X-App-Version: <version>`). No body, answer is `204`. **On the Mac send it every 60 seconds while the app is
+    open and signed in, next to the existing presence write**, fire and forget, never blocking and never shown as an error (a failure just means
+    the next ping tries again). The server writes `lastAppAt` and the panel shows the Mac only while that is under 2.5 minutes old, so a closed
+    or crashed app drops off by itself without any "I am leaving" message. Do not send it for a signed-out person (it answers `401`). It does not
+    touch credits and nothing is decided from it. Windows is `PresenceTracker.BuildPingRequest`, with a test.
 
 ---
 

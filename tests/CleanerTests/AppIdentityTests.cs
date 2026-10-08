@@ -68,6 +68,14 @@ internal static class AppIdentityTests
         Check(!AppIdentityHandler.IsOurServer(null, "replysis.com") && !AppIdentityHandler.IsOurServer(new Uri("https://replysis.com/"), ""),
             "no address, or no known server, means no headers");
 
+        using (var ping = PresenceTracker.BuildPingRequest("https://replysis.com/", "token-123"))
+        {
+            Check(ping.Method == HttpMethod.Post && ping.RequestUri!.ToString() == "https://replysis.com/api/v1/presence",
+                "the open-now ping is a POST to our own presence address, whatever trailing slash the setting has");
+            Check(ping.Headers.Authorization?.Scheme == "Bearer" && ping.Headers.Authorization?.Parameter == "token-123",
+                "the ping says who is signed in, so the server can mark that person's app as open");
+        }
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "app identity: all passed" : $"app identity: {failed} FAILED");
         return failed;

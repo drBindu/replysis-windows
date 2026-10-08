@@ -51,6 +51,31 @@ namespace InterviewCopilot
             }
         }
 
+        /// <summary>
+        /// The request that tells our own server "this app is open right now". lastActive says somebody is here but not which app or
+        /// the website, because all of them write it; the server writes the rest from this ping (see PresenceController). The platform
+        /// and version ride along as headers added by AppIdentityHandler.
+        /// </summary>
+        internal static HttpRequestMessage BuildPingRequest(string backendUrl, string token)
+        {
+            var req = new HttpRequestMessage(HttpMethod.Post, backendUrl.TrimEnd('/') + "/api/v1/presence");
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            return req;
+        }
+
+        private static async Task PingServerAsync(string token)
+        {
+            try
+            {
+                using var req = BuildPingRequest(SettingsWindow.GetBackendUrl(), token);
+                using var res = await Http.SendAsync(req);
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("PRESENCE", $"ping failed: {ex.Message}");
+            }
+        }
+
         private static async Task<bool> BeatAsync(bool includeLogin)
         {
             try
@@ -71,6 +96,9 @@ namespace InterviewCopilot
 
                 string token = UserSession.IdToken;
                 if (string.IsNullOrEmpty(token)) return false;
+
+                // Does not wait for it and cannot fail the beat.
+                _ = PingServerAsync(token);
 
                 string nowIso = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                 string fields = includeLogin
