@@ -125,6 +125,12 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     "what's going on", "how are things", "good to see you" and similar are small talk now, answered with the short canned line and never sent
     to the model, with the curly apostrophe a speech recogniser may write handled too. A real question after it (anything not filler) is
     still a question. **Check the Mac's small talk list for the same gap.**
+28. **Say which app you are (server deployed 2026-10-08, Windows 1.0.31).** The admin page now shows whether each person has the Windows app,
+    the Mac app or the website open, and which version. The server reads two headers on every request to OUR server only (never GitHub,
+    Google or anyone else): `X-App-Platform: mac` and `X-App-Version: 1.0.247` (the plain version, digits and dots). Accepted platform values
+    are `windows` and `mac`; anything else is ignored, and they are labels only (nothing is granted, charged or limited from them). On Windows
+    this is a `DelegatingHandler` (`AppIdentityHandler`) that adds them only when the request host equals our backend host. **On the Mac add
+    the same to the shared HttpClient for our backend calls.** Until a Mac build sends them, a Mac user shows as "App, older version".
 
 ---
 

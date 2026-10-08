@@ -13,12 +13,27 @@ namespace InterviewCopilot
             PooledConnectionLifetime = TimeSpan.FromMinutes(5)
         };
 
-        public static readonly HttpClient Http = new HttpClient(MakeHandler())
+        // Our own server is told which app is calling (see AppIdentityHandler). Other addresses get nothing extra.
+        private static HttpMessageHandler MakeIdentifiedHandler() => new AppIdentityHandler(
+            MakeHandler(),
+            () => AppUpdates.CurrentVersion,
+            BackendHost);
+
+        private static string? _backendHost;
+        private static string BackendHost()
+        {
+            if (_backendHost != null) return _backendHost;
+            try { _backendHost = new Uri(SettingsWindow.GetBackendUrl()).Host; }
+            catch { _backendHost = ""; }
+            return _backendHost;
+        }
+
+        public static readonly HttpClient Http = new HttpClient(MakeIdentifiedHandler())
         {
             Timeout = TimeSpan.FromSeconds(90)
         };
 
-        public static readonly HttpClient HttpShort = new HttpClient(MakeHandler())
+        public static readonly HttpClient HttpShort = new HttpClient(MakeIdentifiedHandler())
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
