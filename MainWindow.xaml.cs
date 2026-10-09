@@ -2012,6 +2012,16 @@ namespace InterviewCopilot
         /// stays paused until the mic is clicked, rather than restarting itself.
         /// </summary>
         private static readonly TimeSpan AutoIdleListeningTimeout = TimeSpan.FromMinutes(15);
+#if DEBUG
+        // Developer builds only: REPLYSIS_AUTOTEST_IDLE_MINUTES stops a listening test from pausing itself in an empty room, so a long
+        // run keeps the speech engine working for the whole time. A release build ignores it and always uses the 15 minutes above.
+        private static readonly TimeSpan AutoIdleTimeoutInUse =
+            int.TryParse(Environment.GetEnvironmentVariable("REPLYSIS_AUTOTEST_IDLE_MINUTES"), out int idleMinutes) && idleMinutes > 0
+                ? TimeSpan.FromMinutes(idleMinutes)
+                : AutoIdleListeningTimeout;
+#else
+        private static readonly TimeSpan AutoIdleTimeoutInUse = AutoIdleListeningTimeout;
+#endif
 
         // Auto stopped for an empty room and must not restart on its own.
         private bool _autoPausedForIdle;
@@ -2157,7 +2167,7 @@ namespace InterviewCopilot
             // turned it straight back on. Every 45 seconds, in every interview
             // (2026-09-28 audit). Auto only stops for a genuinely empty room.
             TimeSpan patience = AutoModeEnabled
-                ? AutoIdleListeningTimeout
+                ? AutoIdleTimeoutInUse
                 : _heardAnythingThisSession ? IdleListeningTimeout : SilentSessionTimeout;
 
             if (now - _lastSpeechHeardUtc >= patience)
