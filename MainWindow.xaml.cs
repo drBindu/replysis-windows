@@ -5568,6 +5568,7 @@ namespace InterviewCopilot
             _sessionTimer?.Stop();
             _interviewStarted = false;
             AlwaysReady.HoldAwake(false);
+            PresenceTracker.SetListening(false);
             ApplyKeepOnTop();
             DebugWindow.Log("SESSION", $"Prepared session #{sessionNumber}");
         }
@@ -5608,6 +5609,7 @@ namespace InterviewCopilot
             if (_interviewStarted) return;
             _interviewStarted = true;
             AlwaysReady.HoldAwake(true);
+            PresenceTracker.SetListening(true);
             _tailMergesThisInterview = 0;
             _wordsHeardThisInterview = false;
             _interviewSilentTipShown = false;
@@ -5709,6 +5711,7 @@ namespace InterviewCopilot
             SessionTimerBadge.Visibility = Visibility.Collapsed;
             _interviewStarted = false;
             AlwaysReady.HoldAwake(false);
+            PresenceTracker.SetListening(false);
             ApplyKeepOnTop();
             PromptBuilder.ClearHistory();
             UnlockResume();
@@ -9337,6 +9340,7 @@ namespace InterviewCopilot
             string recordingId = _recordingSessionId;
             try { File.WriteAllText(Path.Combine(AppDataFolder, "shutdown.flag"), "1"); } catch { }
             EndSession();
+            PresenceTracker.Leave();
             PresenceTracker.Stop();
             if (!_sessionWriter.Drain(TimeSpan.FromSeconds(5)))
                 DebugWindow.Log("SESSION", "Session writes did not finish within the shutdown deadline.");

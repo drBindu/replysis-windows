@@ -140,6 +140,13 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     the next ping tries again). The server writes `lastAppAt` and the panel shows the Mac only while that is under 2.5 minutes old, so a closed
     or crashed app drops off by itself without any "I am leaving" message. Do not send it for a signed-out person (it answers `401`). It does not
     touch credits and nothing is decided from it. Windows is `PresenceTracker.BuildPingRequest`, with a test.
+    **Two more, added the same night after the owner closed the Mac app and the panel still showed it open, with nothing under listening.**
+    (a) When the app quits, send `DELETE https://replysis.com/api/v1/presence` with the same headers and token (wait at most about 1.5 s for it,
+    never block the quit on it). The server then marks that app closed and the admin page drops it at once; a crash or a closed laptop sends
+    nothing and ages out after two minutes instead. (b) When a session starts or stops, send the ping straight away with `?listening=1` while a
+    session is running and without it otherwise, and keep that flag on the once a minute ping. This is what makes "Listening" show the moment
+    it starts; the once a minute audio report only stamps it after a full minute of audio. Windows is `PresenceTracker.SetListening` and
+    `PresenceTracker.Leave`, called from the session start, end and close points in MainWindow.
 
 ---
 

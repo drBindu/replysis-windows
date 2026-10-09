@@ -56,18 +56,67 @@ namespace InterviewCopilot
         /// the website, because all of them write it; the server writes the rest from this ping (see PresenceController). The platform
         /// and version ride along as headers added by AppIdentityHandler.
         /// </summary>
-        internal static HttpRequestMessage BuildPingRequest(string backendUrl, string token)
+        internal static HttpRequestMessage BuildPingRequest(string backendUrl, string token, bool listening = false)
         {
-            var req = new HttpRequestMessage(HttpMethod.Post, backendUrl.TrimEnd('/') + "/api/v1/presence");
+            var req = new HttpRequestMessage(HttpMethod.Post, backendUrl.TrimEnd('/') + "/api/v1/presence" + (listening ? "?listening=1" : ""));
             req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             return req;
+        }
+
+        /// <summary>The request that says "this app was closed", so the admin page shows it gone at once and not after the ping times out.</summary>
+        internal static HttpRequestMessage BuildLeaveRequest(string backendUrl, string token)
+        {
+            var req = new HttpRequestMessage(HttpMethod.Delete, backendUrl.TrimEnd('/') + "/api/v1/presence");
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            return req;
+        }
+
+        private static volatile bool _listening;
+
+        /// <summary>
+        /// A session started or stopped. Told to our server at once, because the audio report that normally stamps "listening" only
+        /// arrives after a full minute, and the once a minute ping keeps saying so while it lasts.
+        /// </summary>
+        public static void SetListening(bool on)
+        {
+            if (_listening == on) return;
+            _listening = on;
+            _ = PingNowAsync();
+        }
+
+        private static async Task PingNowAsync()
+        {
+            try
+            {
+                if (!UserSession.IsLoggedIn || string.IsNullOrEmpty(UserSession.IdToken)) return;
+                await PingServerAsync(UserSession.IdToken);
+            }
+            catch { }
+        }
+
+        /// <summary>The app is closing. Waits a moment for the server to hear it, never longer, and never fails the close.</summary>
+        public static void Leave()
+        {
+            try
+            {
+                _listening = false;
+                if (!UserSession.IsLoggedIn || string.IsNullOrEmpty(UserSession.IdToken)) return;
+                string token = UserSession.IdToken;
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1500));
+                Task.Run(async () =>
+                {
+                    using var req = BuildLeaveRequest(SettingsWindow.GetBackendUrl(), token);
+                    using var res = await Http.SendAsync(req, cts.Token);
+                }).Wait(1800);
+            }
+            catch { }
         }
 
         private static async Task PingServerAsync(string token)
         {
             try
             {
-                using var req = BuildPingRequest(SettingsWindow.GetBackendUrl(), token);
+                using var req = BuildPingRequest(SettingsWindow.GetBackendUrl(), token, _listening);
                 using var res = await Http.SendAsync(req);
             }
             catch (Exception ex)

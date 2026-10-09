@@ -76,6 +76,15 @@ internal static class AppIdentityTests
                 "the ping says who is signed in, so the server can mark that person's app as open");
         }
 
+        using (var listeningPing = PresenceTracker.BuildPingRequest("https://replysis.com", "t", listening: true))
+        using (var leave = PresenceTracker.BuildLeaveRequest("https://replysis.com/", "token-123"))
+        {
+            Check(listeningPing.RequestUri!.Query == "?listening=1", "a ping sent while a session runs says so");
+            Check(leave.Method == HttpMethod.Delete && leave.RequestUri!.ToString() == "https://replysis.com/api/v1/presence"
+                  && leave.Headers.Authorization?.Parameter == "token-123",
+                "closing the app sends a DELETE to the same address, signed in");
+        }
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "app identity: all passed" : $"app identity: {failed} FAILED");
         return failed;
