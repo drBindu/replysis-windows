@@ -160,6 +160,7 @@ internal static class Program
         _failed += AnswerClosersTests.Run();
         _failed += ScreenWordsTests.Run();
         _failed += AppIdentityTests.Run();
+        _failed += NothingAskedTests.Run();
         _failed += ClientErrorReporterTests.Run();
         _failed += XamlTemplateTests.Run();
         _failed += MacSegmentedTests.Run();

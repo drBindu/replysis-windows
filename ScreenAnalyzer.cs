@@ -1061,7 +1061,17 @@ namespace InterviewCopilot
                 Every answer ends with a SAY THIS line: one or two sentences, first
                 person, ready to speak out loud with no editing. It is the one thing
                 they can use in the next three seconds while someone is looking at
-                them, so it is never optional, whatever is on the screen.
+                them, so it is never optional, whatever is on the screen. The one
+                exception is a screen with nothing on it that anyone could ask them
+                or expect them to do: see NOTHING ASKED below.
+
+                When the screen holds no question, problem, task, error or decision
+                (a chat window, an AI assistant, a document being read, a settings
+                page, a desktop, a video), do not invent a task, do not tell them to
+                ignore anything and do not write a line they could not really say.
+                Write these two lines and nothing else, not even SAY THIS:
+                NOTHING ASKED
+                One short plain line saying what is on the screen.
 
                 Match the shape of your answer to what is on the screen.
 
@@ -1313,6 +1323,27 @@ namespace InterviewCopilot
                 transformed = transformed.Replace("\uE000" + i + "\uE001", stashed[i]);
 
             return transformed;
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex NothingAsked =
+            new(@"^\s*NOTHING ASKED[ \t]*:?[ \t]*\r?\n?(?<line>[^\r\n]*)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>
+        /// A screen with nothing on it to answer (a chat, a document, a desktop) used to get an invented "do this" and a "say this" line
+        /// nobody could say aloud, such as "I am ready for the next prompt". The model now writes NOTHING ASKED and one line about the
+        /// screen; this turns that into a plain sentence and says what to do next. Anything else passes through unchanged.
+        /// </summary>
+        internal static string RewriteNothingAsked(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            var m = NothingAsked.Match(text);
+            if (!m.Success) return text;
+            string line = m.Groups["line"].Value.Trim().TrimEnd('.');
+            const string next = "Press F8 when a question or code is showing.";
+            return line.Length == 0
+                ? "No question on this screen. " + next
+                : "No question on this screen. It shows: " + line + ".\n\n" + next;
         }
 
         public static string PostProcess(string raw)

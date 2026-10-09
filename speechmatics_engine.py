@@ -217,40 +217,57 @@ def _test_device_signal(p, dev, timeout_sec=0.4) -> int:
 
 _timeout_warned = set()
 
+# One read at a time per stream. WASAPI loopback blocks for as long as nothing is playing, which is every quiet stretch of a meeting.
+# This used to give up after the timeout and immediately start ANOTHER read thread on the same stream, so every 0.2 s of silence added
+# one more thread inside PortAudio on the same stream. Windows' audio library does not allow that, and the engine died with an access
+# violation in AUDIOSES.DLL or heap corruption in ntdll, every minute or two, found by the overnight test on 2026-10-09. A read that
+# has not come back is now waited for again on the next call instead of being replaced, so its audio is not lost either.
+_inflight_reads = {}
+_inflight_lock = threading.Lock()
+
 def _read_stream_timeout(stream, frames, timeout_sec, label):
     """Blocking-read helper with a hard timeout. PyAudio's stream.read() has no
-    native timeout parameter — if a device driver stalls, the call can hang
-    indefinitely without ever raising, which would silently freeze the ENTIRE
-    producer loop forever (no exception, no further output, connection still
-    looks 'online' because that's a separate task). This makes a hang visible
-    instead of invisible: runs the read in a daemon thread and gives up after
-    timeout_sec, logging once (not every call) so a real hang is unmistakable
-    in the log rather than just... nothing happening."""
-    result = [None]
+    native timeout parameter, and on a silent WASAPI loopback it simply does not
+    return until something plays. The producer loop must keep going meanwhile,
+    so the read runs on a daemon thread and this waits for it up to timeout_sec,
+    returning None if it has not finished. The unfinished read is KEPT and waited
+    on again by the next call; a second read is never started on a stream while
+    one is still inside PortAudio."""
+    key = id(stream)
+    with _inflight_lock:
+        entry = _inflight_reads.get(key)
+        if entry is None:
+            result = [None]
 
-    def _worker():
-        try:
-            result[0] = stream.read(frames, exception_on_overflow=False)
-        except Exception as ex:
-            result[0] = ("__ERR__", str(ex))
+            def _worker():
+                try:
+                    result[0] = stream.read(frames, exception_on_overflow=False)
+                except Exception as ex:
+                    result[0] = ("__ERR__", str(ex))
 
-    t = threading.Thread(target=_worker, daemon=True)
-    t.start()
+            t = threading.Thread(target=_worker, daemon=True)
+            entry = (t, result)
+            _inflight_reads[key] = entry
+            t.start()
+    t, result = entry
     t.join(timeout=timeout_sec)
 
     if t.is_alive():
         if label not in _timeout_warned:
-            print(f">>> {label} READ TIMEOUT after {timeout_sec}s — stream.read() is HANGING "
-                  f"(not erroring, just never returning). This is why no audio ever gets through.",
-                  flush=True)
+            print(f">>> {label} waiting for audio (nothing is playing on this device yet); the read stays open and is waited "
+                  f"for again, so it is not an error.", flush=True)
             _timeout_warned.add(label)
         return None
+
+    with _inflight_lock:
+        if _inflight_reads.get(key) is entry:
+            del _inflight_reads[key]
 
     if isinstance(result[0], tuple) and result[0] and result[0][0] == "__ERR__":
         print(f">>> {label} read error: {result[0][1]}", flush=True)
         return None
 
-    _timeout_warned.discard(label)   # recovered — allow the warning to fire again if it hangs later
+    _timeout_warned.discard(label)   # audio is flowing again — allow the notice to fire again next quiet stretch
     return result[0]
 
 

@@ -8742,7 +8742,7 @@ namespace InterviewCopilot
             // fences never show raw while it streams and then jump into place at the end.
             string ComposeScreenAnswer(string raw)
             {
-                try { return AnswerClosers.StripTrailingOffer(ScreenAnalyzer.PostProcess(raw), allowClosingQuestion: true); }
+                try { return ScreenAnalyzer.RewriteNothingAsked(AnswerClosers.StripTrailingOffer(ScreenAnalyzer.PostProcess(raw), allowClosingQuestion: true)); }
                 catch { return raw; }
             }
 

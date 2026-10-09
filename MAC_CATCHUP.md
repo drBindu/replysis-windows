@@ -147,6 +147,20 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     session is running and without it otherwise, and keep that flag on the once a minute ping. This is what makes "Listening" show the moment
     it starts; the once a minute audio report only stamps it after a full minute of audio. Windows is `PresenceTracker.SetListening` and
     `PresenceTracker.Leave`, called from the session start, end and close points in MainWindow.
+30. **A screen with nothing to answer (found 2026-10-09 by the owner).** He pressed Screen live with a chat window in front and the screen
+    answer was "WHAT THIS IS / DO THIS: Ignore this informational screen ... / I am ready for the next prompt or interview question", all in
+    the heavy answer weight. Nobody can say that aloud, and the prompt had caused it: it said every answer ends with a SAY THIS line "whatever
+    is on the screen", so the model invented one. The prompt now has a NOTHING ASKED shape for a screen with no question, problem, task, error or
+    decision (two lines: `NOTHING ASKED`, then one plain line saying what is on the screen; no SAY THIS), and the display turns that into
+    "No question on this screen. It shows: <line>. Press F8 when a question or code is showing." Windows is `ScreenAnalyzer.RewriteNothingAsked`
+    plus the new paragraph in the screen prompt, with tests. **Mirror both on the Mac: the prompt paragraph and the rewrite.**
+31. **The speech engine file is shared, and its read helper was crashing the engine on silence (fixed 2026-10-09).** `_read_stream_timeout` in
+    `speechmatics_engine.py` gave up on a read after 0.2 s and immediately started another on the same audio stream. A silent WASAPI loopback
+    blocks for as long as nothing plays, so reads piled up on one stream and Windows' audio library killed the engine every 1 to 3 minutes (an
+    access violation in AUDIOSES.DLL, or heap corruption in ntdll), hidden by the app restarting it. Now one read is in flight per stream, and a
+    read that has not come back is waited for again, so no audio is lost. **Pull the file, rebuild the Mac engine, and run a 15 minute silent
+    session** (a quiet room, nothing playing) checking that the engine process keeps the same id. The Mac may never have hit it, since it
+    captures differently, but it is the same helper. Test: `tests/engine/test_read_helper.py`.
 
 ---
 
