@@ -8813,7 +8813,9 @@ namespace InterviewCopilot
                 // and collapses excess blank lines — runs instantly on the final string.
                 if (screenCt.IsCancellationRequested || !ReferenceEquals(_aiCts, screenOwner)) return;
                 // Offers to say more come off the end of a screen answer too (a question stays: here it is part of reading the screen).
-                string finalResult = AnswerClosers.StripTrailingOffer(ScreenAnalyzer.PostProcess(sb.ToString()), allowClosingQuestion: true);
+                // Through the same function the streaming text used, so the plain "no question on this screen" line is not replaced
+                // by the raw heading when the answer finishes (the streaming view had it, the final step did not).
+                string finalResult = ComposeScreenAnswer(sb.ToString());
                 if (string.IsNullOrWhiteSpace(finalResult))
                 {
                     AiAnswerBox.Text = "Screen AI returned no answer. Please try again.";
