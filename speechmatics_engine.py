@@ -2499,10 +2499,24 @@ class BufferedMixedStream:
         )
         self._thread.start()
 
-    # Chunks are 100 ms, so fifteen of them is the last second and a half: enough
-    # that a word being spoken as the connection returns survives, little enough
-    # that nothing older is transcribed.
-    KEEP_ON_RECONNECT = 15
+    # Chunks are 100 ms. This was fifteen (a second and a half), and the buffer itself was thrown
+    # away with every connection, so a question asked while the connection was stalling or being
+    # replaced was simply lost: the owner's first spoken question in the real app test on
+    # 2026-10-10 got no transcript at all. The buffer now lives across reconnects and keeps up to
+    # ten seconds of audio that was recorded but not yet sent, so the question is answered a few
+    # seconds late instead of never. Audio from before a gap (a laptop that slept, a long stall)
+    # is still never kept: see CAPTURE_GAP_SECONDS.
+    KEEP_ON_RECONNECT = 100
+
+    # A pause of this long between two captured chunks means the computer slept or the capture
+    # stalled, and everything buffered before it is stale: it is cleared rather than replayed.
+    CAPTURE_GAP_SECONDS = 3.0
+
+    def push_front(self, chunk):
+        """Put back a chunk that could not be sent, so the next connection sends it first."""
+        with self._condition:
+            self._chunks.appendleft(chunk)
+            self._condition.notify_all()
 
     def drop_stale(self):
         """Throw away audio captured while there was nobody to send it to.
@@ -2522,6 +2536,7 @@ class BufferedMixedStream:
         return dropped
 
     def _capture_loop(self):
+        last_chunk_at = time.monotonic()
         while not self._stopped.is_set():
             try:
                 # The source owns all PyAudio reads and recording state,
@@ -2534,7 +2549,13 @@ class BufferedMixedStream:
                 return
 
             paused = os.path.exists(PAUSE_FLAG)
+            captured_at = time.monotonic()
+            gap = captured_at - last_chunk_at
+            last_chunk_at = captured_at
             with self._condition:
+                if gap > self.CAPTURE_GAP_SECONDS and self._chunks:
+                    print(f">>> Capture paused for {gap:.0f}s; dropping the audio buffered before it.", flush=True)
+                    self._chunks.clear()
                 if paused:
                     self._chunks.clear()
                 else:
@@ -2745,7 +2766,36 @@ _DEEPGRAM_MAX_FAILURES = 2
 _DEEPGRAM_HEALTHY_SECONDS = 5.0
 
 
+class SendStalled(ConnectionError):
+    """An audio send did not complete in time: the upload is stalled."""
+
+
+async def _send_with_stall_guard(ws, chunk, buffered, timeout=3.0):
+    """Send one audio chunk, or put it back and raise if the upload has stalled.
+
+    A send that cannot complete means the network is stuck. Waiting for the speech provider to give
+    up (it closes the session after ten seconds without data) and then reconnecting meant the
+    question being asked in those ten seconds was lost. Noticing in three seconds, with the chunk
+    returned to the buffer, lets the next connection send it first.
+    """
+    try:
+        await asyncio.wait_for(ws.send(chunk), timeout)
+    except asyncio.TimeoutError:
+        buffered.push_front(chunk)
+        raise SendStalled(f"audio upload stalled for {timeout:.0f}s")
+
+
 async def run_deepgram() -> str:
+    """Runs the Deepgram session loop with one audio buffer that outlives each connection."""
+    holder = {"buffered": None}
+    try:
+        return await _run_deepgram_loop(holder)
+    finally:
+        if holder["buffered"] is not None:
+            holder["buffered"].close()
+
+
+async def _run_deepgram_loop(holder) -> str:
     """Stream to Deepgram until told to stop.
 
     Returns "shutdown" when the app asked the engine to exit, or "fallback" when
@@ -2753,6 +2803,7 @@ async def run_deepgram() -> str:
     """
     import websockets  # already bundled for the Sarvam path
 
+    buffered = None   # created on the first attempt and kept for the whole run
     url = _deepgram_url()
     headers = {"Authorization": f"Bearer {_DG_TOKEN}"}
     loop = asyncio.get_running_loop()
@@ -2777,9 +2828,12 @@ async def run_deepgram() -> str:
 
         online = False
         session_started = 0.0
-        # Created before the handshake, like the Speechmatics path, so speech that
-        # starts while the connection opens is kept rather than lost.
-        buffered = BufferedMixedStream(MixedStream())
+        # Created once and kept across reconnects, so audio recorded while the connection was stalling
+        # or being replaced is still there for the next one. (It used to be created here, per attempt,
+        # and closed in the finally below: everything unsent died with each connection.)
+        if buffered is None:
+            buffered = BufferedMixedStream(MixedStream())
+            holder["buffered"] = buffered
         try:
             print(">>> [DEEPGRAM] Connecting...", flush=True)
             async with websockets.connect(url, additional_headers=headers, max_size=None,
@@ -2800,7 +2854,7 @@ async def run_deepgram() -> str:
                         chunk = await loop.run_in_executor(None, buffered.read_timeout, 0.25)
                         now = time.monotonic()
                         if chunk and not os.path.exists(PAUSE_FLAG):
-                            await ws.send(chunk)
+                            await _send_with_stall_guard(ws, chunk, buffered)
                             last_sent = now
                         elif now - last_sent >= 4.0:
                             # Muted. Deepgram closes a session after ten seconds
@@ -2933,7 +2987,9 @@ async def run_deepgram() -> str:
             await asyncio.sleep(reconnect_delay)
             reconnect_delay = min(reconnect_delay * 2, 8)
         finally:
-            buffered.close()
+            # Left open for the next attempt. It is closed when run_deepgram returns, so a hand-over to
+            # Speechmatics never leaves two readers on the device.
+            pass
 
 
 # ── MAIN WITH AUTO-RECONNECT ──────────────────────────────────────────────────

@@ -161,6 +161,14 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     read that has not come back is waited for again, so no audio is lost. **Pull the file, rebuild the Mac engine, and run a 15 minute silent
     session** (a quiet room, nothing playing) checking that the engine process keeps the same id. The Mac may never have hit it, since it
     captures differently, but it is the same helper. Test: `tests/engine/test_read_helper.py`.
+32. **A question asked while the speech connection stalls must not be lost (found 2026-10-10 in the real installed Windows app).** The first
+    spoken question of a test got no transcript at all: the speech provider closed the connection (1011, "did not receive audio data within the
+    timeout window"), and the audio that was recorded but not yet sent died with the connection (a new empty buffer started), plus nothing was
+    captured during the reconnect wait. Fixed in the shared `speechmatics_engine.py`: (a) one `BufferedMixedStream` for the whole Deepgram run,
+    kept across reconnects, `KEEP_ON_RECONNECT` 15 to 100 chunks (10 s); (b) audio from before a capture gap longer than 3 s (sleep, long stall) is
+    cleared, never replayed; (c) `_send_with_stall_guard`: a send that does not complete in 3 s puts the chunk back and raises `SendStalled`, so the
+    reconnect happens in 3 s instead of waiting 10 s for the provider to give up. **Pull the file, rebuild the Mac engine, run both tests in
+    `tests/engine/` and one real spoken question across a Wi-Fi switch.** Nothing else in the Mac app has to change.
 
 ---
 
