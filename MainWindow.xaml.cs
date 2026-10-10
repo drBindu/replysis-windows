@@ -1352,6 +1352,11 @@ namespace InterviewCopilot
             // overlay starts from its XAML default, so it would have shown OFF
             // while the screen was being watched.
             answerWindow.SetWatchScreenState(_watchScreenMode);
+            // The same goes for the microphone. The compact bar starts at "Ready, Ctrl+Alt+Space to listen" and is only told the
+            // state when it next changes, so opening it in the middle of a listening session showed "Ready" while the app was
+            // listening, and a person who pressed the shortcut it suggested turned listening off. Found in the real installed
+            // app on 2026-10-10: the bar read "Ready" with Auto listening and answering questions.
+            UpdateMicUi();
             this.Hide();
         }
 

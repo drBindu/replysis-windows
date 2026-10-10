@@ -169,6 +169,11 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     cleared, never replayed; (c) `_send_with_stall_guard`: a send that does not complete in 3 s puts the chunk back and raises `SendStalled`, so the
     reconnect happens in 3 s instead of waiting 10 s for the provider to give up. **Pull the file, rebuild the Mac engine, run both tests in
     `tests/engine/` and one real spoken question across a Wi-Fi switch.** Nothing else in the Mac app has to change.
+33. **The compact bar must show the state it is opened in (found 2026-10-10 in the real installed Windows app).** Opening Compact in the middle of
+    a listening session showed "Ready, Ctrl+Alt+Space to listen" while Auto was listening and answering, because the bar starts from its
+    default and is only told the mic state when it next changes. A person who pressed the shortcut it suggested turned listening off. Windows
+    now calls its mic-state update right after opening the bar (`CameraMode_Click`, next to the Screen live sync that was already there).
+    **Check the Mac's compact view for the same: open it while listening and confirm it says so at once.**
 
 ---
 
