@@ -114,7 +114,16 @@ check("a rejected key is reported before giving up", "API key rejected on ALL en
 # the reconnected session transcribed all of it: words from audio nobody heard.
 check("stale audio is dropped on reconnect", "def drop_stale" in SOURCE and "buffered.drop_stale()" in SOURCE)
 check("the first session keeps its prebuffer", "if sessions_opened:" in SOURCE)
-check("about a second and a half is kept", "KEEP_ON_RECONNECT = 15" in SOURCE)
+# 2026-10-10: this used to say a second and a half (KEEP_ON_RECONNECT = 15) and the buffer was thrown away with every
+# connection, so a question asked while the connection stalled got no transcript in the real installed app. The buffer now
+# lives for the whole run and keeps up to ten seconds of audio that was recorded but not yet sent. Audio from before a
+# capture gap (a sleeping laptop, a long stall) is still never replayed, so the original reason for dropping stays covered.
+check("up to ten seconds of unsent audio is kept on a reconnect", "KEEP_ON_RECONNECT = 100" in SOURCE)
+check("audio from before a capture gap is never replayed",
+      "CAPTURE_GAP_SECONDS = 3.0" in SOURCE and "Capture paused for" in SOURCE and "self._chunks.clear()" in SOURCE)
+check("one audio buffer lives across reconnects", 'holder["buffered"] = buffered' in SOURCE and "if buffered is None:" in SOURCE)
+check("a stalled upload is noticed in three seconds and the audio kept",
+      "_send_with_stall_guard(ws, chunk, buffered)" in SOURCE and "buffered.push_front(chunk)" in SOURCE)
 
 check("no mic search while words are arriving", "time.time() - _last_words_at > MIC_WORDS_QUIET_SECS" in SOURCE and SOURCE.count("_last_words_at = time.time()") == 2)
 check("the search never gives up for good", "MIC_RESEARCH_BACKOFF_SECS" in SOURCE and "search_allowed" in SOURCE)
