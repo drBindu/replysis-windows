@@ -165,6 +165,7 @@ internal static class Program
         _failed += XamlTemplateTests.Run();
         _failed += MacSegmentedTests.Run();
         _failed += StealthDialogTests.Run();
+        _failed += UpdateDownloadGuardTests.Run();
 
         Console.WriteLine("\n10. Punctuation that reads as AI generated");
         _failed += HumanVoiceTests.Run();

@@ -130,7 +130,21 @@ namespace InterviewCopilot
                 string version = update.TargetFullRelease.Version.ToString();
                 DebugWindow.Log("UPDATE", $"Downloading {version}");
 
-                await mgr.DownloadUpdatesAsync(update, cancelToken: ct).ConfigureAwait(false);
+                // Watched, not trusted: a connection that drops without closing used to leave this waiting for
+                // ever on "Downloading..." (2026-10-10). A stalled attempt is cancelled and retried, and if it
+                // cannot finish the check reports a failure and the next launch tries again.
+                bool downloaded = await UpdateDownloadGuard.RunAsync(
+                    (progress, token) => mgr.DownloadUpdatesAsync(update, progress, cancelToken: token),
+                    ct,
+                    UpdateDownloadGuard.DefaultStall,
+                    UpdateDownloadGuard.DefaultAttempts,
+                    UpdateDownloadGuard.DefaultRetryDelay,
+                    message => DebugWindow.Log("UPDATE", message)).ConfigureAwait(false);
+                if (!downloaded)
+                {
+                    DebugWindow.Log("UPDATE", $"{version} could not be downloaded; will try again at the next check.");
+                    return (UpdateCheckOutcome.Failed, null);
+                }
 
                 _staged = update;
                 PendingVersion = version;

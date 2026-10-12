@@ -198,6 +198,11 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
 36. **Windows only: the "close while working" dialog** says "Close Replysis?" with Keep running as the default and a red Close app button.
     Nothing to port unless the Mac asks the same question on quit.
 
+37. **An update download must not hang forever (found 2026-10-10 on the real installed Windows app, fixed 2026-10-12, Windows 1.0.34).** The
+    update to 1.0.32 sat on "Downloading..." for good with the package complete except its last 460 bytes: the connection dropped without
+    closing and the downloader has no read timeout. `UpdateDownloadGuard` watches the download's progress, cancels an attempt that has not
+    moved for 2 minutes, retries up to 3 times, and then reports a failure so the next launch checks again. **Check the Mac: does the
+    Sparkle download have a stall timeout, and what does the person see if it never finishes?** Test: `tests/CleanerTests/UpdateDownloadGuardTests.cs`.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
