@@ -18,6 +18,11 @@ on:
         description: 'What changed in this release, shown to users'
         required: false
         default: ''
+      publish:
+        description: 'Publish to customers now. Turn off to create a DRAFT release that nobody can download or update to until it is checked and published by hand.'
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write
@@ -236,7 +241,7 @@ jobs:
             --token "${{ secrets.GITHUB_TOKEN }}" `
             --tag "v${{ inputs.version }}" `
             --releaseName "Replysis ${{ inputs.version }}" `
-            --publish true `
+            --publish ${{ inputs.publish }} `
             --merge true `
             -o Releases
 
