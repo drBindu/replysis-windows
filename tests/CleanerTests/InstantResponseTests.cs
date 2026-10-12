@@ -44,6 +44,51 @@ internal static class InstantResponseTests
         Check(AutoTurnRules.QuickSendWaitMs(true, 100, 2800) == AutoTurnRules.UtteranceEndConfirmMs,
             "a tiny pace floor does not raise the minimum");
 
+        Check(AutoTurnRules.AmbiguousWaitMs(false, false, 0, 2800) == 1200,
+            "without an endpoint, an unpunctuated question keeps the cautious wait");
+        Check(AutoTurnRules.AmbiguousWaitMs(false, true, 0, 2800) == 850,
+            "speech final shortens the ambiguous-question wait");
+        Check(AutoTurnRules.AmbiguousWaitMs(true, false, 0, 2800) == 650,
+            "utterance end shortens it further because the provider already waited");
+        Check(AutoTurnRules.AmbiguousWaitMs(false, true, 0, 2800, 1) == 1100 &&
+              AutoTurnRules.AmbiguousWaitMs(true, false, 0, 2800, 1) == 850,
+            "a late continuation makes subsequent ambiguous turns more cautious");
+        Check(AutoTurnRules.AmbiguousWaitMs(false, true, 1950, 2800) == 1950 &&
+              AutoTurnRules.AmbiguousWaitMs(true, false, 9000, 2800) == 2800,
+            "speaker pace remains a floor, capped at the configured maximum");
+
+        Check(!AutoTurnRules.CanLearnPaceFrom("What is?") &&
+              !AutoTurnRules.CanLearnPaceFrom("Tell me about a time") &&
+              !AutoTurnRules.CanLearnPaceFrom("Hello."),
+            "an opening fragment or greeting cannot make the first real question slow");
+        Check(AutoTurnRules.CanLearnPaceFrom("What is dependency injection?"),
+            "a pause after a substantive question still teaches the speaker's pace");
+        Check(AutoTurnRules.CanLearnPaceFrom("Your resume mentions Kafka and Spark."),
+            "a pause after a resume-directed prompt still teaches the speaker's pace");
+        Check(!AutoTurnRules.CanMergeContinuationFromMixedAudio("full time.", true) &&
+              AutoTurnRules.CanMergeContinuationFromMixedAudio("and full time.", true) &&
+              AutoTurnRules.CanMergeContinuationFromMixedAudio("full time.", false),
+            "Practice requires an explicit extension to re-answer; Interview keeps the original rule");
+
+        var micActivity = new RecentMicActivityEvidence();
+        DateTime micTime = new DateTime(t0, DateTimeKind.Utc);
+        Check(!micActivity.Observe(micTime, 1100), "one microphone peak cannot delay Auto");
+        Check(!micActivity.Observe(micTime.AddMilliseconds(20), 1200), "closely bunched peaks do not count twice");
+        Check(micActivity.Observe(micTime.AddMilliseconds(140), 1000), "repeated microphone audio is in flight");
+        DateTime changed = micTime.AddMilliseconds(-2800);
+        Check(AutoTurnRules.HoldForInFlightMicAudio(micTime.AddMilliseconds(200), changed,
+                micTime.AddMilliseconds(140).Ticks, 2800, true),
+            "Practice defers a submission briefly while new microphone audio awaits words");
+        Check(!AutoTurnRules.HoldForInFlightMicAudio(micTime.AddMilliseconds(200), changed,
+                micTime.AddMilliseconds(140).Ticks, 2800, false),
+            "system-only interview audio keeps its original fast path");
+        Check(!AutoTurnRules.HoldForInFlightMicAudio(micTime.AddMilliseconds(200), micTime.AddMilliseconds(150),
+                micTime.AddMilliseconds(140).Ticks, 250, true),
+            "new transcript text supersedes earlier microphone activity");
+        Check(!AutoTurnRules.HoldForInFlightMicAudio(micTime.AddMilliseconds(1200), changed,
+                micTime.AddMilliseconds(1100).Ticks, 2800, true),
+            "microphone noise cannot defer a question indefinitely");
+
         // What the person feels: the service takes about 0.3 s of silence to say "speech final",
         // plus the trip. Measured on 2026-09-29 the whole wait after it was 1.8 s.
         Check(AutoTurnRules.SpeechFinalConfirmMs <= 800,

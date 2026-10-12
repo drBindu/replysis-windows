@@ -174,6 +174,29 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     default and is only told the mic state when it next changes. A person who pressed the shortcut it suggested turned listening off. Windows
     now calls its mic-state update right after opening the bar (`CameraMode_Click`, next to the Screen live sync that was already there).
     **Check the Mac's compact view for the same: open it while listening and confirm it says so at once.**
+34. **Auto must not answer half a question, and must not answer the candidate (2026-10-11, Windows 1.0.33; made with Codex, tested on the
+    real build).** (a) A recogniser that punctuates a pause turns "What is" into "What is?" and Auto answered it. `IsBareQuestionOpener`
+    holds those exact openers ("what is/are/do", "why/how do you", "can you") but never a finished "What is Java?" (a real test answered
+    that one in 306 ms). (b) An unpunctuated question waits 650 ms after the provider's utterance end, 850 ms after its speech-final, and
+    1.2 s when it said nothing (it used to be a flat 1.2 s), more after a late continuation this interview (`AmbiguousWaitMs`). (c) With the
+    microphone mixed in (Practice), only an explicit extension is merged into the previous question, and a boundary only counts as a
+    question when it addresses the candidate ("your experience with...", "you mentioned..."): a candidate's own sentence must not become a
+    paid second answer. (d) Opening-fragment pauses are not learned as the speaker's pace (`CanLearnPaceFrom`). (e) A bounded hold of at
+    most one extra second while microphone audio is in flight (`HoldForInFlightMicAudio`, fed by `RecentMicActivityEvidence`). (f) Canned
+    replies (greeting, small talk, closing) are logged as local, not as a model request. **Check the Mac's Auto for the same six cases; the
+    rules live in `AutoTurnRules.cs` with tests in `tests/CleanerTests/AutoQuestionTests.cs`.**
+35. **Shared engine changes in `speechmatics_engine.py` (2026-10-11, Windows 1.0.33): pull the file.** (a) `mix_audio` no longer picks the
+    louder source every 100 ms (that removed syllables of the quieter speaker); it keeps both, pads the shorter packet, and mixes at 0.65
+    each; an all-zero source returns the other untouched. (b) The muted mic drain reads the same native-duration packet as the live read
+    (a pending read survives an unmute; 1600 frames on a 48 kHz mic returned 33 ms as the first 100 ms). (c) Deepgram key terms: the
+    candidate's own terms (first 50) go before the built-in list and the whole list is held to 480 bytes, because the provider's ceiling is
+    500 tokens and counting terms alone could not enforce it. (d) Deepgram `no_delay=true`, so a spoken number or date is not held for up
+    to three seconds by Smart Format. (e) The transcript file is written before the "received" line is printed, so a reader that reacts to
+    the line never reads the previous text. Tests: `tests/engine/test_streaming_options.py`, `tests/test_audio_samples.py`. **Pull the
+    file, rebuild the Mac engine, and check one Practice session where the speakers and the microphone are both live (item (a) is the
+    one that could echo on speakers).**
+36. **Windows only: the "close while working" dialog** says "Close Replysis?" with Keep running as the default and a red Close app button.
+    Nothing to port unless the Mac asks the same question on quit.
 
 ---
 

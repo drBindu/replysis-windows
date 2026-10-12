@@ -62,6 +62,7 @@ namespace InterviewCopilot
         internal const int SpeechFinalConfirmMs = 450;
         internal const int SpeechFinalConfirmAfterTailMs = 650;
         internal const int UtteranceEndConfirmMs = 250;
+        internal const int AmbiguousNoEndpointWaitMs = 1200;
 
         /// <summary>
         /// The speech service called the end of the speech, and nothing has been heard since.
@@ -85,6 +86,54 @@ namespace InterviewCopilot
                 utteranceEnded ? UtteranceEndConfirmMs
                                : (tailMergesThisInterview > 0 ? SpeechFinalConfirmAfterTailMs : SpeechFinalConfirmMs),
                 paceFloorMs));
+
+        /// <summary>
+        /// An unpunctuated question needs more room for a follow-up clause than a
+        /// plainly finished one. A fresh provider endpoint is evidence that the
+        /// speaker stopped, so it can use a shorter wait than the no-endpoint
+        /// fallback. Keep the learned mid-sentence pause and increase the wait
+        /// after this interview has already produced a late continuation.
+        /// </summary>
+        internal static int AmbiguousWaitMs(bool utteranceEnded, bool speechFinalEnded,
+            int paceFloorMs, int ceilingMs, int tailMergesThisInterview = 0)
+        {
+            int minimum = utteranceEnded ? 650 : speechFinalEnded ? 850 : AmbiguousNoEndpointWaitMs;
+            if (tailMergesThisInterview > 0 && (utteranceEnded || speechFinalEnded))
+                minimum = Math.Max(minimum, utteranceEnded ? 850 : 1100);
+            return Math.Min(ceilingMs, Math.Max(minimum, paceFloorMs));
+        }
+
+        // A recognizer may report an end after a greeting or a bare opener and
+        // then deliver the actual question. That gap says little about how long
+        // the interviewer pauses *inside a usable question*. Treating it as a
+        // pace sample made the first real question wait over two seconds in a
+        // Practice test, despite a confirmed final and an ordinary fast path.
+        internal static bool CanLearnPaceFrom(string previousFragment) =>
+            IsLikelyCompleteQuestion(PromptBuilder.NormalizeInterviewerQuestion(previousFragment));
+
+        // With microphone and system audio mixed, timing alone cannot identify
+        // the speaker. A candidate's short statement after an answer must not
+        // become a paid re-answer to the previous question. In mixed mode only
+        // a clear extension is eligible for automatic merging; the system-only
+        // Interview mode retains its existing continuation behavior.
+        internal static bool CanMergeContinuationFromMixedAudio(string candidate, bool mixedAudio) =>
+            !mixedAudio || IsExplicitExtension(candidate);
+
+        // The mixed Practice stream can have microphone audio in flight even when
+        // Deepgram's latest text still looks settled. This is a short, bounded
+        // guard against sending an answer between the sound and its next partial.
+        // It does not change the normal question wait when no such audio exists.
+        internal static bool HoldForInFlightMicAudio(DateTime now, DateTime transcriptChanged,
+            long lastMicActivityTicks, int requiredSilenceMs, bool microphoneInStream)
+        {
+            if (!microphoneInStream || lastMicActivityTicks <= transcriptChanged.Ticks)
+                return false;
+            DateTime lastActivity = new(lastMicActivityTicks, DateTimeKind.Utc);
+            TimeSpan sinceActivity = now - lastActivity;
+            TimeSpan sinceTranscript = now - transcriptChanged;
+            return sinceActivity >= TimeSpan.Zero && sinceActivity < TimeSpan.FromMilliseconds(450) &&
+                   sinceTranscript < TimeSpan.FromMilliseconds(requiredSilenceMs + 1000);
+        }
 
         /// <summary>
         /// Whether a gap between two changes of the transcript was the speaker pausing.
@@ -289,6 +338,20 @@ namespace InterviewCopilot
                 @"(?: a time(?: when| where| that)?)?$");
 
         /// <summary>
+        /// A recognizer may punctuate an opening clause as a complete question
+        /// when the interviewer pauses: "What is?" or "Why did you?". Neither
+        /// contains the subject needed for a useful answer. Hold these exact
+        /// openers without slowing a finished short question like "What is Java?".
+        /// </summary>
+        internal static bool IsBareQuestionOpener(string question) =>
+            Regex.IsMatch((question ?? "").Trim().TrimEnd('?', '.', '!', ',').ToLowerInvariant(),
+                @"^(?:so |and |okay |ok |now |alright )?" +
+                @"(?:what (?:is|are|was|were|do|does|did)|" +
+                @"why (?:do|does|did|would|should|can|could) (?:you|we|they)|" +
+                @"how (?:do|does|did|would|should|can|could) (?:you|we|they)|" +
+                @"(?:can|could|would|will|should|do|did|have|are) you(?: please)?)$");
+
+        /// <summary>
         /// A recogniser-confirmed utterance that contains enough substance to answer even
         /// when punctuation or the first word was transcribed imperfectly.
         ///
@@ -303,7 +366,7 @@ namespace InterviewCopilot
             string value = text ?? "";
             string[] words = Words(value);
             if (words.Length < 3 || value.Trim().Length < 12) return false;
-            if (IsSpelledOutNoise(value) || IsBareRequestOpener(value)) return false;
+            if (IsSpelledOutNoise(value) || IsBareRequestOpener(value) || IsBareQuestionOpener(value)) return false;
 
             string normalized = string.Join(" ", words);
             if (normalized is "okay thank you" or "yes thank you" or "that is fine" or
@@ -325,6 +388,30 @@ namespace InterviewCopilot
             // paragraph of background conversation.
             int stops = value.Count(c => c is '.' or '?' or '!');
             return stops <= 3;
+        }
+
+        // Practice audio mixes the meeting with the candidate's microphone, so a
+        // generic provider boundary is not enough to answer arbitrary statements.
+        // These elliptical prompts explicitly address the candidate, however, and
+        // are common in interviews even when STT supplies no question mark.
+        internal static bool IsDirectBoundaryPromptInMixedAudio(string text)
+        {
+            if (!IsSubstantiveBoundaryUtterance(text)) return false;
+            string core = PromptBuilder.StripLeadingDiscourse(DropLeadingAcknowledgements(text));
+            return Regex.IsMatch(core, @"^(?:your (?:experience|background|resume|cv|projects?|work|skills|approach|thoughts|career)|you (?:mentioned|described|built|led|worked))\b",
+                RegexOptions.IgnoreCase);
+        }
+
+        internal static string IncompleteQuestionReason(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "empty transcript";
+            if (IsBareRequestOpener(text) || IsBareQuestionOpener(text)) return "unfinished opener";
+            if (IsSpelledOutNoise(text)) return "recognition noise";
+            if (IsInterviewerAside(text)) return "interviewer aside";
+            if (PromptBuilder.IsAcknowledgement(text) || PromptBuilder.IsGreeting(text) ||
+                PromptBuilder.IsSmallTalk(text)) return "pleasantry";
+            if (!AddressesTheCandidate(text)) return "not candidate-directed";
+            return "no complete question pattern";
         }
 
         private static readonly HashSet<string> CommonWords = new(StringComparer.OrdinalIgnoreCase)
@@ -382,6 +469,7 @@ namespace InterviewCopilot
             string core = PromptBuilder.StripLeadingDiscourse(DropLeadingAcknowledgements(question));
             if (core.Length == 0) return false;
             if (IsInterviewerAside(core)) return false;
+            if (IsBareRequestOpener(core) || IsBareQuestionOpener(core)) return false;
 
             string[] words = Words(core);
             if (words.Length == 0) return false;

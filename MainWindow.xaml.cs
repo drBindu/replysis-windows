@@ -61,7 +61,6 @@ namespace InterviewCopilot
         // second charge when the continuation arrives, and break the candidate's
         // flow. Reliability therefore wins over speculative sub-second submission.
         private const int    AutoTurnFinishedSilenceMs = 2_800; // period/statement may only be a clause pause
-        private const int    AutoTurnNaturalSilenceMs  = 1_200; // no punctuation is genuinely ambiguous
         private const int    AutoTurnMaxSilenceMs      = 2_800;
         private const int    AutoTurnMinimumSpeechMs = 500;   // reject clicks/noise bursts
         private const int    AutoTurnMinimumChars    = 4;     // reject empty or tiny fragments
@@ -179,6 +178,7 @@ namespace InterviewCopilot
         // finished an utterance. Interlocked ticks make the background reader/UI handoff
         // atomic without dispatching every engine line through the UI thread.
         private long _lastUtteranceEndUtcTicks;
+        private long _lastLikelyMicActivityUtcTicks;
         // When the engine last printed ">>> SPEECH FINAL": the speech service's own call that
         // the speaker stopped, about 0.3 s after the last word.
         private long _lastSpeechFinalUtcTicks;
@@ -279,6 +279,11 @@ namespace InterviewCopilot
         public MainWindow()
         {
             InitializeComponent();
+            string buildVersion = typeof(MainWindow).Assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()?.InformationalVersion ?? "unknown";
+            DebugWindow.Log("APP", $"Build {buildVersion}");
             EnterSetupStep(animate: false);
             projectRoot = AppDomain.CurrentDomain.BaseDirectory;
             scriptFolder = FindScriptFolder(projectRoot);
@@ -2561,6 +2566,7 @@ namespace InterviewCopilot
             _autoTranscriptChangedUtc = DateTime.UtcNow;
             _autoLongestMidTurnGapMs = 0;
             Interlocked.Exchange(ref _lastUtteranceEndUtcTicks, 0);
+            Interlocked.Exchange(ref _lastLikelyMicActivityUtcTicks, 0);
             Interlocked.Exchange(ref _lastSpeechFinalUtcTicks, 0);
         }
 
@@ -2758,6 +2764,8 @@ namespace InterviewCopilot
         {
             if (string.IsNullOrWhiteSpace(_lastAutoSubmittedQuestion)) return false;
             if (now - _lastAutoSubmitUtc > ContinuationWindow) return false;
+            if (!AutoTurnRules.CanMergeContinuationFromMixedAudio(candidate, CaptureMode() != "system"))
+                return false;
 
             // The next question, not the rest of this one: its first words came
             // well after the last submission. Timing from the submission alone let
@@ -2840,6 +2848,7 @@ namespace InterviewCopilot
         // Practice session they did exactly that for minutes (2026-09-28).
         private string _autoRejectedRaw = "";
         private string _autoRejectedTranscript = "";
+        private long _lastAutoIgnoredBoundaryTicks;
 
         // What had been answered before the last set-aside, so Space can bring the
         // set-aside words back. In the owner's test the question was said, lost
@@ -2875,6 +2884,14 @@ namespace InterviewCopilot
             if (now - _lastAutoSubmitUtc < TimeSpan.FromSeconds(45))
                 question = AutoTurnRules.StripAnsweredPrefix(question, _lastAutoSubmittedQuestion);
             string candidateQuestion = PromptBuilder.NormalizeInterviewerQuestion(question);
+            // Even an end-of-speech signal can land on a recognizer-punctuated
+            // opener. There is no subject to answer yet, including when this
+            // fragment follows a previous question as a possible continuation.
+            if (AutoTurnRules.IsBareQuestionOpener(candidateQuestion))
+            {
+                NoteAutoRejected(transcript, candidateQuestion);
+                return;
+            }
             bool isContinuation = LooksLikeContinuation(candidateQuestion, now);
             long boundaryTicks = Interlocked.Read(ref _lastUtteranceEndUtcTicks);
             // The provider said the speaker stopped, and said it after the last
@@ -2889,8 +2906,10 @@ namespace InterviewCopilot
             // audio alone. With the microphone mixed in, the candidate's own speech can
             // also end at a provider boundary and must continue through the stricter
             // question/read-back rules below.
-            bool boundaryFallback = CaptureMode() == "system" && providerConfirmedEnd &&
-                                    AutoTurnRules.IsSubstantiveBoundaryUtterance(candidateQuestion);
+            bool boundaryFallback = providerConfirmedEnd &&
+                                    (CaptureMode() == "system"
+                                        ? AutoTurnRules.IsSubstantiveBoundaryUtterance(candidateQuestion)
+                                        : AutoTurnRules.IsDirectBoundaryPromptInMixedAudio(candidateQuestion));
             bool isCompleteQuestion = isContinuation ||
                                       IsLikelyCompleteAutomaticQuestion(candidateQuestion) ||
                                       boundaryFallback;
@@ -2919,6 +2938,12 @@ namespace InterviewCopilot
             if (!isCompleteQuestion || isRecentDuplicate)
             {
                 NoteAutoRejected(transcript, candidateQuestion);
+                if (!isCompleteQuestion && providerConfirmedEnd && boundaryTicks != _lastAutoIgnoredBoundaryTicks)
+                {
+                    _lastAutoIgnoredBoundaryTicks = boundaryTicks;
+                    DebugWindow.Log("AUTO", $"Completed utterance not submitted ({candidateQuestion.Length} chars; " +
+                        $"{AutoTurnRules.IncompleteQuestionReason(candidateQuestion)}); transcript omitted.");
+                }
                 if (!isCompleteQuestion &&
                     !string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
                 {
@@ -2967,7 +2992,8 @@ namespace InterviewCopilot
             // you tell me") has nothing to answer yet and still waits.
             if (ending == TurnEnding.Unfinished && providerConfirmedEnd &&
                 now - _autoTranscriptChangedUtc >= TimeSpan.FromSeconds(4) &&
-                !AutoTurnRules.IsBareRequestOpener(candidateQuestion))
+                !AutoTurnRules.IsBareRequestOpener(candidateQuestion) &&
+                !AutoTurnRules.IsBareQuestionOpener(candidateQuestion))
             {
                 DebugWindow.Log("AUTO", "No punctuation, but the speaker stopped 4s ago; treating the question as finished.");
                 ending = TurnEnding.Unclear;
@@ -3025,15 +3051,23 @@ namespace InterviewCopilot
             }
             else
             {
-                requiredSilenceMs = AutoTurnNaturalSilenceMs;
                 int paceFloorMs = (int)Math.Round(_autoLongestMidTurnGapMs * 1.3);
-                if (paceFloorMs > requiredSilenceMs)
-                    requiredSilenceMs = Math.Min(paceFloorMs, AutoTurnMaxSilenceMs);
+                requiredSilenceMs = AutoTurnRules.AmbiguousWaitMs(
+                    providerConfirmedEnd, speechFinalEnded, paceFloorMs,
+                    AutoTurnMaxSilenceMs, _tailMergesThisInterview);
             }
 
             if (question.Length < AutoTurnMinimumChars ||
                 now - _autoListeningStartedUtc < TimeSpan.FromMilliseconds(AutoTurnMinimumSpeechMs) ||
                 now - _autoTranscriptChangedUtc < TimeSpan.FromMilliseconds(requiredSilenceMs))
+                return;
+
+            // In Practice, audio can start arriving before Deepgram updates the
+            // transcript. Do not send the old question during that small window.
+            // The hold is bounded to one extra second even on a noisy microphone.
+            if (AutoTurnRules.HoldForInFlightMicAudio(now, _autoTranscriptChangedUtc,
+                    Interlocked.Read(ref _lastLikelyMicActivityUtcTicks), requiredSilenceMs,
+                    CaptureMode() != "system"))
                 return;
 
             _autoTurnSubmitting = true;
@@ -3091,6 +3125,13 @@ namespace InterviewCopilot
                     Interlocked.Read(ref _lastUtteranceEndUtcTicks),
                     _autoTranscriptChangedUtc, now))
                 return;
+
+            if (!AutoTurnRules.CanLearnPaceFrom(_autoLastTranscript))
+            {
+                if (gapMs is >= 700 and <= 2_000)
+                    DebugWindow.Log("AUTO", "Opening fragment pause ignored for speaker pace.");
+                return;
+            }
 
             // Above two seconds it is no longer a pause inside a sentence: they
             // stopped, and something else (a slow packet, thinking) explains it.
@@ -3177,7 +3218,8 @@ namespace InterviewCopilot
 
             // "Can you tell me" is how a request starts, not a request. Answered as
             // soon as it paused, the rest of the question was lost.
-            if (AutoTurnRules.IsBareRequestOpener(trimmed))
+            if (AutoTurnRules.IsBareRequestOpener(trimmed) ||
+                AutoTurnRules.IsBareQuestionOpener(trimmed))
                 return TurnEnding.Unfinished;
 
             // No full stop yet, and hanging on an auxiliary or a pronoun: still
@@ -3691,6 +3733,8 @@ namespace InterviewCopilot
                     : customQuestion.Trim();
                 q = PromptBuilder.NormalizeInterviewerQuestion(rawQuestion);
                 if (string.IsNullOrWhiteSpace(q)) { isProcessing = false; UpdateMicUi(); return; }
+                bool isLocalReply = PromptBuilder.IsGreeting(q) || PromptBuilder.IsSmallTalk(q) ||
+                                    PromptBuilder.TryGetClosingResponse(q, out _);
                 bool allowClosingQuestion = PromptBuilder.IsCandidateQuestionInvitation(q);
                 if (!string.Equals(rawQuestion, q, StringComparison.Ordinal))
                     DebugWindow.Log("AI", $"Ignored opening transcript filler: {rawQuestion.Length - q.Length} chars");
@@ -3746,10 +3790,13 @@ namespace InterviewCopilot
                             ThinkingPanel.Visibility = Visibility.Collapsed;
                             long total = _turnStopwatch?.ElapsedMilliseconds ?? 0;
                             long model = answerTimer.ElapsedMilliseconds;
-                            DebugWindow.Log("SPEED",
-                                $"answer submission -> first word: {total}ms  " +
-                                $"(waiting for transcript {_waitedForWordsMs}ms, " +
-                                $"network + model {model}ms)");
+                            if (isLocalReply)
+                                DebugWindow.Log("SPEED", $"Local canned reply in {total}ms; no backend/model request.");
+                            else
+                                DebugWindow.Log("SPEED",
+                                    $"answer submission -> first word: {total}ms  " +
+                                    $"(waiting for transcript {_waitedForWordsMs}ms, " +
+                                    $"request path {model}ms)");
                         }
                         // Paint the first token immediately. After that, repaint every two
                         // tokens (or on a newline) to keep the stream smooth without
@@ -6491,6 +6538,7 @@ namespace InterviewCopilot
                 // Stream-reader tasks exit cleanly when ct is cancelled or process EOF
                 var proc = speechmaticsProcess; // capture snapshot for the lambda
                 var audioEvidence = new SustainedAudioEvidence();
+                var recentMicActivity = new RecentMicActivityEvidence();
                 _ = Task.Run(async () =>
                 {
                     try
@@ -6611,9 +6659,14 @@ namespace InterviewCopilot
                             {
                                 var amplitude = EngineMicAmplitude.Match(line);
                                 if (amplitude.Success &&
-                                    int.TryParse(amplitude.Groups[1].Value, out int level) &&
-                                    audioEvidence.Observe(DateTime.UtcNow, level))
-                                    _lastSpeechDetectedUtc = DateTime.UtcNow;
+                                    int.TryParse(amplitude.Groups[1].Value, out int level))
+                                {
+                                    DateTime detectedAt = DateTime.UtcNow;
+                                    if (recentMicActivity.Observe(detectedAt, level))
+                                        Interlocked.Exchange(ref _lastLikelyMicActivityUtcTicks, detectedAt.Ticks);
+                                    if (audioEvidence.Observe(detectedAt, level))
+                                        _lastSpeechDetectedUtc = detectedAt;
+                                }
                             }
                             else if (line.Contains("UTTERANCE END", StringComparison.Ordinal))
                                 Interlocked.Exchange(ref _lastUtteranceEndUtcTicks, DateTime.UtcNow.Ticks);
@@ -9259,10 +9312,11 @@ namespace InterviewCopilot
 
             bool closeAnyway = StealthDialog.Confirm(
                 this,
-                "Replysis is still working",
-                "Close it anyway? Any unfinished answer will stop. Completed answers are saved on this computer.",
-                "Close anyway",
-                "Keep running");
+                "Close Replysis?",
+                "Your session is still active. Closing stops listening and any answer in progress. Completed answers stay saved on this computer.",
+                "Close app",
+                "Keep running",
+                destructive: true);
 
             if (!closeAnyway)
             {

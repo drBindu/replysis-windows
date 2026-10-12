@@ -73,11 +73,33 @@ internal static class AutoQuestionTests
         }
         Check(AutoTurnRules.IsSubstantiveBoundaryUtterance("Your experience with Kubernetes"),
             "a recruiter prompt without a question word still counts at an utterance end");
+        Check(AutoTurnRules.IsDirectBoundaryPromptInMixedAudio("Your experience with Kubernetes"),
+            "an explicit candidate prompt is recovered at a Practice-mode boundary");
+        Check(AutoTurnRules.IsDirectBoundaryPromptInMixedAudio("You mentioned leading the migration"),
+            "a candidate-directed follow-up is recovered without punctuation");
+        Check(!AutoTurnRules.IsDirectBoundaryPromptInMixedAudio("The team uses Kubernetes every day"),
+            "a general statement is not promoted to a Practice-mode question");
+        Check(!AutoTurnRules.IsDirectBoundaryPromptInMixedAudio("Let me pull up my notes"),
+            "an interviewer aside is not promoted to a Practice-mode question");
+        Check(AutoTurnRules.IncompleteQuestionReason("Let me pull up my notes") == "interviewer aside",
+            "ignored boundary diagnostics identify asides without storing words");
 
         // Behavioural openers are not a whole question
         Check(AutoTurnRules.IsBareRequestOpener("Tell me about a time"), "'Tell me about a time' waits for the rest");
         Check(AutoTurnRules.IsBareRequestOpener("Can you tell me about a time when"), "'...a time when' waits for the rest");
         Check(!AutoTurnRules.IsBareRequestOpener("Tell me about a time you failed"), "a full behavioural question is not an opener");
+        foreach (var opener in new[] { "What is?", "Why did you?", "How would you?", "Can you?", "And what are?" })
+        {
+            Check(AutoTurnRules.IsBareQuestionOpener(opener), $"bare question opener waits: {opener}");
+            Check(!Q(opener), $"bare question opener is not submitted: {opener}");
+            Check(!AutoTurnRules.IsSubstantiveBoundaryUtterance(opener),
+                $"an utterance end does not submit a bare opener: {opener}");
+        }
+        foreach (var complete in new[] { "What is Java?", "Why did you choose Redis?", "How would you scale this?", "Can you introduce yourself?" })
+        {
+            Check(!AutoTurnRules.IsBareQuestionOpener(complete), $"finished question remains fast: {complete}");
+            Check(Q(complete), $"finished question is submitted: {complete}");
+        }
         Check(AutoTurnRules.EndsOnJoiningWord("My next question is"), "a question still being spoken is recognised");
 
         // What was said after the answered question, when the recogniser revised it

@@ -1682,30 +1682,25 @@ def disable_unresponsive_system_audio(reason: str):
 
 
 def mix_audio(mic_data: bytes, sys_data: bytes) -> bytes:
-    """Additively mix mic + system audio, clamped to the int16 range.
-    Additive (not averaged): when system audio is silent — the normal case in
-    mic+system mode with nothing playing — the mic stays at full volume. The old
-    ``(m + s) // 2`` halved quiet speech, often below the transcription threshold.
-    Length-safe: mixes only the overlapping span so a short/long buffer can't raise
-    struct.error and silently collapse the stream to mic-only."""
-    count = min(len(mic_data), len(sys_data)) // 2
-    if count == 0:
-        return mic_data if mic_data else sys_data
+    """Preserve both sources and their duration in Practice mode.
 
-    mic_level = _signal_level(mic_data)
-    sys_level = _signal_level(sys_data)
-    if sys_level <= 125:
+    Loudness is not speaker identity: choosing the louder source every 100 ms
+    removed syllables from the quieter speaker (or let a notification replace
+    speech). Pad a short packet rather than truncate the other source's tail.
+    Interview mode continues to use system audio only, without this mixer.
+    """
+    count = max(len(mic_data), len(sys_data)) // 2
+    if not count:
+        return b""
+    mic_data = mic_data[:count * 2].ljust(count * 2, b"\x00")
+    sys_data = sys_data[:count * 2].ljust(count * 2, b"\x00")
+    if not any(sys_data):
         return mic_data
-    if mic_level <= 125:
+    if not any(mic_data):
         return sys_data
-    if mic_level >= sys_level * 1.8:
-        return mic_data
-    if sys_level >= mic_level * 1.8:
-        return sys_data
-
     fmt = f'<{count}h'
-    mic_samples = struct.unpack_from(fmt, mic_data)
-    sys_samples = struct.unpack_from(fmt, sys_data)
+    mic_samples = struct.unpack(fmt, mic_data)
+    sys_samples = struct.unpack(fmt, sys_data)
     mixed = [max(-32768, min(32767, int((m * 0.65) + (s * 0.65))))
              for m, s in zip(mic_samples, sys_samples)]
     return struct.pack(fmt, *mixed)
@@ -2209,7 +2204,10 @@ class MixedStream:
         if paused:
             try:
                 if mic_stream:
-                    _read_stream_timeout(mic_stream, num_frames, 0.5, "MIC-drain")
+                    # Read the same native-duration packet while muted and live.
+                    # A pending read survives an unmute; using 1600 frames on a
+                    # 48 kHz fallback mic returned only 33 ms as the first 100 ms.
+                    _read_stream_timeout(mic_stream, _mic_chunk_frames, 0.5, "MIC-drain")
                 if sys_stream:
                     # A WASAPI loopback may legitimately have no packet until
                     # the renderer plays sound. Blocking read() while muted made
@@ -2670,12 +2668,22 @@ def _deepgram_eligible() -> bool:
 
 
 def _deepgram_keyterms():
-    terms, seen = [], set()
-    for term in _DEEPGRAM_BUILTIN_TERMS + [v["content"] for v in _load_extra_vocab()]:
+    # Reserve space for this candidate. Previously the generic dictionary used
+    # most of the 100 slots before their company/projects were considered.
+    custom = [v["content"] for v in _load_extra_vocab()]
+    terms, seen, byte_budget = [], set(), 480
+    for term in custom[:50] + _DEEPGRAM_BUILTIN_TERMS + custom[50:]:
+        term = term.strip()
         key = term.lower()
-        if key in seen:
+        if not term or key in seen:
             continue
         seen.add(key)
+        # A conservative UTF-8 byte bound also bounds byte-level token counts.
+        # Counting terms alone cannot enforce the provider's 500-token ceiling.
+        cost = len(term.encode("utf-8")) + 1
+        if cost > byte_budget:
+            continue
+        byte_budget -= cost
         terms.append(term)
         if len(terms) >= DEEPGRAM_MAX_KEYTERMS:
             break
@@ -2691,6 +2699,10 @@ def _deepgram_url() -> str:
         ("channels", "1"),
         ("interim_results", "true"),
         ("smart_format", "true"),
+        # Do not hold a spoken number/date for Smart Format's entity-completion
+        # wait (up to three seconds). This can reduce number formatting, not
+        # acoustic recognition; partials and normal endpointing still apply.
+        ("no_delay", "true"),
         ("punctuate", "true"),
         # Finalise after 200 ms of silence rather than the 10 ms default, so a
         # short pause mid-sentence does not split a question into two finals.
@@ -2909,8 +2921,8 @@ async def _run_deepgram_loop(holder) -> str:
                             transcript["partial"] = text
                             label = "PARTIAL"
                         display = f"{transcript['confirmed']} {transcript['partial']}".strip()
-                        print(f">>> {label} received ({len(display)} chars)", flush=True)
                         _write_latest(display)
+                        print(f">>> {label} received ({len(display)} chars)", flush=True)
                         # Deepgram's own call that the speaker stopped (300 ms of silence,
                         # the endpointing setting above). It arrives about a second before
                         # UtteranceEnd, and Auto answering on the later signal was most of

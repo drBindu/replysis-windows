@@ -2,6 +2,8 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Markup;
+using System.Windows.Input;
 
 namespace InterviewCopilot
 {
@@ -9,7 +11,7 @@ namespace InterviewCopilot
     internal static class StealthDialog
     {
         internal static bool Confirm(Window? owner, string title, string message,
-                                     string confirm = "Continue", string cancel = "Cancel")
+                                     string confirm = "Continue", string cancel = "Cancel", bool destructive = false)
         {
             var dialog = Create(owner, title, message);
             bool accepted = false;
@@ -19,8 +21,12 @@ namespace InterviewCopilot
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 20, 0, 0)
             };
-            buttons.Children.Add(MakeButton(cancel, false, (_, _) => dialog.Close()));
-            buttons.Children.Add(MakeButton(confirm, true, (_, _) => { accepted = true; dialog.Close(); }));
+            var cancelButton = MakeButton(cancel, false, (_, _) => dialog.Close());
+            cancelButton.IsCancel = true;
+            cancelButton.IsDefault = true;
+            buttons.Children.Add(cancelButton);
+            buttons.Children.Add(MakeButton(confirm, true, (_, _) => { accepted = true; dialog.Close(); }, destructive));
+            dialog.Loaded += (_, _) => cancelButton.Focus();
             PanelOf(dialog).Children.Add(buttons);
             WindowStealth.SetStealthMode(dialog, SettingsWindow.GetStealthMode());
             dialog.ShowDialog();
@@ -36,7 +42,10 @@ namespace InterviewCopilot
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 20, 0, 0)
             };
-            buttons.Children.Add(MakeButton("OK", true, (_, _) => dialog.Close()));
+            var okButton = MakeButton("OK", true, (_, _) => dialog.Close());
+            okButton.IsDefault = true;
+            okButton.IsCancel = true;
+            buttons.Children.Add(okButton);
             PanelOf(dialog).Children.Add(buttons);
             WindowStealth.SetStealthMode(dialog, SettingsWindow.GetStealthMode());
             dialog.ShowDialog();
@@ -52,14 +61,25 @@ namespace InterviewCopilot
         internal static Window Create(Window? owner, string title, string message)
         {
             var panel = new StackPanel();
-            panel.Children.Add(new TextBlock
+            var heading = new StackPanel();
+            heading.Children.Add(new TextBlock
+            {
+                Text = "REPLYSIS",
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(52, 224, 138)),
+                Margin = new Thickness(0, 0, 0, 14)
+            });
+            heading.Children.Add(new TextBlock
             {
                 Text = title,
                 FontFamily = new FontFamily("Segoe UI Variable Display"),
                 FontSize = 19,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(241, 245, 249))
+                Foreground = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
+                TextWrapping = TextWrapping.Wrap
             });
+            panel.Children.Add(heading);
             panel.Children.Add(new TextBlock
             {
                 Text = message,
@@ -68,7 +88,7 @@ namespace InterviewCopilot
                 FontFamily = new FontFamily("Segoe UI Variable Text"),
                 FontSize = 13,
                 LineHeight = 20,
-                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184))
+                Foreground = new SolidColorBrush(Color.FromRgb(180, 192, 209))
             });
 
             return new Window
@@ -80,15 +100,17 @@ namespace InterviewCopilot
                 MaxHeight = 520,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStyle = WindowStyle.None,
-                AllowsTransparency = false,
+                AllowsTransparency = true,
                 ShowInTaskbar = false,
                 Topmost = owner?.Topmost == true,
-                Background = new SolidColorBrush(Color.FromRgb(13, 17, 23)),
+                Background = Brushes.Transparent,
                 WindowStartupLocation = owner?.IsVisible == true
                     ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
                 Content = new Border
                 {
                     Padding = new Thickness(24),
+                    CornerRadius = new CornerRadius(16),
+                    Background = new SolidColorBrush(Color.FromRgb(13, 20, 32)),
                     BorderThickness = new Thickness(1),
                     BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
                     Child = panel
@@ -96,13 +118,13 @@ namespace InterviewCopilot
             };
         }
 
-        private static Button MakeButton(string text, bool primary, RoutedEventHandler click)
+        internal static Button MakeButton(string text, bool primary, RoutedEventHandler click, bool destructive = false)
         {
             var button = new Button
             {
                 Content = text,
                 MinWidth = 96,
-                Height = 36,
+                Height = 40,
                 Margin = new Thickness(8, 0, 0, 0),
                 Padding = new Thickness(16, 0, 16, 0),
                 FontFamily = new FontFamily("Segoe UI Variable Text"),
@@ -110,11 +132,38 @@ namespace InterviewCopilot
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
                 Background = new SolidColorBrush(primary
-                    ? Color.FromRgb(30, 58, 95) : Color.FromRgb(24, 29, 38)),
+                    ? (destructive ? Color.FromRgb(83, 36, 45) : Color.FromRgb(23, 91, 64))
+                    : Color.FromRgb(29, 39, 54)),
                 BorderBrush = new SolidColorBrush(primary
-                    ? Color.FromRgb(51, 93, 143) : Color.FromRgb(55, 65, 81)),
-                BorderThickness = new Thickness(1)
+                    ? (destructive ? Color.FromRgb(162, 76, 88) : Color.FromRgb(42, 148, 100))
+                    : Color.FromRgb(63, 79, 100)),
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center
             };
+            // Own every interaction state: the OS theme otherwise paints a
+            // pale blue hover background under our white text.
+            button.Template = (ControlTemplate)XamlReader.Parse("""
+                <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="Button">
+                    <Border x:Name="Surface" CornerRadius="8" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid>
+                            <Border x:Name="Hover" Background="#FFFFFF" Opacity="0" CornerRadius="8"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Hover" Property="Opacity" Value="0.08"/></Trigger>
+                        <Trigger Property="IsPressed" Value="True"><Setter TargetName="Hover" Property="Opacity" Value="0.14"/></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#84E7B6"/></Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value="0.45"/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+                """);
             button.Click += click;
             return button;
         }

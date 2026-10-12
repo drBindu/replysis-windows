@@ -23,6 +23,25 @@ namespace InterviewCopilot
         }
     }
 
+    // A much shorter signal than the deafness detector: two microphone peaks
+    // separated in time suggest sound is currently reaching the recognizer.
+    // It is only used to briefly defer an Auto submission, never to label the
+    // sound as speech or to trigger an answer by itself.
+    internal sealed class RecentMicActivityEvidence
+    {
+        private DateTime previousPeak = DateTime.MinValue;
+
+        internal bool Observe(DateTime now, int amplitude)
+        {
+            if (amplitude < 600) return false;
+            bool sustained = previousPeak != DateTime.MinValue &&
+                now - previousPeak >= TimeSpan.FromMilliseconds(70) &&
+                now - previousPeak <= TimeSpan.FromMilliseconds(400);
+            previousPeak = now;
+            return sustained;
+        }
+    }
+
     /// <summary>
     /// Whether the speech engine has gone deaf while still reporting itself
     /// healthy.
