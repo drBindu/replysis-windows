@@ -2772,6 +2772,10 @@ _DEEPGRAM_REFUSED = {401, 402, 403, 429}
 # a few seconds rather than a minute of "connecting".
 _DEEPGRAM_MAX_FAILURES = 2
 
+# How long the first Deepgram connection is given to open, and how much more each later one gets. Four seconds is already
+# many times what a healthy handshake takes (under a second), and waiting longer only delays the retry that usually works.
+_DEEPGRAM_OPEN_SECONDS = 4
+
 # A session shorter than this counts as a failed connection. Without it a server
 # that accepts and then closes at once was reconnected in a tight loop forever,
 # because a successful handshake reset the failure count every time.
@@ -2849,7 +2853,8 @@ async def _run_deepgram_loop(holder) -> str:
         try:
             print(">>> [DEEPGRAM] Connecting...", flush=True)
             async with websockets.connect(url, additional_headers=headers, max_size=None,
-                                          open_timeout=8, ping_interval=20) as ws:
+                                          open_timeout=_DEEPGRAM_OPEN_SECONDS + 2 * failures,
+                                          ping_interval=20) as ws:
                 # A reconnect starts from what is being said now, not from
                 # everything recorded while the connection was gone.
                 if sessions_opened:
@@ -2982,6 +2987,13 @@ async def _run_deepgram_loop(holder) -> str:
                 else:
                     print(f">>> [DEEPGRAM] Refused with {status}; Speechmatics takes over.", flush=True)
                 return "fallback"
+            # A first attempt that only timed out is tried again at once. The network probe below can take eight seconds
+            # on its own, and on a laptop's first start of the day that was most of a twenty second wait with nothing
+            # listening (2026-10-12, a real log). The probe still runs after a second failure.
+            if failures == 0 and not status and _looks_like_no_network(e):
+                failures += 1
+                print(">>> [DEEPGRAM] First attempt did not connect in time; trying again at once.", flush=True)
+                continue
             # No network at all is not a broken provider. A laptop waking from sleep failed
             # twice in a row on DNS, was handed to the slower fallback for the rest of the
             # session, and the fallback failed the same way (2026-09-29). Wait for the network

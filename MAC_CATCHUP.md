@@ -203,6 +203,16 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     closing and the downloader has no read timeout. `UpdateDownloadGuard` watches the download's progress, cancels an attempt that has not
     moved for 2 minutes, retries up to 3 times, and then reports a failure so the next launch checks again. **Check the Mac: does the
     Sparkle download have a stall timeout, and what does the person see if it never finishes?** Test: `tests/CleanerTests/UpdateDownloadGuardTests.cs`.
+38. **Speech must be ready within seconds of launch, not twenty (found 2026-10-12 in a real log from another Windows laptop).** The first
+    Deepgram connection after the app opened timed out after 8 s, then a network probe of up to 8 s ran before the retry, so nothing was
+    listening for about 20 s (`[DEEPGRAM] error: timed out during opening handshake` at +8 s, `Connecting...` again at +19 s, online 0.8 s
+    later). In the shared `speechmatics_engine.py`: the first attempt is given `_DEEPGRAM_OPEN_SECONDS` (4 s, +2 s per failure) and a first
+    timeout is retried at once with no probe; the probe only runs after a second failure. **Pull the file, rebuild the Mac engine, and check
+    a cold start on a slow network: the line `STATUS: ONLINE` should come within about 5 s of `Connecting...`.** Test: `tests/test_engine_contract.py`.
+39. **A screen read that finds nothing to answer is no longer charged (server, deployed 2026-10-12; applies to every app).** The screen prompt
+    makes the model open with `NOTHING ASKED` when the screen holds no question (the empty desktop, "Program Manager"). That read took 5 s
+    and cost an answer. `InterviewController` now sees the marker while streaming and refunds. **Check the Mac sends the same prompt and
+    marker; if its prompt differs the refund never triggers.**
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
