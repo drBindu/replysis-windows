@@ -28,7 +28,8 @@ CLASSES = {"SendStalled", "DeadConnection"}
 CONSTS = {"_MULAW_TABLE", "_SLOW_LINE_FLAG", "_SLOW_LINE_FRESH_SECONDS", "_DEEPGRAM_REFUSED", "_DEEPGRAM_MAX_FAILURES",
           "_DEEPGRAM_OPEN_SECONDS", "_DEEPGRAM_HEALTHY_SECONDS", "_DEEPGRAM_SILENT_SECONDS", "_DEEPGRAM_LINE_PROBLEMS_HEARD",
           "_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD", "_DEEPGRAM_REPLAY_CHUNKS", "_DEEPGRAM_REACH_EVERY",
-          "_DEEPGRAM_REACH_UP_TO", "_DEEPGRAM_PING_EVERY", "_DEEPGRAM_PING_ALLOWED"}
+          "_DEEPGRAM_REACH_UP_TO", "_DEEPGRAM_PING_EVERY", "_DEEPGRAM_PING_ALLOWED", "_DEEPGRAM_FIRST_ANSWER_SECONDS",
+          "_DEEPGRAM_FIRST_ANSWER_WINDOW"}
 
 
 def engine_scope(app, url, buffered_class, printed, deepgram_only=False):
@@ -152,6 +153,8 @@ class LineResilience(unittest.TestCase):
         self.assertEqual(result, "fallback")
         self.assertIn("3 line problems in a row; Speechmatics takes over", text)
         self.assertEqual(seen["connections"], 3)
+        gap = seen["started"][1] - seen["started"][0]
+        self.assertLess(gap, 3.9, f"a connection that gives no first answer is replaced in about 2.5 s, not 4; took {gap:.1f}s")
 
     def test_deepgram_only_never_hands_over(self):
         # The same silent provider that makes the normal engine give up after three, run as the Windows app runs it.

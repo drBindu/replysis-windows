@@ -2853,6 +2853,13 @@ class DeadConnection(ConnectionError):
 # above only notices once the socket buffers are full: in a real log that was 14 s after the connection died.
 _DEEPGRAM_SILENT_SECONDS = 4.0
 
+# Right after audio starts flowing again (Start, or unmuting after a pause) the first answer has to come sooner: Deepgram's first
+# message arrives about a second after the first audio, so two and a half seconds of nothing means the connection that sat idle
+# has died while nobody was speaking, which a Wi-Fi that drops flows every half minute does constantly (a real log, 2026-10-13:
+# connected at 05:32:17, dead by 05:32:30, the first question lost). Replaced at once, the question is re-sent.
+_DEEPGRAM_FIRST_ANSWER_SECONDS = 2.5
+_DEEPGRAM_FIRST_ANSWER_WINDOW = 6.0
+
 # Consecutive line problems (stalls, silence, resets, handshake timeouts) before Deepgram is given up on. A provider that has
 # answered from this machine is not blocked, so a dropped line is retried; one that has never answered may be blocked or behind
 # a proxy that cuts websockets, so Speechmatics gets it sooner.
@@ -3011,7 +3018,11 @@ async def _run_deepgram_loop(holder) -> str:
                         if now - audio["last"] > 1.5:
                             continue
                         waited = now - max(rx["last"], audio["since"])
-                        if waited > _DEEPGRAM_SILENT_SECONDS:
+                        # In the first seconds of a stretch of audio nothing has come back yet, and that is the moment an idle
+                        # connection that died is found out: expect the first message quickly.
+                        fresh = now - audio["since"] < _DEEPGRAM_FIRST_ANSWER_WINDOW and rx["last"] < audio["since"]
+                        limit = _DEEPGRAM_FIRST_ANSWER_SECONDS if fresh else _DEEPGRAM_SILENT_SECONDS
+                        if waited > limit:
                             raise DeadConnection(f"nothing came back from Deepgram for {waited:.0f}s while audio was going out")
 
                 async def receiver():

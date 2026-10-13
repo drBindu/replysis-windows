@@ -137,6 +137,8 @@ check("the network probe only runs after a second line problem",
 check("a dead connection is noticed within four seconds, not when the socket buffers fill",
       "_DEEPGRAM_SILENT_SECONDS = 4.0" in SOURCE and "async def watchdog():" in SOURCE and "class DeadConnection" in SOURCE
       and "asyncio.create_task(watchdog())" in SOURCE)
+check("an idle connection that died is found out within two and a half seconds of the first audio",
+      "_DEEPGRAM_FIRST_ANSWER_SECONDS = 2.5" in SOURCE and "fresh = now - audio[\"since\"]" in SOURCE)
 check("a dropped line is retried on Deepgram instead of handing the session to the slower recogniser",
       "_DEEPGRAM_LINE_PROBLEMS_HEARD = 8" in SOURCE and "_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD = 3" in SOURCE
       and "staying on Deepgram and reconnecting" in SOURCE and "def _is_line_problem" in SOURCE)
