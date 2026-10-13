@@ -128,11 +128,29 @@ check("a weak line sends the voice as mu-law, a good line is unchanged",
 check("the buffer keeps 16 bit PCM and only what goes up the line is converted",
       "ws.send(encode(chunk) if encode else chunk)" in SOURCE and "buffered.push_front(chunk)" in SOURCE)
 check("the first Deepgram connection is given four seconds and retried at once",
-      "_DEEPGRAM_OPEN_SECONDS = 4" in SOURCE and "open_timeout=_DEEPGRAM_OPEN_SECONDS + 2 * failures" in SOURCE
+      "_DEEPGRAM_OPEN_SECONDS = 4" in SOURCE
+      and "open_timeout=_DEEPGRAM_OPEN_SECONDS + 2 * (failures + min(line_problems, 2))" in SOURCE
       and "First attempt did not connect in time; trying again at once." in SOURCE)
-check("the network probe only runs after a second failure",
-      SOURCE.index("if failures == 0 and not status and _looks_like_no_network(e):")
-      < SOURCE.index("if _looks_like_no_network(e) and await loop.run_in_executor(None, _network_is_down):"))
+check("the network probe only runs after a second line problem",
+      "if line_problems >= 1 and _looks_like_no_network(e) and await loop.run_in_executor(None, _network_is_down):" in SOURCE
+      and SOURCE.index("if line_problems >= 1 and _looks_like_no_network(e)") < SOURCE.index("line_problems += 1"))
+check("a dead connection is noticed within four seconds, not when the socket buffers fill",
+      "_DEEPGRAM_SILENT_SECONDS = 4.0" in SOURCE and "async def watchdog():" in SOURCE and "class DeadConnection" in SOURCE
+      and "asyncio.create_task(watchdog())" in SOURCE)
+check("a dropped line is retried on Deepgram instead of handing the session to the slower recogniser",
+      "_DEEPGRAM_LINE_PROBLEMS_HEARD = 8" in SOURCE and "_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD = 3" in SOURCE
+      and "staying on Deepgram and reconnecting" in SOURCE and "def _is_line_problem" in SOURCE)
+check("the Windows app can keep Deepgram as the only recogniser for English",
+      '"--deepgram-only"' in SOURCE and "def _deepgram_only" in SOURCE and SOURCE.count("not _deepgram_only()") >= 3 and "if _deepgram_only():" in SOURCE
+      and "waiting for a new token or credit, then trying again" in SOURCE)
+check("recovery waits for the line, not a timer, and idle connections are pinged",
+      "def _deepgram_host_reachable" in SOURCE and "_deepgram_host_reachable)" in SOURCE
+      and "ping_interval=_DEEPGRAM_PING_EVERY, ping_timeout=_DEEPGRAM_PING_ALLOWED" in SOURCE)
+check("audio that went into a dead connection is put back for the next one",
+      "buffered.push_front(chunk)" in SOURCE and "unanswered = [chunk for (when, chunk) in sent_log" in SOURCE)
+check("the smaller voice format is used for fifteen minutes after any line problem",
+      "line_trouble_until = time.monotonic() + _SLOW_LINE_FRESH_SECONDS" in SOURCE
+      and "_slow_line_requested() or time.monotonic() < line_trouble_until" in SOURCE)
 check("a stalled upload is noticed in three seconds and the audio kept",
       "_send_with_stall_guard(ws, chunk, buffered, encode=send_encoder)" in SOURCE and "buffered.push_front(chunk)" in SOURCE)
 

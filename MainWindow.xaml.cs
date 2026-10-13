@@ -6497,7 +6497,10 @@ namespace InterviewCopilot
                     modeArg += $" --sysdevice {testSysIndex}";
 #endif
                 string langArg   = $" --language {SettingsWindow.GetTranscriptLanguage()}";
-                speechmaticsProcess.StartInfo.Arguments = $"{scriptArg}{deviceArg}{modeArg}{langArg}";
+                // Deepgram is the only recogniser for English: if its connection fails the engine retries it, it never hands
+                // the session to Speechmatics (slower, and the owner does not want it: 2026-10-13). Other languages are
+                // unaffected, because Deepgram is English only here.
+                speechmaticsProcess.StartInfo.Arguments = $"{scriptArg}{deviceArg}{modeArg}{langArg} --deepgram-only";
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SM_API_KEY"] = smKey;
                 // Deepgram goes first for English when the server issued a token. The
                 // engine hands over to Speechmatics on its own if Deepgram refuses or

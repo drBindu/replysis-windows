@@ -751,6 +751,11 @@ parser.add_argument("--utterance-silence", type=float, default=0.8,
          "utterance, printed as '>>> UTTERANCE END'. Set to 0 to disable. The "
          "Mac client uses this to decide a turn is over; Windows currently "
          "classifies turn-end from the transcript text and ignores the line.")
+parser.add_argument("--deepgram-only", dest="deepgram_only", action="store_true",
+                    help="Deepgram is the only recogniser for English: a failing connection is retried, never handed to "
+                         "Speechmatics. The Windows app passes this. Without it the engine behaves as it always did, handing "
+                         "over after repeated failures, which is what the Mac app relies on. Other languages are unaffected, "
+                         "because Deepgram is English only here.")
 parser.add_argument("--warmup",     action="store_true",
                     help="Load every module this engine uses and exit. The app runs this once at launch, in the "
                          "background, so that the first real start on a new computer does not pay for Windows "
@@ -2667,6 +2672,11 @@ def _deepgram_eligible() -> bool:
     return bool(_DG_TOKEN) and args.language in DEEPGRAM_LANGUAGES
 
 
+def _deepgram_only() -> bool:
+    """True when the app asked for Deepgram and nothing else: failures are retried, never handed to Speechmatics."""
+    return bool(getattr(args, "deepgram_only", False))
+
+
 def _deepgram_keyterms():
     # Reserve space for this candidate. Previously the generic dictionary used
     # most of the 100 slots before their company/projects were considered.
@@ -2834,6 +2844,51 @@ class SendStalled(ConnectionError):
     """An audio send did not complete in time: the upload is stalled."""
 
 
+class DeadConnection(ConnectionError):
+    """Audio is going out and nothing at all has come back: the connection is open here and gone there."""
+
+
+# How long Deepgram may say nothing while audio is being sent before the connection is called dead. It answers about once a
+# second even through pure silence (measured 2026-10-13: the longest gap in ten seconds of silence was 1.08 s). The send guard
+# above only notices once the socket buffers are full: in a real log that was 14 s after the connection died.
+_DEEPGRAM_SILENT_SECONDS = 4.0
+
+# Consecutive line problems (stalls, silence, resets, handshake timeouts) before Deepgram is given up on. A provider that has
+# answered from this machine is not blocked, so a dropped line is retried; one that has never answered may be blocked or behind
+# a proxy that cuts websockets, so Speechmatics gets it sooner.
+_DEEPGRAM_LINE_PROBLEMS_HEARD = 8
+_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD = 3
+
+# How much of the audio sent into a dead connection is put back for the next one.
+_DEEPGRAM_REPLAY_CHUNKS = 60
+
+# While the line is down the engine does not sit on a timer: it asks the host for a TCP connection this often, for at most this
+# long, and goes the moment one is answered. A handshake is only attempted once the host can be reached.
+_DEEPGRAM_REACH_EVERY = 0.5
+_DEEPGRAM_REACH_UP_TO = 12.0
+
+# A connection that died while nobody was speaking is replaced before they do. Pings go out this often and the answer is
+# allowed this long; both are well inside the ten seconds Deepgram itself waits.
+_DEEPGRAM_PING_EVERY = 5
+_DEEPGRAM_PING_ALLOWED = 6
+
+
+def _deepgram_host_reachable(timeout: float = 1.5) -> bool:
+    """True when a TCP connection to the Deepgram host opens: the line is back, whatever else is wrong."""
+    try:
+        socket.create_connection(("api.deepgram.com", 443), timeout=timeout).close()
+        return True
+    except OSError:
+        return False
+
+
+def _is_line_problem(exc) -> bool:
+    """A failure of the connection to the provider rather than of the provider: it dropped, stalled, went quiet or timed out."""
+    if isinstance(exc, ConnectionError) or _looks_like_no_network(exc):
+        return True
+    return type(exc).__name__ in ("ConnectionClosedError", "ConnectionClosed", "InvalidMessage", "EOFError")
+
+
 async def _send_with_stall_guard(ws, chunk, buffered, timeout=3.0, encode=None):
     """Send one audio chunk, or put it back and raise if the upload has stalled.
 
@@ -2874,12 +2929,16 @@ async def _run_deepgram_loop(holder) -> str:
 
     print("", flush=True)
     print("===============================================", flush=True)
-    print("   DEEPGRAM ENGINE: READY  (nova-3, Speechmatics as fallback)", flush=True)
+    print("   DEEPGRAM ENGINE: READY  (nova-3)" if _deepgram_only()
+          else "   DEEPGRAM ENGINE: READY  (nova-3, Speechmatics as fallback)", flush=True)
     print("===============================================", flush=True)
 
     failures = 0
     reconnect_delay = 1
     sessions_opened = 0   # counts across reconnects, so only the first keeps its prebuffer
+    ever_heard = False    # Deepgram has answered at least once from this machine, so it is not blocked here
+    line_problems = 0     # consecutive line problems, cleared by a session that was heard from and lasted
+    line_trouble_until = 0.0   # the smaller voice format is used until then, whatever the app's own test said
 
     while True:
         if os.path.exists(SHUTDOWN_FLAG):
@@ -2892,6 +2951,8 @@ async def _run_deepgram_loop(holder) -> str:
 
         online = False
         session_started = 0.0
+        rx = {"last": time.monotonic(), "heard": False}   # when Deepgram last said anything on this connection
+        sent_log = deque(maxlen=_DEEPGRAM_REPLAY_CHUNKS)   # (when, chunk) of the audio sent on this connection
         # Created once and kept across reconnects, so audio recorded while the connection was stalling
         # or being replaced is still there for the next one. (It used to be created here, per attempt,
         # and closed in the finally below: everything unsent died with each connection.)
@@ -2900,15 +2961,15 @@ async def _run_deepgram_loop(holder) -> str:
             holder["buffered"] = buffered
         try:
             # Decided at each connection, so a line that got slow (or recovered) is followed at the next one.
-            slow_line = _slow_line_requested()
+            slow_line = _slow_line_requested() or time.monotonic() < line_trouble_until
             url = _deepgram_url(slow_line)
             send_encoder = _pcm16_to_mulaw if slow_line else None
             if slow_line:
                 print(">>> [DEEPGRAM] Weak connection: sending the voice in the smaller format.", flush=True)
             print(">>> [DEEPGRAM] Connecting...", flush=True)
             async with websockets.connect(url, additional_headers=headers, max_size=None,
-                                          open_timeout=_DEEPGRAM_OPEN_SECONDS + 2 * failures,
-                                          ping_interval=20) as ws:
+                                          open_timeout=_DEEPGRAM_OPEN_SECONDS + 2 * (failures + min(line_problems, 2)),
+                                          ping_interval=_DEEPGRAM_PING_EVERY, ping_timeout=_DEEPGRAM_PING_ALLOWED) as ws:
                 # A reconnect starts from what is being said now, not from
                 # everything recorded while the connection was gone.
                 if sessions_opened:
@@ -2917,7 +2978,9 @@ async def _run_deepgram_loop(holder) -> str:
                 print(">>> STATUS: ONLINE ✓", flush=True)
                 online = True
                 session_started = time.monotonic()
+                rx["last"] = session_started
                 transcript = {"confirmed": "", "partial": ""}
+                audio = {"last": 0.0, "since": 0.0}   # when audio last went out, and when this stretch of audio began
 
                 async def sender():
                     last_sent = time.monotonic()
@@ -2927,6 +2990,10 @@ async def _run_deepgram_loop(holder) -> str:
                         if chunk and not os.path.exists(PAUSE_FLAG):
                             await _send_with_stall_guard(ws, chunk, buffered, encode=send_encoder)
                             last_sent = now
+                            if now - audio["last"] > 1.5:
+                                audio["since"] = now
+                            audio["last"] = now
+                            sent_log.append((now, chunk))
                         elif now - last_sent >= 4.0:
                             # Muted. Deepgram closes a session after ten seconds
                             # without data, and bills audio rather than connection
@@ -2935,8 +3002,22 @@ async def _run_deepgram_loop(holder) -> str:
                             await ws.send(json.dumps({"type": "KeepAlive"}))
                             last_sent = now
 
+                async def watchdog():
+                    """Audio is going out and nothing is coming back: the connection is dead. Nothing is expected while muted,
+                    because only KeepAlive goes out then and Deepgram does not answer that."""
+                    while True:
+                        await asyncio.sleep(0.5)
+                        now = time.monotonic()
+                        if now - audio["last"] > 1.5:
+                            continue
+                        waited = now - max(rx["last"], audio["since"])
+                        if waited > _DEEPGRAM_SILENT_SECONDS:
+                            raise DeadConnection(f"nothing came back from Deepgram for {waited:.0f}s while audio was going out")
+
                 async def receiver():
                     async for raw in ws:
+                        rx["last"] = time.monotonic()
+                        rx["heard"] = True
                         if isinstance(raw, bytes):
                             continue
                         try:
@@ -2990,7 +3071,7 @@ async def _run_deepgram_loop(holder) -> str:
                         if label == "FINAL" and msg.get("speech_final"):
                             print(">>> SPEECH FINAL", flush=True)
 
-                tasks = [asyncio.create_task(sender()), asyncio.create_task(receiver())]
+                tasks = [asyncio.create_task(sender()), asyncio.create_task(receiver()), asyncio.create_task(watchdog())]
                 done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                 for task in pending:
                     task.cancel()
@@ -3003,9 +3084,12 @@ async def _run_deepgram_loop(holder) -> str:
                     pass
             print(">>> STATUS: OFFLINE", flush=True)
             lasted = time.monotonic() - session_started
+            ever_heard = ever_heard or rx["heard"]
             if lasted >= _DEEPGRAM_HEALTHY_SECONDS:
                 failures = 0
                 reconnect_delay = 1
+                if rx["heard"]:
+                    line_problems = 0
                 print(">>> [DEEPGRAM] Session closed by the server; reconnecting.", flush=True)
             else:
                 # Closed almost as soon as it opened: out of credit mid-handshake,
@@ -3014,9 +3098,11 @@ async def _run_deepgram_loop(holder) -> str:
                 failures += 1
                 print(f">>> [DEEPGRAM] Session closed after {lasted:.1f}s.", flush=True)
                 if failures >= _DEEPGRAM_MAX_FAILURES:
-                    print(f">>> [DEEPGRAM] {failures} sessions closed at once; Speechmatics takes over.",
-                          flush=True)
-                    return "fallback"
+                    if not _deepgram_only():
+                        print(f">>> [DEEPGRAM] {failures} sessions closed at once; Speechmatics takes over.",
+                              flush=True)
+                        return "fallback"
+                    print(f">>> [DEEPGRAM] {failures} sessions closed at once; trying again.", flush=True)
                 await asyncio.sleep(reconnect_delay)
                 reconnect_delay = min(reconnect_delay * 2, 8)
 
@@ -3025,14 +3111,24 @@ async def _run_deepgram_loop(holder) -> str:
                 print(">>> STATUS: OFFLINE", flush=True)
             if os.path.exists(SHUTDOWN_FLAG):
                 continue   # the top of the loop exits cleanly
+            ever_heard = ever_heard or rx["heard"]
             # A long healthy session that finally dropped is not a failed connection.
             if online and time.monotonic() - session_started >= _DEEPGRAM_HEALTHY_SECONDS:
                 failures = 0
                 reconnect_delay = 1
+                if rx["heard"]:
+                    line_problems = 0
 
             status = _http_status(e)
             print(f">>> [DEEPGRAM] {'HTTP ' + str(status) if status else 'error'}: {str(e)[:200]}", flush=True)
             if status in _DEEPGRAM_REFUSED:
+                if _deepgram_only():
+                    # Nothing to hand over to. The app renews an expired token when it sees the 401 line below and
+                    # restarts speech; until then this waits and asks again. Same literal wording as ever.
+                    print(f">>> [DEEPGRAM] Refused with {status}; waiting for a new token or credit, then trying again.",
+                          flush=True)
+                    await asyncio.sleep(15)
+                    continue
                 # Keep the 401 wording literal: the desktop client watches this exact
                 # line to renew an expired temporary token instead of leaving speech
                 # offline for the rest of the interview.
@@ -3041,27 +3137,57 @@ async def _run_deepgram_loop(holder) -> str:
                 else:
                     print(f">>> [DEEPGRAM] Refused with {status}; Speechmatics takes over.", flush=True)
                 return "fallback"
-            # A first attempt that only timed out is tried again at once. The network probe below can take eight seconds
-            # on its own, and on a laptop's first start of the day that was most of a twenty second wait with nothing
-            # listening (2026-10-12, a real log). The probe still runs after a second failure.
-            if failures == 0 and not status and _looks_like_no_network(e):
-                failures += 1
-                print(">>> [DEEPGRAM] First attempt did not connect in time; trying again at once.", flush=True)
+            # The line, not the provider: it stalled, went quiet, reset, or a handshake timed out. Deepgram stays the recogniser
+            # unless this keeps happening. Falling back after two (the earlier rule) put a person on the slower provider for the
+            # rest of the session because of ten seconds of bad line, which is exactly when speed matters most (2026-10-13).
+            if not status and _is_line_problem(e):
+                line_trouble_until = time.monotonic() + _SLOW_LINE_FRESH_SECONDS
+                if sent_log:
+                    # What went into the dead connection was never answered. Put back what Deepgram had not yet answered
+                    # (a second of margin, because its answers trail the audio), oldest first, so a question asked in that
+                    # window is heard on the next connection.
+                    unanswered = [chunk for (when, chunk) in sent_log if when >= rx["last"] - 1.0]
+                    for chunk in reversed(unanswered):
+                        buffered.push_front(chunk)
+                    if unanswered:
+                        print(f">>> [DEEPGRAM] Putting back {len(unanswered) * 100}ms of audio that was never answered.", flush=True)
+                # The first one is tried again at once. The network probe can take eight seconds on its own, and on a laptop's
+                # first start of the day that was most of a twenty second wait with nothing listening (2026-10-12, a real
+                # log). From the second one on, no network at all is not a broken provider: a laptop waking from sleep failed
+                # twice on DNS, was handed to the slower fallback for the rest of the session, and the fallback failed the
+                # same way (2026-09-29). Wait for the network and keep trying Deepgram; nothing is counted against it.
+                if line_problems >= 1 and _looks_like_no_network(e) and await loop.run_in_executor(None, _network_is_down):
+                    print(">>> [DEEPGRAM] No network right now; waiting for it to come back.", flush=True)
+                    await asyncio.sleep(min(reconnect_delay, 5))
+                    reconnect_delay = min(reconnect_delay * 2, 5)
+                    continue
+                line_problems += 1
+                limit = _DEEPGRAM_LINE_PROBLEMS_HEARD if ever_heard else _DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD
+                if line_problems >= limit and not _deepgram_only():
+                    print(f">>> [DEEPGRAM] {line_problems} line problems in a row; Speechmatics takes over.", flush=True)
+                    return "fallback"
+                if line_problems == 1 and not ever_heard and _looks_like_no_network(e):
+                    print(">>> [DEEPGRAM] First attempt did not connect in time; trying again at once.", flush=True)
+                else:
+                    print(">>> [DEEPGRAM] The connection dropped; staying on Deepgram and reconnecting.", flush=True)
+                if line_problems > 1:
+                    # Wait for the line, not for a timer: go the moment the host can be reached.
+                    waited_until = time.monotonic() + _DEEPGRAM_REACH_UP_TO
+                    while time.monotonic() < waited_until and not os.path.exists(SHUTDOWN_FLAG):
+                        if await loop.run_in_executor(None, _deepgram_host_reachable):
+                            break
+                        await asyncio.sleep(_DEEPGRAM_REACH_EVERY)
                 continue
-            # No network at all is not a broken provider. A laptop waking from sleep failed
-            # twice in a row on DNS, was handed to the slower fallback for the rest of the
-            # session, and the fallback failed the same way (2026-09-29). Wait for the network
-            # and keep trying Deepgram; nothing is counted against it.
-            if _looks_like_no_network(e) and await loop.run_in_executor(None, _network_is_down):
-                print(">>> [DEEPGRAM] No network right now; waiting for it to come back.", flush=True)
-                await asyncio.sleep(min(reconnect_delay, 5))
-                reconnect_delay = min(reconnect_delay * 2, 5)
-                continue
+
+            # Anything else is the provider answering badly (an HTTP error, a close it chose to send): two in a row and
+            # Speechmatics takes over.
             failures += 1
             if failures >= _DEEPGRAM_MAX_FAILURES:
-                print(f">>> [DEEPGRAM] {failures} failed connections in a row; Speechmatics takes over.",
-                      flush=True)
-                return "fallback"
+                if not _deepgram_only():
+                    print(f">>> [DEEPGRAM] {failures} failed connections in a row; Speechmatics takes over.",
+                          flush=True)
+                    return "fallback"
+                print(f">>> [DEEPGRAM] {failures} failed connections in a row; trying again.", flush=True)
             await asyncio.sleep(reconnect_delay)
             reconnect_delay = min(reconnect_delay * 2, 8)
         finally:

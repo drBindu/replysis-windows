@@ -230,6 +230,20 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     engine looks at it each time it connects. A good line never uses it. **Check the Mac: does it have an upload test, and does it write the
     same `slowline.flag` into the folder the engine reads? Without the flag the engine behaves exactly as before.** Tests:
     `tests/engine/test_weak_line_audio.py`, `tests/test_engine_contract.py`.
+42. **A bad line no longer demotes a session to the slower recogniser, and a dead connection is noticed in four seconds (2026-10-13, found in
+    a real log, 05:32).** The connection to Deepgram died silently after a picture upload; the engine only noticed when the send buffers
+    filled, 14 s later, the retry timed out, and "2 failed connections in a row; Speechmatics takes over" put the person on the slower
+    recogniser for the rest of the session (late words, "empty results" lines). In the shared `speechmatics_engine.py`:
+    (a) a watchdog raises `DeadConnection` when audio has been going out for 4 s and nothing at all has come back (Deepgram answers about
+    once a second even through silence); (b) a line problem (stall, silence, reset, handshake timeout, ping timeout) is retried on
+    Deepgram: the first at once, then once the host answers a TCP connect (polled every 0.5 s), and Speechmatics takes over only after 8 in a
+    row once Deepgram has answered from this machine, or 3 when it never has; (c) audio sent into the dead connection and never answered is put
+    back for the next one; (d) the smaller voice format (item 41) is used for 15 minutes after any line problem; (e) pings every 5 s with a 6 s
+    allowance, so a connection that died while muted is replaced before the person speaks. NEW FLAG `--deepgram-only` (the Windows app passes
+    it): Deepgram is the only recogniser for English, a failing connection is retried forever and never handed to Speechmatics, and 401/402/
+    403/429 print the same `Refused with N` line and wait. The Mac does not pass it, so its behaviour is unchanged until you decide.
+    **Decide for the Mac whether to pass `--deepgram-only`; the owner wants Deepgram only.** Tests: `tests/engine/test_line_resilience.py`
+    (drives the real loop against a local server that answers, goes quiet, or never answers), `tests/test_engine_contract.py`.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
