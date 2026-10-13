@@ -122,6 +122,11 @@ check("up to ten seconds of unsent audio is kept on a reconnect", "KEEP_ON_RECON
 check("audio from before a capture gap is never replayed",
       "CAPTURE_GAP_SECONDS = 3.0" in SOURCE and "Capture paused for" in SOURCE and "self._chunks.clear()" in SOURCE)
 check("one audio buffer lives across reconnects", 'holder["buffered"] = buffered' in SOURCE and "if buffered is None:" in SOURCE)
+check("a weak line sends the voice as mu-law, a good line is unchanged",
+      '("encoding", "mulaw" if slow_line else "linear16")' in SOURCE and "def _pcm16_to_mulaw" in SOURCE
+      and "send_encoder = _pcm16_to_mulaw if slow_line else None" in SOURCE and "def _slow_line_requested" in SOURCE)
+check("the buffer keeps 16 bit PCM and only what goes up the line is converted",
+      "ws.send(encode(chunk) if encode else chunk)" in SOURCE and "buffered.push_front(chunk)" in SOURCE)
 check("the first Deepgram connection is given four seconds and retried at once",
       "_DEEPGRAM_OPEN_SECONDS = 4" in SOURCE and "open_timeout=_DEEPGRAM_OPEN_SECONDS + 2 * failures" in SOURCE
       and "First attempt did not connect in time; trying again at once." in SOURCE)
@@ -129,7 +134,7 @@ check("the network probe only runs after a second failure",
       SOURCE.index("if failures == 0 and not status and _looks_like_no_network(e):")
       < SOURCE.index("if _looks_like_no_network(e) and await loop.run_in_executor(None, _network_is_down):"))
 check("a stalled upload is noticed in three seconds and the audio kept",
-      "_send_with_stall_guard(ws, chunk, buffered)" in SOURCE and "buffered.push_front(chunk)" in SOURCE)
+      "_send_with_stall_guard(ws, chunk, buffered, encode=send_encoder)" in SOURCE and "buffered.push_front(chunk)" in SOURCE)
 
 check("no mic search while words are arriving", "time.time() - _last_words_at > MIC_WORDS_QUIET_SECS" in SOURCE and SOURCE.count("_last_words_at = time.time()") == 2)
 check("the search never gives up for good", "MIC_RESEARCH_BACKOFF_SECS" in SOURCE and "search_allowed" in SOURCE)

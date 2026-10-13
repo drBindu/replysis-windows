@@ -2690,11 +2690,13 @@ def _deepgram_keyterms():
     return terms
 
 
-def _deepgram_url() -> str:
+def _deepgram_url(slow_line: bool = False) -> str:
     query = [
         ("model", "nova-3"),
         ("language", "en"),
-        ("encoding", "linear16"),
+        # 16 bit PCM, or on a line the app has measured as slow, 8 bit mu-law at the same 16 kHz: half the bytes up the
+        # line for the same words (15.6 against 31.2 KB/s, tested live on the same recorded question).
+        ("encoding", "mulaw" if slow_line else "linear16"),
         ("sample_rate", str(SAMPLE_RATE)),
         ("channels", "1"),
         ("interim_results", "true"),
@@ -2718,6 +2720,52 @@ def _deepgram_url() -> str:
         query.append(("utterance_end_ms", str(max(1000, int(args.utterance_silence * 1000)))))
     query += [("keyterm", term) for term in _deepgram_keyterms()]
     return DEEPGRAM_URL + "?" + urllib.parse.urlencode(query)
+
+
+# ── Weak line: the voice in half the bytes ────────────────────────────────────────────────────────────
+# The speech audio alone is 32 KB/s up the line. On a mobile hotspot that uploads 20 to 90 KB/s that is most of the line, so
+# anything else going up (a picture, an answer request) makes the words late and the speech connection stalls. When the app has
+# measured the line as slow it writes slowline.flag; the engine then sends 8 bit mu-law (G.711), which the provider accepts
+# at 16 kHz, for the same words in half the bytes. A good line never uses it.
+_MULAW_TABLE = None
+_SLOW_LINE_FLAG = "slowline.flag"
+_SLOW_LINE_FRESH_SECONDS = 15 * 60
+
+
+def _build_mulaw_table() -> bytes:
+    """One byte for every possible 16 bit sample, by the standard G.711 mu-law rule."""
+    bias, clip = 0x84, 32635
+    table = bytearray(65536)
+    for i in range(65536):
+        sample = i - 32768
+        sign = 0x80 if sample < 0 else 0
+        magnitude = min(-sample if sample < 0 else sample, clip) + bias
+        exponent, mask = 7, 0x4000
+        while exponent > 0 and not (magnitude & mask):
+            exponent -= 1
+            mask >>= 1
+        mantissa = (magnitude >> (exponent + 3)) & 0x0F
+        table[i] = (~(sign | (exponent << 4) | mantissa)) & 0xFF
+    return bytes(table)
+
+
+def _pcm16_to_mulaw(chunk: bytes) -> bytes:
+    """16 bit little endian PCM to mu-law, one byte per sample."""
+    global _MULAW_TABLE
+    if _MULAW_TABLE is None:
+        _MULAW_TABLE = _build_mulaw_table()
+    count = len(chunk) // 2
+    table = _MULAW_TABLE
+    return bytes([table[s + 32768] for s in struct.unpack_from(f"<{count}h", chunk)])
+
+
+def _slow_line_requested() -> bool:
+    """True when the app has recently measured the upload line as slow."""
+    path = os.path.join(APP_DATA, _SLOW_LINE_FLAG)
+    try:
+        return os.path.exists(path) and (time.time() - os.path.getmtime(path)) < _SLOW_LINE_FRESH_SECONDS
+    except OSError:
+        return False
 
 
 def _looks_like_no_network(exc) -> bool:
@@ -2786,7 +2834,7 @@ class SendStalled(ConnectionError):
     """An audio send did not complete in time: the upload is stalled."""
 
 
-async def _send_with_stall_guard(ws, chunk, buffered, timeout=3.0):
+async def _send_with_stall_guard(ws, chunk, buffered, timeout=3.0, encode=None):
     """Send one audio chunk, or put it back and raise if the upload has stalled.
 
     A send that cannot complete means the network is stuck. Waiting for the speech provider to give
@@ -2795,7 +2843,8 @@ async def _send_with_stall_guard(ws, chunk, buffered, timeout=3.0):
     returned to the buffer, lets the next connection send it first.
     """
     try:
-        await asyncio.wait_for(ws.send(chunk), timeout)
+        # The buffer always holds 16 bit PCM; only what goes up the line is converted, so a chunk put back is unchanged.
+        await asyncio.wait_for(ws.send(encode(chunk) if encode else chunk), timeout)
     except asyncio.TimeoutError:
         buffered.push_front(chunk)
         raise SendStalled(f"audio upload stalled for {timeout:.0f}s")
@@ -2820,7 +2869,6 @@ async def _run_deepgram_loop(holder) -> str:
     import websockets  # already bundled for the Sarvam path
 
     buffered = None   # created on the first attempt and kept for the whole run
-    url = _deepgram_url()
     headers = {"Authorization": f"Bearer {_DG_TOKEN}"}
     loop = asyncio.get_running_loop()
 
@@ -2851,6 +2899,12 @@ async def _run_deepgram_loop(holder) -> str:
             buffered = BufferedMixedStream(MixedStream())
             holder["buffered"] = buffered
         try:
+            # Decided at each connection, so a line that got slow (or recovered) is followed at the next one.
+            slow_line = _slow_line_requested()
+            url = _deepgram_url(slow_line)
+            send_encoder = _pcm16_to_mulaw if slow_line else None
+            if slow_line:
+                print(">>> [DEEPGRAM] Weak connection: sending the voice in the smaller format.", flush=True)
             print(">>> [DEEPGRAM] Connecting...", flush=True)
             async with websockets.connect(url, additional_headers=headers, max_size=None,
                                           open_timeout=_DEEPGRAM_OPEN_SECONDS + 2 * failures,
@@ -2871,7 +2925,7 @@ async def _run_deepgram_loop(holder) -> str:
                         chunk = await loop.run_in_executor(None, buffered.read_timeout, 0.25)
                         now = time.monotonic()
                         if chunk and not os.path.exists(PAUSE_FLAG):
-                            await _send_with_stall_guard(ws, chunk, buffered)
+                            await _send_with_stall_guard(ws, chunk, buffered, encode=send_encoder)
                             last_sent = now
                         elif now - last_sent >= 4.0:
                             # Muted. Deepgram closes a session after ten seconds

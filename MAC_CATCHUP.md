@@ -220,6 +220,16 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     disk until the startup restore has happened (`VocabResume.Choose`), and respects an empty box afterwards. **Check the Mac: does its
     engine start before the saved resume is restored, and is the dictionary written from the restored text?** Test:
     `tests/CleanerTests/VocabResumeTests.cs`.
+41. **Weak connection: the voice goes up in half the bytes (2026-10-13).** The speech audio alone is 32 KB/s up the line, which is most of a
+    phone hotspot's upload, so anything else going up (a picture, an answer request) made the words late. Deepgram accepts 16 kHz **mu-law**
+    (`encoding=mulaw&sample_rate=16000`) with the same words and half the bytes (15.6 against 31.2 KB/s, measured live, the same recorded
+    questions). In the shared `speechmatics_engine.py`: `_deepgram_url(slow_line)`, `_pcm16_to_mulaw` (a G.711 table), `_slow_line_requested()`
+    (reads `slowline.flag` in the app data folder, ignored once it is 15 minutes old), and `_send_with_stall_guard(..., encode=...)` which
+    converts only what goes up the line, so a chunk put back after a stall is still 16 bit. The app writes the flag from its own upload tests
+    (`SetWeakLineFlag` in `MainWindow.xaml.cs`: set when a test upload or a picture send is slow or fails, deleted when one passes) and the
+    engine looks at it each time it connects. A good line never uses it. **Check the Mac: does it have an upload test, and does it write the
+    same `slowline.flag` into the folder the engine reads? Without the flag the engine behaves exactly as before.** Tests:
+    `tests/engine/test_weak_line_audio.py`, `tests/test_engine_contract.py`.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

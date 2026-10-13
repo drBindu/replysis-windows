@@ -4622,6 +4622,7 @@ namespace InterviewCopilot
                 // which it cannot be. Anything else says the server, not the line, is the problem.
                 bool reached = status is 400 or 200;
                 TimeSpan quiet = _uplink.RecordProbe(DateTime.UtcNow, reached, sw.Elapsed);
+                SetWeakLineFlag(quiet != TimeSpan.Zero);
                 ApplyLineSpeedToCaptures();
                 DebugWindow.Log("SCREEN", quiet == TimeSpan.Zero
                     ? $"Upload test: {UplinkGovernor.ProbeBytes / 1024} KB in {sw.ElapsedMilliseconds}ms; this line can carry screenshots ahead of a question."
@@ -4637,16 +4638,33 @@ namespace InterviewCopilot
                 if (_windowClosed) return;
                 // The test could not even be sent: no connection, or too slow to finish in four seconds.
                 TimeSpan quiet = _uplink.RecordProbe(DateTime.UtcNow, false, UplinkGovernor.ProbeTimeout);
+                SetWeakLineFlag(true);
                 ApplyLineSpeedToCaptures();
                 DebugWindow.Log("SCREEN", $"Upload test failed ({ex.GetType().Name}); no screenshots ahead of questions for {quiet.TotalSeconds:F0}s.");
             }
             finally { Interlocked.Exchange(ref _uplinkProbeRunning, 0); }
         }
 
+        /// <summary>
+        /// Tells the speech engine whether the upload line is weak, so it sends the voice in half the bytes (8 bit mu-law
+        /// instead of 16 bit PCM). The engine reads this file each time it connects; a flag older than 15 minutes is ignored.
+        /// </summary>
+        private void SetWeakLineFlag(bool weak)
+        {
+            try
+            {
+                string path = Path.Combine(AppDataFolder, "slowline.flag");
+                if (weak) File.WriteAllText(path, DateTime.UtcNow.ToString("o"));
+                else if (File.Exists(path)) File.Delete(path);
+            }
+            catch (Exception ex) { DebugWindow.Log("SCREEN", $"Could not update the weak line flag: {ex.GetType().Name}"); }
+        }
+
         /// <summary>Tells the governor how a picture sent ahead went, and says so once when it backs off.</summary>
         private void NoteUplinkOutcome(bool succeeded, TimeSpan elapsed, int imageBytes)
         {
             TimeSpan quiet = _uplink.Record(DateTime.UtcNow, succeeded, elapsed);
+            SetWeakLineFlag(quiet != TimeSpan.Zero);
             ApplyLineSpeedToCaptures();
             if (quiet == TimeSpan.Zero) return;
             DebugWindow.Log("SCREEN",
