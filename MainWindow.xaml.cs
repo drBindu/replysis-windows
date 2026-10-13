@@ -1599,10 +1599,8 @@ namespace InterviewCopilot
 
             if (AudioSwitchMustWait())
             {
+                // The switch is already shown on the bar; it is applied between questions without a message over the bar.
                 _audioSourceChangePending = true;
-                ShowListeningModeNotice(practice
-                    ? "Practice starts after this question"
-                    : "Interview starts after this question");
                 return;
             }
             ApplyAudioSourceNow();
@@ -1731,12 +1729,6 @@ namespace InterviewCopilot
 
 
 
-        // Shown once per launch. In Auto with the microphone open, the candidate's
-        // own spoken answer can read as a new question; in a real interview the
-        // fix is to turn the microphone off, and people need to be told that
-        // where they choose Auto, not only in Settings.
-        private bool _realInterviewMicTipShown;
-
         private void SelectListeningMode(ListeningMode mode)
         {
             if (_listeningMode == mode)
@@ -1783,12 +1775,6 @@ namespace InterviewCopilot
             else if (AutoModeEnabled)
             {
                 StartAutoListeningIfReady();
-            }
-
-            if (mode == ListeningMode.Auto && MicrophoneInUse && !_realInterviewMicTipShown)
-            {
-                _realInterviewMicTipShown = true;
-                ShowListeningModeNotice("Real interview? Mic off in Settings");
             }
 
             DebugWindow.Log("MODE",
