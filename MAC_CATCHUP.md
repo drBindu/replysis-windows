@@ -246,6 +246,14 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     403/429 print the same `Refused with N` line and wait. The Mac does not pass it, so its behaviour is unchanged until you decide.
     **Decide for the Mac whether to pass `--deepgram-only`; the owner wants Deepgram only.** Tests: `tests/engine/test_line_resilience.py`
     (drives the real loop against a local server that answers, goes quiet, or never answers), `tests/test_engine_contract.py`.
+43. **The answer connection is checked while listening, and a quick reconnect is not announced (2026-10-13).** Two app side changes that
+    belong beside item 42. (a) The backend only speaks HTTP/1.1, so a pooled connection that a home router dropped silently is found out by
+    the next real question writing into it. `WarmBackendAsync` (a HEAD to `/api/v1/resume/status` on the answer client) now runs every 8 s
+    while the microphone is open and once at every unmute, with a 3 s timeout instead of 6 (cancelling a request closes its socket, so the
+    next one opens a fresh connection). It still runs every 25 s when idle. (b) `SpeechHealth.IsJustABlip`: no "problem" notice, and no
+    red state, for the first 1.5 s after the speech connection drops, because the engine replaces a dead connection in about a quarter of a
+    second and the warning was flashing for that long several times a minute. **Check the Mac has an equivalent keep-alive and does not flash
+    its connection warning for sub-second reconnects.** Tests: `tests/CleanerTests/SpeechHealthTests.cs`.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

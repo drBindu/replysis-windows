@@ -149,6 +149,20 @@ namespace InterviewCopilot
             return recent >= DropsThatMeanUnstable;
         }
 
+        /// <summary>
+        /// How long the speech connection may be down before the person is told anything. The engine now replaces a dead
+        /// connection in a quarter of a second, on a line that drops several times a minute; a warning that flashed for a
+        /// quarter of a second each time was noise, and read as the app being unwell when it was recovering.
+        /// </summary>
+        internal static readonly TimeSpan BlipPatience = TimeSpan.FromMilliseconds(1500);
+
+        /// <summary>
+        /// True while the connection has only just dropped, so it is too early to say anything. Never true for an engine that
+        /// has not been online yet (nothing is known about when it went down).
+        /// </summary>
+        internal static bool IsJustABlip(DateTime now, DateTime offlineSinceUtc) =>
+            offlineSinceUtc != DateTime.MinValue && now >= offlineSinceUtc && now - offlineSinceUtc < BlipPatience;
+
         internal static bool ConnectionStalled(bool engineOnline, DateTime now, DateTime engineStartedUtc)
         {
             if (engineOnline) return false;

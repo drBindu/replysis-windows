@@ -207,6 +207,7 @@ namespace InterviewCopilot
         private DispatcherTimer? thinkingTimer;
         private DispatcherTimer? creditsRefreshTimer;
         private DispatcherTimer? warmupTimer;
+        private DispatcherTimer? _listeningWarmTimer;
         private DispatcherTimer? _sessionTimer;
         private DispatcherTimer? _jobContextSaveTimer;
         private DispatcherTimer? _autoModeNoticeTimer;
@@ -477,6 +478,12 @@ namespace InterviewCopilot
                     warmupTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(25) };
                     warmupTimer.Tick += (s2, e2) => _ = WarmBackendAsync();
                     warmupTimer.Start();
+                    // While the microphone is open every second counts, so the check is much more frequent: a connection that
+                    // died is found and replaced within about ten seconds, before the next question needs it. A HEAD with no
+                    // body, only while listening, so a quiet app costs the server nothing extra.
+                    _listeningWarmTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
+                    _listeningWarmTimer.Tick += (s2, e2) => { if (isListening) _ = WarmBackendAsync(); };
+                    _listeningWarmTimer.Start();
 
                     // Also repairs accounts restored from disk that have never
                     // signed in through replysis.com. Both calls are deliberately
@@ -2362,7 +2369,8 @@ namespace InterviewCopilot
         }
 
         private ListeningProblems.Kind? CurrentProblem() => ListeningProblems.Detect(
-            _engineOnline,
+            // A connection that dropped less than a second and a half ago is not announced: it is being replaced already.
+            _engineOnline || SpeechHealth.IsJustABlip(DateTime.UtcNow, _engineOfflineSinceUtc),
             UserSession.SpeechmaticsLastStatusCode,
             UserSession.SpeechmaticsOutOfListeningTime,
             outOfCredits: UserSession.SpeechmaticsOutOfCredits,
@@ -3330,6 +3338,9 @@ namespace InterviewCopilot
                 // lets the muted interval above be long without costing the
                 // first question its screenshot.
                 _ = PrepareShotAsync();
+                // The answer connection is checked at this moment too: whatever it did while nobody was speaking, the next
+                // question must not be the thing that finds out it is dead.
+                _ = WarmBackendAsync();
                 StartListeningMeter();
                 if (AutoModeEnabled) ResetAutoTurnDetection();
                 UpdateMicUi();
@@ -5192,7 +5203,10 @@ namespace InterviewCopilot
                 // is not the answer server's, it lands on the website, which renders a whole
                 // page to say "not found" and would feel every open app pinging it every 25 s.
                 using var req = new HttpRequestMessage(HttpMethod.Head, $"{BackendUrl}/api/v1/resume/status");
-                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(6));
+                // Three seconds, not six: a HEAD that is not answered by then is on a connection the network has dropped
+                // silently (a home router forgets a quiet one in well under a minute), and cancelling it closes that socket
+                // so the next real question opens a fresh one instead of writing into the dead one and waiting for it.
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(3));
                 using var res = await _backendClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
                 // Any response (even 404) means the connection is open — that's all we need.
             }
@@ -6656,6 +6670,10 @@ namespace InterviewCopilot
                                     if (_connectionDropsUtc.Count > 20) _connectionDropsUtc.RemoveAt(0);
                                 }
                                 _ = Dispatcher.BeginInvoke(new Action(UpdateMicUi));
+                                // Looked at again once the blip allowance has passed, so a drop that does last is announced
+                                // then, not at the next unrelated refresh.
+                                _ = System.Threading.Tasks.Task.Delay(SpeechHealth.BlipPatience + TimeSpan.FromMilliseconds(150))
+                                    .ContinueWith(_ => Dispatcher.BeginInvoke(new Action(UpdateMicUi)));
                             }
 
                             // The engine says when it hears speech and when words

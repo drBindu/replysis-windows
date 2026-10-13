@@ -47,6 +47,12 @@ internal static class SpeechHealthTests
         Case("sustained loud audio establishes recovery evidence", sustainedTriggered, true, "repeated audio is present");
         Case("old evidence expires after silence", sustained.Observe(T0.AddSeconds(10), 100), false, "no stale restart evidence");
 
+        // ── A quick reconnect is not announced ───────────────────────────────
+        Case("a drop 0.2 s ago is only a blip", SpeechHealth.IsJustABlip(T0.AddMilliseconds(200), T0), true, "replaced already");
+        Case("a drop 1.4 s ago is still a blip", SpeechHealth.IsJustABlip(T0.AddMilliseconds(1400), T0), true, "inside the allowance");
+        Case("a drop 1.6 s ago is announced", SpeechHealth.IsJustABlip(T0.AddMilliseconds(1600), T0), false, "it is lasting");
+        Case("an engine never online is never a blip", SpeechHealth.IsJustABlip(T0, DateTime.MinValue), false, "nothing known");
+
         // ── It fires ──────────────────────────────────────────────────────────
         // Speech arriving now, nothing ever returned, listening for 20s.
         // This is the exact shape a broken FIFO reader produces.
