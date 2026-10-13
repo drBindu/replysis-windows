@@ -213,6 +213,13 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     makes the model open with `NOTHING ASKED` when the screen holds no question (the empty desktop, "Program Manager"). That read took 5 s
     and cost an answer. `InterviewController` now sees the marker while streaming and refunds. **Check the Mac sends the same prompt and
     marker; if its prompt differs the refund never triggers.**
+40. **The speech dictionary was empty for every returning person (found 2026-10-12 in a real log).** The engine reads the custom dictionary
+    (`vocab.txt`: names, tools, companies from the resume) once, when it starts, and deletes the file. At launch the engine started about
+    1.4 s BEFORE the saved resume was put back in the box, so the file was written with nothing and the whole session ran without the
+    person's own words (`[VOCAB] No terms written` then `Restored last resume`). Windows now builds the dictionary from the saved resume on
+    disk until the startup restore has happened (`VocabResume.Choose`), and respects an empty box afterwards. **Check the Mac: does its
+    engine start before the saved resume is restored, and is the dictionary written from the restored text?** Test:
+    `tests/CleanerTests/VocabResumeTests.cs`.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

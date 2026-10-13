@@ -6785,6 +6785,22 @@ namespace InterviewCopilot
         /// names/projects) to vocab.txt so the speech engine recognises them instead of
         /// guessing. Big accuracy win on exactly the words that matter in THIS interview.
         /// </summary>
+        // False until RestoreLastResume has run at launch. See VocabResume.
+        private volatile bool _startupResumeRestored;
+
+        /// <summary>The most recently saved resume, read straight from disk, or empty. Safe on any thread.</summary>
+        private string LatestSavedResumeContent()
+        {
+            try
+            {
+                string path = Path.Combine(AppDataFolder, "savedresumes.json");
+                if (!File.Exists(path)) return "";
+                var raw = JsonSerializer.Deserialize<List<SavedResumeEntry>>(ReadProtectedLocalText(path));
+                return raw is { Count: > 0 } ? raw[0].Content ?? "" : "";
+            }
+            catch { return ""; }
+        }
+
         private void WriteVocabFile()
         {
             try
@@ -6816,6 +6832,13 @@ namespace InterviewCopilot
                 {
                     DebugWindow.Log("VOCAB", $"resume text unreadable: {ex.GetType().Name}: {ex.Message}");
                 }
+
+                // At launch the engine starts before the saved resume is put back in the box, so the box is still empty
+                // here and the whole session would run without the person's own names and tools (2026-10-12, a real log).
+                string fromBox = resume;
+                resume = VocabResume.Choose(resume, _startupResumeRestored, LatestSavedResumeContent);
+                if (string.IsNullOrWhiteSpace(fromBox) && !string.IsNullOrWhiteSpace(resume))
+                    DebugWindow.Log("VOCAB", $"The resume box was still empty at engine start; built the dictionary from the saved resume ({resume.Length} chars).");
 
                 string blob = $"{_companyName}\n{_jobDescription}\n{_liveHints}\n{resume}";
                 var terms = ExtractVocabTerms(blob, _companyName);
@@ -9923,6 +9946,7 @@ namespace InterviewCopilot
                 DebugWindow.Log("RESUME", $"Restored last resume ({content.Length} chars)");
             }
             catch { }
+            finally { _startupResumeRestored = true; }
         }
 
         private void UpdateSavedResumesButton()
