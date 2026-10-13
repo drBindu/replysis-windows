@@ -249,8 +249,8 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
 43. **The answer connection is checked while listening, and a quick reconnect is not announced (2026-10-13).** Two app side changes that
     belong beside item 42. (a) The backend only speaks HTTP/1.1, so a pooled connection that a home router dropped silently is found out by
     the next real question writing into it. `WarmBackendAsync` (a HEAD to `/api/v1/resume/status` on the answer client) now runs every 8 s
-    while the microphone is open and once at every unmute, with a 3 s timeout instead of 6 (cancelling a request closes its socket, so the
-    next one opens a fresh connection). It still runs every 25 s when idle. (b) `SpeechHealth.IsJustABlip`: no "problem" notice, and no
+    while the microphone is open and once at every unmute, with its 6 s allowance unchanged (a shorter one was tried and taken back: cancelling a slow but
+    working connection on a lossy line makes the next question pay for a new one). It still runs every 25 s when idle. (b) `SpeechHealth.IsJustABlip`: no "problem" notice, and no
     red state, for the first 1.5 s after the speech connection drops, because the engine replaces a dead connection in about a quarter of a
     second and the warning was flashing for that long several times a minute. **Check the Mac has an equivalent keep-alive and does not flash
     its connection warning for sub-second reconnects.** Tests: `tests/CleanerTests/SpeechHealthTests.cs`.

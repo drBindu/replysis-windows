@@ -5203,10 +5203,11 @@ namespace InterviewCopilot
                 // is not the answer server's, it lands on the website, which renders a whole
                 // page to say "not found" and would feel every open app pinging it every 25 s.
                 using var req = new HttpRequestMessage(HttpMethod.Head, $"{BackendUrl}/api/v1/resume/status");
-                // Three seconds, not six: a HEAD that is not answered by then is on a connection the network has dropped
-                // silently (a home router forgets a quiet one in well under a minute), and cancelling it closes that socket
-                // so the next real question opens a fresh one instead of writing into the dead one and waiting for it.
-                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(3));
+                // Six seconds. A shorter allowance was tried (three) and taken back: on a line that loses packets a slow but
+                // working connection would be cancelled, which closes its socket and makes the next real question pay for a
+                // new connection (SYN, TLS) on that same line. Keeping it warm every eight seconds is what helps; cancelling it
+                // early is a gamble that has not been measured.
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(6));
                 using var res = await _backendClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
                 // Any response (even 404) means the connection is open — that's all we need.
             }
