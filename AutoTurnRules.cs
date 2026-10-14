@@ -133,6 +133,25 @@ namespace InterviewCopilot
         internal static bool RefersBack(string text) =>
             Regex.IsMatch(text ?? "", @"\b(?:that|this|it|its|those|these|them|same|there)\b", RegexOptions.IgnoreCase);
 
+        /// <summary>
+        /// A short follow-up about the question just answered, whatever it starts with: "Give me an example of that",
+        /// "Why did you choose it?", "Tell me more about that project", "Can you elaborate?". The owner (2026-10-14): when the
+        /// interviewer asks one more thing about the same question, the answer has to be updated, not a new card started.
+        /// A new topic ("What work have you done before?") does not match and gets its own answer.
+        /// </summary>
+        internal static bool IsFollowUpOnPrevious(string text)
+        {
+            string t = (text ?? "").Trim();
+            int words = Regex.Matches(t, @"[\p{L}\p{N}']+").Count;
+            if (words < 2 || words > 14) return false;
+            if (Regex.IsMatch(t, @"\bwhat(?:'s| is) it like\b", RegexOptions.IgnoreCase)) return false;
+            return Regex.IsMatch(t,
+                @"\b(?:elaborate|expand on|more about (?:that|this|it|them)|more detail|go deeper|for example|an example|example of|tell me more)\b" +
+                @"|\b(?:about|of|with|on|for|in|behind|use|used|using|choose|chose|like|prefer|explain|describe|do|did|does)\s+(?:that|this|it|those|these|them)\b" +
+                @"|\b(?:that|this|those|these|the same)\s+(?:language|project|projects|tool|tools|framework|one|role|company|technology|approach|example|experience|part|feature|system|team|problem|code)\b",
+                RegexOptions.IgnoreCase);
+        }
+
         /// <summary>The text stops on a joining word, so the sentence plainly goes on.</summary>
         internal static bool EndsOnConnector(string text) =>
             Regex.IsMatch((text ?? "").Trim(),

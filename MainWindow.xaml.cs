@@ -2757,6 +2757,14 @@ namespace InterviewCopilot
         private bool LooksLikeContinuation(string candidate, DateTime now)
         {
             if (string.IsNullOrWhiteSpace(_lastAutoSubmittedQuestion)) return false;
+
+            // A follow-up about the question just answered updates that answer, whatever word it starts with and even after
+            // the answer has been read for a while (owner, 2026-10-14). A new topic falls through and gets its own answer.
+            if (now - _lastAutoSubmitUtc <= TimeSpan.FromSeconds(20) && _continuationCount < MaxContinuations &&
+                AutoTurnRules.IsFollowUpOnPrevious(candidate) &&
+                !AutoTurnRules.IsRevisionOf(candidate, _lastAutoSubmittedQuestion))
+                return true;
+
             if (now - _lastAutoSubmitUtc > ContinuationWindow) return false;
             if (!AutoTurnRules.CanMergeContinuationFromMixedAudio(candidate, CaptureMode() != "system", _lastAutoSubmittedQuestion))
                 return false;
@@ -2831,6 +2839,14 @@ namespace InterviewCopilot
             // for each merge. Reported from the Mac, where eight questions asked two
             // seconds apart left five unanswered.
             if (AutoTurnRules.AsksItsOwnQuestion(candidate)) return false;
+
+            // "And what work have you done before?" opens with "and" but asks about something else: its own answer
+            // (owner, 2026-10-14). "And full time." or "and how would you scale it" stay part of the question before.
+            string[] afterOpener = words.SkipWhile(w => ContinuationOpeners.Contains(w)).ToArray();
+            if (afterOpener.Length >= 3 && afterOpener.Length < words.Length &&
+                (QuestionStarters.Contains(afterOpener[0]) || InterviewCommands.Contains(afterOpener[0])) &&
+                !AutoTurnRules.RefersBack(candidate))
+                return false;
 
             return ContinuationOpeners.Contains(words[0]) || !asksSomething;
         }

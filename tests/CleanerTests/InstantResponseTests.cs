@@ -77,6 +77,17 @@ internal static class InstantResponseTests
         Check(AutoTurnRules.RefersBack("Tell me about that language.") && AutoTurnRules.RefersBack("Why do you like it?") &&
               !AutoTurnRules.RefersBack("What work you have done before.") && !AutoTurnRules.RefersBack("How many years of experience do you have?"),
             "a follow-up about the same thing points back at it; a new topic does not");
+        Check(AutoTurnRules.IsFollowUpOnPrevious("Give me an example of that.") &&
+              AutoTurnRules.IsFollowUpOnPrevious("Why did you choose it?") &&
+              AutoTurnRules.IsFollowUpOnPrevious("Tell me more about that project.") &&
+              AutoTurnRules.IsFollowUpOnPrevious("Can you elaborate?") &&
+              AutoTurnRules.IsFollowUpOnPrevious("Tell me about that language."),
+            "a follow-up about the question just answered updates that answer, whatever it starts with");
+        Check(!AutoTurnRules.IsFollowUpOnPrevious("What work have you done before?") &&
+              !AutoTurnRules.IsFollowUpOnPrevious("How many years of experience do you have?") &&
+              !AutoTurnRules.IsFollowUpOnPrevious("What is it like working in a team?") &&
+              !AutoTurnRules.IsFollowUpOnPrevious("What is the difference between a process and a thread?"),
+            "a new topic is never taken for a follow-up");
         Check(AutoTurnRules.EndsOnConnector("about your experience. And") && AutoTurnRules.EndsOnConnector("Java or") &&
               !AutoTurnRules.EndsOnConnector("Tell me about Java.") && !AutoTurnRules.EndsOnConnector("What is a brand?"),
             "only a joining word at the very end counts");

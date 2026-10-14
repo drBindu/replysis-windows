@@ -269,6 +269,10 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     starts within 8 s of a question sent on a joining word AND points back at it (`AutoTurnRules.RefersBack`: that, this, it, those...), so the
     answer is redone for the merged question; a new topic ("what work have you done before") still gets its own answer (owner). The quick
     confirmation after Deepgram's speech_final is now 250 ms (was 450; owner wants 0.3 s), 650 ms after a tail has been merged. **Check the Mac's turn rules.**
+46. **A follow-up about the question just answered updates that answer, whatever it starts with (2026-10-14, owner).** "Give me an example of
+    that", "Why did you choose it?", "Tell me more about that project", "Can you elaborate?" within 20 s of a question merge into it and the
+    answer is redone (`AutoTurnRules.IsFollowUpOnPrevious`, checked first in `LooksLikeContinuation`). A tail that opens with "and" but then asks
+    something new ("And what work have you done before?") is now its own question unless it points back (that/it/this). **Check the Mac.**
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
