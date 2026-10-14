@@ -273,6 +273,17 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     that", "Why did you choose it?", "Tell me more about that project", "Can you elaborate?" within 20 s of a question merge into it and the
     answer is redone (`AutoTurnRules.IsFollowUpOnPrevious`, checked first in `LooksLikeContinuation`). A tail that opens with "and" but then asks
     something new ("And what work have you done before?") is now its own question unless it points back (that/it/this). **Check the Mac.**
+47. **English on Windows now uses Deepgram Flux (2026-10-14).** Measured on the same recorded questions: nova-3 sends the words while someone
+    speaks exactly once a second however the audio is sliced (12 runs); Flux sends them every 0.24 s, first words at 0.5 s instead of 1.0, the
+    same words (better on "PostgreSQL"; "Redis" needs the keyterm, which Flux accepts), mu-law works, and it calls the end of a turn itself. In
+    the shared engine: `REPLYSIS_DEEPGRAM_MODEL=flux` (environment, set by the Windows app) switches `_deepgram_url` to `wss://api.deepgram.com/v2/listen`
+    with `model=flux-general-en`, `eager_eot_threshold=0.5` and the same keyterms. Its `TurnInfo` events become the usual lines: Update and
+    StartOfTurn print PARTIAL, EagerEndOfTurn prints FINAL + SPEECH FINAL (about 0.4 s before the sure call, so Auto answers as fast as on nova-3),
+    TurnResumed undoes the early call, EndOfTurn commits the turn and prints FINAL + UTTERANCE END. **Flux rejects `{"type":"KeepAlive"}` with
+    UNPARSABLE_CLIENT_MESSAGE and closes the connection**, so the engine never sends it in Flux mode; with pings alone Flux stayed open through
+    3 minutes of no audio. Flux sends a message at least every 0.3 s even in silence, so the dead-connection watchdog (item 42) works unchanged.
+    Without the variable the engine is nova-3 exactly as before (the Mac). **Decide for the Mac; check Flux pricing against nova-3.**
+    Tests: `tests/test_engine_contract.py`, the engine loop run against real Flux in both voice formats.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

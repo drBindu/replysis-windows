@@ -2643,6 +2643,11 @@ class BufferedMixedStream:
 # DEEPGRAM_API_KEY there turns this path off for every installed app at once.
 
 DEEPGRAM_URL = "wss://api.deepgram.com/v1/listen"
+# Flux, Deepgram's model built for conversation: the words while someone speaks arrive about every 0.24 s instead of once a
+# second, the first words at 0.5 s instead of 1.0, and it decides by itself when the speaker has finished a turn (measured on
+# the same recorded questions, 2026-10-14). Same words, same custom vocabulary, mu-law works. Two differences matter: it rejects
+# the KeepAlive message (and closes), and it stays open through minutes of no audio with pings alone.
+DEEPGRAM_FLUX_URL = "wss://api.deepgram.com/v2/listen"
 DEEPGRAM_LANGUAGES = {"en"}
 _DG_TOKEN = os.environ.get("DG_TOKEN", "").strip()
 
@@ -2674,6 +2679,11 @@ _DEEPGRAM_BUILTIN_TERMS = [
 
 def _deepgram_eligible() -> bool:
     return bool(_DG_TOKEN) and args.language in DEEPGRAM_LANGUAGES
+
+
+def _deepgram_flux() -> bool:
+    """True when the app asked for Flux (REPLYSIS_DEEPGRAM_MODEL=flux). Without it the engine uses nova-3 as before (the Mac)."""
+    return os.environ.get("REPLYSIS_DEEPGRAM_MODEL", "").strip().lower() == "flux"
 
 
 def _deepgram_only() -> bool:
@@ -2709,6 +2719,17 @@ def _deepgram_keyterms():
 
 
 def _deepgram_url(slow_line: bool = False) -> str:
+    if _deepgram_flux():
+        query = [
+            ("model", "flux-general-en"),
+            ("encoding", "mulaw" if slow_line else "linear16"),
+            ("sample_rate", str(SAMPLE_RATE)),
+            # An early "they have probably finished" about 0.4 s before the sure one, so Auto answers as soon as it does on
+            # nova-3. If the speaker carries on, Flux says TurnResumed and the words keep coming, so nothing is cut off.
+            ("eager_eot_threshold", "0.5"),
+        ]
+        query += [("keyterm", term) for term in _deepgram_keyterms()]
+        return DEEPGRAM_FLUX_URL + "?" + urllib.parse.urlencode(query)
     query = [
         ("model", "nova-3"),
         ("language", "en"),
@@ -2944,7 +2965,7 @@ async def _run_deepgram_loop(holder) -> str:
 
     print("", flush=True)
     print("===============================================", flush=True)
-    print("   DEEPGRAM ENGINE: READY  (nova-3)" if _deepgram_only()
+    print("   DEEPGRAM ENGINE: READY  (flux)" if _deepgram_flux() else "   DEEPGRAM ENGINE: READY  (nova-3)" if _deepgram_only()
           else "   DEEPGRAM ENGINE: READY  (nova-3, Speechmatics as fallback)", flush=True)
     print("===============================================", flush=True)
 
@@ -3009,7 +3030,8 @@ async def _run_deepgram_loop(holder) -> str:
                                 audio["since"] = now
                             audio["last"] = now
                             sent_log.append((now, chunk))
-                        elif now - last_sent >= 4.0:
+                        elif now - last_sent >= 4.0 and not _deepgram_flux():
+                            # (Flux rejects KeepAlive and closes; it stays open on pings alone.)
                             # Muted. Deepgram closes a session after ten seconds
                             # without data, and bills audio rather than connection
                             # time, so KeepAlive holds the session for free where
@@ -3044,6 +3066,49 @@ async def _run_deepgram_loop(holder) -> str:
                         except Exception:
                             continue
                         kind = msg.get("type")
+                        if kind == "TurnInfo":
+                            # Flux. The transcript is the whole of the current turn so far. The app reads the same lines it
+                            # reads from nova-3: PARTIAL while words come, FINAL and SPEECH FINAL when Flux thinks the speaker
+                            # has finished (its early call), UTTERANCE END when it is sure.
+                            if os.path.exists(RESET_FLAG):
+                                transcript["confirmed"] = ""
+                                transcript["partial"] = ""
+                                try:
+                                    os.remove(RESET_FLAG)
+                                except Exception:
+                                    pass
+                            if os.path.exists(PAUSE_FLAG):
+                                continue
+                            event = msg.get("event") or ""
+                            text = (msg.get("transcript") or "").strip()
+                            if event == "EndOfTurn":
+                                if text:
+                                    transcript["confirmed"] = f"{transcript['confirmed']} {text}".strip()
+                                transcript["partial"] = ""
+                                _write_latest(transcript["confirmed"])
+                                print(f">>> FINAL received ({len(transcript['confirmed'])} chars)", flush=True)
+                                if not transcript.get("eager"):
+                                    print(">>> SPEECH FINAL", flush=True)
+                                transcript["eager"] = False
+                                print(">>> UTTERANCE END", flush=True)
+                                continue
+                            if event == "TurnResumed":
+                                transcript["eager"] = False
+                            if not text and not transcript["partial"]:
+                                continue
+                            transcript["partial"] = text
+                            display = f"{transcript['confirmed']} {transcript['partial']}".strip()
+                            _write_latest(display)
+                            if event == "EagerEndOfTurn":
+                                transcript["eager"] = True
+                                print(f">>> FINAL received ({len(display)} chars)", flush=True)
+                                print(">>> SPEECH FINAL", flush=True)
+                            else:
+                                print(f">>> PARTIAL received ({len(display)} chars)", flush=True)
+                            continue
+                        if kind == "Error" and _deepgram_flux():
+                            print(f">>> [DEEPGRAM] error: {str(msg)[:200]}", flush=True)
+                            continue
                         if kind == "UtteranceEnd":
                             print(">>> UTTERANCE END", flush=True)
                             continue

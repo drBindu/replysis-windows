@@ -142,6 +142,10 @@ check("an idle connection that died is found out within two and a half seconds o
 check("a dropped line is retried on Deepgram instead of handing the session to the slower recogniser",
       "_DEEPGRAM_LINE_PROBLEMS_HEARD = 8" in SOURCE and "_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD = 3" in SOURCE
       and "staying on Deepgram and reconnecting" in SOURCE and "def _is_line_problem" in SOURCE)
+check("Flux is used when the app asks, never sent KeepAlive, and its turn events become the usual lines",
+      'DEEPGRAM_FLUX_URL = "wss://api.deepgram.com/v2/listen"' in SOURCE and 'os.environ.get("REPLYSIS_DEEPGRAM_MODEL"' in SOURCE
+      and 'elif now - last_sent >= 4.0 and not _deepgram_flux():' in SOURCE and 'if kind == "TurnInfo":' in SOURCE
+      and 'event == "EagerEndOfTurn"' in SOURCE and '("eager_eot_threshold", "0.5")' in SOURCE)
 check("an argument the engine does not know can never stop it starting",
       "parser.parse_known_args(" in SOURCE and "Ignoring arguments this engine does not know" in SOURCE
       and 'os.environ.get("REPLYSIS_DEEPGRAM_ONLY"' in SOURCE)

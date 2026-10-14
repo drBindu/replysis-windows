@@ -6573,6 +6573,10 @@ namespace InterviewCopilot
                 // error and exited, so speech never connected at all (2026-10-14, the owner's screen). An unknown environment
                 // variable is ignored by every engine ever shipped; a new setting must never be able to stop speech.
                 speechmaticsProcess.StartInfo.EnvironmentVariables["REPLYSIS_DEEPGRAM_ONLY"] = "1";
+                // Flux: the words while someone speaks every quarter second instead of once a second, and its own call that
+                // the speaker finished (owner: the transcript felt rough and late, 2026-10-14). An environment variable, so an
+                // engine that does not know it simply carries on with nova-3.
+                speechmaticsProcess.StartInfo.EnvironmentVariables["REPLYSIS_DEEPGRAM_MODEL"] = "flux";
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SM_API_KEY"] = smKey;
                 // Deepgram goes first for English when the server issued a token. The
                 // engine hands over to Speechmatics on its own if Deepgram refuses or
