@@ -69,6 +69,14 @@ internal static class InstantResponseTests
               AutoTurnRules.CanMergeContinuationFromMixedAudio("and full time.", true) &&
               AutoTurnRules.CanMergeContinuationFromMixedAudio("full time.", false),
             "Practice requires an explicit extension to re-answer; Interview keeps the original rule");
+        Check(AutoTurnRules.CanMergeContinuationFromMixedAudio("what work you've done before.", true,
+                  "Tell me what is Java and also tell me about your experience. And") &&
+              !AutoTurnRules.CanMergeContinuationFromMixedAudio("what work you've done before.", true,
+                  "Tell me what is Java and also tell me about your experience."),
+            "a question sent ending on 'And' takes the rest of the sentence with it, in Practice too");
+        Check(AutoTurnRules.EndsOnConnector("about your experience. And") && AutoTurnRules.EndsOnConnector("Java or") &&
+              !AutoTurnRules.EndsOnConnector("Tell me about Java.") && !AutoTurnRules.EndsOnConnector("What is a brand?"),
+            "only a joining word at the very end counts");
 
         var micActivity = new RecentMicActivityEvidence();
         DateTime micTime = new DateTime(t0, DateTimeKind.Utc);
@@ -88,6 +96,9 @@ internal static class InstantResponseTests
         Check(!AutoTurnRules.HoldForInFlightMicAudio(micTime.AddMilliseconds(1200), changed,
                 micTime.AddMilliseconds(1100).Ticks, 2800, true),
             "microphone noise cannot defer a question indefinitely");
+        Check(AutoTurnRules.HoldForInFlightMicAudio(micTime.AddMilliseconds(640), changed,
+                micTime.AddMilliseconds(140).Ticks, 2800, true),
+            "speech half a second ago whose words have not landed yet still holds the question (the real 2026-10-14 cut)");
 
         // What the person feels: the service takes about 0.3 s of silence to say "speech final",
         // plus the trip. Measured on 2026-09-29 the whole wait after it was 1.8 s.

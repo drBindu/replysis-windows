@@ -116,8 +116,18 @@ namespace InterviewCopilot
         // become a paid re-answer to the previous question. In mixed mode only
         // a clear extension is eligible for automatic merging; the system-only
         // Interview mode retains its existing continuation behavior.
-        internal static bool CanMergeContinuationFromMixedAudio(string candidate, bool mixedAudio) =>
-            !mixedAudio || IsExplicitExtension(candidate);
+        //
+        // A question that was sent ending on "and", "or", "also"... was cut mid-sentence: the speaker paused and then
+        // carried on. Its continuation is the rest of the SAME question whatever it begins with, so it merges too.
+        // Found in a real Practice test (2026-10-14): "Tell me what is Java and also tell me about your experience. And"
+        // was answered, then "what work you've done before" was answered again as a separate question.
+        internal static bool CanMergeContinuationFromMixedAudio(string candidate, bool mixedAudio, string previousQuestion = "") =>
+            !mixedAudio || IsExplicitExtension(candidate) || EndsOnConnector(previousQuestion);
+
+        /// <summary>The text stops on a joining word, so the sentence plainly goes on.</summary>
+        internal static bool EndsOnConnector(string text) =>
+            Regex.IsMatch((text ?? "").Trim(),
+                @"\b(?:and|or|but|also|plus|then|with|because|like)[\s.,;:!?…-]*$", RegexOptions.IgnoreCase);
 
         // The mixed Practice stream can have microphone audio in flight even when
         // Deepgram's latest text still looks settled. This is a short, bounded
@@ -131,7 +141,9 @@ namespace InterviewCopilot
             DateTime lastActivity = new(lastMicActivityTicks, DateTimeKind.Utc);
             TimeSpan sinceActivity = now - lastActivity;
             TimeSpan sinceTranscript = now - transcriptChanged;
-            return sinceActivity >= TimeSpan.Zero && sinceActivity < TimeSpan.FromMilliseconds(450) &&
+            // 900 ms, up from 450: the words for a sound arrive 0.5 to 1 s after it. In a real test (2026-10-14) a question
+            // was sent 0.5 s after the speaker started again ("...experience. And"), the new words landing a moment later.
+            return sinceActivity >= TimeSpan.Zero && sinceActivity < TimeSpan.FromMilliseconds(900) &&
                    sinceTranscript < TimeSpan.FromMilliseconds(requiredSilenceMs + 1000);
         }
 

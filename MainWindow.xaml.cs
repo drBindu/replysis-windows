@@ -2758,7 +2758,7 @@ namespace InterviewCopilot
         {
             if (string.IsNullOrWhiteSpace(_lastAutoSubmittedQuestion)) return false;
             if (now - _lastAutoSubmitUtc > ContinuationWindow) return false;
-            if (!AutoTurnRules.CanMergeContinuationFromMixedAudio(candidate, CaptureMode() != "system"))
+            if (!AutoTurnRules.CanMergeContinuationFromMixedAudio(candidate, CaptureMode() != "system", _lastAutoSubmittedQuestion))
                 return false;
 
             // The next question, not the rest of this one: its first words came

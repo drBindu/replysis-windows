@@ -255,6 +255,13 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     red state, for the first 1.5 s after the speech connection drops, because the engine replaces a dead connection in about a quarter of a
     second and the warning was flashing for that long several times a minute. **Check the Mac has an equivalent keep-alive and does not flash
     its connection warning for sub-second reconnects.** Tests: `tests/CleanerTests/SpeechHealthTests.cs`.
+44. **A question cut off on "And" takes the rest of the sentence with it (2026-10-14, the owner's Practice test).** The interviewer said
+    "Tell me what is Java and also tell me about your experience. And ... what work you've done before". Auto sent the first part ending on
+    "And" (the words for "And" landed 1 ms after the decision), and in mixed microphone mode the rest was answered as a separate question,
+    because there a continuation had to begin with "and/also/...". Now (a) `AutoTurnRules.EndsOnConnector`: if the question that was sent ends
+    on a joining word (and, or, but, also, plus, then, with, because, like), what follows merges into it in any mode; (b)
+    `HoldForInFlightMicAudio` holds a submission while microphone speech from the last 900 ms (was 450) has not produced words yet, because
+    the words for a sound arrive 0.5 to 1 s after it. **Check the Mac's turn rules for both.** Tests: `tests/CleanerTests/InstantResponseTests.cs`.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
