@@ -262,6 +262,11 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     on a joining word (and, or, but, also, plus, then, with, because, like), what follows merges into it in any mode; (b)
     `HoldForInFlightMicAudio` holds a submission while microphone speech from the last 900 ms (was 450) has not produced words yet, because
     the words for a sound arrive 0.5 to 1 s after it. **Check the Mac's turn rules for both.** Tests: `tests/CleanerTests/InstantResponseTests.cs`.
+45. **A finished question that trails off on "And" is answered at once, and what follows is merged into it (2026-10-14).** "You know what
+    language is your preferred? And" waited 4.5 s (an Unfinished ending: up to 4 s for the rest, then the flush), and the follow-up "Tell me about
+    that language" was answered as a new question because it asks something by itself. Now `ClassifyTurnEnding` returns Finished when the text
+    before a trailing and/or/but/plus ends with "?" or "." (four words or more), and `LooksLikeContinuation` accepts anything up to 20 words that
+    starts within 8 s of a question sent on a joining word, so the answer is redone for the merged question. **Check the Mac's turn rules.**
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

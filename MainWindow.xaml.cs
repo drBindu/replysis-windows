@@ -2764,7 +2764,14 @@ namespace InterviewCopilot
             // The next question, not the rest of this one: its first words came
             // well after the last submission. Timing from the submission alone let
             // "Before we wrap up," join onto "Why should we hire you".
-            if (!AutoTurnRules.CanContinueAfterPause(candidate, _lastAutoSubmitUtc, _autoFirstWordsAfterSubmitUtc))
+            // The question that was sent stopped on "and"/"or"/"but": the speaker said there was more. What follows is the
+            // rest of the SAME question, whatever it asks ("...your preferred? And ... tell me about that language"), and it
+            // may come after a longer breath than an ordinary tail.
+            bool sentOnJoiningWord = AutoTurnRules.EndsOnConnector(_lastAutoSubmittedQuestion);
+            bool soonAfterJoiningWord = sentOnJoiningWord && _autoFirstWordsAfterSubmitUtc >= _lastAutoSubmitUtc &&
+                                        _autoFirstWordsAfterSubmitUtc - _lastAutoSubmitUtc <= TimeSpan.FromSeconds(8);
+            if (!soonAfterJoiningWord &&
+                !AutoTurnRules.CanContinueAfterPause(candidate, _lastAutoSubmitUtc, _autoFirstWordsAfterSubmitUtc))
                 return false;
             if (AutoTurnRules.IsSpelledOutNoise(candidate)) return false;
             // Already part of the question that was sent: recognition re-delivering
@@ -2789,6 +2796,10 @@ namespace InterviewCopilot
                                   .Select(m => m.Value.ToLowerInvariant())
                                   .ToArray();
             if (words.Length < 2) return false;
+
+            // After a joining word it is the rest of the question even when it asks something by itself.
+            if (soonAfterJoiningWord && words.Length <= 20 && !ContinuationFillers.Contains(string.Join(" ", words)))
+                return true;
 
             // A tail is short. Anything longer is the interviewer moving on, even
             // if they happened to begin it with "and".
@@ -3192,6 +3203,9 @@ namespace InterviewCopilot
             "when", "then", "what", "which", "who", "how",
         };
 
+        /// <summary>Joining words that can trail a finished question while the speaker draws breath.</summary>
+        private static readonly HashSet<string> JoiningTails = new(StringComparer.OrdinalIgnoreCase) { "and", "or", "but", "plus" };
+
         private static TurnEnding ClassifyTurnEnding(string question)
         {
             if (string.IsNullOrWhiteSpace(question)) return TurnEnding.Unclear;
@@ -3208,7 +3222,15 @@ namespace InterviewCopilot
             // Nothing can follow these and still be a finished sentence, so the
             // speaker is mid-air no matter what the engine punctuated.
             if (NeverEndsSentence.Contains(tail))
+            {
+                // "What language is your preferred? And": a finished question, then a pause on a joining word. Waiting for
+                // the rest made the answer 4.5 s late (owner's test, 2026-10-14). It is answered now, and whatever follows
+                // the "And" merges into it and the answer is redone (LooksLikeContinuation).
+                string before = trimmed.Substring(0, words[^1].Index).TrimEnd();
+                if (JoiningTails.Contains(tail) && words.Count >= 4 && before.Length > 0 && before[^1] is '?' or '.')
+                    return TurnEnding.Finished;
                 return punctuated ? TurnEnding.Unclear : TurnEnding.Unfinished;
+            }
 
             // "Can you tell me" is how a request starts, not a request. Answered as
             // soon as it paused, the rest of the question was lost.
