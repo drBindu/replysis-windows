@@ -782,7 +782,11 @@ def _accept_single_dash(argv):
             fixed.append(arg)
     return fixed
 
-args = parser.parse_args(_accept_single_dash(sys.argv[1:]))
+# An argument this engine does not know is a newer app talking to it, not a reason to refuse to start: a usage error here
+# meant no speech at all (2026-10-14). It is ignored, and said so.
+args, _unknown_arguments = parser.parse_known_args(_accept_single_dash(sys.argv[1:]))
+if _unknown_arguments:
+    print(f">>> Ignoring arguments this engine does not know: {' '.join(_unknown_arguments)}", flush=True)
 
 if args.warmup:
     # Everything the real run imports, so every file is opened, scanned and cached now. No audio, no network.
@@ -2673,8 +2677,12 @@ def _deepgram_eligible() -> bool:
 
 
 def _deepgram_only() -> bool:
-    """True when the app asked for Deepgram and nothing else: failures are retried, never handed to Speechmatics."""
-    return bool(getattr(args, "deepgram_only", False))
+    """True when the app asked for Deepgram and nothing else: failures are retried, never handed to Speechmatics.
+
+    Asked for by the environment (REPLYSIS_DEEPGRAM_ONLY=1), which an older engine ignores, or by --deepgram-only."""
+    if getattr(args, "deepgram_only", False):
+        return True
+    return os.environ.get("REPLYSIS_DEEPGRAM_ONLY", "").strip().lower() in ("1", "true", "yes")
 
 
 def _deepgram_keyterms():

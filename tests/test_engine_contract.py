@@ -142,6 +142,9 @@ check("an idle connection that died is found out within two and a half seconds o
 check("a dropped line is retried on Deepgram instead of handing the session to the slower recogniser",
       "_DEEPGRAM_LINE_PROBLEMS_HEARD = 8" in SOURCE and "_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD = 3" in SOURCE
       and "staying on Deepgram and reconnecting" in SOURCE and "def _is_line_problem" in SOURCE)
+check("an argument the engine does not know can never stop it starting",
+      "parser.parse_known_args(" in SOURCE and "Ignoring arguments this engine does not know" in SOURCE
+      and 'os.environ.get("REPLYSIS_DEEPGRAM_ONLY"' in SOURCE)
 check("the Windows app can keep Deepgram as the only recogniser for English",
       '"--deepgram-only"' in SOURCE and "def _deepgram_only" in SOURCE and SOURCE.count("not _deepgram_only()") >= 3 and "if _deepgram_only():" in SOURCE
       and "waiting for a new token or credit, then trying again" in SOURCE)

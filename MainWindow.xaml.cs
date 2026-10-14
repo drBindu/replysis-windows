@@ -6512,10 +6512,16 @@ namespace InterviewCopilot
                     modeArg += $" --sysdevice {testSysIndex}";
 #endif
                 string langArg   = $" --language {SettingsWindow.GetTranscriptLanguage()}";
+                speechmaticsProcess.StartInfo.Arguments = $"{scriptArg}{deviceArg}{modeArg}{langArg}";
                 // Deepgram is the only recogniser for English: if its connection fails the engine retries it, it never hands
                 // the session to Speechmatics (slower, and the owner does not want it: 2026-10-13). Other languages are
                 // unaffected, because Deepgram is English only here.
-                speechmaticsProcess.StartInfo.Arguments = $"{scriptArg}{deviceArg}{modeArg}{langArg} --deepgram-only";
+                //
+                // An environment variable, NOT a command line flag. The first version passed --deepgram-only, and an engine
+                // that did not know it (a Visual Studio debug build next to an engine copied on 10 October) printed a usage
+                // error and exited, so speech never connected at all (2026-10-14, the owner's screen). An unknown environment
+                // variable is ignored by every engine ever shipped; a new setting must never be able to stop speech.
+                speechmaticsProcess.StartInfo.EnvironmentVariables["REPLYSIS_DEEPGRAM_ONLY"] = "1";
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SM_API_KEY"] = smKey;
                 // Deepgram goes first for English when the server issued a token. The
                 // engine hands over to Speechmatics on its own if Deepgram refuses or

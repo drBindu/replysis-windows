@@ -241,8 +241,9 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     back for the next one; (d) the smaller voice format (item 41) is used for 15 minutes after any line problem; (e) pings every 5 s with a 6 s
     allowance, so a connection that died while muted is replaced before the person speaks; (f) in the first 6 s after audio starts flowing
     again the first message must arrive within 2.5 s or the connection is replaced and the audio re-sent (Wi-Fi that drops flows every half minute
-    kills the idle connection, and the first question after a wait found it dead). NEW FLAG `--deepgram-only` (the Windows app passes
-    it): Deepgram is the only recogniser for English, a failing connection is retried forever and never handed to Speechmatics, and 401/402/
+    kills the idle connection, and the first question after a wait found it dead). NEW SETTING `REPLYSIS_DEEPGRAM_ONLY=1` in the environment, or the flag `--deepgram-only` (the Windows app sets the
+    environment variable; it first passed the flag and an older engine rejected it with a usage error, so speech never connected, 2026-10-14;
+    the engine now also ignores arguments it does not know, with a line saying so): Deepgram is the only recogniser for English, a failing connection is retried forever and never handed to Speechmatics, and 401/402/
     403/429 print the same `Refused with N` line and wait. The Mac does not pass it, so its behaviour is unchanged until you decide.
     **Decide for the Mac whether to pass `--deepgram-only`; the owner wants Deepgram only.** Tests: `tests/engine/test_line_resilience.py`
     (drives the real loop against a local server that answers, goes quiet, or never answers), `tests/test_engine_contract.py`.
