@@ -3096,6 +3096,11 @@ async def _run_deepgram_loop(holder) -> str:
                                 transcript["eager"] = False
                             if not text and not transcript["partial"]:
                                 continue
+                            # Flux repeats the same words several times a second while nothing changes. Passing each repeat
+                            # on looked to the app like the speaker still talking, and held a finished question for 1.75 s
+                            # (scenario test, 2026-10-14). Only new words, and the early end-of-turn call, go through.
+                            if text == transcript["partial"] and event != "EagerEndOfTurn":
+                                continue
                             transcript["partial"] = text
                             display = f"{transcript['confirmed']} {transcript['partial']}".strip()
                             _write_latest(display)
