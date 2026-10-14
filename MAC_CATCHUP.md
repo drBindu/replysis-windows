@@ -266,7 +266,9 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     language is your preferred? And" waited 4.5 s (an Unfinished ending: up to 4 s for the rest, then the flush), and the follow-up "Tell me about
     that language" was answered as a new question because it asks something by itself. Now `ClassifyTurnEnding` returns Finished when the text
     before a trailing and/or/but/plus ends with "?" or "." (four words or more), and `LooksLikeContinuation` accepts anything up to 20 words that
-    starts within 8 s of a question sent on a joining word, so the answer is redone for the merged question. **Check the Mac's turn rules.**
+    starts within 8 s of a question sent on a joining word AND points back at it (`AutoTurnRules.RefersBack`: that, this, it, those...), so the
+    answer is redone for the merged question; a new topic ("what work have you done before") still gets its own answer (owner). The quick
+    confirmation after Deepgram's speech_final is now 250 ms (was 450; owner wants 0.3 s), 650 ms after a tail has been merged. **Check the Mac's turn rules.**
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

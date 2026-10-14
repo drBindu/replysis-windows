@@ -2797,8 +2797,10 @@ namespace InterviewCopilot
                                   .ToArray();
             if (words.Length < 2) return false;
 
-            // After a joining word it is the rest of the question even when it asks something by itself.
-            if (soonAfterJoiningWord && words.Length <= 20 && !ContinuationFillers.Contains(string.Join(" ", words)))
+            // After a joining word, a follow-up ABOUT the same thing ("Tell me about that language", "Why do you like it")
+            // is the rest of that question: merged, the answer redone. A new topic ("What work have you done before")
+            // is its own question and gets its own answer (owner, 2026-10-14), so it goes through the rules below.
+            if (soonAfterJoiningWord && words.Length <= 20 && AutoTurnRules.RefersBack(candidate))
                 return true;
 
             // A tail is short. Anything longer is the interviewer moving on, even
@@ -3031,10 +3033,13 @@ namespace InterviewCopilot
             // "Tell me about yourself." is as plainly finished as a question mark
             // (silent live test: 2.9s to the first word, against 1.4s for "?").
             // A statement prompt ("Your resume says...") still waits the full time.
+            // Judged without a trailing "And"/"Or": "What language do you prefer? And" is a finished question with a
+            // breath on the end, and the "?" test failed on it, so it waited 2.8 s (scenario test, 2026-10-14).
+            string coreQuestion = StripTrailingJoiningWord(candidateQuestion);
             if (ending == TurnEnding.Finished && (providerConfirmedEnd || speechFinalEnded) &&
-                IsLikelyCompleteAutomaticQuestion(candidateQuestion) &&
-                (candidateQuestion.TrimEnd().EndsWith('?') ||
-                 PromptBuilder.StartsLikeAQuestion(LastSentence(candidateQuestion))))
+                IsLikelyCompleteAutomaticQuestion(coreQuestion) &&
+                (coreQuestion.TrimEnd().EndsWith('?') ||
+                 PromptBuilder.StartsLikeAQuestion(LastSentence(coreQuestion))))
             {
                 // A question mark, and the provider itself heard the speaker stop.
                 // Waiting the full 2.8s here put 3.5s between the last word and the
@@ -3202,6 +3207,14 @@ namespace InterviewCopilot
             "any", "some", "more", "most", "very", "really", "so",
             "when", "then", "what", "which", "who", "how",
         };
+
+        /// <summary>The question without a trailing and/or/but/plus, when what comes before it is a finished sentence.</summary>
+        private static string StripTrailingJoiningWord(string question)
+        {
+            string trimmed = (question ?? "").TrimEnd();
+            var m = Regex.Match(trimmed, @"^(.*[?.])\s*(\w+)[\s.,;:!?]*$", RegexOptions.Singleline);
+            return m.Success && JoiningTails.Contains(m.Groups[2].Value) ? m.Groups[1].Value.TrimEnd() : trimmed;
+        }
 
         /// <summary>Joining words that can trail a finished question while the speaker draws breath.</summary>
         private static readonly HashSet<string> JoiningTails = new(StringComparer.OrdinalIgnoreCase) { "and", "or", "but", "plus" };

@@ -59,7 +59,9 @@ namespace InterviewCopilot
         // part that is ours. The cost of too short a wait is a tail that arrives just after the question was sent,
         // which re-answers the whole question, so the first time that happens in an interview the wait goes back to
         // the cautious 650 ms for the rest of it (SpeechFinalConfirmAfterTailMs).
-        internal const int SpeechFinalConfirmMs = 450;
+        // 250 ms, down from 450 (2026-10-14, owner: "I want it instant, 0.3"). A tail that arrives after the answer started is
+        // merged and the answer redone, and after the first such tail the wait goes back to 650 ms for that interview.
+        internal const int SpeechFinalConfirmMs = 250;
         internal const int SpeechFinalConfirmAfterTailMs = 650;
         internal const int UtteranceEndConfirmMs = 250;
         internal const int AmbiguousNoEndpointWaitMs = 1200;
@@ -123,6 +125,13 @@ namespace InterviewCopilot
         // was answered, then "what work you've done before" was answered again as a separate question.
         internal static bool CanMergeContinuationFromMixedAudio(string candidate, bool mixedAudio, string previousQuestion = "") =>
             !mixedAudio || IsExplicitExtension(candidate) || EndsOnConnector(previousQuestion);
+
+        /// <summary>
+        /// The words point back at what was just asked ("that language", "it", "those projects") rather than at something new.
+        /// Only consulted for a follow-up within seconds of a question that stopped on "and"/"or".
+        /// </summary>
+        internal static bool RefersBack(string text) =>
+            Regex.IsMatch(text ?? "", @"\b(?:that|this|it|its|those|these|them|same|there)\b", RegexOptions.IgnoreCase);
 
         /// <summary>The text stops on a joining word, so the sentence plainly goes on.</summary>
         internal static bool EndsOnConnector(string text) =>

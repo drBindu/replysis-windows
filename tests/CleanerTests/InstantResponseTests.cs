@@ -73,7 +73,10 @@ internal static class InstantResponseTests
                   "Tell me what is Java and also tell me about your experience. And") &&
               !AutoTurnRules.CanMergeContinuationFromMixedAudio("what work you've done before.", true,
                   "Tell me what is Java and also tell me about your experience."),
-            "a question sent ending on 'And' takes the rest of the sentence with it, in Practice too");
+            "after a question sent ending on 'And', what follows is considered as its possible continuation, in Practice too");
+        Check(AutoTurnRules.RefersBack("Tell me about that language.") && AutoTurnRules.RefersBack("Why do you like it?") &&
+              !AutoTurnRules.RefersBack("What work you have done before.") && !AutoTurnRules.RefersBack("How many years of experience do you have?"),
+            "a follow-up about the same thing points back at it; a new topic does not");
         Check(AutoTurnRules.EndsOnConnector("about your experience. And") && AutoTurnRules.EndsOnConnector("Java or") &&
               !AutoTurnRules.EndsOnConnector("Tell me about Java.") && !AutoTurnRules.EndsOnConnector("What is a brand?"),
             "only a joining word at the very end counts");
@@ -105,8 +108,10 @@ internal static class InstantResponseTests
         Check(AutoTurnRules.SpeechFinalConfirmMs <= 800,
             $"the confirmation after speech final is {AutoTurnRules.SpeechFinalConfirmMs} ms, well under the 1,500 ms it used to be");
         Check(AutoTurnRules.UtteranceEndConfirmMs <= 400, "and after utterance end it is short");
-        Check(AutoTurnRules.SpeechFinalConfirmMs >= 400,
-            "but not so short that a pause between two clauses is taken for the end");
+        // 250 ms since 2026-10-14 (owner: "instant, 0.3"). A pause between two clauses that does get answered early is
+        // merged as a continuation and the answer redone; the wait then returns to 650 ms for the interview.
+        Check(AutoTurnRules.SpeechFinalConfirmMs >= 200,
+            "but not so short that a breath inside a word is taken for the end");
 
         Check(AutoTurnRules.FlushStableChecks(true, false) == 1,
             "once the service called the end of the speech, nothing is in flight: one look");
@@ -248,8 +253,8 @@ internal static class InstantResponseTests
         Check(RecoveryPolicy.CredentialRenewalWaitSeconds(100) == 60 && RecoveryPolicy.CredentialRenewalWaitSeconds(-1) == 5,
             "there is always a next attempt: it never gives up, and never spins");
 
-        // The quick send wait is 450 ms, and goes back to 650 ms once an interviewer has added a tail to a question.
-        Check(AutoTurnRules.QuickSendWaitMs(false, 0, 2800, 0) == 450, "a finished question is sent 450 ms after the service says the speaker stopped");
+        // The quick send wait is 250 ms, and goes back to 650 ms once an interviewer has added a tail to a question.
+        Check(AutoTurnRules.QuickSendWaitMs(false, 0, 2800, 0) == 250, "a finished question is sent 250 ms after the service says the speaker stopped");
         Check(AutoTurnRules.QuickSendWaitMs(false, 0, 2800, 1) == 650 && AutoTurnRules.QuickSendWaitMs(false, 0, 2800, 3) == 650,
             "after a tail has been merged this interview, it is cautious again");
         Check(AutoTurnRules.QuickSendWaitMs(true, 0, 2800, 5) == AutoTurnRules.UtteranceEndConfirmMs,
