@@ -1056,6 +1056,8 @@ namespace InterviewCopilot
                 int credits = doc.RootElement.TryGetProperty("credits", out var c) ? c.GetInt32() : 0;
                 string plan = doc.RootElement.TryGetProperty("plan", out var p) ? p.GetString() ?? "free" : "free";
                 bool isUnlimited = doc.RootElement.TryGetProperty("isUnlimited", out var u) ? u.GetBoolean() : false;
+                _minutesBalance = doc.RootElement.TryGetProperty("minutesBalance", out var mb) && mb.TryGetInt32(out int mbv)
+                    ? Math.Max(0, mbv) : 0;
 
                 UserSession.Credits = credits;
                 UserSession.Plan = plan;
@@ -1111,7 +1113,9 @@ namespace InterviewCopilot
                         // no hours, nothing". Listening is still limited on the server
                         // as a fair use guard, and says so in words only if it is ever hit.
                         bool limitReached = _audioMinutesRemaining == 0;
-                        CreditsLabel.Text = PlanFacts.BadgeText(credits);
+                        CreditsLabel.Text = _minutesBalance > 0
+                            ? $"{_minutesBalance} min left"
+                            : PlanFacts.BadgeText(credits);
                         if (CreditsBadge != null)
                             CreditsBadge.ToolTip = ExplainCredits(credits, limitReached, OnFreeTrial());
                         CreditsIcon.Text = "";
@@ -2037,6 +2041,10 @@ namespace InterviewCopilot
         private DateTime _lastSpeechHeardUtc = DateTime.MinValue;
         private double _unreportedListeningSeconds;
         private int _audioMinutesRemaining = -1;   // -1 = unknown or unlimited
+        // Bought interview minutes (India, Rs 5 a minute). While any are left the badge shows them, not answers.
+        private int _minutesBalance;
+        private DateTime _lastAutoAddAskUtc = DateTime.MinValue;
+        private const int AutoAddWhenLeft = 2;   // matches AUTO_ADD_WHEN_LEFT on the website
 
         private void StartListeningMeter()
         {
@@ -2545,8 +2553,66 @@ namespace InterviewCopilot
                     DebugWindow.Log("METER", $"Reported {minutes} min; {_audioMinutesRemaining} left this month.");
                     _ = FetchAndDisplayCreditsAsync(force: true);
                 }
+                if (doc.RootElement.TryGetProperty("minutesBalance", out var bal) && bal.TryGetInt32(out int balance))
+                {
+                    bool hadMinutes = _minutesBalance > 0;
+                    _minutesBalance = Math.Max(0, balance);
+                    if ((hadMinutes || _minutesBalance > 0) && _minutesBalance <= AutoAddWhenLeft)
+                        _ = AskForMoreMinutesAsync();
+                }
             }
             catch (Exception ex) { DebugWindow.Log("METER", $"Report error: {ex.Message}"); }
+        }
+
+        /// <summary>
+        /// Bought minutes are nearly gone. Asks the website to auto add 30 minutes on the saved card (when the
+        /// user switched auto add on). Most Indian banks want the person to approve such a charge, so when the
+        /// website says so, a notice offers the one tap payment: nothing opens on screen by itself during an
+        /// interview. Asked at most once every three minutes; the website also refuses a second charge.
+        /// </summary>
+        private async Task AskForMoreMinutesAsync()
+        {
+            if (!UserSession.IsLoggedIn || string.IsNullOrEmpty(UserSession.IdToken)) return;
+            if (DateTime.UtcNow - _lastAutoAddAskUtc < TimeSpan.FromMinutes(3)) return;
+            _lastAutoAddAskUtc = DateTime.UtcNow;
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Post, "https://replysis.com/api/minutes");
+                req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
+                req.Content = new StringContent("{\"action\":\"add\"}", System.Text.Encoding.UTF8, "application/json");
+                using var res = await _creditsClient.SendAsync(req);
+                string body = await res.Content.ReadAsStringAsync();
+                if (!res.IsSuccessStatusCode) { DebugWindow.Log("MINUTES", $"Auto add: HTTP {(int)res.StatusCode}"); return; }
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+                int added = root.TryGetProperty("added", out var a) && a.TryGetInt32(out int av) ? av : 0;
+                string reason = root.TryGetProperty("reason", out var r) ? r.GetString() ?? "" : "";
+                if (added > 0)
+                {
+                    DebugWindow.Log("MINUTES", $"Auto add: +{added} minutes on the saved card.");
+                    _ = FetchAndDisplayCreditsAsync(force: true);
+                    return;
+                }
+                if (root.TryGetProperty("needsApproval", out var na) && na.ValueKind == JsonValueKind.True &&
+                    root.TryGetProperty("url", out var u) && u.GetString() is string url &&
+                    url.StartsWith("https://checkout.stripe.com/", StringComparison.Ordinal))
+                {
+                    DebugWindow.Log("MINUTES", "Auto add: the bank wants approval; offering the one tap payment.");
+                    Dispatcher.Invoke(() => ShowInAppAlert(
+                        "Your minutes are almost over",
+                        "Your bank asks you to approve the 30 minutes. Tap to pay, and the interview keeps going meanwhile.",
+                        persist: true,
+                        actionLabel: "Add 30 minutes",
+                        action: () =>
+                        {
+                            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+                            catch (Exception ex) { DebugWindow.Log("MINUTES", $"Could not open payment: {ex.GetType().Name}"); }
+                        }));
+                    return;
+                }
+                DebugWindow.Log("MINUTES", $"Auto add not used ({(reason.Length > 0 ? reason : "no reason given")}).");
+            }
+            catch (Exception ex) { DebugWindow.Log("MINUTES", $"Auto add failed: {ex.GetType().Name}"); }
         }
 
         private void ResetAutoTurnDetection()
