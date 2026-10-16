@@ -334,10 +334,10 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     C2C lists. India answers are stored apart from the US ones (`inWorkType`, `inNotice`, `inOffers`, `inWorkLocation`, `inPay` in
     jobcontext.json); the prompt gets "Notice period:" and "Other offers:" lines instead of work authorization and can start.
 57. **India pay by the minute (2026-10-16, owner).** Rs 5 a minute, bought on the website (15 to 600, slider), with auto add of
-    30 minutes. Server: `minutesBalance` on the user; reported listening is taken from it first; while it is above 0 answers cost
+    15 minutes (owner changed it from 30). Prices: Rs 5 a minute at 15 minutes, cheaper per minute up to Rs 649 for 600, all under Pro. Server: `minutesBalance` on the user; reported listening is taken from it first; while it is above 0 answers cost
     no credits. `/api/v1/interview/credits` and `/api/v1/usage/listening` return `minutesBalance`. App: badge shows "N min left"
     while minutes remain; at 2 or fewer it POSTs `https://replysis.com/api/minutes` {"action":"add"}; if the answer has
-    needsApproval + a checkout.stripe.com url, it shows a notice with "Add 30 minutes" (never opens a browser by itself).
+    needsApproval + a checkout.stripe.com url, it shows a notice with "Add 15 minutes" (never opens a browser by itself).
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

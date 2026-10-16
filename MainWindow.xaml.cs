@@ -2565,7 +2565,7 @@ namespace InterviewCopilot
         }
 
         /// <summary>
-        /// Bought minutes are nearly gone. Asks the website to auto add 30 minutes on the saved card (when the
+        /// Bought minutes are nearly gone. Asks the website to auto add 15 minutes on the saved card (when the
         /// user switched auto add on). Most Indian banks want the person to approve such a charge, so when the
         /// website says so, a notice offers the one tap payment: nothing opens on screen by itself during an
         /// interview. Asked at most once every three minutes; the website also refuses a second charge.
@@ -2600,9 +2600,9 @@ namespace InterviewCopilot
                     DebugWindow.Log("MINUTES", "Auto add: the bank wants approval; offering the one tap payment.");
                     Dispatcher.Invoke(() => ShowInAppAlert(
                         "Your minutes are almost over",
-                        "Your bank asks you to approve the 30 minutes. Tap to pay, and the interview keeps going meanwhile.",
+                        "Your bank asks you to approve the 15 minutes. Tap to pay, and the interview keeps going meanwhile.",
                         persist: true,
-                        actionLabel: "Add 30 minutes",
+                        actionLabel: "Add 15 minutes",
                         action: () =>
                         {
                             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
