@@ -3488,7 +3488,7 @@ namespace InterviewCopilot
                 {
                     if (flushClock.ElapsedMilliseconds > NormalFlushCapMs + AutoTurnRules.BehindExtraWaitMs) return false;
                     if (AutoTurnRules.SpeechFinalIsLatest(
-                            Interlocked.Read(ref _lastSpeechFinalUtcTicks),
+                            SpeechEndTicks(),
                             Interlocked.Read(ref _lastPartialResultUtcTicks),
                             Interlocked.Read(ref _lastFinalResultUtcTicks), DateTime.MinValue))
                         return false;
@@ -3536,7 +3536,7 @@ namespace InterviewCopilot
                         stableCount++;
                         int stableNeeded = AutoTurnRules.FlushStableChecks(
                             AutoTurnRules.SpeechFinalIsLatest(
-                                Interlocked.Read(ref _lastSpeechFinalUtcTicks),
+                                SpeechEndTicks(),
                                 Interlocked.Read(ref _lastPartialResultUtcTicks),
                                 Interlocked.Read(ref _lastFinalResultUtcTicks), DateTime.MinValue),
                             ClassifyTurnEnding(PromptBuilder.NormalizeInterviewerQuestion(question))
@@ -4504,6 +4504,15 @@ namespace InterviewCopilot
         /// True while someone is listening and the speech service is falling behind the voice, so an upload
         /// should wait. Reads the engine's speech_lag.txt; see AutoTurnRules.SpeechServiceBehind.
         /// </summary>
+        /// <summary>
+        /// When the speech service last said the sentence ended: its early call (SPEECH FINAL) or its confirmation
+        /// (UTTERANCE END). Flux sends the confirmation as a FINAL line followed by UTTERANCE END, so judged on SPEECH FINAL
+        /// alone a finished sentence looked like words had come after the end, and every answer waited the full 300 ms
+        /// for nothing (2026-10-16, about 0.45 s of each measured answer).
+        /// </summary>
+        private long SpeechEndTicks() =>
+            Math.Max(Interlocked.Read(ref _lastSpeechFinalUtcTicks), Interlocked.Read(ref _lastUtteranceEndUtcTicks));
+
         private bool VoiceNeedsTheLine()
         {
             if (!isListening || isMuted) return false;

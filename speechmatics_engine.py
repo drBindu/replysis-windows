@@ -2905,6 +2905,11 @@ _FLUX_QUIET_REFRESH_SECONDS = 15.0
 # second even through pure silence (measured 2026-10-13: the longest gap in ten seconds of silence was 1.08 s). The send guard
 # above only notices once the socket buffers are full: in a real log that was 14 s after the connection died.
 _DEEPGRAM_SILENT_SECONDS = 4.0
+# Flux answers every 0.24 s while audio flows (measured; its longest healthy gap seen was 1.5 s), so 4 s of nothing is far
+# past dead. 2026-10-16: a stall in the middle of a question was found 4 s late, the unanswered audio was replayed on the
+# new connection too late for the key press, and the question went out with 71 of 121 characters. Found at 2 s, the
+# replayed words are back before the person has finished.
+_FLUX_SILENT_SECONDS = 2.0
 
 # Right after audio starts flowing again (Start, or unmuting after a pause) the first answer has to come sooner: Deepgram's first
 # message arrives about a second after the first audio, so two and a half seconds of nothing means the connection that sat idle
@@ -3082,7 +3087,8 @@ async def _run_deepgram_loop(holder) -> str:
                         # In the first seconds of a stretch of audio nothing has come back yet, and that is the moment an idle
                         # connection that died is found out: expect the first message quickly.
                         fresh = now - audio["since"] < _DEEPGRAM_FIRST_ANSWER_WINDOW and rx["last"] < audio["since"]
-                        limit = _DEEPGRAM_FIRST_ANSWER_SECONDS if fresh else _DEEPGRAM_SILENT_SECONDS
+                        limit = _DEEPGRAM_FIRST_ANSWER_SECONDS if fresh else (
+                            _FLUX_SILENT_SECONDS if _deepgram_flux() else _DEEPGRAM_SILENT_SECONDS)
                         if waited > limit:
                             raise DeadConnection(f"nothing came back from Deepgram for {waited:.0f}s while audio was going out")
 

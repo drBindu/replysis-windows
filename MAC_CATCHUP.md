@@ -313,6 +313,13 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     question whole 5/5; after 30 to 45 s with no audio, cut 3/3 (about half the messages), once a keepalive ping timeout; 8 to 15 s,
     whole. While pause.flag is set the engine closes the connection after `_FLUX_QUIET_REFRESH_SECONDS` (15) without audio and opens
     a new one at once, printing no OFFLINE and counting no failure. Test: `test_a_muted_flux_connection_is_replaced_before_it_goes_stale`.
+
+52. **Flux: a sentence's end is its early call or its confirmation; a silent Flux line is dead after 2 s (2026-10-16).** Flux sends
+    EagerEndOfTurn (FINAL + SPEECH FINAL) and then EndOfTurn (FINAL + UTTERANCE END). Judged on SPEECH FINAL alone the confirming FINAL
+    looked like words after the end, and every key press waited 300 ms for nothing; `SpeechEndTicks()` now takes the later of SPEECH
+    FINAL and UTTERANCE END (measured: wait 453 ms -> 24 ms, first word 0.42 s). `_FLUX_SILENT_SECONDS` = 2.0 (nova-3 stays 4.0):
+    Flux answers every 0.24 s, so a stall is found and the unanswered audio replayed before the key press. No false reconnect in
+    8 healthy runs against the real service.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
