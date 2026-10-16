@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:InterviewCopilot"
         Title="Replysis AI"
         Icon="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
-        Height="590" Width="980"
+        Height="560" Width="930"
         MinHeight="540" MinWidth="880"
         WindowStartupLocation="Manual"
         KeyDown="Window_KeyDown"

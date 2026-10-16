@@ -323,6 +323,7 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
 53. **New users start at 30% opacity, main window and Compact alike (2026-10-16, owner).** Stored default 0.62 -> 0.646, which the
     slider shows as 30% (slider % = 1 + (stored - 0.5) / 0.5 * 99). Existing users keep what they chose. A cream restyle was tried
     the same day and dropped by the owner: the dark glass stays.
+54. **Main window opens at 930 x 560, was 980 x 590 (2026-10-16, owner: a little smaller).** Minimums (880 x 540) unchanged.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

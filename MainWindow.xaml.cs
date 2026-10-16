@@ -71,8 +71,8 @@ namespace InterviewCopilot
         private const long   MaxResumeFileBytes      = 10 * 1024 * 1024;
         private const int    MaxResumeTextChars      = 100_000;
         private const int    MaxAiResponseChars      = 100_000;
-        private const double DefaultMainWindowWidth  = 980;
-        private const double DefaultMainWindowHeight = 590;
+        private const double DefaultMainWindowWidth  = 930;
+        private const double DefaultMainWindowHeight = 560;
 
         private bool _suppressOpacitySlider = false;
         private bool isMuted = true;
