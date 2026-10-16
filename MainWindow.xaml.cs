@@ -3476,14 +3476,25 @@ namespace InterviewCopilot
                 int emptyCount  = 0;
                 // When the speech service is behind the voice, the last words are still on their way: keep waiting for
                 // them, at most BehindExtraWaitMs longer, instead of sending half a question (see SpeechServiceBehind).
-                double listenStartUnix = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0
-                                         - (Environment.TickCount64 - _listeningStartTicks) / 1000.0;
+                // Judged as of the press: once listening stops the speech service has nothing new to answer, so
+                // its silence after the press is not a sign of being behind. And once it has called the end of the
+                // sentence, every word is in and there is nothing to wait for.
+                double pressUnix = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
+                double listenStartUnix = pressUnix - (Environment.TickCount64 - _listeningStartTicks) / 1000.0;
+                var flushClock = Stopwatch.StartNew();
+                const long NormalFlushCapMs = 1280;
                 bool loggedBehind = false;
                 bool Behind()
                 {
+                    if (flushClock.ElapsedMilliseconds > NormalFlushCapMs + AutoTurnRules.BehindExtraWaitMs) return false;
+                    if (AutoTurnRules.SpeechFinalIsLatest(
+                            Interlocked.Read(ref _lastSpeechFinalUtcTicks),
+                            Interlocked.Read(ref _lastPartialResultUtcTicks),
+                            Interlocked.Read(ref _lastFinalResultUtcTicks), DateTime.MinValue))
+                        return false;
                     string lag = "";
                     try { lag = File.ReadAllText(Path.Combine(AppDataFolder, "speech_lag.txt")); } catch { }
-                    bool b = AutoTurnRules.SpeechServiceBehind(lag, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0, listenStartUnix);
+                    bool b = AutoTurnRules.SpeechServiceBehind(lag, pressUnix, listenStartUnix);
                     if (b && !loggedBehind)
                     {
                         loggedBehind = true;
@@ -3491,10 +3502,9 @@ namespace InterviewCopilot
                     }
                     return b;
                 }
-                int extraLoops = AutoTurnRules.BehindExtraWaitMs / 20;
-                for (int i = 0; i < 64 + extraLoops; i++)   // 20ms x 64 = the same ~1.28s cap, longer only while behind
+                for (int i = 0; ; i++)   // the same ~1.28s cap, longer only while behind (by the clock: a 20 ms wait is ~31 ms on Windows)
                 {
-                    if (i >= 64 && !Behind()) break;
+                    if ((i >= 64 || flushClock.ElapsedMilliseconds >= NormalFlushCapMs) && !Behind()) break;
                     await Task.Delay(20, ct);  // throws if the user interrupted
                     string t = ReadLatestTxtSafe().Trim();
                     if (!string.IsNullOrWhiteSpace(t) && !string.Equals(t, question, StringComparison.Ordinal))
@@ -4400,16 +4410,28 @@ namespace InterviewCopilot
                 if (!string.IsNullOrEmpty(UserSession.IdToken))
                     req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
                 req.Headers.TryAddWithoutValidation("X-Device-Id", DeviceIdentity.Current);
-                req.Content = new StringContent(
-                    JsonSerializer.Serialize(new { image = Convert.ToBase64String(shot) }),
-                    System.Text.Encoding.UTF8, "application/json");
+                // The picture steps aside for the live voice: small pieces, capped while listening, and held
+                // whenever the speech service falls behind (see PacedContent; 2026-10-16 an unpaced 651 KB
+                // upload left the speech service answering nothing for 8 seconds).
+                bool pacedForVoice = isListening && !isMuted;
+                var paced = new PacedContent(
+                    System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { image = Convert.ToBase64String(shot) })),
+                    "application/json",
+                    pacedForVoice ? PacedContent.ListeningBytesPerSecond : int.MaxValue / 2,
+                    VoiceNeedsTheLine);
+                req.Content = paced;
 
-                using var uploadCts = new CancellationTokenSource(UplinkGovernor.UploadTimeout);
+                // A paced upload is slow on purpose; it gets longer before it counts as failed.
+                using var uploadCts = new CancellationTokenSource(
+                    pacedForVoice ? UplinkGovernor.UploadTimeout + TimeSpan.FromSeconds(12) : UplinkGovernor.UploadTimeout);
                 _preparedUploadDroppedForQuestion = false;
                 _preparedUploadCts = uploadCts;
                 using var res = await _creditsClient.SendAsync(req, uploadCts.Token);
                 if (_windowClosed || screenSession != _screenSessionGeneration) return;
-                NoteUplinkOutcome(true, sw.Elapsed, shot.Length);
+                // Time spent waiting for the voice was chosen, not a slow line.
+                NoteUplinkOutcome(true, sw.Elapsed - paced.Held, shot.Length);
+                if (paced.Holds > 0)
+                    DebugWindow.Log("SCREEN", $"Screenshot upload stepped aside for the voice {paced.Holds} times ({paced.Held.TotalMilliseconds:F0}ms).");
                 if (!res.IsSuccessStatusCode)
                 {
                     // Not worth a word to the user: the next question simply
@@ -4476,6 +4498,23 @@ namespace InterviewCopilot
             {
                 _preparedUploadCts = null;
             }
+        }
+
+        /// <summary>
+        /// True while someone is listening and the speech service is falling behind the voice, so an upload
+        /// should wait. Reads the engine's speech_lag.txt; see AutoTurnRules.SpeechServiceBehind.
+        /// </summary>
+        private bool VoiceNeedsTheLine()
+        {
+            if (!isListening || isMuted) return false;
+            string lag = "";
+            try { lag = File.ReadAllText(Path.Combine(AppDataFolder, "speech_lag.txt")); } catch { }
+            double nowUnix = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
+            double listenStartUnix = nowUnix - (Environment.TickCount64 - _listeningStartTicks) / 1000.0;
+            // Not one answer since listening began, a second or more in: the voice is not getting through, and that is
+            // exactly when an upload must not take the line (2026-10-16: ten seconds of nothing while 590 KB went up).
+            if (AutoTurnRules.UnansweredSinceListening(lag, nowUnix, listenStartUnix)) return true;
+            return AutoTurnRules.SpeechServiceBehind(lag, nowUnix, listenStartUnix);
         }
 
         // ── The screen's words, sent ahead in place of a picture ───────────────────────────────────────────────────

@@ -157,6 +157,7 @@ internal static class Program
         Console.WriteLine("\n9f. Instant response: Auto does not wait on top of the wait, and words type in");
         _failed += InstantResponseTests.Run();
         _failed += UplinkGovernorTests.Run();
+        _failed += PacedUploadTests.Run();
         _failed += AnswerClosersTests.Run();
         _failed += ScreenWordsTests.Run();
         _failed += AppIdentityTests.Run();

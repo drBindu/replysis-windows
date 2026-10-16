@@ -143,6 +143,9 @@ internal static class InstantResponseTests
             "a file from before this listening started says nothing");
         Check(!AutoTurnRules.SpeechServiceBehind("garbage", startU + 5, startU), "an unreadable file says nothing");
         Check(AutoTurnRules.BehindExtraWaitMs <= 1500, "the extra wait for a late service is capped at 1.5 s");
+        Check(!AutoTurnRules.UnansweredSinceListening(null, startU + 0.5, startU), "half a second in: too early to call it unanswered");
+        Check(AutoTurnRules.UnansweredSinceListening("0.100 990.000", startU + 2, startU), "two seconds of listening, last answer from before: unanswered");
+        Check(!AutoTurnRules.UnansweredSinceListening("0.100 1001.500", startU + 2, startU), "answered since listening began: not unanswered");
 
         // The slow-speaker floor must learn from the speaker, not from the connection.
         DateTime prev = new DateTime(t0, DateTimeKind.Utc);

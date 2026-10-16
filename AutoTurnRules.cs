@@ -235,6 +235,21 @@ namespace InterviewCopilot
             return behind > 0.6 || nowUnix - writtenAt > 0.7;
         }
 
+        /// <summary>
+        /// Listening for over a second and the speech service has not answered once since it began (no lag file
+        /// written since then). Uploads step aside for this; the answer key does not wait on it, because then there
+        /// is nothing on its way to wait for.
+        /// </summary>
+        internal static bool UnansweredSinceListening(string? lagFileContent, double nowUnix, double listeningStartedUnix)
+        {
+            if (nowUnix - listeningStartedUnix < 1.0) return false;
+            if (string.IsNullOrWhiteSpace(lagFileContent)) return true;
+            var parts = lagFileContent.Trim().Split(' ');
+            if (parts.Length < 2 || !double.TryParse(parts[1], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double writtenAt)) return true;
+            return writtenAt < listeningStartedUnix;
+        }
+
         /// <summary>The most the app waits, on top of the normal wait, for a speech service that is behind.</summary>
         internal const int BehindExtraWaitMs = 1500;
 
