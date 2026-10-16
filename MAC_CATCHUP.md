@@ -284,6 +284,14 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     3 minutes of no audio. Flux sends a message at least every 0.3 s even in silence, so the dead-connection watchdog (item 42) works unchanged.
     Without the variable the engine is nova-3 exactly as before (the Mac). **Decide for the Mac; check Flux pricing against nova-3.**
     Tests: `tests/test_engine_contract.py`, the engine loop run against real Flux in both voice formats.
+
+48. **Pressing to answer waits 300 ms, not 100 ms, for the last words when no end of speech has been called (2026-10-16).** A real
+    log (owner's PC, Practice mode) showed the question sent with 78 of its 98 characters and shown that way on screen: after the press
+    the app waited for the transcript to be unchanged for 100 ms (5 reads of 20 ms), but Flux updates the words only every 240 ms and runs
+    about half a second behind the voice, so 100 ms is the gap between two updates, not the end of the words. The answer was built from the
+    cut question and the on screen line stayed cut. `AutoTurnRules.FlushStableChecks(false, false)` is now 15 (300 ms); with a speech final
+    already latest it is still one read, so the normal interview path is not slower. Any port that polls for a stable transcript after the
+    key press needs the stable window to be longer than the provider's update interval. Test: `InstantResponseTests`.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

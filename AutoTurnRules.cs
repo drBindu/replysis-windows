@@ -205,11 +205,16 @@ namespace InterviewCopilot
         /// <summary>
         /// How many 20 ms reads with no change the last look at the transcript needs before
         /// the question is sent. When the service has already called the end of the speech
-        /// nothing is in flight, so one read is enough; otherwise 100 ms, or 800 ms when the
+        /// nothing is in flight, so one read is enough; otherwise 300 ms, or 800 ms when the
         /// sentence plainly is not over.
+        ///
+        /// 300 and not 100 since 2026-10-16: the speech service (Flux) updates the words every 240 ms and
+        /// runs about half a second behind the voice, so 100 ms of no change is the gap between two
+        /// updates, not the end of the words. A real log showed the question sent with 78 of its 98
+        /// characters and shown that way on screen. Only reached when no end of speech has been called yet.
         /// </summary>
         internal static int FlushStableChecks(bool speechFinalIsLatest, bool looksUnfinished) =>
-            looksUnfinished ? 40 : speechFinalIsLatest ? 1 : 5;
+            looksUnfinished ? 40 : speechFinalIsLatest ? 1 : 15;
 
         /// <summary>
         /// Whether recognition has genuinely stopped changing. Providers often

@@ -126,7 +126,8 @@ internal static class InstantResponseTests
 
         Check(AutoTurnRules.FlushStableChecks(true, false) == 1,
             "once the service called the end of the speech, nothing is in flight: one look");
-        Check(AutoTurnRules.FlushStableChecks(false, false) == 5, "otherwise 100 ms of no change");
+        Check(AutoTurnRules.FlushStableChecks(false, false) == 15,
+            "otherwise 300 ms of no change: longer than the 240 ms between two Flux updates, or the last words are lost");
         Check(AutoTurnRules.FlushStableChecks(true, true) == 40 && AutoTurnRules.FlushStableChecks(false, true) == 40,
             "a sentence that plainly is not over still waits, whatever the signal says");
 
