@@ -2892,6 +2892,15 @@ class DeadConnection(ConnectionError):
     """Audio is going out and nothing at all has come back: the connection is open here and gone there."""
 
 
+# A Flux connection that sat muted goes stale. Measured 2026-10-16 against the real service from the owner's PC: a fresh
+# connection heard the whole test question 5 times out of 5; after 30 to 45 s with no audio (pings only) the same question
+# came back cut 3 times out of 3 ("...URL shortener that had", about half the messages), and one 45 s quiet ended in
+# "keepalive ping timeout", the error in the owner's own log. After 8 to 15 s it was whole. Between interview questions the
+# line is often muted for longer than that, so while muted the engine replaces the connection before it goes stale, and
+# the next question always starts on one that is at most this old. No audio is sent while muted, so a fresh one costs nothing.
+_FLUX_QUIET_REFRESH_SECONDS = 15.0
+
+
 # How long Deepgram may say nothing while audio is being sent before the connection is called dead. It answers about once a
 # second even through pure silence (measured 2026-10-13: the longest gap in ten seconds of silence was 1.08 s). The send guard
 # above only notices once the socket buffers are full: in a real log that was 14 s after the connection died.
@@ -3003,6 +3012,7 @@ async def _run_deepgram_loop(holder) -> str:
         online = False
         session_started = 0.0
         rx = {"last": time.monotonic(), "heard": False}   # when Deepgram last said anything on this connection
+        refresh = {"due": False}   # set when a muted Flux connection is replaced before it goes stale
         sent_log = deque(maxlen=_DEEPGRAM_REPLAY_CHUNKS)   # (when, chunk) of the audio sent on this connection
         # Created once and kept across reconnects, so audio recorded while the connection was stalling
         # or being replaced is still there for the next one. (It used to be created here, per attempt,
@@ -3047,6 +3057,10 @@ async def _run_deepgram_loop(holder) -> str:
                             audio["last"] = now
                             sent_log.append((now, chunk))
                             sent_secs["s"] += len(chunk) / (SAMPLE_RATE * 2)   # the chunk is 16 bit mono before any encoding
+                        elif (_deepgram_flux() and os.path.exists(PAUSE_FLAG)
+                              and now - max(audio["last"], session_started) >= _FLUX_QUIET_REFRESH_SECONDS):
+                            refresh["due"] = True   # muted long enough to go stale: hand over to a fresh connection
+                            return
                         elif now - last_sent >= 4.0 and not _deepgram_flux():
                             # (Flux rejects KeepAlive and closes; it stays open on pings alone.)
                             # Muted. Deepgram closes a session after ten seconds
@@ -3192,6 +3206,10 @@ async def _run_deepgram_loop(holder) -> str:
                     await ws.send(json.dumps({"type": "CloseStream"}))
                 except Exception:
                     pass
+            if refresh["due"]:
+                # Not a drop and not a failure: the muted connection was swapped for a fresh one. Nothing is shown to the app.
+                print(">>> [DEEPGRAM] Fresh connection while muted, so the next question starts on a new line.", flush=True)
+                continue
             print(">>> STATUS: OFFLINE", flush=True)
             lasted = time.monotonic() - session_started
             ever_heard = ever_heard or rx["heard"]

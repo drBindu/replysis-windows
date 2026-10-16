@@ -308,6 +308,11 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     answered once a second into listening (`AutoTurnRules.UnansweredSinceListening`). Capture is unchanged. The item 49 wait is now
     judged as of the key press, skipped once the end of speech is called, and capped by the clock (a 20 ms delay is ~31 ms on
     Windows; a loop count cap let one answer wait 4.4 s). Tests: `PacedUploadTests`, `InstantResponseTests`.
+
+51. **A muted Flux connection is replaced every 15 s (2026-10-16).** Measured against the real service: fresh connection, the test
+    question whole 5/5; after 30 to 45 s with no audio, cut 3/3 (about half the messages), once a keepalive ping timeout; 8 to 15 s,
+    whole. While pause.flag is set the engine closes the connection after `_FLUX_QUIET_REFRESH_SECONDS` (15) without audio and opens
+    a new one at once, printing no OFFLINE and counting no failure. Test: `test_a_muted_flux_connection_is_replaced_before_it_goes_stale`.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

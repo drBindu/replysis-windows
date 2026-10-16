@@ -30,7 +30,8 @@ CONSTS = {"_MULAW_TABLE", "_SLOW_LINE_FLAG", "_SLOW_LINE_FRESH_SECONDS", "_DEEPG
           "_DEEPGRAM_OPEN_SECONDS", "_DEEPGRAM_HEALTHY_SECONDS", "_DEEPGRAM_SILENT_SECONDS", "_DEEPGRAM_LINE_PROBLEMS_HEARD",
           "_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD", "_DEEPGRAM_REPLAY_CHUNKS", "_DEEPGRAM_REACH_EVERY",
           "_DEEPGRAM_REACH_UP_TO", "_DEEPGRAM_PING_EVERY", "_DEEPGRAM_PING_ALLOWED", "_DEEPGRAM_FIRST_ANSWER_SECONDS",
-          "_DEEPGRAM_FIRST_ANSWER_WINDOW", "SAMPLE_RATE", "LAG_FILE"}
+          "_DEEPGRAM_FIRST_ANSWER_WINDOW", "SAMPLE_RATE", "LAG_FILE",
+          "_FLUX_QUIET_REFRESH_SECONDS"}
 
 
 def engine_scope(app, url, buffered_class, printed, deepgram_only=False):
@@ -200,6 +201,42 @@ class LineResilience(unittest.TestCase):
         connections = asyncio.run(main())
         self.assertEqual(connections, 1, "nine seconds muted, still one connection: " + " | ".join(printed[-4:]))
 
+
+    def test_a_muted_flux_connection_is_replaced_before_it_goes_stale(self):
+        # Flux, muted for 20 s: one fresh connection after 15 s, without an OFFLINE for the app to show.
+        printed = []
+
+        async def main():
+            app = tempfile.mkdtemp(prefix="line-")
+            Path(app, "pause.flag").write_text("1")
+            seen = {"connections": 0}
+
+            async def handler(ws):
+                seen["connections"] += 1
+                async for _ in ws:
+                    pass
+            os.environ["REPLYSIS_DEEPGRAM_MODEL"] = "flux"
+            try:
+                async with websockets.serve(handler, "127.0.0.1", 0) as server:
+                    port = server.sockets[0].getsockname()[1]
+                    FakeBuffered.instances.clear()
+                    scope = engine_scope(app, f"ws://127.0.0.1:{port}/", FakeBuffered, printed, deepgram_only=True)
+                    runner = asyncio.create_task(scope["_run_deepgram_loop"]({}))
+                    await asyncio.sleep(0.5)
+                    buffered = FakeBuffered.instances[0]
+                    buffered.app = app
+                    buffered.stop_at = time.monotonic() + 20
+                    await asyncio.wait_for(runner, 40)
+                    return seen["connections"]
+            finally:
+                os.environ.pop("REPLYSIS_DEEPGRAM_MODEL", None)
+        connections = asyncio.run(main())
+        text = " | ".join(printed)
+        self.assertEqual(connections, 2, text[-400:])
+        self.assertIn("Fresh connection while muted", text)
+        # The only OFFLINE is the test stopping the engine at the end; the refresh itself shows none.
+        self.assertEqual(text.count("STATUS: OFFLINE"), 1, "a planned refresh is not shown as a drop")
+        self.assertLess(text.index("Fresh connection while muted"), text.index("STATUS: OFFLINE"))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
