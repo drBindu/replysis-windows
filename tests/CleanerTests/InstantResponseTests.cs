@@ -131,6 +131,19 @@ internal static class InstantResponseTests
         Check(AutoTurnRules.FlushStableChecks(true, true) == 40 && AutoTurnRules.FlushStableChecks(false, true) == 40,
             "a sentence that plainly is not over still waits, whatever the signal says");
 
+        // The key pressed to answer while the speech service is still behind the voice (2026-10-16, real run: words
+        // stopped at "design a URL" and 5.1 s of voice was never answered).
+        double startU = 1_000.0;
+        Check(!AutoTurnRules.SpeechServiceBehind(null, startU + 5, startU), "no lag file (older engine, nova-3): send as before");
+        Check(!AutoTurnRules.SpeechServiceBehind("0.200 1004.900", startU + 5, startU), "keeping up: 0.2 s behind, fresh, send");
+        Check(AutoTurnRules.SpeechServiceBehind("1.800 1004.900", startU + 5, startU), "1.8 s behind: wait for the last words");
+        Check(AutoTurnRules.SpeechServiceBehind("0.200 1003.000", startU + 5, startU),
+            "no message for 2 s while listening: stalled, wait");
+        Check(!AutoTurnRules.SpeechServiceBehind("3.000 990.000", startU + 5, startU),
+            "a file from before this listening started says nothing");
+        Check(!AutoTurnRules.SpeechServiceBehind("garbage", startU + 5, startU), "an unreadable file says nothing");
+        Check(AutoTurnRules.BehindExtraWaitMs <= 1500, "the extra wait for a late service is capped at 1.5 s");
+
         // The slow-speaker floor must learn from the speaker, not from the connection.
         DateTime prev = new DateTime(t0, DateTimeKind.Utc);
         DateTime later = prev.AddSeconds(1.5);

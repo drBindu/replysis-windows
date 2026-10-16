@@ -213,6 +213,31 @@ namespace InterviewCopilot
         /// updates, not the end of the words. A real log showed the question sent with 78 of its 98
         /// characters and shown that way on screen. Only reached when no end of speech has been called yet.
         /// </summary>
+        /// <summary>
+        /// Whether the speech service is still behind the voice when the key is pressed to answer, so the last words
+        /// are still on their way. The engine writes speech_lag.txt as "<seconds behind> <unix time>" on every Flux
+        /// message. Behind means: a lag over 0.6 s, or no message at all for 0.7 s (Flux sends one every 0.24 s while
+        /// it is keeping up). A file from before this stretch of listening, an unreadable one, or none at all (an older
+        /// engine, or nova-3) says nothing, and the app sends as it always has.
+        ///
+        /// 2026-10-16, a real run: the words stopped at "design a URL", 5.1 s of voice was never answered, and the
+        /// question went out cut. Measured the same evening, the last words land 0.1 to 0.5 s after the voice when
+        /// Flux keeps up, and Flux sometimes falls 1.5 to 5 s behind.
+        /// </summary>
+        internal static bool SpeechServiceBehind(string? lagFileContent, double nowUnix, double listeningStartedUnix)
+        {
+            if (string.IsNullOrWhiteSpace(lagFileContent)) return false;
+            var parts = lagFileContent.Trim().Split(' ');
+            if (parts.Length < 2) return false;
+            if (!double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double behind)) return false;
+            if (!double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double writtenAt)) return false;
+            if (writtenAt < listeningStartedUnix) return false;
+            return behind > 0.6 || nowUnix - writtenAt > 0.7;
+        }
+
+        /// <summary>The most the app waits, on top of the normal wait, for a speech service that is behind.</summary>
+        internal const int BehindExtraWaitMs = 1500;
+
         internal static int FlushStableChecks(bool speechFinalIsLatest, bool looksUnfinished) =>
             looksUnfinished ? 40 : speechFinalIsLatest ? 1 : 15;
 

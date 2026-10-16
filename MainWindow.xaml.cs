@@ -3474,8 +3474,27 @@ namespace InterviewCopilot
                 question = ReadLatestTxtSafe().Trim();
                 int stableCount = 0;
                 int emptyCount  = 0;
-                for (int i = 0; i < 64; i++)   // 20ms x 64 = the same ~1.28s cap
+                // When the speech service is behind the voice, the last words are still on their way: keep waiting for
+                // them, at most BehindExtraWaitMs longer, instead of sending half a question (see SpeechServiceBehind).
+                double listenStartUnix = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0
+                                         - (Environment.TickCount64 - _listeningStartTicks) / 1000.0;
+                bool loggedBehind = false;
+                bool Behind()
                 {
+                    string lag = "";
+                    try { lag = File.ReadAllText(Path.Combine(AppDataFolder, "speech_lag.txt")); } catch { }
+                    bool b = AutoTurnRules.SpeechServiceBehind(lag, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0, listenStartUnix);
+                    if (b && !loggedBehind)
+                    {
+                        loggedBehind = true;
+                        DebugWindow.Log("MIC", $"Speech service is behind the voice ({lag.Trim()}); waiting for the last words.");
+                    }
+                    return b;
+                }
+                int extraLoops = AutoTurnRules.BehindExtraWaitMs / 20;
+                for (int i = 0; i < 64 + extraLoops; i++)   // 20ms x 64 = the same ~1.28s cap, longer only while behind
+                {
+                    if (i >= 64 && !Behind()) break;
                     await Task.Delay(20, ct);  // throws if the user interrupted
                     string t = ReadLatestTxtSafe().Trim();
                     if (!string.IsNullOrWhiteSpace(t) && !string.Equals(t, question, StringComparison.Ordinal))
@@ -3513,6 +3532,7 @@ namespace InterviewCopilot
                             ClassifyTurnEnding(PromptBuilder.NormalizeInterviewerQuestion(question))
                                 == TurnEnding.Unfinished);   // 800ms, 100ms, or a single look
 
+                        if (stableCount >= stableNeeded && Behind()) continue;   // the words are not all here yet
                         if (stableCount >= stableNeeded)
                         {
                             if (stableNeeded > 5)
@@ -3530,7 +3550,7 @@ namespace InterviewCopilot
                         // most obvious because there is no answer at the end of
                         // it either.
                         emptyCount++;
-                        if (emptyCount >= 20) break;   // 400ms of silence
+                        if (emptyCount >= 20 && !Behind()) break;   // 400ms of silence, unless the words are still coming
                     }
                 }
             }

@@ -852,6 +852,10 @@ APP_DATA = os.environ.get("APP_DATA_DIR", "").strip() or os.path.join(
 os.makedirs(APP_DATA, exist_ok=True)
 
 LATEST_FILE    = os.path.join(APP_DATA, "latest.txt")
+# How far behind the speech service is: "<seconds behind> <unix time>". Written on every Flux message so the app,
+# when the key is pressed to answer, can wait for the last words that are still on their way instead of sending
+# half a question (2026-10-16: a real run lost "shortener that handles a million requests a minute").
+LAG_FILE       = os.path.join(APP_DATA, "speech_lag.txt")
 PAUSE_FLAG     = os.path.join(APP_DATA, "pause.flag")
 RESET_FLAG     = os.path.join(APP_DATA, "reset.flag")
 RECORD_FLAG    = os.path.join(APP_DATA, "record.flag")
@@ -1932,6 +1936,17 @@ def _load_extra_vocab():
     if terms:
         print(f">>> Loaded {len(terms)} interview-specific vocab terms for accuracy", flush=True)
     return list(_extra_vocab_cache)
+
+
+def _write_lag(seconds_behind):
+    """Publishes how many seconds of sent audio the speech service has not listened to yet. Never raises."""
+    try:
+        tmp = LAG_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(f"{max(0.0, seconds_behind):.3f} {time.time():.3f}")
+        os.replace(tmp, LAG_FILE)
+    except Exception:
+        pass
 
 
 def _write_latest(text):
@@ -3017,6 +3032,7 @@ async def _run_deepgram_loop(holder) -> str:
                 rx["last"] = session_started
                 transcript = {"confirmed": "", "partial": ""}
                 audio = {"last": 0.0, "since": 0.0}   # when audio last went out, and when this stretch of audio began
+                sent_secs = {"s": 0.0}   # seconds of voice sent on this connection; Flux counts from 0 on each connection too
 
                 async def sender():
                     last_sent = time.monotonic()
@@ -3030,6 +3046,7 @@ async def _run_deepgram_loop(holder) -> str:
                                 audio["since"] = now
                             audio["last"] = now
                             sent_log.append((now, chunk))
+                            sent_secs["s"] += len(chunk) / (SAMPLE_RATE * 2)   # the chunk is 16 bit mono before any encoding
                         elif now - last_sent >= 4.0 and not _deepgram_flux():
                             # (Flux rejects KeepAlive and closes; it stays open on pings alone.)
                             # Muted. Deepgram closes a session after ten seconds
@@ -3067,6 +3084,10 @@ async def _run_deepgram_loop(holder) -> str:
                             continue
                         kind = msg.get("type")
                         if kind == "TurnInfo":
+                            # Before the pause check: the app reads this while it waits for the last words after the key press.
+                            window_end = msg.get("audio_window_end")
+                            if isinstance(window_end, (int, float)):
+                                _write_lag(sent_secs["s"] - float(window_end))
                             # Flux. The transcript is the whole of the current turn so far. The app reads the same lines it
                             # reads from nova-3: PARTIAL while words come, FINAL and SPEECH FINAL when Flux thinks the speaker
                             # has finished (its early call), UTTERANCE END when it is sure.

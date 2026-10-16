@@ -23,13 +23,14 @@ except ImportError:           # the CI runner has no third party packages; the e
 SOURCE = Path(__file__).resolve().parents[2] / "speechmatics_engine.py"
 TREE = ast.parse(SOURCE.read_text(encoding="utf-8"))
 FUNCS = {"_run_deepgram_loop", "_send_with_stall_guard", "_slow_line_requested", "_pcm16_to_mulaw", "_build_mulaw_table",
-         "_http_status", "_looks_like_no_network", "_network_is_down", "_is_line_problem", "_deepgram_only", "_deepgram_flux"}
+         "_http_status", "_looks_like_no_network", "_network_is_down", "_is_line_problem", "_deepgram_only", "_deepgram_flux",
+         "_write_lag"}
 CLASSES = {"SendStalled", "DeadConnection"}
 CONSTS = {"_MULAW_TABLE", "_SLOW_LINE_FLAG", "_SLOW_LINE_FRESH_SECONDS", "_DEEPGRAM_REFUSED", "_DEEPGRAM_MAX_FAILURES",
           "_DEEPGRAM_OPEN_SECONDS", "_DEEPGRAM_HEALTHY_SECONDS", "_DEEPGRAM_SILENT_SECONDS", "_DEEPGRAM_LINE_PROBLEMS_HEARD",
           "_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD", "_DEEPGRAM_REPLAY_CHUNKS", "_DEEPGRAM_REACH_EVERY",
           "_DEEPGRAM_REACH_UP_TO", "_DEEPGRAM_PING_EVERY", "_DEEPGRAM_PING_ALLOWED", "_DEEPGRAM_FIRST_ANSWER_SECONDS",
-          "_DEEPGRAM_FIRST_ANSWER_WINDOW"}
+          "_DEEPGRAM_FIRST_ANSWER_WINDOW", "SAMPLE_RATE", "LAG_FILE"}
 
 
 def engine_scope(app, url, buffered_class, printed, deepgram_only=False):

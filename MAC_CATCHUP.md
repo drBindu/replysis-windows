@@ -292,6 +292,14 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     cut question and the on screen line stayed cut. `AutoTurnRules.FlushStableChecks(false, false)` is now 15 (300 ms); with a speech final
     already latest it is still one read, so the normal interview path is not slower. Any port that polls for a stable transcript after the
     key press needs the stable window to be longer than the provider's update interval. Test: `InstantResponseTests`.
+
+49. **The engine says how far behind the speech service is, and the answer key waits for the last words (2026-10-16).** Same evening,
+    the cut went on after item 48: "design a URL" was the last word, and 5.1 s of voice had never been answered when the key was pressed.
+    Flux sends `audio_window_end` (seconds of audio it has listened to) on every TurnInfo. The engine now counts the seconds of voice it
+    sent on the connection and writes `speech_lag.txt` = `<seconds behind> <unix time>` on every message, BEFORE the pause check.
+    After the key press the app keeps waiting while `AutoTurnRules.SpeechServiceBehind` says behind (over 0.6 s, or no message for 0.7 s
+    during this listening), at most 1.5 s more. Measured on real Flux: median 0.6 s behind, worst 2.7 s, about 0.1 s right after the voice
+    ends. No file (an older engine, nova-3) means no change. The Mac needs the same two halves if it uses Flux.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
