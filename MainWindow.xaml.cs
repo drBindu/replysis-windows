@@ -9771,6 +9771,30 @@ namespace InterviewCopilot
             "Remote, can travel", "Open to any of these",
         };
 
+        // India asks different things in the first call: notice period, other offers, current and expected CTC.
+        // Nobody there is asked about H1B or C2C, so those lists are not shown to them at all.
+        private static readonly string[] IndiaWorkTypeOptions =
+        {
+            PrefUnset, "Full time / permanent", "Contract (third party payroll)", "Contract to hire",
+            "Freelance", "Internship", "Open to any of these",
+        };
+
+        private static readonly string[] IndiaNoticeOptions =
+        {
+            PrefUnset, "Immediate joiner", "Serving notice", "15 days", "30 days", "45 days",
+            "60 days", "90 days", "Notice period negotiable",
+        };
+
+        private static readonly string[] IndiaOfferOptions =
+        {
+            PrefUnset, "No other offers", "Have an offer in hand", "In final rounds elsewhere", "Prefer not to say",
+        };
+
+        private static readonly string[] IndiaWorkLocationOptions =
+        {
+            PrefUnset, "Work from office", "Hybrid", "Remote only", "Open to relocation", "Open to any of these",
+        };
+
         private string _workType     = PrefUnset;
         private string _workAuth     = PrefUnset;
         private string _availability = PrefUnset;
@@ -9778,8 +9802,74 @@ namespace InterviewCopilot
         private string _payExpectation = "";
         private bool   _screeningPrefsLoading;
 
+        // India keeps its own answers, so switching the country back and forth never mixes the two.
+        private bool   _india = DetectIndia();
+        private string _inWorkType     = PrefUnset;
+        private string _inNotice       = PrefUnset;
+        private string _inOffers       = PrefUnset;
+        private string _inWorkLocation = PrefUnset;
+        private string _inPay          = "";
+
+        /// <summary>First guess before the server answers: the PC's time zone or region.</summary>
+        internal static bool DetectIndia()
+        {
+            try
+            {
+                if (TimeZoneInfo.Local.Id == "India Standard Time") return true;
+                return System.Globalization.RegionInfo.CurrentRegion.TwoLetterISORegionName == "IN";
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// The country the user is connecting from, as the website sees it (owner: no choosing, detect it). The same
+        /// answer the checkout uses for rupee prices. Falls back to the time zone guess when the site cannot be reached.
+        /// </summary>
+        private async Task DetectCountryFromServerAsync()
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+                string json = await SharedHttpClient.HttpShort.GetStringAsync("https://replysis.com/api/geo", timeout.Token);
+                using var doc = JsonDocument.Parse(json);
+                if (!doc.RootElement.TryGetProperty("country", out var c) || c.ValueKind != JsonValueKind.String) return;
+                string code = c.GetString() ?? "";
+                if (code.Length != 2) return;
+                ApplyCountry(code == "IN");
+                DebugWindow.Log("SETUP", $"Screening options for {(code == "IN" ? "India" : "outside India")} ({code})");
+            }
+            catch (Exception ex) { DebugWindow.Log("SETUP", $"Country check skipped: {ex.GetType().Name}"); }
+        }
+
+        private void ApplyCountry(bool india)
+        {
+            if (india == _india) return;
+            _india = india;
+            _screeningPrefsLoading = true;
+            try
+            {
+                InitScreeningPrefCombos();
+                if (PayExpectationBox != null) PayExpectationBox.Text = _india ? _inPay : _payExpectation;
+            }
+            finally { _screeningPrefsLoading = false; }
+            PushScreeningPrefsToPrompt();
+            ScheduleJobContextSave();
+        }
+
         private void InitScreeningPrefCombos()
         {
+            if (WorkAuthLabel != null)     WorkAuthLabel.Text     = _india ? "NOTICE PERIOD" : "WORK AUTHORIZATION";
+            if (AvailabilityLabel != null) AvailabilityLabel.Text = _india ? "OTHER OFFERS" : "CAN START";
+            if (PayExpectationWatermark != null)
+                PayExpectationWatermark.Text = _india ? "e.g. current 12 LPA, expecting 18 LPA" : "e.g. $65/hr on C2C, or $140k base";
+            if (_india)
+            {
+                FillCombo(WorkTypeCombo,     IndiaWorkTypeOptions,     _inWorkType);
+                FillCombo(WorkAuthCombo,     IndiaNoticeOptions,       _inNotice);
+                FillCombo(AvailabilityCombo, IndiaOfferOptions,        _inOffers);
+                FillCombo(WorkLocationCombo, IndiaWorkLocationOptions, _inWorkLocation);
+                return;
+            }
             FillCombo(WorkTypeCombo,     WorkTypeOptions,     _workType);
             FillCombo(WorkAuthCombo,     WorkAuthOptions,     _workAuth);
             FillCombo(AvailabilityCombo, AvailabilityOptions, _availability);
@@ -9797,19 +9887,21 @@ namespace InterviewCopilot
         private void ScreeningPref_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             if (_screeningPrefsLoading) return;
-            _workType     = WorkTypeCombo?.SelectedItem     as string ?? PrefUnset;
-            _workAuth     = WorkAuthCombo?.SelectedItem     as string ?? PrefUnset;
-            _availability = AvailabilityCombo?.SelectedItem as string ?? PrefUnset;
-            _workLocation = WorkLocationCombo?.SelectedItem as string ?? PrefUnset;
+            string type  = WorkTypeCombo?.SelectedItem     as string ?? PrefUnset;
+            string auth  = WorkAuthCombo?.SelectedItem     as string ?? PrefUnset;
+            string avail = AvailabilityCombo?.SelectedItem as string ?? PrefUnset;
+            string where = WorkLocationCombo?.SelectedItem as string ?? PrefUnset;
+            if (_india) { _inWorkType = type; _inNotice = auth; _inOffers = avail; _inWorkLocation = where; }
+            else        { _workType = type; _workAuth = auth; _availability = avail; _workLocation = where; }
             PushScreeningPrefsToPrompt();
             ScheduleJobContextSave();
         }
 
         private void PayExpectationBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
         {
-            _payExpectation = PayExpectationBox.Text;
+            if (_india) _inPay = PayExpectationBox.Text; else _payExpectation = PayExpectationBox.Text;
             if (PayExpectationWatermark != null)
-                PayExpectationWatermark.Visibility = string.IsNullOrWhiteSpace(_payExpectation)
+                PayExpectationWatermark.Visibility = string.IsNullOrWhiteSpace(PayExpectationBox.Text)
                     ? Visibility.Visible : Visibility.Collapsed;
             if (_screeningPrefsLoading) return;
             PushScreeningPrefsToPrompt();
@@ -9818,11 +9910,13 @@ namespace InterviewCopilot
 
         private void PushScreeningPrefsToPrompt()
         {
-            PromptBuilder.WorkType       = Clean(_workType);
-            PromptBuilder.WorkAuth       = Clean(_workAuth);
-            PromptBuilder.Availability   = Clean(_availability);
-            PromptBuilder.WorkLocation   = Clean(_workLocation);
-            PromptBuilder.PayExpectation = (_payExpectation ?? "").Trim();
+            PromptBuilder.WorkType       = Clean(_india ? _inWorkType : _workType);
+            PromptBuilder.WorkAuth       = _india ? "" : Clean(_workAuth);
+            PromptBuilder.Availability   = _india ? "" : Clean(_availability);
+            PromptBuilder.WorkLocation   = Clean(_india ? _inWorkLocation : _workLocation);
+            PromptBuilder.PayExpectation = ((_india ? _inPay : _payExpectation) ?? "").Trim();
+            PromptBuilder.NoticePeriod   = _india ? Clean(_inNotice) : "";
+            PromptBuilder.OffersInHand   = _india ? Clean(_inOffers) : "";
 
             static string Clean(string value) =>
                 string.IsNullOrWhiteSpace(value) || value == PrefUnset ? "" : value;
@@ -10158,6 +10252,11 @@ namespace InterviewCopilot
                 _availability = Read("availability");
                 _workLocation = Read("workLocation");
                 _payExpectation = doc.TryGetProperty("pay", out var p) ? p.GetString() ?? "" : "";
+                _inWorkType     = Read("inWorkType");
+                _inNotice       = Read("inNotice");
+                _inOffers       = Read("inOffers");
+                _inWorkLocation = Read("inWorkLocation");
+                _inPay          = doc.TryGetProperty("inPay", out var ip) ? ip.GetString() ?? "" : "";
 
                 string Read(string key) =>
                     doc.TryGetProperty(key, out var v) ? v.GetString() ?? PrefUnset : PrefUnset;
@@ -10171,10 +10270,11 @@ namespace InterviewCopilot
                 try
                 {
                     InitScreeningPrefCombos();
-                    if (PayExpectationBox != null) PayExpectationBox.Text = _payExpectation;
+                    if (PayExpectationBox != null) PayExpectationBox.Text = _india ? _inPay : _payExpectation;
                 }
                 finally { _screeningPrefsLoading = false; }
                 PushScreeningPrefsToPrompt();
+                _ = DetectCountryFromServerAsync();
             }
         }
 
@@ -10191,6 +10291,11 @@ namespace InterviewCopilot
                     availability = _availability,
                     workLocation = _workLocation,
                     pay          = _payExpectation,
+                    inWorkType     = _inWorkType,
+                    inNotice       = _inNotice,
+                    inOffers       = _inOffers,
+                    inWorkLocation = _inWorkLocation,
+                    inPay          = _inPay,
                 };
                 string json = JsonSerializer.Serialize(obj);
                 string path = Path.Combine(AppDataFolder, "jobcontext.json");

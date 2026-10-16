@@ -34,11 +34,14 @@ namespace InterviewCopilot
         public static string Availability   { get; set; } = "";
         public static string WorkLocation   { get; set; } = "";
         public static string PayExpectation { get; set; } = "";
+        public static string NoticePeriod   { get; set; } = "";   // India
+        public static string OffersInHand   { get; set; } = "";   // India
 
         private static bool HasScreeningPrefs =>
             !string.IsNullOrWhiteSpace(WorkType) || !string.IsNullOrWhiteSpace(WorkAuth) ||
             !string.IsNullOrWhiteSpace(Availability) || !string.IsNullOrWhiteSpace(WorkLocation) ||
-            !string.IsNullOrWhiteSpace(PayExpectation);
+            !string.IsNullOrWhiteSpace(PayExpectation) || !string.IsNullOrWhiteSpace(NoticePeriod) ||
+            !string.IsNullOrWhiteSpace(OffersInHand);
 
         /// <summary>
         /// The answers to the questions a recruiter opens with, which no resume
@@ -67,6 +70,10 @@ namespace InterviewCopilot
                 sb.AppendLine($"Location: {Truncate(WorkLocation, 60)}");
             if (!string.IsNullOrWhiteSpace(PayExpectation))
                 sb.AppendLine($"Pay: {Truncate(PayExpectation, 120)}");
+            if (!string.IsNullOrWhiteSpace(NoticePeriod))
+                sb.AppendLine($"Notice period: {Truncate(NoticePeriod, 40)}");
+            if (!string.IsNullOrWhiteSpace(OffersInHand))
+                sb.AppendLine($"Other offers: {Truncate(OffersInHand, 60)}");
             sb.AppendLine();
             sb.AppendLine("Asked any of these, lead with the answer in the first few words, then");
             sb.AppendLine("one short line of flexibility if it is true. \"I'm looking for C2C, and");

@@ -327,6 +327,12 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
 55. **Existing users on the old 25% default move to 30% too (2026-10-16, owner: "u didnt make the opacity 30 by default").** Item 53 only
     reached new installs: every settings file already held 0.62. Once per settings file (`OpacityDefaultVersion`), 0.62 becomes 0.646;
     any other level is kept. Slider saves now round to 3 places, since 2 places stored 30% as 0.65 and it reopened as 31%.
+56. **India gets its own screening options, chosen automatically (2026-10-16, owner: no choosing, detect the country).** The app asks
+    `https://replysis.com/api/geo` (the same country the checkout uses for rupee prices) and falls back to the time zone / region.
+    India: work type (full time, third party payroll contract, contract to hire, freelance, internship), NOTICE PERIOD (immediate,
+    serving notice, 15 to 90 days), OTHER OFFERS, WHERE (work from office, hybrid, remote, relocation), pay hint in LPA. No visa or
+    C2C lists. India answers are stored apart from the US ones (`inWorkType`, `inNotice`, `inOffers`, `inWorkLocation`, `inPay` in
+    jobcontext.json); the prompt gets "Notice period:" and "Other offers:" lines instead of work authorization and can start.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
