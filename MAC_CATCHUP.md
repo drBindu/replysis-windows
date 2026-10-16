@@ -300,6 +300,14 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     After the key press the app keeps waiting while `AutoTurnRules.SpeechServiceBehind` says behind (over 0.6 s, or no message for 0.7 s
     during this listening), at most 1.5 s more. Measured on real Flux: median 0.6 s behind, worst 2.7 s, about 0.1 s right after the voice
     ends. No file (an older engine, nova-3) means no change. The Mac needs the same two halves if it uses Flux.
+
+50. **The screenshot sent ahead steps aside for the live voice (2026-10-16, owner chose "pace the upload").** On the owner's PC a
+    590 to 651 KB picture sent ahead when listening started held the line for 8 to 15 s, and Flux answered nothing in that time, so
+    questions went out half or empty. Same sentence, same engine, no upload: every word. `PacedContent` sends the picture in 16 KB
+    pieces, at most 64 KB/s while listening, and before each piece waits while the speech service is behind (item 49) or has not
+    answered once a second into listening (`AutoTurnRules.UnansweredSinceListening`). Capture is unchanged. The item 49 wait is now
+    judged as of the key press, skipped once the end of speech is called, and capped by the clock (a 20 ms delay is ~31 ms on
+    Windows; a loop count cap let one answer wait 4.4 s). Tests: `PacedUploadTests`, `InstantResponseTests`.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
