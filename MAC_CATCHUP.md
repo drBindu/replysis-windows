@@ -320,6 +320,9 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     FINAL and UTTERANCE END (measured: wait 453 ms -> 24 ms, first word 0.42 s). `_FLUX_SILENT_SECONDS` = 2.0 (nova-3 stays 4.0):
     Flux answers every 0.24 s, so a stall is found and the unanswered audio replayed before the key press. No false reconnect in
     8 healthy runs against the real service.
+53. **New users start at 30% opacity, main window and Compact alike (2026-10-16, owner).** Stored default 0.62 -> 0.646, which the
+    slider shows as 30% (slider % = 1 + (stored - 0.5) / 0.5 * 99). Existing users keep what they chose. A cream restyle was tried
+    the same day and dropped by the owner: the dark glass stays.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)

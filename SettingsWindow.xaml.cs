@@ -598,8 +598,8 @@ namespace InterviewCopilot
             public string FirebaseApiKey     { get; set; } = "AIzaSyAGGmuFpR0qkCHLI3q2cPv_o3cQlbIU8lE";
             public double Temperature        { get; set; } = 0.2;
             // Default ~25% on the slider = mostly transparent glass out of the box.
-            public double MainWindowOpacity  { get; set; } = 0.62;
-            public double OverlayOpacity     { get; set; } = 0.62;
+            public double MainWindowOpacity  { get; set; } = 0.646;   // 30% on the slider, the default for new users (owner, 2026-10-16)
+            public double OverlayOpacity     { get; set; } = 0.646;   // Compact shares the main window's value
 
             /// <summary>
             /// Whether questions are answered from the screen without being asked
