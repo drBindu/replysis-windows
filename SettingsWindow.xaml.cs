@@ -454,8 +454,8 @@ namespace InterviewCopilot
                 BackendUrl        = BackendUrlBox.Text?.Trim()       ?? "",
                 CoopilotEmail     = CoopilotEmailBox.Text?.Trim()    ?? "",
                 Temperature       = Math.Round(TempSlider.Value, 1),
-                MainWindowOpacity = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 2),
-                OverlayOpacity    = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 2),
+                MainWindowOpacity = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 3),
+                OverlayOpacity    = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 3),
                 MicCaptureEnabled = MicCaptureCheckBox.IsChecked == true,
                 AudioDeviceIndex  = SelectedDeviceIndex,   // persist the chosen mic across restarts
                 AudioDeviceName   = SelectedDeviceName,     // and the name, which outlives the number
@@ -600,6 +600,8 @@ namespace InterviewCopilot
             // Default ~25% on the slider = mostly transparent glass out of the box.
             public double MainWindowOpacity  { get; set; } = 0.646;   // 30% on the slider, the default for new users (owner, 2026-10-16)
             public double OverlayOpacity     { get; set; } = 0.646;   // Compact shares the main window's value
+            // Set once the old 25% default has been moved to 30%. Null in every settings file written before 1.0.38.
+            public int?   OpacityDefaultVersion { get; set; }
 
             /// <summary>
             /// Whether questions are answered from the screen without being asked
@@ -688,7 +690,8 @@ namespace InterviewCopilot
                         throw new InvalidDataException("Could not decrypt settings file.");
                     _cachedConfig = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
                     _cacheTime    = DateTime.UtcNow;
-                    if (!isProtected)
+                    bool movedOpacity = MoveOldOpacityDefault(_cachedConfig);
+                    if (!isProtected || movedOpacity)
                         SaveConfig(_cachedConfig);
                     return _cachedConfig;
                 }
@@ -826,7 +829,23 @@ namespace InterviewCopilot
         public static double GetMainWindowOpacity()
         {
             double value = LoadConfig().MainWindowOpacity;
-            return Math.Clamp(value > 0 ? value : 0.62, 0.50, 1.0);
+            return Math.Clamp(value > 0 ? value : 0.646, 0.50, 1.0);
+        }
+
+        /// <summary>
+        /// Existing users still on the old default (0.62, 25% on the slider) move to the new one (0.646, 30%), once
+        /// (owner, 2026-10-16). Anyone who chose another level keeps it. Returns true when the file needs saving.
+        /// </summary>
+        internal static bool MoveOldOpacityDefault(AppConfig config)
+        {
+            if (config.OpacityDefaultVersion != null) return false;
+            if (Math.Abs(config.MainWindowOpacity - 0.62) < 0.005)
+            {
+                config.MainWindowOpacity = 0.646;
+                config.OverlayOpacity    = 0.646;
+            }
+            config.OpacityDefaultVersion = 2;
+            return true;
         }
 
         // Eye mode overlay always uses the same opacity as the main window

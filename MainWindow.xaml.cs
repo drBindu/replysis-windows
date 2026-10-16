@@ -783,7 +783,7 @@ namespace InterviewCopilot
             ApplyGlassOpacity(opacity);
             // Persist the shared preference for the main and eye-mode windows.
             var cfg = SettingsWindow.LoadConfig();
-            cfg.MainWindowOpacity = Math.Round(opacity, 2);
+            cfg.MainWindowOpacity = Math.Round(opacity, 3);   // 2 places turned 30% into 31% on reopen
             cfg.OverlayOpacity    = cfg.MainWindowOpacity;
             SettingsWindow.SaveConfig(cfg);
 

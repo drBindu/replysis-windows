@@ -324,6 +324,9 @@ check on the Mac (items 1, 2, 7 and 9 are shared product behaviour, the rest are
     slider shows as 30% (slider % = 1 + (stored - 0.5) / 0.5 * 99). Existing users keep what they chose. A cream restyle was tried
     the same day and dropped by the owner: the dark glass stays.
 54. **Main window opens at 930 x 560, was 980 x 590 (2026-10-16, owner: a little smaller).** Minimums (880 x 540) unchanged.
+55. **Existing users on the old 25% default move to 30% too (2026-10-16, owner: "u didnt make the opacity 30 by default").** Item 53 only
+    reached new installs: every settings file already held 0.62. Once per settings file (`OpacityDefaultVersion`), 0.62 becomes 0.646;
+    any other level is kept. Slider saves now round to 3 places, since 2 places stored 30% as 0.65 and it reopened as 31%.
 ---
 
 ## No "listening limit" wording anywhere a customer can read it (2026-10-05, Windows 1.0.30)
