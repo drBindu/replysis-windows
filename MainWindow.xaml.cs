@@ -80,7 +80,10 @@ namespace InterviewCopilot
         private bool isProcessing = false;
         private bool   _engineAuthFailed  = false;
         private bool   _engineUsageLimitReached = false;
-        private string _engineFatalReason = ""; // non-empty = fatal, used by ShowEngineAuthError
+        private string _engineFatalReason = "";
+        /// <summary>Starts with "No microphone": CurrentProblem and the mic label key off that prefix.</summary>
+        private const string NoMicrophoneMessage =
+            "No microphone found on this computer. Plug in earphones with a mic and Replysis starts listening by itself."; // non-empty = fatal, used by ShowEngineAuthError
         private bool _creditsFetched = false;
         private bool isRecording = false;
         // A session file can be prepared before a call begins, but the visible
@@ -6811,13 +6814,48 @@ namespace InterviewCopilot
                                 continue;
                             }
 
+                            // A computer with no microphone (most desktops). In Practice mode the engine waits for
+                            // one and starts by itself when it is plugged in; until then the app says so plainly,
+                            // instead of looking like it is listening (India tester, 2026-10-18).
+                            if (line.Contains("NO_MICROPHONE_WAITING", StringComparison.Ordinal))
+                            {
+                                _engineFatalReason = NoMicrophoneMessage;
+                                _engineAuthFailed = true;   // the engine is alive and waiting; do not restart it
+                                DebugWindow.Log("ENGINE", "No microphone on this computer; waiting for one.");
+                                _ = Dispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    ShowListeningModeNotice(NoMicrophoneMessage);
+                                    UpdateMicUi();
+                                }));
+                                continue;
+                            }
+                            if (line.Contains("MICROPHONE CONNECTED", StringComparison.Ordinal))
+                            {
+                                _engineFatalReason = "";
+                                _engineAuthFailed = false;
+                                DebugWindow.Log("ENGINE", "A microphone was plugged in; listening.");
+                                _ = Dispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    ShowListeningModeNotice("Microphone found. Replysis is listening.");
+                                    UpdateMicUi();
+                                }));
+                                continue;
+                            }
+                            if (line.Contains(">>> NO_MICROPHONE:", StringComparison.Ordinal))
+                            {
+                                DebugWindow.Log("ENGINE", "No microphone on this computer; listening to computer sound only.");
+                                _ = Dispatcher.BeginInvoke(new Action(() => ShowListeningModeNotice(
+                                    "This computer has no microphone, so Replysis listens to the computer's sound. " +
+                                    "That is all an interview needs. For Practice, plug in earphones with a mic.")));
+                                continue;
+                            }
+
                             if (line.Contains("FATAL", StringComparison.Ordinal))
                             {
                                 string reason =
                                     line.Contains("NO_INPUT_DEVICE", StringComparison.Ordinal)
                                     || line.Contains("Input Device", StringComparison.OrdinalIgnoreCase)
-                                        ? "No microphone found. Plug one in, or pick one in "
-                                          + "Settings, then restart the audio service."
+                                        ? NoMicrophoneMessage
                                         : "The speech engine could not start. Press Ctrl+Alt+F12 for details.";
 
                                 _engineFatalReason = reason;

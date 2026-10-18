@@ -278,6 +278,16 @@ check("Deepgram keeps the first result after reset",
 check("Deepgram instant closes count as failures",
       "_DEEPGRAM_HEALTHY_SECONDS" in dg and "sessions closed at once" in dg)
 
+# ── No microphone (India tester, 2026-10-18) ────────────────────────────────
+# A desktop with no microphone lists only the speaker loopback as an input. It was used as the mic,
+# so Practice heard a silent speaker and nothing on screen said why.
+check("a speaker loopback is never used as the microphone",
+      'elif "[loopback]" in nm:' in SOURCE and 'raise OSError("the default input is a speaker loopback' in SOURCE)
+check("no microphone: Interview carries on with computer sound",
+      "NO_MICROPHONE: this computer has no microphone" in SOURCE and 'args.mode = "system"' in SOURCE)
+check("no microphone: Practice waits and starts when one is plugged in",
+      "NO_MICROPHONE_WAITING" in SOURCE and "MICROPHONE CONNECTED" in SOURCE)
+
 print()
 print("ALL PASS" if not failures else f"{len(failures)} FAILED: {', '.join(failures)}")
 sys.exit(1 if failures else 0)

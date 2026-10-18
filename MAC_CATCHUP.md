@@ -1,3 +1,19 @@
+## A computer with no microphone (2026-10-18, Windows, after 1.0.38)
+
+A tester in India used a desktop with no microphone. Windows listed only the speaker loopback as an input, the
+engine used it as the "microphone", and Practice listened to a silent speaker for minutes with nothing on screen
+saying why.
+
+Windows now:
+- never treats a speaker loopback as a microphone (stored device, Windows default, or fallback);
+- with no microphone in Interview mode, keeps listening to the computer's sound and says so once;
+- with no microphone in Practice mode, shows "No microphone found on this computer. Plug in earphones with a mic
+  and Replysis starts listening by itself", re-checks every 3 seconds, and starts on its own when one appears
+  (engine lines NO_MICROPHONE, NO_MICROPHONE_WAITING, MICROPHONE CONNECTED).
+
+Mac: check the same three cases. A Mac always has a built in mic, but an external display with a disabled mic or a
+denied microphone permission is the same experience: say it on screen, and recover by itself when it is fixed.
+
 ## Deep audit of the whole Windows app: what was found and fixed (2026-10-06, Windows 1.0.30)
 
 Owner: "do a deep audit, find more bugs, so many users will use this, no crashes, no stopping." Every file was read. What mattered, and what to

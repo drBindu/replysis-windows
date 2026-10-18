@@ -101,8 +101,8 @@ namespace InterviewCopilot
             Kind.NoMicrophone => new(
                 "NO MICROPHONE",
                 "No microphone found",
-                "Practice mode needs a microphone. Plug one in, or turn on microphone access in Windows Settings, " +
-                "under Privacy and security, then Microphone. Interview mode does not need a microphone.",
+                "Practice mode listens to your microphone, and this computer has none. Plug in earphones with a mic " +
+                "and Replysis starts listening by itself. Interview mode does not need a microphone.",
                 NextStep.None),
 
             Kind.NoSpeechService => new(

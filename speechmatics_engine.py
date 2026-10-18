@@ -1222,6 +1222,29 @@ try:
     p = pyaudio.PyAudio()
     write_devices_file(p)
 
+    # A computer with no microphone at all (most desktops) used to have its SPEAKER loopback picked as the
+    # "microphone", because it is the only input device Windows lists there. The engine then listened to a
+    # silent speaker, nothing was heard, and nothing on screen said why (India tester, 2026-10-18).
+    # Interview mode only needs the computer's sound, so it carries on with that. Practice mode needs a voice:
+    # it says so and waits, checking every few seconds, so plugging in earphones is all it takes.
+    if args.mode in ("both", "mic") and not _real_input_devices(p):
+        if args.mode == "both":
+            print(">>> NO_MICROPHONE: this computer has no microphone; listening to the computer's sound only.",
+                  flush=True)
+            args.mode = "system"
+        else:
+            print(">>> NO_MICROPHONE_WAITING: this computer has no microphone. Waiting for one to be plugged in.",
+                  flush=True)
+            while not _real_input_devices(p):
+                time.sleep(3)
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
+                p = pyaudio.PyAudio()   # a fresh PortAudio is the only way to see a device added after start
+            write_devices_file(p)
+            print(">>> MICROPHONE CONNECTED: a microphone was plugged in; listening.", flush=True)
+
     # ── MIC STREAM — only opened in "both" mode ──────────────────────────────
     mic_stream = None
     if args.mode in ("both", "mic"):
@@ -1290,6 +1313,10 @@ try:
                     print(f">>> MIC device [{chosen_device}] is a legacy passthrough "
                           f"({nm}) — using the real default input instead.", flush=True)
                     chosen_device = None
+                elif "[loopback]" in nm:
+                    print(f">>> MIC device [{chosen_device}] is a speaker loopback ({nm}), not a "
+                          f"microphone — using a real microphone instead.", flush=True)
+                    chosen_device = None
             except Exception:
                 chosen_device = None
 
@@ -1317,6 +1344,8 @@ try:
             default_index = None
             try:
                 info = p.get_default_input_device_info()
+                if "[loopback]" in str(info.get('name', '')).lower():
+                    raise OSError("the default input is a speaker loopback, not a microphone")
                 default_index = info['index']
                 _mic_device_name = info.get('name', '')
                 _mic_device_index = default_index
@@ -1345,7 +1374,8 @@ try:
                         if int(info.get('maxInputChannels', 0)) > 0:
                             yield i, info
 
-                candidates = list(input_devices())
+                candidates = [(i, info) for i, info in input_devices()
+                              if "[loopback]" not in str(info.get('name', '')).lower()]
                 real = [(i, info) for i, info in candidates
                         if not any(v in str(info.get('name', '')).lower() for v in VIRTUAL)]
 
