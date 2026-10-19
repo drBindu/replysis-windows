@@ -10,6 +10,8 @@ namespace InterviewCopilot
         public bool IsCameraModeActive = false;
         public event Action? CameraModeClosedByUser;
         public event Action? AnalyzeRequested;
+        /// <summary>The mode pill was pressed; the main window fills the given panel with the menu.</summary>
+        public event Action<System.Windows.Controls.Panel>? ModeMenuRequested;
 
         private bool _isListening  = false;
         private bool _isProcessing = false;
@@ -332,6 +334,52 @@ namespace InterviewCopilot
         }
 
         // ── Close ─────────────────────────────────────────────────────────────
+        private void CompactModePill_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;   // not a drag of the bar
+            if (CompactModePopup.IsOpen) { CompactModePopup.IsOpen = false; return; }
+            ModeMenuRequested?.Invoke(CompactModeRows);
+            CompactModePopup.IsOpen = true;
+            WatchForClickOutside();
+        }
+
+        internal void CloseModeMenu() { CompactModePopup.IsOpen = false; _menuWatch?.Stop(); }
+
+        // This bar never takes focus (it must not steal it from the meeting), so a normal menu closed itself at once
+        // (owner, 2026-10-19). The menu stays open; a click anywhere outside it or its pill, or Esc, closes it.
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+        private System.Windows.Threading.DispatcherTimer? _menuWatch;
+        private void WatchForClickOutside()
+        {
+            _menuWatch ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            _menuWatch.Tick -= MenuWatchTick;
+            _menuWatch.Tick += MenuWatchTick;
+            GetAsyncKeyState(0x01); GetAsyncKeyState(0x02); GetAsyncKeyState(0x1B);   // forget presses from before it opened
+            _menuWatch.Start();
+        }
+        private void MenuWatchTick(object? sender, EventArgs e)
+        {
+            if (!CompactModePopup.IsOpen) { _menuWatch?.Stop(); return; }
+            bool esc = (GetAsyncKeyState(0x1B) & 1) != 0;
+            bool click = (GetAsyncKeyState(0x01) & 1) != 0 || (GetAsyncKeyState(0x02) & 1) != 0;
+            bool overMenu = (CompactModePopup.Child as UIElement)?.IsMouseOver == true || CompactModePill.IsMouseOver;
+            if (esc || (click && !overMenu)) CloseModeMenu();
+        }
+
+        internal void SetModeText(bool practice, string main, string sub)
+        {
+            CompactModeText.Text = main;
+            CompactModeSub.Text = sub;
+            CompactModeIcon.Text = practice ? "\uE720" : "\uE7F5";
+        }
+
+        /// <summary>The menu's "Full window": the same as the bar's own close-to-full-window button.</summary>
+        internal void ReturnToFullWindow()
+        {
+            ToggleCameraMode(false);
+            CameraModeClosedByUser?.Invoke();
+        }
+
         private void HideOverlay_Click(object sender, RoutedEventArgs e)
         {
             ToggleCameraMode(false);

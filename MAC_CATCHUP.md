@@ -1,3 +1,9 @@
+## Compact bar has the same mode pill (2026-10-19, Windows, owner chose it)
+
+The slim Compact bar now carries the same pill as the top bar ("Interview" or "Practice", "Auto" or "Manual"), and it
+opens the same menu; in Compact the window choice is "Full window". The bar never takes focus, so its menu stays open
+until a choice, a click outside, the pill again, or Esc. Mac: same in its compact overlay.
+
 ## The top bar is decided and locked (2026-10-19, Windows): minimal
 
 The owner tried it and chose it, and asked that it not change again. Top bar: logo, mic with its state, ONE pill

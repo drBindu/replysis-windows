@@ -360,6 +360,8 @@ namespace InterviewCopilot
                     // in-person interview, where there is no main window to fall
                     // back on — had no way to actually read the screen. Pressing
                     // it silently changed a preference instead.
+                    answerWindow.ModeMenuRequested += rows => Dispatcher.Invoke(() =>
+                        BuildModeMenuInto(rows, () => answerWindow?.CloseModeMenu(), compact: true));
                     answerWindow.AnalyzeRequested += () => Dispatcher.Invoke(() =>
                     {
                         _ = HandleScreenAnalysisAsync().ContinueWith(t =>
@@ -1357,6 +1359,7 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         private void CameraMode_Click(object sender, RoutedEventArgs e)
         {
+            UpdateModeMenuPill();   // the compact bar's pill shows the current choice from the start
             if (answerWindow == null)
             {
                 DebugWindow.Log("CAMERA", "Overlay is unavailable; keeping the main workspace visible.");
@@ -1955,6 +1958,7 @@ namespace InterviewCopilot
             ModeMenuText.Text = practice ? "Practice" : "Interview";
             ModeMenuIcon.Text = practice ? "\uE720" : "\uE7F5";
             ModeMenuSub.Text = AutoModeEnabled ? "Auto" : "Manual";
+            answerWindow?.SetModeText(practice, ModeMenuText.Text, ModeMenuSub.Text);
         }
 
         private void ModeMenuPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -1991,7 +1995,10 @@ namespace InterviewCopilot
             return false;
         }
 
-        private void BuildModeMenu()
+        private void BuildModeMenu() => BuildModeMenuInto(ModeMenuRows, () => ModeMenuPopup.IsOpen = false, compact: false);
+
+        /// <summary>The one mode menu, for the top bar and for Compact. In Compact the window choice is "Full window".</summary>
+        internal void BuildModeMenuInto(System.Windows.Controls.Panel ModeMenuRows, Action close, bool compact)
         {
             ModeMenuRows.Children.Clear();
             bool practice = PracticeAudioOn, auto = AutoModeEnabled;
@@ -2028,7 +2035,7 @@ namespace InterviewCopilot
                     args.Handled = true;
                     DebugWindow.Log("MENU", $"Picked {title}.");
                     try { pick(); } catch (Exception ex) { DebugWindow.Log("MENU", $"{title} failed: {ex.Message}"); }
-                    ModeMenuPopup.IsOpen = false;
+                    close();
                 };
                 ModeMenuRows.Children.Add(row);
             }
@@ -2043,7 +2050,10 @@ namespace InterviewCopilot
             Row("Manual", "Press Space to listen and answer", "Ctrl+Shift+A", !auto, () => SelectListeningMode(ListeningMode.Manual));
             Line();
             Heading("Window");
-            Row("Compact", "A slim bar for in person interviews", "Ctrl+Shift+C", false, () => CameraMode_Click(this, new RoutedEventArgs()));
+            if (compact)
+                Row("Full window", "Back to the full Replysis window", "Ctrl+Shift+C", false, () => answerWindow?.ReturnToFullWindow());
+            else
+                Row("Compact", "A slim bar for in person interviews", "Ctrl+Shift+C", false, () => CameraMode_Click(this, new RoutedEventArgs()));
             Row(_keepOnTop ? "Unpin" : "Pin on top", _keepOnTop ? "Stops staying in front" : "Stays in front of other windows", "", _keepOnTop, () => PinWindowBtn_Click(this, new RoutedEventArgs()));
         }
 
