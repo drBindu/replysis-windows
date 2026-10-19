@@ -1972,6 +1972,8 @@ namespace InterviewCopilot
                 PreviewMouseDown += (_, args) =>
                 {
                     if (!ModeMenuPopup.IsOpen) return;
+                    // Clicks inside the menu reach the window too (a popup's events travel up to it), so they count as inside.
+                    if (ModeMenuPopup.Child is UIElement menu && menu.IsMouseOver) return;
                     if (args.OriginalSource is DependencyObject d && (IsInside(d, ModeMenuPill))) return;
                     ModeMenuPopup.IsOpen = false;
                 };
@@ -2240,7 +2242,7 @@ namespace InterviewCopilot
             // the message was moved into a tooltip, which nobody hovers, and nine
             // warnings went invisible at once - among them "Another device is
             // using your account" and "Not transcribing. Restart the app."
-            if (!ModeMenuPopup.IsOpen) ModeMenuPill.Visibility = Visibility.Collapsed;
+            // The pill stays: hiding it for the message made it unclickable for 4 seconds after every switch.
             ModeNoticeText.Text = message;
             ModeNoticeText.Visibility = Visibility.Visible;
             ModeSegments.ToolTip = message;
