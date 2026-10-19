@@ -653,6 +653,9 @@ namespace InterviewCopilot
 
         private void ShowError(string msg)
         {
+            // Sign-in problems reach admin like every other problem; typing mistakes do not (2026-10-19).
+            if (!msg.StartsWith("Please enter", StringComparison.Ordinal) && !msg.StartsWith("Enter your email", StringComparison.Ordinal))
+                ClientErrorReporter.ReportProblem("signin", "signin-" + ClientErrorReporter.Slug(msg), msg);
             if (_windowToken.IsCancellationRequested) return;
             ErrorText.Text = msg;
             HideBanner(SuccessBanner);
