@@ -288,6 +288,9 @@ check("no microphone: Interview carries on with computer sound",
 check("no microphone: Practice waits and starts when one is plugged in",
       "NO_MICROPHONE_WAITING" in SOURCE and "MICROPHONE CONNECTED" in SOURCE)
 
+check("a speaker skipped on purpose is not reported as new headphones",
+      "_all_loopback_names.append" in SOURCE and "is skipped on purpose; " in SOURCE)
+
 print()
 print("ALL PASS" if not failures else f"{len(failures)} FAILED: {', '.join(failures)}")
 sys.exit(1 if failures else 0)

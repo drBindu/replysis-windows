@@ -353,6 +353,7 @@ def find_wasapi_loopback_device(p):
         # Collect all loopback candidates
         candidates = []
         for lb in p.get_loopback_device_info_generator():
+            _all_loopback_names.append(lb['name'])
             if mic_family and mic_family in lb['name'].lower():
                 print(f">>> Loopback candidate SKIPPED (shares mic's audio engine): [{lb['index']}] {lb['name']}", flush=True)
                 continue
@@ -547,8 +548,13 @@ def _follow_current_windows_default():
     # support can distinguish that from a recogniser failure.
     if match is None:
         if default_name != _last_default_output_name:
-            print(f">>> Windows default output changed to '{default_name}', but its "
-                  "loopback is not available in this engine session yet.", flush=True)
+            if any(default_name[:25] in name for name in _all_loopback_names):
+                # Skipped on purpose (shares the microphone's audio engine). Not new, so no restart.
+                print(f">>> Windows default output '{default_name}' is skipped on purpose; "
+                      "staying on the current system audio.", flush=True)
+            else:
+                print(f">>> Windows default output changed to '{default_name}', but its "
+                      "loopback is not available in this engine session yet.", flush=True)
             _last_default_output_name = default_name
         return False
 
@@ -1061,6 +1067,9 @@ _sys_native_channels = 1
 _sys_chunk_frames    = CHUNK_FRAMES
 _sys_use_loopback    = False
 _loopback_candidates   = []
+# Every loopback Windows listed at start, including ones skipped on purpose (they share the mic's audio engine).
+# A default output in here is known, not new, so it must not be reported as a device that appeared later.
+_all_loopback_names    = []
 _active_loopback_index = 0
 # Which candidate is the machine's default output, or -1 when unknown. The
 # default output IS system audio: it is where the interviewer's voice plays.
