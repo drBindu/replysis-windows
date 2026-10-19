@@ -395,7 +395,7 @@
                 <Border Grid.Row="0" CornerRadius="18,18,0,0"
                         BorderBrush="#26364A" BorderThickness="0,0,0,1"
                         Background="#08FFFFFF">
-                    <Grid Margin="14,0,10,0">
+                    <Grid Margin="14,0,10,0" LayoutUpdated="HeaderGrid_LayoutUpdated">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
@@ -408,7 +408,7 @@
                                    Source="pack://siteoforigin:,,,/Assets/replysis-icon-1024.png"
                                    Stretch="Uniform" SnapsToDevicePixels="True"/>
                             <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="Replysis AI" Foreground="#F5F8FC" FontSize="14.5"
+                                <TextBlock x:Name="BrandTitle" Text="Replysis AI" Foreground="#F5F8FC" FontSize="14.5"
                                            FontWeight="Bold" FontFamily="Segoe UI"/>
                             </StackPanel>
                         </StackPanel>
@@ -416,7 +416,7 @@
                         <!-- Mic + status - an Interview-step control, so hidden
                              while Setup fills the page ("this page no interview").
                              See EnterSetupStep / EnterInterviewStep. -->
-                        <StackPanel x:Name="HeaderMicArea" Grid.Column="1" Orientation="Horizontal"
+                        <StackPanel x:Name="HeaderMicArea" Grid.Column="1" Orientation="Horizontal" SizeChanged="HeaderFit_SizeChanged"
                                     HorizontalAlignment="Left" VerticalAlignment="Center" Margin="14,0,0,0">
                             <Button x:Name="MicBtn" Style="{StaticResource MicBtnStyle}"
                                     Click="MicBtn_Click" Margin="0,0,9,0">
@@ -460,7 +460,7 @@
                                  state until it is opened, and this is state a
                                  user needs to see at a glance during an
                                  interview. -->
-                            <Border x:Name="ModeSegments" Margin="9,0,0,0"
+                            <Border x:Name="ModeSegments" Margin="9,0,0,0" SizeChanged="HeaderFit_SizeChanged"
                                     Background="{DynamicResource ActionGraphiteSurface}" BorderBrush="{DynamicResource ActionGraphiteStroke}"
                                     BorderThickness="1" CornerRadius="6" Padding="3"
                                     VerticalAlignment="Center">
@@ -519,7 +519,7 @@
                                     <!-- Status messages stand in for the switch for a few seconds, the
                                          way they replaced the old pill's label. A tooltip is not a
                                          substitute: nobody hovers it. See ShowListeningModeNotice. -->
-                                    <TextBlock x:Name="ModeNoticeText" Visibility="Collapsed"
+                                    <TextBlock x:Name="ModeNoticeText" Visibility="Collapsed" MaxWidth="260" TextTrimming="CharacterEllipsis"
                                                FontFamily="Segoe UI" FontSize="10" FontWeight="SemiBold"
                                                Foreground="#E6EDF5" VerticalAlignment="Center"
                                                Margin="10,5,10,5"/>
@@ -530,7 +530,7 @@
                         </StackPanel>
 
                         <!-- Right controls -->
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" SizeChanged="HeaderFit_SizeChanged">
 
                             <!-- keeps the old AnalyzeLabel name alive off-screen for code that sets it -->
                             <TextBlock x:Name="AnalyzeLabel" Visibility="Collapsed"/>
@@ -588,7 +588,7 @@
                                             <Path Width="13" Height="13" Margin="0,0,5,0" VerticalAlignment="Center"
                                                   Data="M1,1 H13 V13 H1 Z M7,7 H11 V11 H7 Z"
                                                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.25"/>
-                                            <TextBlock Text="Compact" FontSize="11" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="CompactPillLabel" Text="Compact" FontSize="11" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
@@ -648,28 +648,29 @@
                             <Border Style="{StaticResource ToolbarDivider}"/>
 
                             <!-- Profile -->
-                            <Border x:Name="ProfileBadge" CornerRadius="18" Padding="7,4" Margin="0,0,4,0"
+                            <!-- Just the round avatar (owner, 2026-10-19): the name is inside the menu it opens, and the
+                                 header needed the room. -->
+                            <Border x:Name="ProfileBadge" CornerRadius="17" Padding="2" Margin="0,0,4,0"
                                     VerticalAlignment="Center"
                                     Background="#0AFFFFFF" BorderBrush="#16FFFFFF" BorderThickness="1"
                                     Cursor="Hand" MouseLeftButtonDown="ProfileBadge_Click"
                                     ToolTip="Account menu">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Border Width="22" Height="22" CornerRadius="11"
-                                            Background="#22FFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1"
-                                            Margin="0,0,6,0">
+                                    <Border Width="28" Height="28" CornerRadius="14"
+                                            Background="#22FFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1">
                                         <Grid>
                                             <TextBlock x:Name="AvatarInitials" Text="GU"
-                                                       Foreground="White" FontSize="8.5" FontWeight="Bold"
+                                                       Foreground="White" FontSize="10" FontWeight="Bold"
                                                        FontFamily="Segoe UI" HorizontalAlignment="Center"
                                                        VerticalAlignment="Center"/>
-                                            <Ellipse x:Name="AvatarPhoto" Width="22" Height="22"
+                                            <Ellipse x:Name="AvatarPhoto" Width="28" Height="28"
                                                      Visibility="Collapsed"/>
                                         </Grid>
                                     </Border>
-                                    <TextBlock x:Name="ProfileNameLabel" Text="" MaxWidth="48" TextTrimming="CharacterEllipsis"
+                                    <TextBlock x:Name="ProfileNameLabel" Text="" MaxWidth="48" TextTrimming="CharacterEllipsis" Visibility="Collapsed"
                                                Foreground="#EAF1F8" FontSize="11" FontWeight="Medium"
                                                FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                                    <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets"
+                                    <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" Visibility="Collapsed"
                                                Foreground="#59FFFFFF" FontSize="8"
                                                Margin="5,1,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>

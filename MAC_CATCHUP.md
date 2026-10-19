@@ -1,3 +1,10 @@
+## Header fits the window; profile is just the avatar (2026-10-19, Windows)
+
+At the app's width the header overflowed and the Screen button covered "Practice". Now the profile in the header is
+only the round initials avatar (the name is inside the menu it opens), and if space still runs short the header drops
+the "Replysis AI" title first, then the words on Screen and Compact (icons and tooltips stay), and takes them back when
+there is room. Mac: check the toolbar at the smallest window width in Interview and Practice with the timer showing.
+
 ## A computer with no microphone (2026-10-18, Windows, after 1.0.38)
 
 A tester in India used a desktop with no microphone. Windows listed only the speaker loopback as an input, the

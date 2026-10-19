@@ -1727,6 +1727,92 @@ namespace InterviewCopilot
             catch (Exception ex) { DebugWindow.Log("AUDIO", $"Could not open {uri}: {ex.Message}"); }
         }
 
+        // ── The header fits the window ──────────────────────────────────────────────────────────────
+        // At the app's width the mic, the Auto/Manual and Interview/Practice switch, Screen, Compact, the
+        // timer and the profile did not all fit, so the switch was cut off under the Screen button
+        // ("Practice" half hidden, 2026-10-19). When space runs short the header gives up words, never
+        // controls: first the "Replysis AI" title (the logo stays), then the words on Screen and Compact
+        // (their icons and tooltips stay). It takes them back as soon as there is room again.
+        private double _brandTitleWidth, _toolLabelsWidth;
+        private bool _fittingHeader;
+
+        private void HeaderFit_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_fittingHeader) return;
+            _fittingHeader = true;
+            try { FitHeader(); }
+            finally { _fittingHeader = false; }
+        }
+
+        private void FitHeader()
+        {
+            if (HeaderMicArea == null || BrandTitle == null || WatchScreenPillLabel == null || CompactPillLabel == null) return;
+            if (HeaderMicArea.Visibility != Visibility.Visible || HeaderMicArea.Parent is not System.Windows.Controls.Grid header) return;
+
+            // What the middle needs: its pieces at their natural size (each DesiredSize includes its margin).
+            double needed = HeaderMicArea.Margin.Left;
+            foreach (UIElement child in HeaderMicArea.Children)
+                if (child.Visibility == Visibility.Visible) needed += child.DesiredSize.Width;
+
+            // What it gets: the middle column. Not HeaderMicArea.ActualWidth: WPF arranges an element that does not
+            // fit at its full size and clips it, so its own width always looked big enough (the first try, 2026-10-19).
+            double available = header.ColumnDefinitions[1].ActualWidth;
+            if (available <= 0) return;
+
+            bool brandShown = BrandTitle.Visibility == Visibility.Visible;
+            bool labelsShown = WatchScreenPillLabel.Visibility == Visibility.Visible;
+            if (brandShown && BrandTitle.ActualWidth > 0) _brandTitleWidth = BrandTitle.ActualWidth;
+            if (labelsShown && WatchScreenPillLabel.ActualWidth > 0)
+                _toolLabelsWidth = WatchScreenPillLabel.ActualWidth + CompactPillLabel.ActualWidth;
+
+            const double margin = 8, slackToRestore = 18;
+            bool changed = false;
+            double overflow = needed + margin - available;
+            if (overflow > 0)
+            {
+                if (brandShown) { BrandTitle.Visibility = Visibility.Collapsed; changed = true; overflow -= _brandTitleWidth; }
+                if (overflow > 0 && labelsShown)
+                {
+                    WatchScreenPillLabel.Visibility = Visibility.Collapsed;
+                    CompactPillLabel.Visibility = Visibility.Collapsed;
+                    changed = true;
+                }
+            }
+            else
+            {
+                double slack = -overflow;
+                if (!labelsShown && slack > _toolLabelsWidth + slackToRestore)
+                {
+                    WatchScreenPillLabel.Visibility = Visibility.Visible;
+                    CompactPillLabel.Visibility = Visibility.Visible;
+                    changed = true;
+                }
+                else if (labelsShown && !brandShown && slack > _brandTitleWidth + slackToRestore)
+                {
+                    BrandTitle.Visibility = Visibility.Visible;
+                    changed = true;
+                }
+            }
+
+            // Check again once the header has laid itself out with the change; stops when nothing changes.
+            if (changed && _headerFitPasses++ < 4)
+                Dispatcher.BeginInvoke(new Action(FitHeader), System.Windows.Threading.DispatcherPriority.Background);
+            else if (!changed)
+                _headerFitPasses = 0;
+        }
+        private int _headerFitPasses;
+        private double _lastHeaderMiddleWidth = -1;
+
+        // LayoutUpdated fires often, so this only does work when the middle column actually changed width.
+        private void HeaderGrid_LayoutUpdated(object? sender, EventArgs e)
+        {
+            if (HeaderMicArea?.Parent is not System.Windows.Controls.Grid header) return;
+            double w = header.ColumnDefinitions[1].ActualWidth;
+            if (Math.Abs(w - _lastHeaderMiddleWidth) < 0.5) return;
+            _lastHeaderMiddleWidth = w;
+            HeaderFit_SizeChanged(this, null!);
+        }
+
         /// <summary>Applies a switch that was asked for mid-question, as soon as the question is over.</summary>
         private void ApplyPendingAudioSourceChange()
         {
