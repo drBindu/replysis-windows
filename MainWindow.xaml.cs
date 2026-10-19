@@ -1737,6 +1737,48 @@ namespace InterviewCopilot
             catch { }
         }
 
+        private const string NoMicrophoneTitle = "No microphone on this computer";
+        private const string NoMicrophoneBody =
+            "Practice listens to your voice, and this computer has no microphone, so nothing you say can be heard. " +
+            "Plug in earphones with a mic and Replysis starts listening by itself. " +
+            "To use Replysis in a real interview, Interview mode hears the call on this computer and needs no microphone.";
+
+        [System.Runtime.InteropServices.DllImport("winmm.dll")]
+        private static extern uint waveInGetNumDevs();
+
+        private DispatcherTimer? _micWatchTimer;
+
+        /// <summary>
+        /// While Practice runs on a computer with no microphone, look every 3 seconds for one being plugged in, and
+        /// restart listening on it at once. Windows counts real recording devices here; speaker loopbacks are not
+        /// included, so a plugged in headset is the only thing that changes the answer.
+        /// </summary>
+        private void StartWatchingForMicrophone()
+        {
+            if (_micWatchTimer != null) return;
+            // Compared with what Windows lists now, so a device the engine already turned down never causes a restart loop.
+            uint baseline = 0;
+            try { baseline = waveInGetNumDevs(); } catch { }
+            _micWatchTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            _micWatchTimer.Tick += (_, _) =>
+            {
+                uint inputs = 0;
+                try { inputs = waveInGetNumDevs(); } catch { }
+                if (!PracticeAudioOn || inputs > baseline)
+                {
+                    _micWatchTimer?.Stop();
+                    _micWatchTimer = null;
+                    if (inputs > baseline && PracticeAudioOn)
+                    {
+                        DebugWindow.Log("AUDIO", "A microphone was plugged in; restarting listening on it.");
+                        ShowInAppAlert("Microphone found", "Replysis is listening to your microphone now.", persist: false);
+                        RestartEngineBetweenQuestions();
+                    }
+                }
+            };
+            _micWatchTimer.Start();
+        }
+
         private static void OpenWindowsPage(string uri)
         {
             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri) { UseShellExecute = true }); }
@@ -7033,10 +7075,18 @@ namespace InterviewCopilot
                             if (line.Contains(">>> NO_MICROPHONE:", StringComparison.Ordinal))
                             {
                                 DebugWindow.Log("ENGINE", "No microphone on this computer; listening to computer sound only.");
-                                ClientErrorReporter.ReportProblem("audio", "no-microphone-interview", "No microphone on this computer (Interview, computer sound only)");
-                                _ = Dispatcher.BeginInvoke(new Action(() => ShowListeningModeNotice(
-                                    "This computer has no microphone, so Replysis listens to the computer's sound. " +
-                                    "That is all an interview needs. For Practice, plug in earphones with a mic.")));
+                                ClientErrorReporter.ReportProblem("audio", "no-microphone", "No microphone on this computer");
+                                // Only Practice opens the microphone, so this is a Practice user speaking to a computer that
+                                // cannot hear them. A header note for a few seconds was missed (India tester on 1.0.39,
+                                // 2026-10-19): it is a message that stays, and listening starts by itself once a
+                                // microphone is plugged in.
+                                _ = Dispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    ShowInAppAlert(NoMicrophoneTitle, NoMicrophoneBody, persist: true,
+                                                   actionLabel: "Use Interview instead",
+                                                   action: () => SelectAudioSource(practice: false));
+                                    StartWatchingForMicrophone();
+                                }));
                                 continue;
                             }
 
