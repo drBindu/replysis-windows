@@ -1964,6 +1964,28 @@ namespace InterviewCopilot
             BuildModeMenu();
             ModeMenuPopup.PlacementTarget = ModeMenuPill;
             ModeMenuPopup.IsOpen = true;
+            if (!_modeMenuClosersHooked)
+            {
+                // StaysOpen=False closed it a second after opening (owner, 2026-10-19). It now stays until a choice,
+                // a click elsewhere in the window, Esc, or the app losing focus, like the profile menu.
+                _modeMenuClosersHooked = true;
+                PreviewMouseDown += (_, args) =>
+                {
+                    if (!ModeMenuPopup.IsOpen) return;
+                    if (args.OriginalSource is DependencyObject d && (IsInside(d, ModeMenuPill))) return;
+                    ModeMenuPopup.IsOpen = false;
+                };
+                PreviewKeyDown += (_, args) => { if (args.Key == System.Windows.Input.Key.Escape && ModeMenuPopup.IsOpen) { ModeMenuPopup.IsOpen = false; args.Handled = true; } };
+                Deactivated += (_, _) => ModeMenuPopup.IsOpen = false;
+            }
+        }
+        private bool _modeMenuClosersHooked;
+
+        private static bool IsInside(DependencyObject d, DependencyObject container)
+        {
+            for (var cur = d; cur != null; cur = cur is Visual || cur is System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(cur) : LogicalTreeHelper.GetParent(cur))
+                if (ReferenceEquals(cur, container)) return true;
+            return false;
         }
 
         private void BuildModeMenu()
@@ -2218,7 +2240,7 @@ namespace InterviewCopilot
             // the message was moved into a tooltip, which nobody hovers, and nine
             // warnings went invisible at once - among them "Another device is
             // using your account" and "Not transcribing. Restart the app."
-            ModeMenuPill.Visibility = Visibility.Collapsed;
+            if (!ModeMenuPopup.IsOpen) ModeMenuPill.Visibility = Visibility.Collapsed;
             ModeNoticeText.Text = message;
             ModeNoticeText.Visibility = Visibility.Visible;
             ModeSegments.ToolTip = message;

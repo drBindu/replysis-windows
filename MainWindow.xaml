@@ -1685,7 +1685,7 @@
             </Popup>
 
             <!-- ================= PROFILE DROPDOWN ================= -->
-            <Popup x:Name="ModeMenuPopup" Placement="Bottom" StaysOpen="False"
+            <Popup x:Name="ModeMenuPopup" Placement="Bottom" StaysOpen="True"
                    AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="8">
                 <Border Background="#0B1320" BorderBrush="#26354A" BorderThickness="1"
                         CornerRadius="14" Width="272" Margin="0,0,12,12" Padding="6">
