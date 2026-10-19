@@ -1896,6 +1896,7 @@ namespace InterviewCopilot
             SegInterviewIcon.Foreground = practice ? offFg : onFg;
             SegPracticeIcon.Foreground = practice ? onFg : offFg;
             if (ModeSegments != null) ModeSegments.ToolTip = AudioSourceRules.HearingLine(practice);
+            UpdateModeMenuPill();
 
             SetupSource.SetSelected(practice ? 1 : 0);
             SetupSourceHint.Text = practice
@@ -1944,6 +1945,73 @@ namespace InterviewCopilot
                 }
             }
             catch (Exception ex) { DebugWindow.Log("AUDIO", $"tip check failed: {ex.Message}"); }
+        }
+
+        // ── Minimal top bar: one pill, one menu ──────────────────────────────────────────────────────────────
+        private void UpdateModeMenuPill()
+        {
+            if (ModeMenuText == null) return;
+            bool practice = PracticeAudioOn;
+            ModeMenuText.Text = practice ? "Practice" : "Interview";
+            ModeMenuIcon.Text = practice ? "\uE720" : "\uE7F5";
+            ModeMenuSub.Text = AutoModeEnabled ? "Auto" : "Manual";
+        }
+
+        private void ModeMenuPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (ModeMenuPopup.IsOpen) { ModeMenuPopup.IsOpen = false; return; }
+            BuildModeMenu();
+            ModeMenuPopup.PlacementTarget = ModeMenuPill;
+            ModeMenuPopup.IsOpen = true;
+        }
+
+        private void BuildModeMenu()
+        {
+            ModeMenuRows.Children.Clear();
+            bool practice = PracticeAudioOn, auto = AutoModeEnabled;
+
+            void Heading(string text) => ModeMenuRows.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = text, Foreground = new SolidColorBrush(Color.FromRgb(0x7C, 0x88, 0x99)), FontSize = 10.5,
+                FontWeight = FontWeights.SemiBold, FontFamily = new FontFamily("Segoe UI"), Margin = new Thickness(10, 8, 10, 4),
+            });
+            void Row(string title, string sub, string shortcut, bool chosen, Action pick)
+            {
+                var grid = new System.Windows.Controls.Grid();
+                grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(22) });
+                grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = GridLength.Auto });
+                var tick = new System.Windows.Controls.TextBlock
+                {
+                    Text = chosen ? "\uE73E" : "", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x54, 0xD9, 0x9A)), VerticalAlignment = VerticalAlignment.Center,
+                };
+                var words = new System.Windows.Controls.StackPanel();
+                words.Children.Add(new System.Windows.Controls.TextBlock { Text = title, Foreground = Brushes.White, FontSize = 12.5, FontWeight = FontWeights.SemiBold, FontFamily = new FontFamily("Segoe UI") });
+                words.Children.Add(new System.Windows.Controls.TextBlock { Text = sub, Foreground = new SolidColorBrush(Color.FromRgb(0x92, 0x92, 0x9F)), FontSize = 11, FontFamily = new FontFamily("Segoe UI"), Margin = new Thickness(0, 1, 0, 0) });
+                var keys = new System.Windows.Controls.TextBlock { Text = shortcut, Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x76, 0x88)), FontSize = 10.5, FontFamily = new FontFamily("Segoe UI"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 4, 0) };
+                System.Windows.Controls.Grid.SetColumn(words, 1); System.Windows.Controls.Grid.SetColumn(keys, 2);
+                grid.Children.Add(tick); grid.Children.Add(words); grid.Children.Add(keys);
+                var row = new System.Windows.Controls.Border { Child = grid, Padding = new Thickness(8, 7, 8, 7), CornerRadius = new CornerRadius(9), Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent };
+                row.MouseEnter += (_, _) => row.Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
+                row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+                row.MouseLeftButtonUp += (_, _) => { ModeMenuPopup.IsOpen = false; pick(); };
+                ModeMenuRows.Children.Add(row);
+            }
+            void Line() => ModeMenuRows.Children.Add(new System.Windows.Controls.Border { Height = 1, Background = new SolidColorBrush(Color.FromRgb(0x18, 0x23, 0x38)), Margin = new Thickness(8, 6, 8, 2) });
+
+            Heading("What Replysis hears");
+            Row("Interview", "The call on this computer", "Ctrl+Shift+P", !practice, () => SelectAudioSource(practice: false));
+            Row("Practice", "Your voice, for practising", "Ctrl+Shift+P", practice, () => SelectAudioSource(practice: true));
+            Line();
+            Heading("How it answers");
+            Row("Auto", "Answers by itself", "Ctrl+Shift+A", auto, () => SelectListeningMode(ListeningMode.Auto));
+            Row("Manual", "Press Space to listen and answer", "Ctrl+Shift+A", !auto, () => SelectListeningMode(ListeningMode.Manual));
+            Line();
+            Heading("Window");
+            Row("Compact", "A slim bar for in person interviews", "Ctrl+Shift+C", false, () => CameraMode_Click(this, new RoutedEventArgs()));
+            Row(_keepOnTop ? "Unpin" : "Pin on top", _keepOnTop ? "Stops staying in front" : "Stays in front of other windows", "", _keepOnTop, () => PinWindowBtn_Click(this, new RoutedEventArgs()));
         }
 
         private void SegAuto_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -2044,9 +2112,9 @@ namespace InterviewCopilot
 
             bool auto = _listeningMode == ListeningMode.Auto;
 
-            SegAuto.Visibility        = Visibility.Visible;
-            SegManual.Visibility      = Visibility.Visible;
+            ModeMenuPill.Visibility   = Visibility.Visible;
             ModeNoticeText.Visibility = Visibility.Collapsed;
+            UpdateModeMenuPill();
             ModeSegments.ToolTip      = null;
 
             SegAuto.Background = Brushes.Transparent;         // the sliding thumb shows the selection
@@ -2150,8 +2218,7 @@ namespace InterviewCopilot
             // the message was moved into a tooltip, which nobody hovers, and nine
             // warnings went invisible at once - among them "Another device is
             // using your account" and "Not transcribing. Restart the app."
-            SegAuto.Visibility = Visibility.Collapsed;
-            SegManual.Visibility = Visibility.Collapsed;
+            ModeMenuPill.Visibility = Visibility.Collapsed;
             ModeNoticeText.Text = message;
             ModeNoticeText.Visibility = Visibility.Visible;
             ModeSegments.ToolTip = message;
@@ -8106,6 +8173,15 @@ namespace InterviewCopilot
         {
             if (e.IsRepeat) return; // Ignore auto-repeat key down events from holding space down
             if (e.Key == System.Windows.Input.Key.F12) { e.Handled = true; ToggleDebugWindow(); return; }
+
+            // Shortcuts for what used to be buttons in the top bar.
+            var mods = System.Windows.Input.Keyboard.Modifiers;
+            if (mods == (System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift))
+            {
+                if (e.Key == System.Windows.Input.Key.P) { e.Handled = true; SelectAudioSource(practice: !PracticeAudioOn); return; }
+                if (e.Key == System.Windows.Input.Key.A) { e.Handled = true; SelectListeningMode(AutoModeEnabled ? ListeningMode.Manual : ListeningMode.Auto); return; }
+                if (e.Key == System.Windows.Input.Key.C) { e.Handled = true; CameraMode_Click(this, new RoutedEventArgs()); return; }
+            }
 
             // Esc leaves the sessions view. Handled only while that view is up,
             // so Esc keeps whatever meaning it already had everywhere else -

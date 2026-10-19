@@ -1,3 +1,11 @@
+## The top bar is decided and locked (2026-10-19, Windows): minimal
+
+The owner tried it and chose it, and asked that it not change again. Top bar: logo, mic with its state, ONE pill
+("Interview" or "Practice", then "Auto" or "Manual", with a chevron), Screen, timer, the round initials avatar,
+minimise, close. The pill opens a menu: What Replysis hears (Interview: the call on this computer / Practice: your
+voice), How it answers (Auto / Manual), Window (Compact / Pin on top). Shortcuts: Ctrl+Shift+P Interview/Practice,
+Ctrl+Shift+A Auto/Manual, Ctrl+Shift+C Compact; F7/F8/F9 unchanged. Mac: match this layout.
+
 ## Every problem a person hits is reported to admin (2026-10-19, Windows, after 1.0.39)
 
 Only crashes reached admin, so a tester with no microphone never showed up. Windows now sends every problem through
