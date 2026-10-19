@@ -61,41 +61,54 @@ namespace InterviewCopilot
         internal static Window Create(Window? owner, string title, string message)
         {
             var panel = new StackPanel();
+            // The real logo and the name in plain case, instead of "REPLYSIS" in green capitals (owner, 2026-10-19).
             var heading = new StackPanel();
-            heading.Children.Add(new TextBlock
+            var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 16) };
+            try
             {
-                Text = "REPLYSIS",
-                FontSize = 10,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(52, 224, 138)),
-                Margin = new Thickness(0, 0, 0, 14)
+                brand.Children.Add(new System.Windows.Controls.Image
+                {
+                    Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://siteoforigin:,,,/Assets/replysis-icon-1024.png")),
+                    Width = 22, Height = 22, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+            catch { /* the name alone is fine */ }
+            brand.Children.Add(new TextBlock
+            {
+                Text = "Replysis",
+                FontFamily = new FontFamily("Segoe UI Variable Text"),
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                VerticalAlignment = VerticalAlignment.Center
             });
+            heading.Children.Add(brand);
             heading.Children.Add(new TextBlock
             {
                 Text = title,
                 FontFamily = new FontFamily("Segoe UI Variable Display"),
-                FontSize = 19,
+                FontSize = 20,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
+                Foreground = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
                 TextWrapping = TextWrapping.Wrap
             });
             panel.Children.Add(heading);
             panel.Children.Add(new TextBlock
             {
                 Text = message,
-                Margin = new Thickness(0, 10, 0, 0),
+                Margin = new Thickness(0, 8, 0, 0),
                 TextWrapping = TextWrapping.Wrap,
                 FontFamily = new FontFamily("Segoe UI Variable Text"),
-                FontSize = 13,
-                LineHeight = 20,
-                Foreground = new SolidColorBrush(Color.FromRgb(180, 192, 209))
+                FontSize = 13.5,
+                LineHeight = 21,
+                Foreground = new SolidColorBrush(Color.FromRgb(170, 182, 200))
             });
 
             return new Window
             {
                 Owner = owner?.IsVisible == true ? owner : null,
                 Title = title,
-                Width = 440,
+                Width = 468,
                 SizeToContent = SizeToContent.Height,
                 MaxHeight = 520,
                 ResizeMode = ResizeMode.NoResize,
@@ -108,11 +121,13 @@ namespace InterviewCopilot
                     ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
                 Content = new Border
                 {
-                    Padding = new Thickness(24),
-                    CornerRadius = new CornerRadius(16),
-                    Background = new SolidColorBrush(Color.FromRgb(13, 20, 32)),
+                    Margin = new Thickness(14),   // room for the shadow
+                    Padding = new Thickness(26, 24, 26, 22),
+                    CornerRadius = new CornerRadius(18),
+                    Background = new LinearGradientBrush(Color.FromRgb(17, 26, 40), Color.FromRgb(11, 17, 27), 90),
                     BorderThickness = new Thickness(1),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0x94, 0xA3, 0xB8)),
+                    Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 28, ShadowDepth = 8, Opacity = 0.55, Color = Colors.Black },
                     Child = panel
                 }
             };
@@ -123,20 +138,20 @@ namespace InterviewCopilot
             var button = new Button
             {
                 Content = text,
-                MinWidth = 96,
-                Height = 40,
-                Margin = new Thickness(8, 0, 0, 0),
-                Padding = new Thickness(16, 0, 16, 0),
+                MinWidth = 112,
+                Height = 42,
+                Margin = new Thickness(10, 0, 0, 0),
+                Padding = new Thickness(18, 0, 18, 0),
                 FontFamily = new FontFamily("Segoe UI Variable Text"),
                 FontSize = 13,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+                Foreground = new SolidColorBrush(primary && destructive ? Color.FromRgb(254, 202, 202) : Color.FromRgb(241, 245, 249)),
                 Background = new SolidColorBrush(primary
-                    ? (destructive ? Color.FromRgb(83, 36, 45) : Color.FromRgb(23, 91, 64))
-                    : Color.FromRgb(29, 39, 54)),
+                    ? (destructive ? Color.FromRgb(69, 26, 34) : Color.FromRgb(22, 101, 66))
+                    : Color.FromRgb(30, 41, 59)),
                 BorderBrush = new SolidColorBrush(primary
-                    ? (destructive ? Color.FromRgb(162, 76, 88) : Color.FromRgb(42, 148, 100))
-                    : Color.FromRgb(63, 79, 100)),
+                    ? (destructive ? Color.FromRgb(127, 45, 58) : Color.FromRgb(34, 139, 90))
+                    : Color.FromRgb(51, 65, 85)),
                 BorderThickness = new Thickness(1),
                 Cursor = Cursors.Hand,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -147,10 +162,10 @@ namespace InterviewCopilot
             button.Template = (ControlTemplate)XamlReader.Parse("""
                 <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="Button">
-                    <Border x:Name="Surface" CornerRadius="8" Background="{TemplateBinding Background}"
+                    <Border x:Name="Surface" CornerRadius="10" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
                         <Grid>
-                            <Border x:Name="Hover" Background="#FFFFFF" Opacity="0" CornerRadius="8"/>
+                            <Border x:Name="Hover" Background="#FFFFFF" Opacity="0" CornerRadius="10"/>
                             <ContentPresenter Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"
                                               HorizontalAlignment="Center" VerticalAlignment="Center"
                                               TextElement.Foreground="{TemplateBinding Foreground}"/>

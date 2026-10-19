@@ -65,7 +65,7 @@ internal static class StealthDialogTests
                 string? preview = Environment.GetEnvironmentVariable("REPLYSIS_DIALOG_PREVIEW");
                 if (!string.IsNullOrWhiteSpace(preview))
                 {
-                    var bitmap = new RenderTargetBitmap(440, (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                    var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth), (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
                     bitmap.Render(content);
                     var encoder = new PngBitmapEncoder();
                     encoder.Frames.Add(BitmapFrame.Create(bitmap));

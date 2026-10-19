@@ -1,3 +1,8 @@
+## Dialogs: the real logo and calmer design (2026-10-19, Windows)
+
+Every Replysis popup message (close confirmation and the rest) now shows the logo and "Replysis" in plain case instead
+of "REPLYSIS" in green capitals, with softer spacing, a shadow and clearer buttons. Mac: match.
+
 ## Compact bar has the same mode pill (2026-10-19, Windows, owner chose it)
 
 The slim Compact bar now carries the same pill as the top bar ("Interview" or "Practice", "Auto" or "Manual"), and it
