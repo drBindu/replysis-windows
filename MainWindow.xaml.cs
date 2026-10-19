@@ -1960,6 +1960,7 @@ namespace InterviewCopilot
         private void ModeMenuPill_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             e.Handled = true;
+            DebugWindow.Log("MENU", ModeMenuPopup.IsOpen ? "Mode menu closed." : "Mode menu opened.");
             if (ModeMenuPopup.IsOpen) { ModeMenuPopup.IsOpen = false; return; }
             BuildModeMenu();
             ModeMenuPopup.PlacementTarget = ModeMenuPill;
@@ -2020,7 +2021,15 @@ namespace InterviewCopilot
                 var row = new System.Windows.Controls.Border { Child = grid, Padding = new Thickness(8, 7, 8, 7), CornerRadius = new CornerRadius(9), Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent };
                 row.MouseEnter += (_, _) => row.Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
                 row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
-                row.MouseLeftButtonUp += (_, _) => { ModeMenuPopup.IsOpen = false; pick(); };
+                // Acts on the press: a release could be lost when the popup closed under it, and nothing switched
+                // (owner, 2026-10-19). The choice runs first, then the menu closes.
+                row.PreviewMouseLeftButtonDown += (_, args) =>
+                {
+                    args.Handled = true;
+                    DebugWindow.Log("MENU", $"Picked {title}.");
+                    try { pick(); } catch (Exception ex) { DebugWindow.Log("MENU", $"{title} failed: {ex.Message}"); }
+                    ModeMenuPopup.IsOpen = false;
+                };
                 ModeMenuRows.Children.Add(row);
             }
             void Line() => ModeMenuRows.Children.Add(new System.Windows.Controls.Border { Height = 1, Background = new SolidColorBrush(Color.FromRgb(0x18, 0x23, 0x38)), Margin = new Thickness(8, 6, 8, 2) });
