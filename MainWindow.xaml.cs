@@ -1654,6 +1654,79 @@ namespace InterviewCopilot
             StartSpeechmaticsEngine();
         }
 
+        private readonly Dictionary<string, DateTime> _audioAlertShownUtc = new();
+        private DateTime _lastDeviceChangeRestartUtc = DateTime.MinValue;
+
+        /// <summary>
+        /// Turns an engine line about a hearing problem into a message the user sees. Returns true when the
+        /// line was one of them. Each kind is shown at most once every five minutes so a stuck device does
+        /// not keep shouting.
+        /// </summary>
+        private bool TryAudioProblemAlert(string line)
+        {
+            string? key = null, title = null, body = null, actionLabel = null;
+            Action? action = null;
+
+            if (line.Contains("loopback is not available in this engine session", StringComparison.Ordinal))
+            {
+                // Headphones, a headset or Bluetooth connected after the app started: the engine only knows
+                // the devices that existed when it opened. Restart it so it follows the new one by itself.
+                if (DateTime.UtcNow - _lastDeviceChangeRestartUtc > TimeSpan.FromSeconds(30))
+                {
+                    _lastDeviceChangeRestartUtc = DateTime.UtcNow;
+                    DebugWindow.Log("AUDIO", "New speaker or headphones found; restarting audio to follow them.");
+                    _ = Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        ShowListeningModeNotice("New speaker or headphones found. Switching to them.");
+                        RestartEngineBetweenQuestions();
+                    }));
+                }
+                return true;
+            }
+            if (line.Contains("MIC NO_AUDIO", StringComparison.Ordinal))
+            {
+                key = "mic-silent";
+                title = "Your microphone is silent";
+                body = "Replysis can not hear any microphone on this computer. Check it is not muted (a mute key, " +
+                       "or a switch on the headset). If it stays silent, Windows may be blocking it.";
+                actionLabel = "Allow microphone";
+                action = () => OpenWindowsPage("ms-settings:privacy-microphone");
+            }
+            else if (line.Contains("SYSTEM AUDIO unavailable", StringComparison.Ordinal)
+                     || line.Contains("Could not open system audio stream", StringComparison.Ordinal))
+            {
+                key = "system-audio";
+                title = "Replysis can not hear this computer's sound";
+                body = "The interviewer's voice must play on this computer. If the call is on your phone or another " +
+                       "device, Replysis can not hear it. Press Restart audio after the call starts here.";
+                actionLabel = "Restart audio";
+                action = RestartEngineBetweenQuestions;
+            }
+            else if (line.Contains("Mic fallback failed", StringComparison.Ordinal))
+            {
+                key = "mic-open";
+                title = "Your microphone could not be opened";
+                body = "Another app may be holding it. Close other apps that use the microphone, then press Restart audio.";
+                actionLabel = "Restart audio";
+                action = RestartEngineBetweenQuestions;
+            }
+            if (key == null) return false;
+
+            if (_audioAlertShownUtc.TryGetValue(key, out var last) && DateTime.UtcNow - last < TimeSpan.FromMinutes(5))
+                return true;
+            _audioAlertShownUtc[key] = DateTime.UtcNow;
+            DebugWindow.Log("AUDIO", $"Told the user: {title}");
+            _ = Dispatcher.BeginInvoke(new Action(() =>
+                ShowInAppAlert(title!, body!, persist: true, actionLabel: actionLabel, action: action)));
+            return true;
+        }
+
+        private static void OpenWindowsPage(string uri)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri) { UseShellExecute = true }); }
+            catch (Exception ex) { DebugWindow.Log("AUDIO", $"Could not open {uri}: {ex.Message}"); }
+        }
+
         /// <summary>Applies a switch that was asked for mid-question, as soon as the question is over.</summary>
         private void ApplyPendingAudioSourceChange()
         {
@@ -2164,8 +2237,8 @@ namespace InterviewCopilot
                 DebugWindow.Log("MODE", "Interview mode heard nothing for 45s; offered a switch to Practice.");
                 ShowInAppAlert(
                     "Nothing heard yet",
-                    "Interview mode listens to your meeting only, so your own voice is not picked up. " +
-                    "If you are speaking yourself, switch to Practice.",
+                    "Interview mode hears the sound playing on this computer, so a call on your phone and your own " +
+                    "voice are not picked up. Play the interview on this computer, or switch to Practice to speak yourself.",
                     persist: false,
                     actionLabel: "Switch to Practice",
                     action: () => SelectAudioSource(practice: true));
@@ -6237,8 +6310,8 @@ namespace InterviewCopilot
                 label = "NO SPEECH SERVICE";
                 MicBtn.ToolTip =
                     "The app cannot reach the speech service. This is usually a network "
-                    + "that blocks it - a work, school, or shop network, or a VPN. "
-                    + "Try a phone hotspot. Press Ctrl+Alt+F12 for details.";
+                    + "that blocks it, such as a work, school or shop network, or a VPN. "
+                    + "Try a phone hotspot.";
             }
             // Auto is never "muted" from the user's point of view: it is starting,
             // paused, or about to listen again. A red MUTED after choosing
@@ -6814,6 +6887,11 @@ namespace InterviewCopilot
                                 continue;
                             }
 
+                            // Problems the engine could always see but the user never could: they went to the
+                            // hidden log only, so the app looked like it was listening while it heard nothing
+                            // (India tester, 2026-10-18). Each is said once, in words, with the fix on a button.
+                            if (TryAudioProblemAlert(line)) continue;
+
                             // A computer with no microphone (most desktops). In Practice mode the engine waits for
                             // one and starts by itself when it is plugged in; until then the app says so plainly,
                             // instead of looking like it is listening (India tester, 2026-10-18).
@@ -6856,7 +6934,7 @@ namespace InterviewCopilot
                                     line.Contains("NO_INPUT_DEVICE", StringComparison.Ordinal)
                                     || line.Contains("Input Device", StringComparison.OrdinalIgnoreCase)
                                         ? NoMicrophoneMessage
-                                        : "The speech engine could not start. Press Ctrl+Alt+F12 for details.";
+                                        : "Listening could not start. Close Replysis and open it again. If it still does not start, your antivirus may be blocking Replysis; allow it there.";
 
                                 _engineFatalReason = reason;
                                 _engineAuthFailed = true;   // stops the restart loop
@@ -7833,8 +7911,8 @@ namespace InterviewCopilot
             // debug log the user has no reason to open. Someone whose machine is
             // missing the speech engine just saw transcription silently not work.
             string detail = string.IsNullOrEmpty(_engineFatalReason)
-                ? "Speech transcription could not start. Press Ctrl+Alt+F12 for details."
-                : $"Speech transcription could not start. {_engineFatalReason}.";
+                ? "Listening could not start. Close Replysis and open it again. If it still does not start, your antivirus may be blocking Replysis; allow it there."
+                : _engineFatalReason.EndsWith(".", StringComparison.Ordinal) ? _engineFatalReason : $"Listening could not start. {_engineFatalReason}.";
 
             if (_isCameraMode && answerWindow != null)
                 answerWindow.ShowServiceUnavailable("Setup needed", detail);
@@ -9048,7 +9126,7 @@ namespace InterviewCopilot
                 DebugWindow.Log("SCREEN_ERR", ex.Message);
                 RestoreWindows();
                 if (screenCt.IsCancellationRequested || !ReferenceEquals(_aiCts, screenOwner)) return;
-                AiAnswerBox.Text = "Screen capture failed. Press Ctrl+Alt+F12 for details.";
+                AiAnswerBox.Text = "Could not read the screen this time. Press F8 to try again.";
                 _isScreenAnalyzing = false;
                 StopThinkingUi();
                 return;

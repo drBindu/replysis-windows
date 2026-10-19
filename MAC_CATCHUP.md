@@ -11,6 +11,12 @@ Windows now:
   and Replysis starts listening by itself", re-checks every 3 seconds, and starts on its own when one appears
   (engine lines NO_MICROPHONE, NO_MICROPHONE_WAITING, MICROPHONE CONNECTED).
 
+Also (same day): every hearing problem the engine could detect but the user never saw is now an on screen message
+with a one click fix: every microphone silent (muted or blocked: "Allow microphone" opens the Windows page),
+the computer's sound unavailable or the call playing on a phone ("Restart audio"), the microphone could not be opened
+("Restart audio"). Headphones or Bluetooth connected after the app opened: the audio restarts by itself and follows
+them. "Press Ctrl+Alt+F12 for details" is gone from every user message.
+
 Mac: check the same three cases. A Mac always has a built in mic, but an external display with a disabled mic or a
 denied microphone permission is the same experience: say it on screen, and recover by itself when it is fixed.
 
