@@ -1,3 +1,12 @@
+## Every problem a person hits is reported to admin (2026-10-19, Windows, after 1.0.39)
+
+Only crashes reached admin, so a tester with no microphone never showed up. Windows now sends every problem through
+the same client-error report (no account, no paths; each kind once per run, up to 40 kinds), with the situation
+appended ([Interview or Practice, Auto or Manual, setup or in interview]): every listening problem kind, every in app
+alert except update offers, every failed answer, the speech engine stopping or giving up, screen reading failures,
+a new session failing, problem notices ("could not", "nothing heard", "no microphone"...), and failed update
+downloads. They show in admin, Live, Problems filter, as "Problem.<kind>". Mac: send the same.
+
 ## Header fits the window; profile is just the avatar (2026-10-19, Windows)
 
 At the app's width the header overflowed and the Screen button covered "Practice". Now the profile in the header is

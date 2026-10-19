@@ -25,6 +25,9 @@ namespace InterviewCopilot
     internal static class ClientErrorReporter
     {
         internal const int MaxPerRun = 6;
+        /// <summary>Problems (not crashes) a person ran into. Each kind once per run, at most this many kinds.</summary>
+        internal const int MaxProblemsPerRun = 40;
+        private static readonly HashSet<string> _problemsSeen = new();
 
         private static readonly HashSet<string> _seen = new();
         private static int _sent;
@@ -82,6 +85,13 @@ namespace InterviewCopilot
         /// admin portal never showed that a tester in India had no microphone (2026-10-19). Same endpoint, same
         /// privacy rules as a crash (no account, no paths), each kind once per run.
         /// </summary>
+        /// <summary>A short, stable id from free text, so the same problem groups together in admin.</summary>
+        internal static string Slug(string text)
+        {
+            string t = System.Text.RegularExpressions.Regex.Replace((text ?? "").ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+            return t.Length > 48 ? t[..48] : t;
+        }
+
         internal static void ReportProblem(string source, string kind, string message)
         {
 #if DEBUG
@@ -89,7 +99,10 @@ namespace InterviewCopilot
 #else
             try
             {
-                if (!ShouldSend("problem|" + kind)) return;
+                lock (_problemsSeen)
+                {
+                    if (_problemsSeen.Count >= MaxProblemsPerRun || !_problemsSeen.Add(kind)) return;
+                }
                 string version = "";
                 try { version = FileVersionInfo.GetVersionInfo(Environment.ProcessPath ?? "").ProductVersion ?? ""; } catch { }
                 var payload = new
@@ -97,7 +110,7 @@ namespace InterviewCopilot
                     version,
                     os = $"{Environment.OSVersion.Version} {System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}",
                     source,
-                    type = "HearingProblem." + kind,
+                    type = "Problem." + kind,
                     message = SanitizeMessage(message),
                     frames = "",
                 };

@@ -1439,6 +1439,9 @@ namespace InterviewCopilot
         internal void ShowInAppAlert(string title, string message, bool persist = false,
                                     string? actionLabel = null, Action? action = null, bool isUpdate = false)
         {
+            if (!isUpdate)
+                ReportProblem("alert", "alert-" + ClientErrorReporter.Slug(title),
+                              title + ": " + (message.Length > 120 ? message[..120] : message));
             _bannerIsProblem = false;
             _bannerIsUpdate = isUpdate;
             // In compact overlay the main window is hidden, so the banner would
@@ -1720,6 +1723,18 @@ namespace InterviewCopilot
             _ = Dispatcher.BeginInvoke(new Action(() =>
                 ShowInAppAlert(title!, body!, persist: true, actionLabel: actionLabel, action: action)));
             return true;
+        }
+
+        /// <summary>Sends a problem to admin with the situation it happened in (mode, trigger, step).</summary>
+        private void ReportProblem(string source, string kind, string message)
+        {
+            try
+            {
+                string where = $"{(PracticeAudioOn ? "Practice" : "Interview")}, {(AutoModeEnabled ? "Auto" : "Manual")}" +
+                               (_interviewStarted ? ", in interview" : ", setup");
+                ClientErrorReporter.ReportProblem(source, kind, $"{message} [{where}]");
+            }
+            catch { }
         }
 
         private static void OpenWindowsPage(string uri)
@@ -2083,6 +2098,9 @@ namespace InterviewCopilot
 
         private void ShowListeningModeNotice(string message)
         {
+            if (System.Text.RegularExpressions.Regex.IsMatch(message ?? "",
+                    @"(?i)could not|couldn't|failed|nothing heard|no microphone|not available|unavailable|blocked|silent|retry"))
+                ReportProblem("notice", "notice-" + ClientErrorReporter.Slug(message!), message!);
             if (ModeSegments == null) return;
 
             // The message REPLACES the switch for a few seconds, the way it used
@@ -2565,6 +2583,7 @@ namespace InterviewCopilot
             if (!_problemsShown.Add(kind)) return;
             var d = ListeningProblems.Describe(kind, OnFreeTrial());
             DebugWindow.Log("MODE", $"Problem shown to the user: {kind}.");
+            ReportProblem("listening", "listening-" + kind, d.Title);
             // Out of answers goes to the account, where "Add more answers" (no subscription) and the
             // plans are both offered; the listening limit goes to the plans.
             string page = d.Step == ListeningProblems.NextStep.MoreAnswers
@@ -4177,6 +4196,7 @@ namespace InterviewCopilot
             {
                 if (aiCt.IsCancellationRequested || !ReferenceEquals(_aiCts, requestOwner)) return;
                 DebugWindow.Log("AI_ERR", ex.Message);
+                ReportProblem("answer", "answer-" + ClientErrorReporter.Slug(ex.Message), ex.Message);
                 string partial = CleanAiOutput(streamedAnswer.ToString());
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(partial)
                     ? ex.Message
@@ -4208,6 +4228,8 @@ namespace InterviewCopilot
                 string failure = ex is InvalidOperationException && !string.IsNullOrWhiteSpace(ex.Message)
                     ? ex.Message
                     : "Connection interrupted. Please try again.";
+                ReportProblem("answer", "answer-failed-" + ex.GetType().Name,
+                              $"{ex.GetType().Name}: {ex.Message}" + (ex.InnerException is null ? "" : $" <- {ex.InnerException.GetType().Name}"));
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(partial)
                     ? failure
                     : $"{partial}\n\n{failure}";
@@ -7029,6 +7051,7 @@ namespace InterviewCopilot
                                 _engineFatalReason = reason;
                                 _engineAuthFailed = true;   // stops the restart loop
                                 DebugWindow.Log("ENGINE", $"Engine gave up: {line}");
+                                ReportProblem("engine", "engine-fatal-" + ClientErrorReporter.Slug(line), line.Trim());
                                 _ = Dispatcher.BeginInvoke(new Action(() =>
                                 {
                                     ShowListeningModeNotice(reason);
@@ -7855,6 +7878,8 @@ namespace InterviewCopilot
 
                 int code = -1;
                 try { code = speechmaticsProcess?.ExitCode ?? -1; } catch { }
+                if (speechmaticsProcess != null)
+                    ReportProblem("engine", "engine-exit-" + code, $"Speech engine stopped (exit code {code})");
                 if (code == SpeechRecognitionExitCodes.AudioUsageLimit)
                 {
                     _engineUsageLimitReached = true;
@@ -8632,7 +8657,10 @@ namespace InterviewCopilot
             await StartNewSessionAsync();
 
             if (!isRecording)
+            {
+                ReportProblem("session", "session-start-failed", "Could not start a new session");
                 AiAnswerBox.Text = "We could not start a new session. Please try again.";
+            }
             else if (previous.AudioExpected && previous.AudioSaved)
                 AiAnswerBox.Text = $"Session {previousSessionNumber} saved. You are now in session {sessionNumber}, with your resume and role still loaded.";
             else if (previous.AudioExpected)
@@ -8643,6 +8671,7 @@ namespace InterviewCopilot
             catch (Exception ex)
             {
                 DebugWindow.Log("SESSION", $"New session failed: {ex.Message}");
+                ReportProblem("session", "session-start-failed", "Could not start a new session");
                 AiAnswerBox.Text = "We could not start a new session. Please try again.";
             }
             finally
@@ -9216,6 +9245,7 @@ namespace InterviewCopilot
                 DebugWindow.Log("SCREEN_ERR", ex.Message);
                 RestoreWindows();
                 if (screenCt.IsCancellationRequested || !ReferenceEquals(_aiCts, screenOwner)) return;
+                ReportProblem("screen", "screen-capture-failed", "Screen capture failed: " + ex.Message);
                 AiAnswerBox.Text = "Could not read the screen this time. Press F8 to try again.";
                 _isScreenAnalyzing = false;
                 StopThinkingUi();
@@ -9326,6 +9356,7 @@ namespace InterviewCopilot
                 string finalResult = ComposeScreenAnswer(sb.ToString());
                 if (string.IsNullOrWhiteSpace(finalResult))
                 {
+                    ReportProblem("screen", "screen-no-answer", "Screen AI returned no answer");
                     AiAnswerBox.Text = "Screen AI returned no answer. Please try again.";
                     return;
                 }
