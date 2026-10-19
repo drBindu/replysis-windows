@@ -76,6 +76,55 @@ namespace InterviewCopilot
             }
         }
 
+        /// <summary>
+        /// A problem that is not a crash but stops the app working for this person: no microphone, a silent or
+        /// blocked microphone, no computer sound, nothing heard. These used to reach only the local log, so the
+        /// admin portal never showed that a tester in India had no microphone (2026-10-19). Same endpoint, same
+        /// privacy rules as a crash (no account, no paths), each kind once per run.
+        /// </summary>
+        internal static void ReportProblem(string source, string kind, string message)
+        {
+#if DEBUG
+            return;
+#else
+            try
+            {
+                if (!ShouldSend("problem|" + kind)) return;
+                string version = "";
+                try { version = FileVersionInfo.GetVersionInfo(Environment.ProcessPath ?? "").ProductVersion ?? ""; } catch { }
+                var payload = new
+                {
+                    version,
+                    os = $"{Environment.OSVersion.Version} {System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}",
+                    source,
+                    type = "HearingProblem." + kind,
+                    message = SanitizeMessage(message),
+                    frames = "",
+                };
+                Post(payload);
+            }
+            catch { }
+#endif
+        }
+
+        private static void Post(object payload)
+        {
+            string url = SettingsWindow.GetBackendUrl().TrimEnd('/') + "/api/v1/diagnostics/client-error";
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    using var req = new HttpRequestMessage(HttpMethod.Post, url)
+                    {
+                        Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
+                    };
+                    using var _ = await SharedHttpClient.HttpShort.SendAsync(req, cts.Token).ConfigureAwait(false);
+                }
+                catch { }
+            });
+        }
+
         internal static void Report(string source, Exception? ex)
         {
 #if DEBUG

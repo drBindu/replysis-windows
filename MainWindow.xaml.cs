@@ -1712,6 +1712,7 @@ namespace InterviewCopilot
             }
             if (key == null) return false;
 
+            ClientErrorReporter.ReportProblem("audio", key, $"{title} ({(PracticeAudioOn ? "Practice" : "Interview")})");
             if (_audioAlertShownUtc.TryGetValue(key, out var last) && DateTime.UtcNow - last < TimeSpan.FromMinutes(5))
                 return true;
             _audioAlertShownUtc[key] = DateTime.UtcNow;
@@ -2321,6 +2322,7 @@ namespace InterviewCopilot
             {
                 _interviewSilentTipShown = true;
                 DebugWindow.Log("MODE", "Interview mode heard nothing for 45s; offered a switch to Practice.");
+                ClientErrorReporter.ReportProblem("audio", "nothing-heard", "Interview mode heard nothing for 45 seconds");
                 ShowInAppAlert(
                     "Nothing heard yet",
                     "Interview mode hears the sound playing on this computer, so a call on your phone and your own " +
@@ -6986,6 +6988,7 @@ namespace InterviewCopilot
                                 _engineFatalReason = NoMicrophoneMessage;
                                 _engineAuthFailed = true;   // the engine is alive and waiting; do not restart it
                                 DebugWindow.Log("ENGINE", "No microphone on this computer; waiting for one.");
+                                ClientErrorReporter.ReportProblem("audio", "no-microphone", "No microphone on this computer (Practice)");
                                 _ = Dispatcher.BeginInvoke(new Action(() =>
                                 {
                                     ShowListeningModeNotice(NoMicrophoneMessage);
@@ -7008,6 +7011,7 @@ namespace InterviewCopilot
                             if (line.Contains(">>> NO_MICROPHONE:", StringComparison.Ordinal))
                             {
                                 DebugWindow.Log("ENGINE", "No microphone on this computer; listening to computer sound only.");
+                                ClientErrorReporter.ReportProblem("audio", "no-microphone-interview", "No microphone on this computer (Interview, computer sound only)");
                                 _ = Dispatcher.BeginInvoke(new Action(() => ShowListeningModeNotice(
                                     "This computer has no microphone, so Replysis listens to the computer's sound. " +
                                     "That is all an interview needs. For Practice, plug in earphones with a mic.")));
