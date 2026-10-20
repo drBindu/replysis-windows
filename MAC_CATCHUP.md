@@ -33,6 +33,15 @@ only the round initials avatar (the name is inside the menu it opens), and if sp
 the "Replysis AI" title first, then the words on Screen and Compact (icons and tooltips stay), and takes them back when
 there is room. Mac: check the toolbar at the smallest window width in Interview and Practice with the timer showing.
 
+## No microphone in Practice: a message that stays (2026-10-19, Windows 1.0.40)
+
+On 1.0.39 the India tester's desktop (no microphone at all) was detected correctly, but Practice only flashed a header
+note, so she kept speaking to a computer that could not hear her. Now Practice with no microphone shows an alert that
+stays ("No microphone on this computer. Plug in earphones with a mic and Replysis starts listening by itself", button
+"Use Interview instead"), and the app checks Windows every 3 seconds for a newly plugged microphone and restarts
+listening on it. Mac: if microphone permission is denied or no input exists, say it in a message that stays, and
+recover by itself when it is fixed.
+
 ## A computer with no microphone (2026-10-18, Windows, after 1.0.38)
 
 A tester in India used a desktop with no microphone. Windows listed only the speaker loopback as an input, the
