@@ -41,6 +41,9 @@ namespace InterviewCopilot
 
         private static Channel? _channel;
 
+        /// <summary>Off: no update window at launch (owner 2026-10-21). The top bar notice announces updates instead.</summary>
+        private static readonly bool LaunchGateEnabled = false;
+
         internal static Channel Current
         {
             get
@@ -79,6 +82,9 @@ namespace InterviewCopilot
         /// </summary>
         internal static async Task<bool> RunLaunchGateAsync()
         {
+            // No window at launch, ever (owner 2026-10-21: "no popup when the user opens the app"). A waiting
+            // Store update is announced in the top bar notice instead, like every other channel.
+            if (!LaunchGateEnabled) return true;
             if (Current != Channel.Store) return true;
 
             // The gate window is created first because the Store needs a window
@@ -170,6 +176,8 @@ namespace InterviewCopilot
         /// </summary>
         internal static async Task<string?> CheckAndStageAsync()
         {
+            // The Store is asked too, so Store users see the same top bar notice. Asking never closes the app.
+            if (Current == Channel.Store) return await StoreUpdateService.CheckQuietlyAsync().ConfigureAwait(false);
             if (Current != Channel.DirectDownload) return null;
             return await UpdateService.CheckAndStageAsync().ConfigureAwait(false);
         }

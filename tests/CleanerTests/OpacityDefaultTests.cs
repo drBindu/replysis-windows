@@ -3,7 +3,7 @@ using InterviewCopilot;
 namespace CleanerTests;
 
 /// <summary>
-/// Existing users still on the old 25% default move to 30% once; anyone who chose a level keeps it.
+/// Every existing copy moves to 30% once (2026-10-21); after that the user's choice is kept.
 /// </summary>
 internal static class OpacityDefaultTests
 {
@@ -23,9 +23,12 @@ internal static class OpacityDefaultTests
         Check(!SettingsWindow.MoveOldOpacityDefault(old) && old.MainWindowOpacity == 0.62,
               "it happens once: a later choice of 25% is kept");
 
-        var chosen = new SettingsWindow.AppConfig { MainWindowOpacity = 0.85, OverlayOpacity = 0.85 };
-        SettingsWindow.MoveOldOpacityDefault(chosen);
-        Check(chosen.MainWindowOpacity == 0.85, "a level the user chose is kept");
+        var fifty = new SettingsWindow.AppConfig { MainWindowOpacity = 0.748, OverlayOpacity = 0.748, OpacityDefaultVersion = 2 };
+        Check(SettingsWindow.MoveOldOpacityDefault(fifty) && fifty.MainWindowOpacity == 0.646,
+              "a copy on 50% from before also moves to 30%");
+        fifty.MainWindowOpacity = 0.85;
+        Check(!SettingsWindow.MoveOldOpacityDefault(fifty) && fifty.MainWindowOpacity == 0.85,
+              "after the move, a level the user chose is kept");
 
         Check(new SettingsWindow.AppConfig().MainWindowOpacity == 0.646, "a new install starts at 30%");
         double shown = 1 + (0.646 - 0.50) / 0.50 * 99;

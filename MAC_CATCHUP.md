@@ -1,3 +1,16 @@
+## Updates are announced in the top bar notice, never a window, never during an interview (2026-10-21, Windows)
+
+No update window at launch any more (the Store launch gate is off). Every channel, the Store included, shows the
+top bar notice: Store copies ask StoreContext quietly while open (asking never closes the app) and the button opens
+the Store page. The check runs 12 s after opening and then every 10 minutes (was 30). A found update waits while
+listening and shows as soon as listening stops. Mac: same rules for the Sparkle notice: in app banner, not a dialog,
+held during a live session.
+
+## Opacity: every copy moves to 30% once more (2026-10-21, Windows)
+
+The first move only touched copies on the old 25%, so the owner's copy stayed on 50% after updating.
+OpacityDefaultVersion 3 sets 30% (0.646) for every existing copy once; after that the user's choice is kept.
+
 ## Every window and popup is hidden from capture, not only the main ones (2026-10-21, Windows)
 
 Popups (the mode menu, the Compact menu), tooltips, context menus, message boxes and the update window are separate

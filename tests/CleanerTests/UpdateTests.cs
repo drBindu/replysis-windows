@@ -20,8 +20,8 @@ internal static class UpdateTests
 
         // A tester's laptop never showed the 1.0.28 notice: one check, twelve seconds after
         // opening, and a rule that hid it while an error notice was up.
-        Check(UpdatePolicy.RecheckEvery <= TimeSpan.FromHours(2) && UpdatePolicy.RecheckEvery >= TimeSpan.FromMinutes(15),
-            "an open app looks again, every 15 minutes to 2 hours (GitHub allows an address 60 checks an hour)");
+        Check(UpdatePolicy.RecheckEvery <= TimeSpan.FromMinutes(15) && UpdatePolicy.RecheckEvery >= TimeSpan.FromMinutes(5),
+            "an open app looks again every 5 to 15 minutes (GitHub allows an address 60 checks an hour)");
         Check(UpdatePolicy.FirstCheck <= TimeSpan.FromSeconds(30), "the first look is soon after opening");
         Check(UpdatePolicy.ShouldAnnounce("1.0.28", null), "a new version is announced");
         Check(!UpdatePolicy.ShouldAnnounce("1.0.28", "1.0.28"), "the same version is not announced twice");

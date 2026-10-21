@@ -22,10 +22,10 @@ namespace InterviewCopilot
 
         /// <summary>
         /// Between checks while the app stays open. GitHub allows an address 60 unauthenticated
-        /// requests an hour, and a check is one, so 30 minutes leaves room for about 30 people
-        /// behind the same address.
+        /// requests an hour and a check is one, so 10 minutes leaves room for about 10 people behind
+        /// the same address. Was 30; the owner wants the notice to show soon after a release (2026-10-21).
         /// </summary>
-        internal static readonly TimeSpan RecheckEvery = TimeSpan.FromMinutes(30);
+        internal static readonly TimeSpan RecheckEvery = TimeSpan.FromMinutes(10);
 
         /// <summary>A version is announced once, so a dismissed notice does not come back every half hour.</summary>
         internal static bool ShouldAnnounce(string? found, string? alreadyAnnounced) =>

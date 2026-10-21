@@ -1525,12 +1525,20 @@ namespace InterviewCopilot
         {
             string? found;
             bool managed = UpdateService.IsManaged;
-            found = managed
+            bool store = AppUpdates.Current == AppUpdates.Channel.Store;
+            found = managed || store
                 ? await AppUpdates.CheckAndStageAsync()
                 : await SettingsWindow.GetNewerVersionOrNullAsync();
 
             DebugWindow.Log("UPDATE", string.IsNullOrEmpty(found) ? "Checked for updates: none." : $"Checked for updates: {found} found.");
             if (!UpdatePolicy.ShouldAnnounce(found, _updateAnnouncedFor)) return;
+
+            // Never during a live interview: held until listening stops, then shown straight away.
+            while (isListening && !_windowClosed)
+            {
+                try { await Task.Delay(TimeSpan.FromSeconds(10)); } catch { return; }
+            }
+            if (_windowClosed) return;
             _updateAnnouncedFor = found;
 
             // Announced whatever else is on screen. It used to be skipped while a problem
@@ -1540,7 +1548,12 @@ namespace InterviewCopilot
             await Dispatcher.InvokeAsync(() =>
             {
                 DebugWindow.Log("UPDATE", $"Update announced: {found}.");
-                if (managed)
+                if (store)
+                    ShowInAppAlert(
+                        "A new Replysis is ready",
+                        "Update from the Microsoft Store when you are not in an interview. Nothing changes until you choose.",
+                        persist: true, actionLabel: "Update", action: StoreUpdateService.OpenStoreListing, isUpdate: true);
+                else if (managed)
                     ShowInAppAlert(
                         $"Replysis {found} is ready",
                         "Restart now to update, or it installs by itself the next time you open Replysis. Nothing changes until you choose.",

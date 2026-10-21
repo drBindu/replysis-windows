@@ -146,6 +146,32 @@ namespace InterviewCopilot
         }
 
         /// <summary>
+        /// The same question asked while the app is open, for the top bar notice. Asking does not close
+        /// the app; only installing does, and that happens in the Store when the user presses Update
+        /// there. Returns the waiting version (or "a new version"), or null. Never throws.
+        /// </summary>
+        internal static async Task<string?> CheckQuietlyAsync()
+        {
+            if (!IsStoreInstall) return null;
+            try
+            {
+                StoreContext ctx = GetContext(IntPtr.Zero);
+                using var timeout = new CancellationTokenSource(StoreUpdateRules.LaunchCheckTimeout);
+                IReadOnlyList<StorePackageUpdate> updates =
+                    await ctx.GetAppAndOptionalStorePackageUpdatesAsync().AsTask(timeout.Token).ConfigureAwait(false);
+                if (updates == null || updates.Count == 0) return null;
+                _pending = updates;
+                PendingVersion = DescribeVersion(updates);
+                return PendingVersion ?? "a new version";
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("UPDATE", $"Store check failed: {ex.GetType().Name} 0x{ex.HResult:X8}");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Downloads and installs what the check found. The Store closes the app
         /// to apply the package, so this usually does not return; when it does,
         /// the bool says whether the update actually went in.

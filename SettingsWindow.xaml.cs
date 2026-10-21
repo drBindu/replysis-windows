@@ -833,18 +833,17 @@ namespace InterviewCopilot
         }
 
         /// <summary>
-        /// Existing users still on the old default (0.62, 25% on the slider) move to the new one (0.646, 30%), once
-        /// (owner, 2026-10-16). Anyone who chose another level keeps it. Returns true when the file needs saving.
+        /// Every existing copy moves to 30% on the slider (0.646) once. The first move (version 2, 2026-10-16) only
+        /// touched copies on the old 25%, so a copy on 50% stayed there after updating; the owner asked again on
+        /// 2026-10-21 for 30% everywhere. After this one move, whatever the user picks is kept. Returns true when the
+        /// file needs saving.
         /// </summary>
         internal static bool MoveOldOpacityDefault(AppConfig config)
         {
-            if (config.OpacityDefaultVersion != null) return false;
-            if (Math.Abs(config.MainWindowOpacity - 0.62) < 0.005)
-            {
-                config.MainWindowOpacity = 0.646;
-                config.OverlayOpacity    = 0.646;
-            }
-            config.OpacityDefaultVersion = 2;
+            if (config.OpacityDefaultVersion >= 3) return false;
+            config.MainWindowOpacity     = 0.646;
+            config.OverlayOpacity        = 0.646;
+            config.OpacityDefaultVersion = 3;
             return true;
         }
 
