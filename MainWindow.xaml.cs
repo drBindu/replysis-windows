@@ -4235,7 +4235,9 @@ namespace InterviewCopilot
 
                 // Block once credits have been fetched and confirmed exhausted.
                 // _creditsFetched prevents false-blocking before the first backend response.
-                if (!UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold)
+                // Bought minutes pay for live answers, so they also let the question go: a customer bought 45 minutes and
+                // was told "You have 0 answers left" for every question (2026-10-21). The server decides the charge.
+                if (!UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold && _minutesBalance <= 0)
                 {
                     // This fires the instant a user asks a question, so it used to
                     // put a Windows dialog on screen in the middle of a live,

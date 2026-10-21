@@ -1,3 +1,10 @@
+## Bought minutes must let a question through (2026-10-21, Windows, after a paying customer was blocked)
+
+A customer bought 45 interview minutes (Rs 165) and the app kept saying "You have 0 answers left": the ask gate looked
+only at credits. The gate now also lets the question go while minutesBalance > 0 (the server charges minutes, not
+answers, for live answers and screen reads). The server meanwhile reports credits as at least 50 to apps while minutes
+remain (real number in creditsReal), so already installed apps work. Mac: check the same gate.
+
 ## Problem reports say why, and the microphone tries every entry (2026-10-21, Windows 1.0.41)
 
 From a real laptop's log (Cirrus Logic audio, VB-Cable installed, 2026-10-21), three more fixes in the same 1.0.41:
