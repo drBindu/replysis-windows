@@ -1442,8 +1442,39 @@ try:
                 _mic_chunk_frames    = n_chunk
                 print(f">>> MIC stream opened OK with native settings: {n_rate}Hz {n_ch}ch", flush=True)
             except Exception as ex_mic2:
-                print(f">>> WARNING: Mic fallback failed ({ex_mic2})", flush=True)
+                # Last resort: every other microphone entry Windows lists, each at its own rate. The same physical mic
+                # appears once per audio system (MME, DirectSound, WASAPI), and when one refuses (a driver that rejects
+                # shared mode, an Insider build, an app holding the WASAPI endpoint) another usually opens. Seen on a
+                # Windows 26300 laptop where both tries above failed and the session had no microphone at all
+                # (2026-10-21). Real devices first, the sound mapper last; loopback entries are never a microphone.
                 mic_stream = None
+                tried = {mic_kwargs.get("input_device_index")}
+                others = []
+                for i in range(p.get_device_count()):
+                    try:
+                        info = p.get_device_info_by_index(i)
+                    except Exception:
+                        continue
+                    name = str(info.get('name', ''))
+                    if i in tried or int(info.get('maxInputChannels', 0)) <= 0 or "[loopback]" in name.lower():
+                        continue
+                    mapper = any(v in name.lower() for v in ("sound mapper", "primary sound capture"))
+                    others.append((1 if mapper else 0, i, info))
+                for _, i, info in sorted(others, key=lambda x: (x[0], x[1])):
+                    rate = int(info.get('defaultSampleRate', 44100))
+                    ch = max(1, min(int(info.get('maxInputChannels', 1)), 2))
+                    chunk = max(CHUNK_FRAMES, int(CHUNK_FRAMES * rate / SAMPLE_RATE))
+                    try:
+                        mic_stream = open_stream_with_timeout(p, dict(mic_kwargs, rate=rate, channels=ch,
+                                                                      frames_per_buffer=chunk, input_device_index=i))
+                    except Exception:
+                        continue
+                    _mic_native_rate, _mic_native_channels, _mic_chunk_frames = rate, ch, chunk
+                    _mic_device_index, _mic_device_name = i, info.get('name', '')
+                    print(f">>> MIC stream opened OK on another entry: [{i}] {_mic_device_name} {rate}Hz {ch}ch", flush=True)
+                    break
+                if mic_stream is None:
+                    print(f">>> WARNING: Mic fallback failed ({ex_mic2})", flush=True)
     else:
         print(">>> MIC: skipped (system-audio-only mode)", flush=True)
 

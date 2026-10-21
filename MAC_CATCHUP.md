@@ -1,3 +1,17 @@
+## Problem reports say why, and the microphone tries every entry (2026-10-21, Windows 1.0.41)
+
+A Windows laptop (Insider build 26300) reported "microphone could not be opened" and "can not hear this computer's
+sound" together, and the reason (Windows' own error text) stayed in its local log. Two changes:
+
+1. Every problem report now carries the engine's last 40 technical lines (devices found, Windows' error messages) in a
+   new `detail` field; admin Live panel shows them under "What the app saw". Allowlist only: lines starting with `>>>`
+   that mention MIC, SYSTEM AUDIO, WASAPI, loopback, FATAL, WARNING, failed, error, device, MODE, Deepgram, connection;
+   never a line with "words were", DEBUG, FINAL, PARTIAL, segment or said, so nothing a person said leaves the computer.
+   Backend `/api/v1/diagnostics/client-error` accepts `detail` (6000 chars). Mac: send the same field from its reporter.
+2. Engine: when the default microphone fails at 16 kHz and at its native rate, it now tries every other input entry
+   Windows lists (each audio system lists the same mic again), real devices first, the sound mapper last, never a
+   loopback entry; prints "MIC stream opened OK on another entry". Mac: try every input device the same way.
+
 ## Dialogs: the real logo and calmer design (2026-10-19, Windows)
 
 Every Replysis popup message (close confirmation and the rest) now shows the logo and "Replysis" in plain case instead

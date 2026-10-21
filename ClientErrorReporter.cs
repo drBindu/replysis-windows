@@ -92,6 +92,39 @@ namespace InterviewCopilot
             return t.Length > 48 ? t[..48] : t;
         }
 
+        // The engine's own setup lines (which microphone and speaker it found, Windows' error text), kept so a problem
+        // report says WHY, not only what. Before this a laptop reported "microphone could not be opened" and the cause
+        // stayed in its local log, out of reach (2026-10-21). Allowlist only: never a line that can carry speech or an
+        // answer, so nothing a person said leaves their computer.
+        private static readonly Queue<string> _engineTail = new();
+        private static readonly string[] TechWords = { "MIC", "SYSTEM AUDIO", "WASAPI", "loopback", "VB-Cable", "FATAL",
+            "WARNING", "failed", "error", "device", "MODE", "Deepgram", "connection", "NO_MICROPHONE", "ENGINE", "PROVIDER" };
+        private static readonly string[] SpeechWords = { "words were", "DEBUG", "FINAL", "PARTIAL", "segment", "said" };
+
+        internal static void NoteEngineLine(string line)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(line) || !line.StartsWith(">>>", StringComparison.Ordinal)) return;
+                bool tech = false;
+                foreach (var w in TechWords) if (line.Contains(w, StringComparison.OrdinalIgnoreCase)) { tech = true; break; }
+                if (!tech) return;
+                foreach (var w in SpeechWords) if (line.Contains(w, StringComparison.OrdinalIgnoreCase)) return;
+                string clean = SanitizeMessage(line.Length > 240 ? line[..240] : line);
+                lock (_engineTail)
+                {
+                    _engineTail.Enqueue(clean);
+                    while (_engineTail.Count > 40) _engineTail.Dequeue();
+                }
+            }
+            catch { }
+        }
+
+        private static string EngineTail()
+        {
+            lock (_engineTail) return string.Join(" | ", _engineTail);
+        }
+
         internal static void ReportProblem(string source, string kind, string message)
         {
 #if DEBUG
@@ -113,6 +146,7 @@ namespace InterviewCopilot
                     type = "Problem." + kind,
                     message = SanitizeMessage(message),
                     frames = "",
+                    detail = EngineTail(),
                 };
                 Post(payload);
             }

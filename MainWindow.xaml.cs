@@ -7102,6 +7102,7 @@ namespace InterviewCopilot
                         {
                             string? line = await proc.StandardOutput.ReadLineAsync(ct).ConfigureAwait(false);
                             if (line == null) break; // EOF
+                            ClientErrorReporter.NoteEngineLine(line);
                             // The engine prints "STATUS: ONLINE" the moment Speechmatics
                             // accepts the session — that's when transcription actually works.
                             // Flip the readiness flag so the mic pill can show READY.
