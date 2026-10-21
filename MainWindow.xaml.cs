@@ -7043,8 +7043,23 @@ namespace InterviewCopilot
                     DebugWindow.Log("ENGINE", $"No bundled engine; using Python at {pyExe}");
                 }
 
+                // Sound straight from Windows, the way Zoom and Teams capture (2026-10-21). The engine's own device
+                // search failed on a customer's laptop (-9996 on every speaker). Each feed that cannot open is simply
+                // left out and the engine captures that source the old way. Switchable from the server.
+                await RemoteAppConfig.RefreshAsync().ConfigureAwait(false);
+                if (generation != Volatile.Read(ref _engineStartGeneration)) return;
+                StopNativeAudio();
+                if (RemoteAppConfig.NativeAudio && Environment.GetEnvironmentVariable("REPLYSIS_NATIVE_AUDIO") != "0")
+                {
+                    if (CaptureMode() == "both")
+                        _nativeMic = NativeAudioFeed.TryStart(false, SettingsWindow.GetAudioDeviceName());
+                    _nativeSys = NativeAudioFeed.TryStart(true, null);
+                }
+
                 speechmaticsProcess = new Process();
                 speechmaticsProcess.StartInfo.FileName = engineExe;
+                if (_nativeMic != null) speechmaticsProcess.StartInfo.EnvironmentVariables["REPLYSIS_MIC_PIPE"] = _nativeMic.PipePath;
+                if (_nativeSys != null) speechmaticsProcess.StartInfo.EnvironmentVariables["REPLYSIS_SYS_PIPE"] = _nativeSys.PipePath;
                 WriteVocabFile();   // interview-specific terms → better STT accuracy
                 string deviceArg = _audioDeviceId >= 0 ? $" --device {_audioDeviceId}" : "";
                 // The name goes too, and the engine prefers it. Windows renumbers
@@ -7627,8 +7642,20 @@ namespace InterviewCopilot
             return false;
         }
 
+        private NativeAudioFeed? _nativeMic;
+        private NativeAudioFeed? _nativeSys;
+
+        private void StopNativeAudio()
+        {
+            var mic = Interlocked.Exchange(ref _nativeMic, null);
+            var sys = Interlocked.Exchange(ref _nativeSys, null);
+            try { mic?.Dispose(); } catch { }
+            try { sys?.Dispose(); } catch { }
+        }
+
         private void KillAndDisposeEngineCore()
         {
+            StopNativeAudio();
             var proc = speechmaticsProcess;
             speechmaticsProcess = null;
             if (proc == null) return;

@@ -236,6 +236,95 @@ _timeout_warned = set()
 _inflight_reads = {}
 _inflight_lock = threading.Lock()
 
+class _NativePipeStream:
+    """
+    Sound captured by the Windows app itself (WASAPI, the way Zoom and Teams capture), handed over as 16 kHz
+    mono s16le through a named pipe. The app follows the Windows default mic and speakers and reopens them on
+    its own, so nothing here searches, probes or switches devices (2026-10-21: PortAudio failed with -9996 on
+    a customer's speakers and the device search could not recover).
+
+    Shaped like a PyAudio stream. read() behaves like a device: it waits up to one chunk for the sound and
+    pads with silence, so the caller never spins and never blocks. A loopback sends nothing while nothing
+    plays, which is silence, not a fault.
+    """
+
+    MAX_BUFFER = 16000 * 2 * 2            # two seconds at 16 kHz s16; older sound is dropped rather than read late
+
+    def __init__(self, path, label):
+        self.label = label
+        self._buf = bytearray()
+        self._cv = threading.Condition()
+        self.alive = True
+        self._f = open(path, "rb", buffering=0)
+        threading.Thread(target=self._pump, daemon=True, name=f"native-{label}").start()
+
+    def _pump(self):
+        while True:
+            try:
+                chunk = self._f.read(6400)
+            except Exception:
+                chunk = b""
+            if not chunk:
+                self.alive = False
+                print(f">>> NATIVE {self.label}: the app stopped sending sound.", flush=True)
+                with self._cv:
+                    self._cv.notify_all()
+                return
+            with self._cv:
+                self._buf += chunk
+                extra = len(self._buf) - self.MAX_BUFFER
+                if extra > 0:
+                    del self._buf[:extra + (extra & 1)]
+                self._cv.notify_all()
+
+    def get_read_available(self):
+        with self._cv:
+            return len(self._buf) // 2
+
+    def read(self, frames, exception_on_overflow=False):
+        need = frames * 2
+        deadline = time.monotonic() + frames / SAMPLE_RATE
+        with self._cv:
+            while len(self._buf) < need and self.alive:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    break
+                self._cv.wait(left)
+            take = bytes(self._buf[:need])
+            del self._buf[:need]
+        if len(take) < need:
+            take += b"\x00" * (need - len(take))
+        return take
+
+    def stop_stream(self):
+        pass
+
+    def close(self):
+        try:
+            self._f.close()
+        except Exception:
+            pass
+
+
+def _open_native(env_name, label):
+    """The app's pipe for this source, or None to use the old PortAudio path. An engine started without the
+    variable (an older app) behaves exactly as before."""
+    path = os.environ.get(env_name, "").strip()
+    if not path:
+        return None
+    try:
+        stream = _NativePipeStream(path, label)
+        print(f">>> NATIVE {label}: sound comes from the app (Windows default device, 16000Hz 1ch).", flush=True)
+        return stream
+    except Exception as e:
+        print(f">>> NATIVE {label}: could not attach ({e}); using the old capture.", flush=True)
+        return None
+
+
+_native_mic = None
+_native_sys = None
+
+
 def _read_stream_timeout(stream, frames, timeout_sec, label):
     """Blocking-read helper with a hard timeout. PyAudio's stream.read() has no
     native timeout parameter, and on a silent WASAPI loopback it simply does not
@@ -470,6 +559,8 @@ def _follow_the_audio(reason=""):
     global sys_stream, _sys_native_rate, _sys_native_channels, _sys_chunk_frames
     global _active_loopback_index, _sys_use_loopback, _probe_cursor
 
+    if _native_sys is not None:
+        return False
     n = len(_loopback_candidates)
     if n <= 1:
         return False
@@ -531,6 +622,8 @@ def _follow_current_windows_default():
     global _active_loopback_index, _default_loopback_index, _sys_use_loopback
     global _last_default_output_check_at, _last_default_output_name
 
+    if _native_sys is not None:
+        return False
     now = time.monotonic()
     if now - _last_default_output_check_at < DEFAULT_OUTPUT_CHECK_SECS:
         return False
@@ -1268,6 +1361,16 @@ try:
     # ── MIC STREAM — only opened in "both" mode ──────────────────────────────
     mic_stream = None
     if args.mode in ("both", "mic"):
+        _native_mic = _open_native("REPLYSIS_MIC_PIPE", "MIC")
+    if _native_mic is not None:
+        mic_stream = _native_mic
+        _mic_native_rate     = SAMPLE_RATE
+        _mic_native_channels = 1
+        _mic_chunk_frames    = CHUNK_FRAMES
+        _mic_device_index    = None
+        _mic_device_name     = "Windows default microphone"
+        print(">>> MIC stream opened OK: Windows default microphone (from the app)", flush=True)
+    elif args.mode in ("both", "mic"):
         mic_kwargs = dict(
             format=pyaudio.paInt16,
             channels=1,
@@ -1510,6 +1613,16 @@ try:
     #
     # Presented as something with a .read() so the rest of the engine — the
     # mixer, the hot-swap logic, the level probes — needs no knowledge of it.
+    if args.mode != "mic" and not args.sysfifo:
+        _native_sys = _open_native("REPLYSIS_SYS_PIPE", "SYSTEM AUDIO")
+        if _native_sys is not None:
+            sys_stream = _native_sys
+            _sys_native_rate     = SAMPLE_RATE
+            _sys_native_channels = 1
+            _sys_chunk_frames    = CHUNK_FRAMES
+            _sys_use_loopback    = False
+            print(">>> SYSTEM AUDIO (native): the computer's sound, from the app", flush=True)
+
     if args.sysfifo and args.mode != "mic":
         class _FifoStream:
             """
@@ -1667,8 +1780,8 @@ try:
     #           2) Explicit --sysdevice arg  3) VB-Cable
     if args.mode == "mic":
         sys_device_index = None
-    elif args.sysfifo:
-        # The FIFO above is the system audio. Hunting for a loopback device as
+    elif args.sysfifo or _native_sys is not None:
+        # The FIFO above (or the app's native pipe) is the system audio. Hunting for a loopback device as
         # well would open a second source and mix the machine's own output into
         # a feed that already has it.
         sys_device_index = None
@@ -1677,7 +1790,7 @@ try:
         sys_device_index = args.sysdevice
 
     # 1. Try WASAPI loopback unless the user pinned an explicit device
-    if args.mode != "mic" and not args.sysfifo and sys_device_index is None:
+    if args.mode != "mic" and not args.sysfifo and _native_sys is None and sys_device_index is None:
         loopback = find_wasapi_loopback_device(p)
         if loopback is not None:
             lb_idx, lb_rate, lb_ch = loopback
@@ -2488,7 +2601,7 @@ class MixedStream:
                     # words were being transcribed; the search called it silent,
                     # switched to the laptop mic, and no more words came through.
                     # Words are the proof a microphone works, whatever its level.
-                    if (mic_lost and search_allowed
+                    if (mic_lost and search_allowed and _native_mic is None
                             and time.time() - _last_sys_sound_at > 2.0
                             and time.time() - _last_words_at > MIC_WORDS_QUIET_SECS):
                         _mic_autoswitch_attempts += 1

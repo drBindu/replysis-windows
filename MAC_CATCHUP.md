@@ -1,3 +1,13 @@
+## Sound straight from Windows, no device search (2026-10-21, Windows 1.0.42)
+
+The engine used to find the mic and speakers itself through PortAudio, walking a device list that differs on every
+laptop; a customer's speakers failed -9996 on every entry. The app now captures with WASAPI (NAudio) on the Windows
+default mic and speakers, follows a default change within 2 s, reopens a device that stops, and hands 16 kHz mono
+s16le to the engine through named pipes (REPLYSIS_MIC_PIPE / REPLYSIS_SYS_PIPE, environment variables, so older engines
+ignore them). A source that cannot open falls back to the old capture. https://replysis.com/app-config.json
+{"windows":{"nativeAudio":false}} turns it off for everyone without an update. Mac already does this for system audio
+(the FIFO); the mic could follow the same pattern.
+
 ## Updates are announced in the top bar notice, never a window, never during an interview (2026-10-21, Windows)
 
 No update window at launch any more (the Store launch gate is off). Every channel, the Store included, shows the

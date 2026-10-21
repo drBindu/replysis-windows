@@ -218,6 +218,9 @@ internal static class Program
         Console.WriteLine("\n25. Windows-only login creates the admin-visible user profile");
         _failed += UserProfileSyncTests.Run();
 
+        Console.WriteLine("\n26. Sound straight from Windows reaches the engine at real time");
+        _failed += NativeAudioFeedTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;
