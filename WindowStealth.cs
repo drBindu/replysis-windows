@@ -42,7 +42,75 @@ namespace InterviewCopilot
         private const int WS_EX_APPWINDOW = 0x00040000;
         private const uint EVENT_OBJECT_SHOW = 0x8002;
         private const uint WINEVENT_OUTOFCONTEXT = 0;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+        private const uint GA_ROOT = 2;
+
+        private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hwnd);
         #endregion
+
+        // ── Global guard ────────────────────────────────────────────────────────
+        // Every top-level window this process shows is hidden from capture, whatever made it: WPF windows, the mode menu
+        // and Compact menu popups, tooltips, context menus, message boxes, the update window. The per-window calls only
+        // covered windows that remembered to call SetStealthMode, and popups are separate windows, so the mode menu could
+        // appear in a screen share (owner, 2026-10-21: "no window has to be visible"). A hook catches each window the
+        // moment it shows; a once-a-second sweep catches anything the hook missed.
+        private static WinEventDelegate? _guardCallback;   // kept alive: the hook calls it from native code
+        private static IntPtr _guardHook = IntPtr.Zero;
+        private static System.Windows.Threading.DispatcherTimer? _guardSweep;
+        private static Func<bool>? _guardEnabled;
+
+        public static void StartGlobalGuard(Func<bool> stealthOn)
+        {
+            _guardEnabled = stealthOn;
+            if (_guardHook != IntPtr.Zero) return;
+            uint pid = (uint)Environment.ProcessId;
+            _guardCallback = (hook, evt, hwnd, objectId, childId, thread, time) =>
+            {
+                if (objectId != 0 || hwnd == IntPtr.Zero) return;   // OBJID_WINDOW only
+                GuardOne(hwnd);
+            };
+            _guardHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, IntPtr.Zero, _guardCallback, pid, 0, WINEVENT_OUTOFCONTEXT);
+            _guardSweep = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _guardSweep.Tick += (_, _) => SweepAll();
+            _guardSweep.Start();
+            SweepAll();
+        }
+
+        private static void GuardOne(IntPtr hwnd)
+        {
+            try
+            {
+                if (_guardEnabled == null || !_guardEnabled()) return;
+                if (GetAncestor(hwnd, GA_ROOT) != hwnd) return;      // only top-level windows can be excluded
+                GetWindowThreadProcessId(hwnd, out uint owner);
+                if (owner != (uint)Environment.ProcessId) return;
+                if (GetWindowDisplayAffinity(hwnd, out uint current) != 0 && current == WDA_EXCLUDEFROMCAPTURE) return;
+                SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+            }
+            catch { }
+        }
+
+        private static void SweepAll()
+        {
+            try
+            {
+                if (_guardEnabled == null || !_guardEnabled()) return;
+                uint pid = (uint)Environment.ProcessId;
+                EnumWindows((hwnd, _) =>
+                {
+                    GetWindowThreadProcessId(hwnd, out uint owner);
+                    if (owner == pid && IsWindowVisible(hwnd)) GuardOne(hwnd);
+                    return true;
+                }, IntPtr.Zero);
+            }
+            catch { }
+        }
 
         /// <summary>
         /// Apply (or clear) screen-capture exclusion on a raw HWND. WPF Popups (dropdowns,

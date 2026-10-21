@@ -1,3 +1,11 @@
+## Every window and popup is hidden from capture, not only the main ones (2026-10-21, Windows)
+
+Popups (the mode menu, the Compact menu), tooltips, context menus, message boxes and the update window are separate
+top-level windows; only windows that called SetStealthMode were excluded, so the mode menu could show in a screen share.
+WindowStealth.StartGlobalGuard hooks EVENT_OBJECT_SHOW for this process and excludes every top-level window the moment it
+shows, plus a once-a-second sweep (EnumWindows) as a safety net, while stealth is on. Mac: make sure every NSWindow and
+NSPanel, menus and popovers included, gets sharingType = .none.
+
 ## Bought minutes must let a question through (2026-10-21, Windows, after a paying customer was blocked)
 
 A customer bought 45 interview minutes (Rs 165) and the app kept saying "You have 0 answers left": the ask gate looked

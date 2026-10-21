@@ -338,6 +338,9 @@ namespace InterviewCopilot
                 try
                 {
                     try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
+                    // Every window and popup the app ever shows is hidden from capture while stealth is on, not only the
+                    // ones that ask for it (the mode menu and tooltips are separate windows).
+                    try { WindowStealth.StartGlobalGuard(() => _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", "guard: " + ex.Message); }
                     UpdateStealthBtn();
                     ApplyKeepOnTop();
                     UpdateAudioSourceUi();
