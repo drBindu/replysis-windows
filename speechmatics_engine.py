@@ -107,14 +107,25 @@ def test_microphone():
 
 
 def find_vbcable_device(p):
-    """Find VB-Cable virtual audio device index automatically."""
+    """VB-Cable's recording side ("CABLE Output"), and only when this computer's sound actually plays into the cable.
+
+    It used to take any input with "vb-audio" in its name, so a laptop that merely had VB-Cable installed got the cable's
+    own "[Loopback]" entry while the interviewer played through its speakers: Replysis listened to an empty cable for the
+    whole session (2026-10-21, Cirrus Logic laptop). A loopback entry is never the cable's recording side either."""
+    try:
+        wasapi = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+        out_name = str(p.get_device_info_by_index(wasapi.get('defaultOutputDevice', -1)).get('name', '')).lower()
+    except Exception:
+        out_name = ""
+    if "cable" not in out_name:
+        print(">>> VB-Cable: not used (the computer's sound plays on its own speakers, not into the cable).", flush=True)
+        return None
     for i in range(p.get_device_count()):
         info = p.get_device_info_by_index(i)
         name = info['name'].lower()
-        if info.get('maxInputChannels', 0) > 0:
-            if 'cable output' in name or 'vb-audio' in name or 'vb cable' in name:
-                print(f">>> VB-Cable found: [{i}] {info['name']}", flush=True)
-                return i
+        if info.get('maxInputChannels', 0) > 0 and "[loopback]" not in name and 'cable output' in name:
+            print(f">>> VB-Cable found: [{i}] {info['name']}", flush=True)
+            return i
     print(">>> VB-Cable NOT found.", flush=True)
     return None
 
@@ -1688,8 +1699,36 @@ try:
                 _sys_chunk_frames    = lb_chunk
                 _sys_use_loopback    = True
             except Exception as e:
-                print(f">>> WASAPI loopback open failed: {e} — trying VB-Cable.", flush=True)
+                # A Cirrus Logic laptop refused its own speakers' loopback with "-9996 Invalid device" and the engine went
+                # straight to a VB-Cable that carried nothing (2026-10-21). Try once more, then the other real speakers,
+                # each with its own channel count and then stereo and mono, which some drivers accept instead.
+                print(f">>> WASAPI loopback open failed: {e} — trying again and the other speakers.", flush=True)
                 sys_stream = None
+                retry = ([c for c in _loopback_candidates if c['index'] == lb_idx]
+                         + [c for c in _loopback_candidates if c['index'] != lb_idx and 'cable' not in c['name'].lower()])
+                for n_try, cand in enumerate(retry):
+                    if n_try == 0:
+                        time.sleep(0.3)
+                    for ch_try in dict.fromkeys((cand['channels'], 2, 1)):
+                        chunk_try = max(CHUNK_FRAMES, int(CHUNK_FRAMES * cand['rate'] / SAMPLE_RATE))
+                        try:
+                            sys_stream = open_stream_with_timeout(p, dict(
+                                format=pyaudio.paInt16, channels=ch_try, rate=cand['rate'], input=True,
+                                input_device_index=cand['index'], frames_per_buffer=chunk_try,
+                            ))
+                        except Exception:
+                            sys_stream = None
+                            continue
+                        _sys_native_rate, _sys_native_channels, _sys_chunk_frames = cand['rate'], ch_try, chunk_try
+                        _sys_use_loopback = True
+                        _active_loopback_index = _loopback_candidates.index(cand)
+                        print(f">>> SYSTEM AUDIO (WASAPI loopback, retry): [{cand['index']}] {cand['name']} "
+                              f"{cand['rate']}Hz {ch_try}ch", flush=True)
+                        break
+                    if sys_stream is not None:
+                        break
+                if sys_stream is None:
+                    print(">>> WASAPI loopback: no speaker could be opened — trying VB-Cable.", flush=True)
 
     # 2. Fall back to VB-Cable (or explicit --sysdevice)
     if sys_stream is None and args.mode != "mic":
@@ -2766,9 +2805,32 @@ def _deepgram_eligible() -> bool:
     return bool(_DG_TOKEN) and args.language in DEEPGRAM_LANGUAGES
 
 
+_flux_server_errors: list = []   # times Flux answered INTERNAL_SERVER_ERROR
+_flux_given_up = False            # after repeated Flux server errors this session runs on nova-3
+
+
 def _deepgram_flux() -> bool:
-    """True when the app asked for Flux (REPLYSIS_DEEPGRAM_MODEL=flux). Without it the engine uses nova-3 as before (the Mac)."""
+    """True when the app asked for Flux (REPLYSIS_DEEPGRAM_MODEL=flux). Without it the engine uses nova-3 as before (the Mac).
+    False for the rest of the session once Flux has failed on its own side twice in 90 s (see _note_flux_error)."""
+    if _flux_given_up:
+        return False
     return os.environ.get("REPLYSIS_DEEPGRAM_MODEL", "").strip().lower() == "flux"
+
+
+def _note_flux_error(msg) -> None:
+    """A laptop got INTERNAL_SERVER_ERROR from Flux every ~12 s for ten minutes and lost 2 to 8 s of audio each time
+    (2026-10-21); nothing on our side could make Flux recover. Two such errors inside 90 s now move the session to nova-3,
+    a different Deepgram model and endpoint, from the next connection on."""
+    global _flux_given_up
+    if "INTERNAL_SERVER_ERROR" not in str(msg) or _flux_given_up:
+        return
+    now = time.monotonic()
+    _flux_server_errors.append(now)
+    while _flux_server_errors and now - _flux_server_errors[0] > 90:
+        _flux_server_errors.pop(0)
+    if len(_flux_server_errors) >= 2:
+        _flux_given_up = True
+        print(">>> [DEEPGRAM] Flux keeps failing on its side; using nova-3 for the rest of this session.", flush=True)
 
 
 def _deepgram_only() -> bool:
@@ -3224,6 +3286,7 @@ async def _run_deepgram_loop(holder) -> str:
                             continue
                         if kind == "Error" and _deepgram_flux():
                             print(f">>> [DEEPGRAM] error: {str(msg)[:200]}", flush=True)
+                            _note_flux_error(msg)
                             continue
                         if kind == "UtteranceEnd":
                             print(">>> UTTERANCE END", flush=True)

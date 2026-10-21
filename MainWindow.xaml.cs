@@ -1708,6 +1708,17 @@ namespace InterviewCopilot
                 actionLabel = "Restart audio";
                 action = RestartEngineBetweenQuestions;
             }
+            else if (line.Contains("Mic fallback failed", StringComparison.Ordinal)
+                     && line.Contains("-9999", StringComparison.Ordinal))
+            {
+                // "Unanticipated host error" from every microphone entry is Windows' privacy switch, not another app:
+                // a Cirrus Logic laptop showed it while nothing else was using the mic (2026-10-21).
+                key = "mic-blocked";
+                title = "Windows is blocking the microphone";
+                body = "Turn on \"Let desktop apps access your microphone\" in Windows settings, then press Restart audio.";
+                actionLabel = "Allow microphone";
+                action = () => OpenWindowsPage("ms-settings:privacy-microphone");
+            }
             else if (line.Contains("Mic fallback failed", StringComparison.Ordinal))
             {
                 key = "mic-open";

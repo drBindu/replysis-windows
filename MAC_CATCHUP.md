@@ -1,5 +1,18 @@
 ## Problem reports say why, and the microphone tries every entry (2026-10-21, Windows 1.0.41)
 
+From a real laptop's log (Cirrus Logic audio, VB-Cable installed, 2026-10-21), three more fixes in the same 1.0.41:
+
+3. Mic error -9999 ("Unanticipated host error") on every entry means Windows' privacy switch is off. The app now says
+   "Windows is blocking the microphone" with an "Allow microphone" button (ms-settings:privacy-microphone), not
+   "another app may be holding it". Mac: the matching case is the macOS microphone permission; say so the same way.
+4. System audio: a speaker loopback that fails (-9996 Invalid device) is retried once, then every other real speaker,
+   each at its own channel count, then stereo, then mono. VB-Cable is used only when Windows' default output IS the cable,
+   and only its "CABLE Output" recording side, never a "[Loopback]" entry. Before, any VB-Cable got picked and the
+   session listened to an empty cable.
+5. Deepgram Flux returned INTERNAL_SERVER_ERROR every ~12 s on that laptop. Two such errors within 90 s now switch the
+   session to nova-3 (v1/listen) from the next connection on. Mac: same rule if it uses Flux.
+
+
 A Windows laptop (Insider build 26300) reported "microphone could not be opened" and "can not hear this computer's
 sound" together, and the reason (Windows' own error text) stayed in its local log. Two changes:
 
