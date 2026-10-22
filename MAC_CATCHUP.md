@@ -1,3 +1,12 @@
+## Speech connection: no false "dead" during silence; never drop the unanswered question (2026-10-22, Windows 1.0.44)
+
+1. The watchdog called the Deepgram connection dead when nothing came back for 2 s, even while only silence was going
+out; the service can stay quiet then. It now counts only from the first SPEECH chunk (level > 500) sent with no reply
+since. A two minute test went from 6 reconnects to 1.
+2. After a dead connection the unanswered audio is put back at the front of the buffer, but drop_stale then dropped
+"the oldest" first, which was exactly that audio: a question asked across a pause got no answer. Put back audio is now
+kept and the stale audio behind it is dropped. Mac: check the same two places if it has a reconnect buffer.
+
 ## Update checks never use the GitHub API (2026-10-22, Windows 1.0.43)
 
 A customer on 1.0.40 never saw an update: both checks asked api.github.com, which allows 60 requests an hour per

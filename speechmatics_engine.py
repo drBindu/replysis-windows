@@ -3302,6 +3302,11 @@ async def _run_deepgram_loop(holder) -> str:
                 rx["last"] = session_started
                 transcript = {"confirmed": "", "partial": ""}
                 audio = {"last": 0.0, "since": 0.0}   # when audio last went out, and when this stretch of audio began
+                # When speech (not silence) first went out with nothing answered since. The service may stay quiet for a
+                # few seconds while only silence goes out, and that was taken for a dead connection: 6 needless reconnects
+                # in a two minute test, each risking the start of the next question (2026-10-22). Only unanswered SPEECH
+                # means the connection is dead.
+                speech = {"unanswered_since": None}
                 sent_secs = {"s": 0.0}   # seconds of voice sent on this connection; Flux counts from 0 on each connection too
 
                 async def sender():
@@ -3315,6 +3320,8 @@ async def _run_deepgram_loop(holder) -> str:
                             if now - audio["last"] > 1.5:
                                 audio["since"] = now
                             audio["last"] = now
+                            if speech["unanswered_since"] is None and _signal_level(chunk) > 500:
+                                speech["unanswered_since"] = now
                             sent_log.append((now, chunk))
                             sent_secs["s"] += len(chunk) / (SAMPLE_RATE * 2)   # the chunk is 16 bit mono before any encoding
                         elif (_deepgram_flux() and os.path.exists(PAUSE_FLAG)
@@ -3338,7 +3345,9 @@ async def _run_deepgram_loop(holder) -> str:
                         now = time.monotonic()
                         if now - audio["last"] > 1.5:
                             continue
-                        waited = now - max(rx["last"], audio["since"])
+                        if speech["unanswered_since"] is None:
+                            continue   # only silence has gone out since the last answer: nothing is owed
+                        waited = now - max(rx["last"], audio["since"], speech["unanswered_since"])
                         # In the first seconds of a stretch of audio nothing has come back yet, and that is the moment an idle
                         # connection that died is found out: expect the first message quickly.
                         fresh = now - audio["since"] < _DEEPGRAM_FIRST_ANSWER_WINDOW and rx["last"] < audio["since"]
@@ -3350,6 +3359,7 @@ async def _run_deepgram_loop(holder) -> str:
                 async def receiver():
                     async for raw in ws:
                         rx["last"] = time.monotonic()
+                        speech["unanswered_since"] = None
                         rx["heard"] = True
                         if isinstance(raw, bytes):
                             continue
