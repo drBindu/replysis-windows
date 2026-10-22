@@ -1,3 +1,10 @@
+## Update checks never use the GitHub API (2026-10-22, Windows 1.0.43)
+
+A customer on 1.0.40 never saw an update: both checks asked api.github.com, which allows 60 requests an hour per
+internet address, and Indian connections share one address among thousands. The check now reads the release feed file
+at github.com/drBindu/replysis-windows/releases/latest/download/releases.win.json (a plain redirect, no limit), and
+Velopack uses SimpleWebSource on the same URL. Mac: make sure Sparkle's appcast is a plain file URL, never an API call.
+
 ## Invite a friend in the account menu (2026-10-21, Windows, next release)
 
 A row under "How it works": "Invite a friend / You both get 5 free answers". It GETs https://replysis.com/api/referral with

@@ -34,6 +34,9 @@ namespace InterviewCopilot
         /// </summary>
         private const string ReleaseRepositoryUrl = "https://github.com/drBindu/replysis-windows";
 
+        /// <summary>The newest public release's files. A draft or prerelease is never "latest".</summary>
+        internal const string LatestFeedUrl = ReleaseRepositoryUrl + "/releases/latest/download";
+
         private static UpdateManager? _manager;
         private static UpdateInfo? _staged;
 
@@ -67,8 +70,12 @@ namespace InterviewCopilot
                 if (_manager != null) return _manager;
                 try
                 {
-                    _manager = new UpdateManager(
-                        new GithubSource(ReleaseRepositoryUrl, accessToken: null, prerelease: false));
+                    // The feed file itself, not the GitHub API. The API answers 60 requests an hour per internet
+                    // address, and Indian mobile and broadband users share one address with thousands of others, so
+                    // the check failed quietly and no update was ever offered (2026-10-22, a customer stuck on
+                    // 1.0.40). releases/latest/download/ is a plain redirect to the newest release's files, with no
+                    // such limit; the packages are fetched the same way.
+                    _manager = new UpdateManager(new SimpleWebSource(LatestFeedUrl));
                 }
                 catch (Exception ex)
                 {

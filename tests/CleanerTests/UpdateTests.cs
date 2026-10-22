@@ -1,3 +1,4 @@
+using System.IO;
 using InterviewCopilot;
 
 namespace CleanerTests;
@@ -23,6 +24,19 @@ internal static class UpdateTests
         Check(UpdatePolicy.RecheckEvery <= TimeSpan.FromMinutes(15) && UpdatePolicy.RecheckEvery >= TimeSpan.FromMinutes(5),
             "an open app looks again every 5 to 15 minutes (GitHub allows an address 60 checks an hour)");
         Check(UpdatePolicy.FirstCheck <= TimeSpan.FromSeconds(30), "the first look is soon after opening");
+        if (Environment.GetEnvironmentVariable("REPLYSIS_LIVE_NET_TEST") == "1")
+        {
+            // The real check, against the real latest release, without the GitHub API (2026-10-22).
+            string? found = SettingsWindow.GetNewerVersionOrNullAsync().GetAwaiter().GetResult();
+            Check(found != null, $"the live check finds the newest release from the feed file ({found ?? "nothing"})");
+            // The installer's own updater, as a copy installed at 1.0.40 would run it, through the feed file.
+            string pk = Path.Combine(Path.GetTempPath(), "replysis-velopack-test");
+            Directory.CreateDirectory(pk);
+            var mgr = new Velopack.UpdateManager(new Velopack.Sources.SimpleWebSource(InterviewCopilot.UpdateService.LatestFeedUrl), null,
+                new Velopack.Locators.TestVelopackLocator("Replysis", "1.0.40", pk, null));
+            var info = mgr.CheckForUpdatesAsync().GetAwaiter().GetResult();
+            Check(info != null, $"Velopack on 1.0.40 sees the update through the feed file ({info?.TargetFullRelease.Version.ToString() ?? "nothing"})");
+        }
         Check(UpdatePolicy.ShouldAnnounce("1.0.28", null), "a new version is announced");
         Check(!UpdatePolicy.ShouldAnnounce("1.0.28", "1.0.28"), "the same version is not announced twice");
         Check(!UpdatePolicy.ShouldAnnounce("1.0.28", "1.0.28".ToUpperInvariant()), "case does not matter");

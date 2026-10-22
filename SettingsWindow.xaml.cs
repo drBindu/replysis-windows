@@ -555,11 +555,11 @@ namespace InterviewCopilot
                 using var timeout = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(8));
 
+                // The release feed file, not the GitHub API: the API's 60 requests an hour per address ran out for
+                // users behind shared Indian connections, so no update was ever announced to them (2026-10-22).
                 using var req = new System.Net.Http.HttpRequestMessage(
-                    System.Net.Http.HttpMethod.Get,
-                    "https://api.github.com/repos/drBindu/replysis-windows/releases/latest");
+                    System.Net.Http.HttpMethod.Get, UpdateService.LatestFeedUrl + "/releases.win.json");
                 req.Headers.TryAddWithoutValidation("User-Agent", "Replysis-Win");
-                req.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
 
                 using var resp = await SharedHttpClient.Http.SendAsync(req, timeout.Token);
                 if (!resp.IsSuccessStatusCode) return null;
@@ -567,8 +567,12 @@ namespace InterviewCopilot
                 string json = await resp.Content.ReadAsStringAsync(timeout.Token);
                 using var doc = System.Text.Json.JsonDocument.Parse(json);
 
-                string? tag = doc.RootElement.TryGetProperty("tag_name", out var t) ? t.GetString() : null;
-                string? latest = ParseWindowsReleaseTag(tag);
+                string? latest = null;
+                if (doc.RootElement.TryGetProperty("Assets", out var assets) && assets.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    foreach (var a in assets.EnumerateArray())
+                        if (a.TryGetProperty("Version", out var v) && v.GetString() is string ver &&
+                            (latest == null || IsVersionNewer(ver, latest)))
+                            latest = ver;
                 if (latest == null) return null;
 
                 return IsVersionNewer(latest, InstalledVersion()) ? latest : null;
