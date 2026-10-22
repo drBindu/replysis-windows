@@ -1133,7 +1133,10 @@ namespace InterviewCopilot
                         // no hours, nothing". Listening is still limited on the server
                         // as a fair use guard, and says so in words only if it is ever hit.
                         bool limitReached = _audioMinutesRemaining == 0;
-                        CreditsLabel.Text = _minutesBalance > 0
+                        // Minutes only for someone living on minutes. A Pro customer with a gift minute left saw "1 min left"
+                        // while holding 500 answers (2026-10-22): a paid plan with answers shows answers.
+                        bool planCovers = UserSession.IsUnlimited || (IsPaidPlan(UserSession.Plan) && credits >= CreditsCriticalThreshold * 4);
+                        CreditsLabel.Text = _minutesBalance > 0 && !planCovers
                             ? $"{_minutesBalance} min left"
                             : PlanFacts.BadgeText(credits);
                         if (CreditsBadge != null)
@@ -1889,6 +1892,10 @@ namespace InterviewCopilot
             return Deny(Microsoft.Win32.Registry.LocalMachine, path) || Deny(Microsoft.Win32.Registry.CurrentUser, path)
                 || Deny(Microsoft.Win32.Registry.CurrentUser, path + @"\NonPackaged");
         }
+
+        private static bool IsPaidPlan(string? plan) =>
+            plan is not null && (plan.Equals("pro", StringComparison.OrdinalIgnoreCase) || plan.Equals("max", StringComparison.OrdinalIgnoreCase)
+                                 || plan.Equals("teams", StringComparison.OrdinalIgnoreCase) || plan.Equals("lifetime", StringComparison.OrdinalIgnoreCase));
 
         private bool _hidingWarned;
 
@@ -3095,6 +3102,9 @@ namespace InterviewCopilot
         private async Task AskForMoreMinutesAsync()
         {
             if (!UserSession.IsLoggedIn || string.IsNullOrEmpty(UserSession.IdToken)) return;
+            // A paid plan with answers left keeps answering when the minutes run out: never charge for minutes then
+            // (review, 2026-10-22: a Pro customer with a gift minute left would have been charged for 15 more).
+            if (UserSession.IsUnlimited || UserSession.Credits >= CreditsCriticalThreshold * 4) return;
             if (DateTime.UtcNow - _lastAutoAddAskUtc < TimeSpan.FromMinutes(3)) return;
             _lastAutoAddAskUtc = DateTime.UtcNow;
             try

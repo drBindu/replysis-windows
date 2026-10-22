@@ -1,3 +1,10 @@
+## Bug sweep, batch 2 (2026-10-22, Windows)
+
+(1) The engine says who is speaking while they speak (">>> SOURCE" on Flux updates, when it changes), not only at the
+turn's end: Auto can answer before the end and used the previous turn's label. (2) The badge shows answers, not
+"N min left", for a paid plan with answers left. (3) No auto-add of paid minutes for a paid plan with answers left.
+(4) Google sign-in waits 5 minutes, not 2, and says "not finished in the browser".
+
 ## False alarms hunted down (2026-10-22, Windows)
 
 Same class as the room-hum watchdog: noise taken for a problem. (1) A stalled voice upload pauses screenshots sent

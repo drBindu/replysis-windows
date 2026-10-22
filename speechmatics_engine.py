@@ -3508,6 +3508,7 @@ async def _run_deepgram_loop(holder) -> str:
                                     transcript["confirmed"] = f"{transcript['confirmed']} {text}".strip()
                                 transcript["partial"] = ""
                                 _write_latest(transcript["confirmed"])
+                                turnmap["live_source"] = None
                                 _print_source(turnmap, msg.get("audio_window_start"), msg.get("audio_window_end"), text)
                                 print(f">>> FINAL received ({len(transcript['confirmed'])} chars)", flush=True)
                                 if not transcript.get("eager"):
@@ -3533,6 +3534,15 @@ async def _run_deepgram_loop(holder) -> str:
                                 print(f">>> FINAL received ({len(display)} chars)", flush=True)
                                 print(">>> SPEECH FINAL", flush=True)
                             else:
+                                # Who is speaking, while they speak, not only at the end: Auto can answer after 2.8 s of quiet
+                                # before the turn officially ends, and then used the previous turn's label, so a candidate
+                                # pausing mid-answer could be answered as if they were the interviewer (review, 2026-10-22).
+                                # Printed only when it changes.
+                                src = _turn_source(turnmap, msg.get("audio_window_start"), msg.get("audio_window_end"),
+                                                   len(text.split()))
+                                if src != turnmap.get("live_source"):
+                                    turnmap["live_source"] = src
+                                    print(f">>> SOURCE {src}", flush=True)
                                 print(f">>> PARTIAL received ({len(display)} chars)", flush=True)
                             continue
                         if kind == "Error" and _deepgram_flux():

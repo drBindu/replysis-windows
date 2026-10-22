@@ -366,7 +366,9 @@ namespace InterviewCopilot
             // connection or its request for an icon, is ignored; see OAuthCallbackReader.WaitForAnswerAsync.
             string? code = null;
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(_windowToken);
-            cts.CancelAfter(TimeSpan.FromSeconds(120));
+            // Five minutes: choosing or creating a Google account can take longer than two, and a new user who did
+            // was told "timed out" and had to start again (2026-10-22).
+            cts.CancelAfter(TimeSpan.FromMinutes(5));
             try
             {
                 var answer = await OAuthCallbackReader.WaitForAnswerAsync(
@@ -390,8 +392,8 @@ namespace InterviewCopilot
             {
                 // No callback ever arrived. In a packaged build this is the
                 // signature of the loopback redirect not reaching the app.
-                DebugWindow.Log("GOOGLE", "S4 TIMEOUT: no loopback callback within 120s");
-                ShowError("Sign-in timed out. Please try again. (E4)");
+                DebugWindow.Log("GOOGLE", "S4 TIMEOUT: no loopback callback within 5 minutes");
+                ShowError("Sign-in was not finished in the browser. Please try again. (E4)");
                 return;
             }
             catch (Exception ex)
