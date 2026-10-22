@@ -1,3 +1,11 @@
+## One listening mode: no Interview or Practice (2026-10-22, Windows 1.0.45)
+
+Always the mic and the computer's sound. The engine records per-100 ms levels of each and prints
+">>> SOURCE interviewer|candidate|unknown" before each turn end: any computer sound in the turn = interviewer (covers
+no-headphones echo), mic only = candidate. Auto answers the interviewer; the candidate only when no interviewer was
+heard in 10 minutes (practising alone). The mode menu rows, the setup "Audio source" row, Ctrl+Shift+P and the mode tips
+are gone; the pill shows Auto or Manual. Mac: same rule, the Mac already has separate mic and system streams.
+
 ## Speech connection: no false "dead" during silence; never drop the unanswered question (2026-10-22, Windows 1.0.44)
 
 1. The watchdog called the Deepgram connection dead when nothing came back for 2 s, even while only silence was going
