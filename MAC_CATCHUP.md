@@ -1,5 +1,10 @@
 ## Warn at start when this computer cannot hide Replysis (2026-10-22, Windows)
 
+Proven, not trusted: StealthSelfTest shows a 16 px magenta square with hiding applied 4 s after start, copies that corner
+the way a screen share does (BitBlt), and compares with the corner once the square is gone: Visible, BlackBox or Hidden.
+Read the display scale only after the square is shown (175% read as 100% before). tests/StealthCheck proves it tells
+Visible (hiding off) from Hidden (hiding on). Mac: CGWindowListCreateImage of a probe window does the same.
+
 Checked at every start, before any interview: if Windows refuses full hiding (or is older than 10 2004, build 19041,
 which silently only blacks the window out), a persistent notice says "Screen sharing warning": share only the meeting
 window or a browser tab, with "Get the driver" (Windows optional updates). Mac: warn the same way if sharingType

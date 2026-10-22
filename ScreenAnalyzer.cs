@@ -473,6 +473,36 @@ namespace InterviewCopilot
         /// <summary>
         /// Core capture: BitBlt a region of the desktop DC into a JPEG byte array.
         /// </summary>
+        /// <summary>
+        /// A small region of the screen as BGRA pixels, copied the way screen sharing copies it (BitBlt of the desktop),
+        /// for StealthSelfTest. Physical pixels.
+        /// </summary>
+        internal static byte[] GrabPixels(int x, int y, int w, int h)
+        {
+            IntPtr screenDc = GetDC(IntPtr.Zero);
+            IntPtr memDc = CreateCompatibleDC(screenDc);
+            IntPtr hBitmap = CreateCompatibleBitmap(screenDc, w, h);
+            IntPtr oldObj = SelectObject(memDc, hBitmap);
+            try
+            {
+                if (!BitBlt(memDc, 0, 0, w, h, screenDc, x, y, SRCCOPY))
+                    throw new InvalidOperationException($"BitBlt failed ({Marshal.GetLastWin32Error()})");
+                SelectObject(memDc, oldObj);
+                BitmapSource src = Imaging.CreateBitmapSourceFromHBitmap(hBitmap, IntPtr.Zero, Int32Rect.Empty,
+                    BitmapSizeOptions.FromEmptyOptions());
+                var bgra = new FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
+                var pixels = new byte[w * h * 4];
+                bgra.CopyPixels(pixels, w * 4, 0);
+                return pixels;
+            }
+            finally
+            {
+                DeleteObject(hBitmap);
+                DeleteDC(memDc);
+                ReleaseDC(IntPtr.Zero, screenDc);
+            }
+        }
+
         private static byte[] CaptureRegionCore(int srcX, int srcY, int srcW, int srcH)
         {
             if (srcW <= 0 || srcH <= 0)

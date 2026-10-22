@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 // re-implements the rule and then agrees with itself, which is the failure the
 // old string-presence test demonstrated for a fortnight.
 [assembly: InternalsVisibleTo("CleanerTests")]
+[assembly: InternalsVisibleTo("StealthCheck")]
 
 namespace InterviewCopilot
 {

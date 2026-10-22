@@ -348,6 +348,7 @@ namespace InterviewCopilot
                     WindowStealth.HidingRefused += blackBox => Dispatcher.BeginInvoke(new Action(() => WarnHidingNotAvailable(blackBox)));
                     if (_stealthMode && WindowStealth.HidingRefusedBlackBox is bool refused) WarnHidingNotAvailable(refused);
                     else if (_stealthMode && WindowStealth.HidingUnsupportedByWindows) WarnHidingNotAvailable(true);
+                    else if (_stealthMode) _ = VerifyHidingAsync();
                     UpdateStealthBtn();
                     ApplyKeepOnTop();
                     UpdateAudioSourceUi();
@@ -1856,6 +1857,28 @@ namespace InterviewCopilot
         /// included, so a plugged in headset is the only thing that changes the answer.
         /// </summary>
         private bool _hidingWarned;
+
+        /// <summary>
+        /// Proves hiding on this computer a few seconds after start (StealthSelfTest): a computer that accepts the request
+        /// but still shows the window is caught too, not only one that says no. Reported to admin either way it fails.
+        /// </summary>
+        private async Task VerifyHidingAsync()
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(4));
+                if (!_stealthMode || _windowClosed) return;
+                var result = await StealthSelfTest.RunAsync();
+                DebugWindow.Log("STEALTH", $"Self-test: {result} ({StealthSelfTest.LastDetail}).");
+                if (result is StealthSelfTest.Result.Visible or StealthSelfTest.Result.BlackBox)
+                {
+                    ClientErrorReporter.NoteEngineLine($">>> STEALTH self-test: {result}; {StealthSelfTest.LastDetail}; Windows {Environment.OSVersion.Version}");
+                    ClientErrorReporter.ReportProblem("stealth", "stealth-selftest", $"Screen share can see Replysis: self-test {result}");
+                    WarnHidingNotAvailable(result == StealthSelfTest.Result.BlackBox);
+                }
+            }
+            catch (Exception ex) { DebugWindow.Log("STEALTH", $"Self-test failed to run: {ex.GetType().Name}"); }
+        }
 
         /// <summary>Warns, once per start, that this computer cannot hide Replysis from a screen share, and what to do.</summary>
         private void WarnHidingNotAvailable(bool blackBox)
