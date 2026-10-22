@@ -34,7 +34,7 @@ namespace InterviewCopilot
 
         internal bool Observe(DateTime now, int amplitude)
         {
-            if (amplitude < 600) return false;
+            if (amplitude < 1500) return false;   // voice, not room hum (a fan peaked at 630, 2026-10-22)
             bool sustained = previousPeak != DateTime.MinValue &&
                 now - previousPeak >= TimeSpan.FromMilliseconds(70) &&
                 now - previousPeak <= TimeSpan.FromMilliseconds(400);
@@ -139,7 +139,9 @@ namespace InterviewCopilot
         /// How many times, within how long, the connection must have dropped after being up before the
         /// app says "your connection keeps dropping" instead of a vague wait. One drop is a hiccup.
         /// </summary>
-        internal const int DropsThatMeanUnstable = 2;
+        // Three, not two: false drops (room hum, the app's own screenshot upload) made two in a few minutes on healthy lines,
+        // and "your connection keeps dropping" frightened a paying customer (2026-10-22). Real instability repeats.
+        internal const int DropsThatMeanUnstable = 3;
         internal static readonly TimeSpan DropWindow = TimeSpan.FromMinutes(4);
 
         internal static bool ConnectionKeepsDropping(System.Collections.Generic.IReadOnlyList<DateTime> dropsUtc, DateTime now)

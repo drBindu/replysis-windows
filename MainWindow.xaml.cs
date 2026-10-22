@@ -2677,11 +2677,11 @@ namespace InterviewCopilot
             // laptop listening to the wrong input (Stereo Mix on a laptop with no mic, 2026-10-22) is found from admin
             // without asking anyone for a log. Before one mode this only ran in Interview mode, so it never fired.
             if (!_wordsHeardThisInterview && !_interviewSilentTipShown &&
-                _interviewStarted && _sessionSeconds >= 45)
+                _interviewStarted && _sessionSeconds >= 90)   // 45 s was a normal wait for the interviewer to start (2026-10-22)
             {
                 _interviewSilentTipShown = true;
-                DebugWindow.Log("MODE", "Nothing heard for 45s of listening; told the user and reported it.");
-                ClientErrorReporter.ReportProblem("audio", "nothing-heard", "Nothing heard for 45 seconds of listening");
+                DebugWindow.Log("MODE", "Nothing heard for 90s of listening; told the user and reported it.");
+                ClientErrorReporter.ReportProblem("audio", "nothing-heard", "Nothing heard for 90 seconds of listening");
                 ShowInAppAlert(
                     "Nothing heard yet",
                     "Replysis has not heard any voice. Practising? Speak into your microphone; earphones with a mic work best. " +
@@ -3695,7 +3695,9 @@ namespace InterviewCopilot
             // The hold is bounded to one extra second even on a noisy microphone.
             if (AutoTurnRules.HoldForInFlightMicAudio(now, _autoTranscriptChangedUtc,
                     Interlocked.Read(ref _lastLikelyMicActivityUtcTicks), requiredSilenceMs,
-                    CaptureMode() != "system"))
+                    // Only when the candidate is the one asking (practising alone). For the interviewer's question, mic
+                    // sound is the candidate, the room or a fan, and holding for it delayed answers by up to 1 s (2026-10-22).
+                    CaptureMode() != "system" && _lastTurnSource == "candidate"))
                 return;
 
             _autoTurnSubmitting = true;
@@ -7508,6 +7510,14 @@ namespace InterviewCopilot
                                     if (audioEvidence.Observe(detectedAt, level))
                                         _lastSpeechDetectedUtc = detectedAt;
                                 }
+                            }
+                            else if (line.Contains("audio upload stalled", StringComparison.Ordinal))
+                            {
+                                // The voice could not get out: whatever else is using the line must give way. On a slow line
+                                // the screenshot sent ahead filled the upload, the voice stalled for 3 s, and the user was told
+                                // their connection keeps dropping (tester's log, 2026-10-22). Voice always comes first.
+                                DebugWindow.Log("SCREEN", "The voice upload stalled; pausing screenshots sent ahead so speech keeps the line.");
+                                NoteUplinkOutcome(false, UplinkGovernor.UploadTimeout, 0);
                             }
                             else if (line.StartsWith(">>> SOURCE ", StringComparison.Ordinal))
                             {

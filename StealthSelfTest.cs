@@ -35,7 +35,7 @@ namespace InterviewCopilot
                 var area = SystemParameters.WorkArea;
                 probe = new Window
                 {
-                    Width = Size, Height = Size, Left = area.Right - Size - 2, Top = area.Bottom - Size - 2,
+                    Width = Size, Height = Size, Left = area.Left + 2, Top = area.Top + 2,
                     WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false,
                     ShowActivated = false, Topmost = true, Background = new SolidColorBrush(Colors.Magenta),
                     Focusable = false,
@@ -49,8 +49,8 @@ namespace InterviewCopilot
                 // The display scale is only right once the square is on screen (175% read as 100% before it).
                 var source = PresentationSource.FromVisual(probe);
                 double scale = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
-                int px = (int)Math.Round((area.Right - Size - 2) * scale);
-                int py = (int)Math.Round((area.Bottom - Size - 2) * scale);
+                int px = (int)Math.Round((area.Left + 2) * scale);   // top left: Windows notifications pop up bottom right and could cover the square
+                int py = (int)Math.Round((area.Top + 2) * scale);
                 int side = (int)Math.Floor(Size * scale);
 
                 byte[] after = ScreenAnalyzer.GrabPixels(px, py, side, side);

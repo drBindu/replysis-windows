@@ -92,11 +92,16 @@ internal static class InstantResponseTests
               !AutoTurnRules.EndsOnConnector("Tell me about Java.") && !AutoTurnRules.EndsOnConnector("What is a brand?"),
             "only a joining word at the very end counts");
 
+        var hum = new RecentMicActivityEvidence();
+        DateTime humTime = new DateTime(t0, DateTimeKind.Utc);
+        hum.Observe(humTime, 630);
+        Check(!hum.Observe(humTime.AddMilliseconds(140), 600), "a fan's steady hum (peaks near 630) never counts as speech in flight");
+
         var micActivity = new RecentMicActivityEvidence();
         DateTime micTime = new DateTime(t0, DateTimeKind.Utc);
-        Check(!micActivity.Observe(micTime, 1100), "one microphone peak cannot delay Auto");
-        Check(!micActivity.Observe(micTime.AddMilliseconds(20), 1200), "closely bunched peaks do not count twice");
-        Check(micActivity.Observe(micTime.AddMilliseconds(140), 1000), "repeated microphone audio is in flight");
+        Check(!micActivity.Observe(micTime, 2100), "one microphone peak cannot delay Auto");
+        Check(!micActivity.Observe(micTime.AddMilliseconds(20), 2200), "closely bunched peaks do not count twice");
+        Check(micActivity.Observe(micTime.AddMilliseconds(140), 2000), "repeated microphone audio is in flight");
         DateTime changed = micTime.AddMilliseconds(-2800);
         Check(AutoTurnRules.HoldForInFlightMicAudio(micTime.AddMilliseconds(200), changed,
                 micTime.AddMilliseconds(140).Ticks, 2800, true),

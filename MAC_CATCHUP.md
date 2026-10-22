@@ -1,3 +1,11 @@
+## False alarms hunted down (2026-10-22, Windows)
+
+Same class as the room-hum watchdog: noise taken for a problem. (1) A stalled voice upload pauses screenshots sent
+ahead (they filled a slow line and made the voice stall). (2) "Connection keeps dropping" needs 3 drops in 4 minutes,
+not 2. (3) "Nothing heard yet" after 90 s, not 45 (a normal wait for the interviewer). (4) Auto's hold for "speech in
+flight" counts only voice level (1500, not 600) and only when the candidate is the one asking: a fan delayed every
+answer by up to 1 s. (5) The stealth self-test square moved to the top left, away from Windows notifications.
+
 ## Speech watchdog: voice level only (2026-10-22, Windows)
 
 The "unanswered speech" watchdog counted any chunk peaking above 500; a customer's room hum (peaks 400 to 630) made a

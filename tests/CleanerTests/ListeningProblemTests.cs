@@ -106,7 +106,8 @@ internal static class ListeningProblemTests
         // A connection that was up and keeps breaking is named as that, not blamed on a VPN.
         var now = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc);
         Check(!SpeechHealth.ConnectionKeepsDropping(new[] { now.AddSeconds(-30) }, now), "one drop is a hiccup, not a pattern");
-        Check(SpeechHealth.ConnectionKeepsDropping(new[] { now.AddSeconds(-110), now.AddSeconds(-50) }, now), "two drops within minutes keep dropping");
+        Check(!SpeechHealth.ConnectionKeepsDropping(new[] { now.AddSeconds(-110), now.AddSeconds(-50) }, now), "two drops are not yet a pattern (false drops came in pairs)");
+        Check(SpeechHealth.ConnectionKeepsDropping(new[] { now.AddSeconds(-170), now.AddSeconds(-110), now.AddSeconds(-50) }, now), "three drops within minutes keep dropping");
         Check(!SpeechHealth.ConnectionKeepsDropping(new[] { now.AddMinutes(-20), now.AddSeconds(-50) }, now), "an old drop does not count");
         Check(ListeningProblems.Detect(false, 0, false, false, false, true, connectionKeepsDropping: true) == ListeningProblems.Kind.UnstableConnection,
             "an engine that keeps dropping says so, instead of blaming a VPN");
