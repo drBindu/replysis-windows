@@ -113,6 +113,33 @@ namespace InterviewCopilot
         private static readonly string[] VirtualWords =
             { "cable", "stereo mix", "voicemeeter", "virtual", "wave out mix", "what u hear" };
 
+        // Capture devices that record the computer's own sound, never a voice. Stereo Mix was enabled on a laptop with
+        // no microphone, Windows made it the default input, and Replysis listened to it while the person spoke
+        // (2026-10-22). Not "virtual" in general: a SteelSeries Sonar virtual mic is a real mic routed through software.
+        private static readonly string[] NotAMicWords =
+            { "stereo mix", "what u hear", "what you hear", "wave out mix", "wave out", "cable output", "voicemeeter out" };
+
+        internal static bool IsNotAMic(string name)
+        {
+            foreach (string w in NotAMicWords)
+                if (name.Contains(w, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>Active capture devices that can hear a voice (Stereo Mix and the like are not counted).</summary>
+        internal static uint CountRealMics()
+        {
+            try
+            {
+                using var en = new MMDeviceEnumerator();
+                uint n = 0;
+                foreach (MMDevice d in en.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
+                    if (!IsNotAMic(d.FriendlyName ?? "")) n++;
+                return n;
+            }
+            catch { return 0; }
+        }
+
         private static bool LooksVirtual(string name)
         {
             foreach (string w in VirtualWords)
@@ -139,21 +166,26 @@ namespace InterviewCopilot
                 }
             }
 
-            // The Windows default, as set in Sound settings.
+            // The Windows default, as set in Sound settings. For the mic, never an input that only records the
+            // computer's sound.
             foreach (Role role in new[] { Role.Console, Role.Communications, Role.Multimedia })
             {
                 try
                 {
-                    if (en.HasDefaultAudioEndpoint(flow, role)) return en.GetDefaultAudioEndpoint(flow, role);
+                    if (!en.HasDefaultAudioEndpoint(flow, role)) continue;
+                    MMDevice d = en.GetDefaultAudioEndpoint(flow, role);
+                    if (_loopback || !IsNotAMic(d.FriendlyName ?? "")) return d;
                 }
                 catch { }
             }
 
-            // No default at all: any working device that is not virtual, then anything.
+            // No usable default: any working device that is not virtual, then anything that can be a mic.
             MMDevice? any = null;
             foreach (MMDevice d in en.EnumerateAudioEndPoints(flow, DeviceState.Active))
             {
-                if (!LooksVirtual(d.FriendlyName ?? "")) return d;
+                string n = d.FriendlyName ?? "";
+                if (!_loopback && IsNotAMic(n)) continue;
+                if (!LooksVirtual(n)) return d;
                 any ??= d;
             }
             return any ?? throw new InvalidOperationException("no active " + (_loopback ? "speaker" : "microphone"));

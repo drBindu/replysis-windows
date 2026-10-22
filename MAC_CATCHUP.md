@@ -1,3 +1,14 @@
+## Not a mic: Stereo Mix; nothing heard is reported; black box when hiding is refused (2026-10-22, Windows 1.0.47)
+
+1. A desktop with no mic had Stereo Mix enabled; Windows made it the default input and Replysis listened to it.
+Inputs that record the computer's sound (stereo mix, what u hear, wave out, cable output, voicemeeter out) are never
+used as the mic, in the app (NativeAudioFeed.IsNotAMic) and the engine (_NOT_A_MIC); "Microphone found" counts real mics.
+2. "Nothing heard for 45 s of listening" now tells the user and reports with the engine lines (it only ran in the old
+Interview mode).
+3. When WDA_EXCLUDEFROMCAPTURE is refused (err 8 on a Windows 10 desktop), WDA_MONITOR is applied so a capture shows
+a black box, and the first refusal is reported with the graphics driver name. Mac: sharingType .none has no fallback,
+but report when it is not honoured.
+
 ## Update notice shows the moment an update is found (2026-10-22, Windows 1.0.46)
 
 The notice waited for the whole download (21 s on a good line, minutes on a slow one), so people opened the app and

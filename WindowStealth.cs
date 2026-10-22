@@ -36,6 +36,50 @@ namespace InterviewCopilot
 
         private const uint WDA_NONE = 0x00000000;
         private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
+        private const uint WDA_MONITOR = 0x00000001;   // the window shows as a black box in a capture
+
+        private static int _hideFailureReported;
+
+        /// <summary>
+        /// Hides a window from screen capture. When full exclusion is refused, the black-box level (WDA_MONITOR) is used
+        /// so a screen share shows a black rectangle instead of the answers. A Windows 10 desktop refused exclusion with
+        /// error 8 (2026-10-22); the first refusal is reported with the graphics driver, which is the likely cause.
+        /// </summary>
+        private static bool ApplyHide(IntPtr hwnd)
+        {
+            if (SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) != 0) return true;
+            int err = Marshal.GetLastWin32Error();
+            bool blackBox = SetWindowDisplayAffinity(hwnd, WDA_MONITOR) != 0;
+            DebugWindow.Log("STEALTH", $"Full hiding refused (err {err}); black box {(blackBox ? "applied" : "also refused")}.");
+            if (System.Threading.Interlocked.Exchange(ref _hideFailureReported, 1) == 0)
+            {
+                string gpu = GraphicsDriverName();
+                ClientErrorReporter.NoteEngineLine($">>> STEALTH: full hiding refused (err {err}); black box {(blackBox ? "applied" : "refused")}; graphics device: {gpu}; Windows {Environment.OSVersion.Version}");
+                ClientErrorReporter.ReportProblem("stealth", "stealth-refused",
+                    $"Hiding from screen share was refused (err {err}); black box {(blackBox ? "on" : "also refused")}; graphics: {gpu}");
+            }
+            return blackBox;
+        }
+
+        /// <summary>The display adapter's name from the registry, e.g. "Microsoft Basic Display Adapter" when no driver is installed.</summary>
+        private static string GraphicsDriverName()
+        {
+            try
+            {
+                using var cls = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}");
+                if (cls == null) return "unknown";
+                var names = new System.Collections.Generic.List<string>();
+                foreach (string sub in cls.GetSubKeyNames())
+                {
+                    if (sub.Length != 4) continue;
+                    using var k = cls.OpenSubKey(sub);
+                    if (k?.GetValue("DriverDesc") is string d && !names.Contains(d)) names.Add(d);
+                }
+                return names.Count == 0 ? "unknown" : string.Join(" + ", names);
+            }
+            catch { return "unknown"; }
+        }
 
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_TOOLWINDOW = 0x00000080;
@@ -90,8 +134,9 @@ namespace InterviewCopilot
                 if (GetAncestor(hwnd, GA_ROOT) != hwnd) return;      // only top-level windows can be excluded
                 GetWindowThreadProcessId(hwnd, out uint owner);
                 if (owner != (uint)Environment.ProcessId) return;
-                if (GetWindowDisplayAffinity(hwnd, out uint current) != 0 && current == WDA_EXCLUDEFROMCAPTURE) return;
-                SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+                if (GetWindowDisplayAffinity(hwnd, out uint current) != 0 &&
+                    (current == WDA_EXCLUDEFROMCAPTURE || current == WDA_MONITOR)) return;
+                ApplyHide(hwnd);
             }
             catch { }
         }
@@ -122,10 +167,7 @@ namespace InterviewCopilot
             if (hwnd == IntPtr.Zero) return false;
             try
             {
-                bool applied = SetWindowDisplayAffinity(hwnd, enable ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE) != 0;
-                if (!applied)
-                    DebugWindow.Log("STEALTH", $"Capture exclusion was not applied (err {Marshal.GetLastWin32Error()}).");
-                return applied;
+                return enable ? ApplyHide(hwnd) : SetWindowDisplayAffinity(hwnd, WDA_NONE) != 0;
             }
             catch (Exception ex)
             {
@@ -281,12 +323,7 @@ namespace InterviewCopilot
                             SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
 
                             // Exclude from screen capture (OBS, Teams, screen share, etc.)
-                            if (SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) == 0)
-                            {
-                                DebugWindow.Log("STEALTH",
-                                    $"SetWindowDisplayAffinity failed (err {Marshal.GetLastWin32Error()}) — " +
-                                    "window may be visible in screen capture. Requires Windows 10 v2004+.");
-                            }
+                            ApplyHide(hwnd);
                         }
                         else
                         {

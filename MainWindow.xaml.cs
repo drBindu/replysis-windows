@@ -1855,12 +1855,14 @@ namespace InterviewCopilot
             if (_micWatchTimer != null) return;
             // Compared with what Windows lists now, so a device the engine already turned down never causes a restart loop.
             uint baseline = 0;
-            try { baseline = waveInGetNumDevs(); } catch { }
+            // Real microphones only: turning on Stereo Mix (it records the computer's sound) said "Microphone found"
+            // on a laptop with no mic, and the person then spoke into nothing (2026-10-22).
+            baseline = NativeAudioFeed.CountRealMics();
             _micWatchTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
             _micWatchTimer.Tick += (_, _) =>
             {
                 uint inputs = 0;
-                try { inputs = waveInGetNumDevs(); } catch { }
+                inputs = NativeAudioFeed.CountRealMics();
                 if (!PracticeAudioOn || inputs > baseline)
                 {
                     _micWatchTimer?.Stop();
@@ -2590,19 +2592,20 @@ namespace InterviewCopilot
             // nothing, because Interview hears the meeting only and never her own
             // voice (2026-09-29). After 45 seconds with nothing heard at all, say
             // so once, and offer the switch.
-            if (!_wordsHeardThisInterview && !_interviewSilentTipShown && !PracticeAudioOn &&
+            // Nothing heard at all for 45 seconds of listening: said once, and reported with what the engine saw, so a
+            // laptop listening to the wrong input (Stereo Mix on a laptop with no mic, 2026-10-22) is found from admin
+            // without asking anyone for a log. Before one mode this only ran in Interview mode, so it never fired.
+            if (!_wordsHeardThisInterview && !_interviewSilentTipShown &&
                 _interviewStarted && _sessionSeconds >= 45)
             {
                 _interviewSilentTipShown = true;
-                DebugWindow.Log("MODE", "Interview mode heard nothing for 45s; offered a switch to Practice.");
-                ClientErrorReporter.ReportProblem("audio", "nothing-heard", "Interview mode heard nothing for 45 seconds");
+                DebugWindow.Log("MODE", "Nothing heard for 45s of listening; told the user and reported it.");
+                ClientErrorReporter.ReportProblem("audio", "nothing-heard", "Nothing heard for 45 seconds of listening");
                 ShowInAppAlert(
                     "Nothing heard yet",
-                    "Interview mode hears the sound playing on this computer, so a call on your phone and your own " +
-                    "voice are not picked up. Play the interview on this computer, or switch to Practice to speak yourself.",
-                    persist: false,
-                    actionLabel: "Switch to Practice",
-                    action: () => SelectAudioSource(practice: true));
+                    "Replysis has not heard any voice. Practising? Speak into your microphone; earphones with a mic work best. " +
+                    "In an online interview, the interviewer is heard from this computer's sound.",
+                    persist: false);
             }
 
             WarnIfHearingButNotTranscribing(now);

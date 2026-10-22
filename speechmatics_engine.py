@@ -1261,6 +1261,9 @@ def _mic_needs_recovery(ever_heard, dead_reads):
     return dead_reads >= threshold
 
 
+_NOT_A_MIC = ("stereo mix", "what u hear", "what you hear", "wave out mix", "wave out", "cable output", "voicemeeter out")
+
+
 def _real_input_devices(audio, exclude_index=None):
     """Input devices that could plausibly be a microphone.
 
@@ -1281,6 +1284,10 @@ def _real_input_devices(audio, exclude_index=None):
         name = str(info.get("name", ""))
         low = name.lower()
         if "[loopback]" in low or "sound mapper" in low or "primary sound capture" in low:
+            continue
+        # Inputs that record the computer's own sound, never a voice. A laptop with no mic had Stereo Mix turned on
+        # while trying to fix it, Windows made it the default input, and the person spoke into nothing (2026-10-22).
+        if any(w in low for w in _NOT_A_MIC):
             continue
         # DirectSound inputs opened at 16 kHz mono return static on this driver
         # stack (see _is_capture_noise), so they are never offered as a switch.
