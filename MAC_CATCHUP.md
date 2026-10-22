@@ -1,3 +1,9 @@
+## Update notice shows the moment an update is found (2026-10-22, Windows 1.0.46)
+
+The notice waited for the whole download (21 s on a good line, minutes on a slow one), so people opened the app and
+saw nothing. UpdateService.UpdateFound fires before the download: "Replysis X is on its way", replaced by "ready /
+Restart and update" when staged. Still never while listening. Mac: same with Sparkle's found/downloaded callbacks.
+
 ## One listening mode: no Interview or Practice (2026-10-22, Windows 1.0.45)
 
 Always the mic and the computer's sound. The engine records per-100 ms levels of each and prints

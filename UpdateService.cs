@@ -60,6 +60,9 @@ namespace InterviewCopilot
             }
         }
 
+        /// <summary>Raised on a background thread as soon as a newer version is found, before it is downloaded.</summary>
+        internal static event Action<string>? UpdateFound;
+
         /// <summary>The version staged and waiting for the next restart, if any.</summary>
         internal static string? PendingVersion { get; private set; }
 
@@ -135,6 +138,9 @@ namespace InterviewCopilot
                 if (update == null) return (UpdateCheckOutcome.UpToDate, null);
 
                 string version = update.TargetFullRelease.Version.ToString();
+                // Said the moment it is found, before the download: the notice waited for the whole download (21 s on
+                // the owner's line, minutes on a slow one) and people never saw it (2026-10-22).
+                try { UpdateFound?.Invoke(version); } catch { }
                 DebugWindow.Log("UPDATE", $"Downloading {version}");
 
                 // Watched, not trusted: a connection that drops without closing used to leave this waiting for

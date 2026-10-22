@@ -1571,8 +1571,26 @@ namespace InterviewCopilot
             }
         }
 
+        private string? _updateComingFor;
+
+        /// <summary>The early notice: an update was found and is downloading. Replaced by "ready" when it is staged.</summary>
+        private void OnUpdateFound(string version)
+        {
+            if (_updateComingFor == version || _updateAnnouncedFor == version) return;
+            _updateComingFor = version;
+            _ = Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (isListening || _updateAnnouncedFor == version) return;   // never during a live interview
+                DebugWindow.Log("UPDATE", $"Update found, getting it ready: {version}.");
+                ShowInAppAlert($"Replysis {version} is on its way",
+                    "Getting it ready in the background. Keep working; a Restart button appears here in a moment.",
+                    persist: true, isUpdate: true);
+            }));
+        }
+
         private async Task CheckForUpdateOnceAsync()
         {
+            if (_updateComingFor == null) { UpdateService.UpdateFound -= OnUpdateFound; UpdateService.UpdateFound += OnUpdateFound; }
             string? found;
             bool managed = UpdateService.IsManaged;
             bool store = AppUpdates.Current == AppUpdates.Channel.Store;
