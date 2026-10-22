@@ -1803,6 +1803,18 @@ namespace InterviewCopilot
                 action = RestartEngineBetweenQuestions;
             }
             else if (line.Contains("Mic fallback failed", StringComparison.Ordinal)
+                     && line.Contains("-9999", StringComparison.Ordinal) && !MicPrivacyBlocked())
+            {
+                // The same error with every privacy switch on: Windows' own audio service is stuck. Swathi's laptop had
+                // all switches on and was told to turn them on (2026-10-22); a restart is what fixes this.
+                key = "audio-service-stuck";
+                title = "Windows sound is not responding";
+                body = "This computer's sound system did not let any app use the microphone or speakers. " +
+                       "Restart the computer, then open Replysis again.";
+                actionLabel = "Restart audio";
+                action = RestartEngineBetweenQuestions;
+            }
+            else if (line.Contains("Mic fallback failed", StringComparison.Ordinal)
                      && line.Contains("-9999", StringComparison.Ordinal))
             {
                 // "Unanticipated host error" from every microphone entry is Windows' privacy switch, not another app:
@@ -1860,6 +1872,23 @@ namespace InterviewCopilot
         /// restart listening on it at once. Windows counts real recording devices here; speaker loopbacks are not
         /// included, so a plugged in headset is the only thing that changes the answer.
         /// </summary>
+        /// <summary>True only when a Windows microphone privacy switch is actually off (machine, user, or desktop apps).</summary>
+        private static bool MicPrivacyBlocked()
+        {
+            const string path = @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone";
+            static bool Deny(Microsoft.Win32.RegistryKey root, string sub)
+            {
+                try
+                {
+                    using var k = root.OpenSubKey(sub);
+                    return string.Equals(k?.GetValue("Value") as string, "Deny", StringComparison.OrdinalIgnoreCase);
+                }
+                catch { return false; }
+            }
+            return Deny(Microsoft.Win32.Registry.LocalMachine, path) || Deny(Microsoft.Win32.Registry.CurrentUser, path)
+                || Deny(Microsoft.Win32.Registry.CurrentUser, path + @"\NonPackaged");
+        }
+
         private bool _hidingWarned;
 
         /// <summary>
@@ -7199,6 +7228,16 @@ namespace InterviewCopilot
                     if (CaptureMode() == "both")
                         _nativeMic = NativeAudioFeed.TryStart(false, SettingsWindow.GetAudioDeviceName());
                     _nativeSys = NativeAudioFeed.TryStart(true, null);
+                    // Windows refused every sound device (its audio service was stuck on a tester's laptop, 2026-10-22):
+                    // try again by itself a few times, so a recovery needs nothing from the user.
+                    if (_nativeSys == null && (_nativeMic == null || CaptureMode() != "both") && _audioRetries < 3)
+                    {
+                        _audioRetries++;
+                        DebugWindow.Log("AUDIO", $"No sound device could be opened; trying again in 15 s ({_audioRetries} of 3).");
+                        _ = Task.Delay(TimeSpan.FromSeconds(15)).ContinueWith(_ =>
+                            Dispatcher.BeginInvoke(new Action(() => { if (_nativeSys == null && !_windowClosed) RestartEngineBetweenQuestions(); })));
+                    }
+                    else if (_nativeSys != null) _audioRetries = 0;
                 }
 
                 speechmaticsProcess = new Process();
@@ -7792,6 +7831,7 @@ namespace InterviewCopilot
             return false;
         }
 
+        private int _audioRetries;
         private NativeAudioFeed? _nativeMic;
         private NativeAudioFeed? _nativeSys;
 

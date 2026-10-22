@@ -1,3 +1,11 @@
+## When Windows refuses every sound device (2026-10-22, Windows, tester's Cirrus Logic laptop)
+
+Native mic 0x80070651, native speakers 0x8889000F (AUDCLNT_E_ENDPOINT_CREATE_FAILED), PortAudio -9999 / -9996:
+Windows' audio service was stuck. Fixes: (1) the engine paces at real time when no stream is open (it produced
+230,000 silent chunks in 3 minutes and stalled the upload); (2) "Windows is blocking the microphone" only when a
+privacy switch really says Deny (registry ConsentStore\microphone), otherwise "Windows sound is not responding,
+restart the computer"; (3) the app retries opening the devices every 15 s, 3 times.
+
 ## Fixes from the pre-release review (2026-10-22, Windows 1.0.48)
 
 1. NativeAudioFeed: closing the old device waited for its capture thread while holding the lock the thread needed in

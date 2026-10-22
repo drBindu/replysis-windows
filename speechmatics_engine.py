@@ -2800,6 +2800,14 @@ class MixedStream:
         if shutdown_requested and not recording_requested:
             raise RuntimeError("Shutdown requested")
 
+        # Nothing to wait on: with no microphone and no computer sound open (a laptop whose Windows audio refused every
+        # device, 2026-10-22) nothing blocked above, the loop produced silence as fast as the CPU allowed (230,000
+        # reads in 3 minutes) and flooded the upload until the connection stalled. A chunk takes its real duration.
+        if mic_stream is None and sys_stream is None:
+            spare = CHUNK_FRAMES / SAMPLE_RATE - (time.time() - _read_started)
+            if spare > 0:
+                time.sleep(spare)
+
         _tag_chunk(data)
         return data
 
