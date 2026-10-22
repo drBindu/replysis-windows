@@ -2178,20 +2178,55 @@ def _write_lag(seconds_behind):
 # the candidate. Sound on both (no headphones, the interviewer leaking into the mic) counts as the interviewer. The app
 # answers the interviewer, and the candidate only when no interviewer has been heard (practising alone).
 _SPEECH_LEVEL = 500
-_levels = deque(maxlen=600)          # (monotonic time, mic level, computer level): the last minute
+# Levels are tied to the chunk itself, not to the clock: transcripts can come back seconds late on a slow line, and a
+# clock window then looked at the wrong sound (4 of 4 wrong in a test on a slow connection, 2026-10-22). The sender
+# records each chunk's levels at its position in the stream, and the speech service says which stream seconds a turn
+# covered, so lag cannot move the window.
+_pending_levels = (0, 0)
+_chunk_levels = {}                   # id(chunk) -> (mic level, computer level), for chunks not yet sent
+_chunk_order = deque()
 
 
 def _note_levels(mic_amp, sys_amp):
-    _levels.append((time.monotonic(), int(mic_amp or 0), int(sys_amp or 0)))
+    global _pending_levels
+    _pending_levels = (int(mic_amp or 0), int(sys_amp or 0))
 
 
-def _turn_source(turn_seconds=None, words=0):
-    span = turn_seconds if isinstance(turn_seconds, (int, float)) and turn_seconds > 0 else max(1.5, min(15.0, words * 0.4))
-    end = time.monotonic() - 0.2
-    start = end - span - 0.6
+def _tag_chunk(data):
+    """Called as read() hands a chunk over: remembers that chunk's levels until the sender sends it."""
+    global _pending_levels
+    lv, _pending_levels = _pending_levels, (0, 0)
+    if data is None or data is SILENCE:
+        return
+    k = id(data)
+    _chunk_levels[k] = lv
+    _chunk_order.append(k)
+    while len(_chunk_order) > 3000:
+        _chunk_levels.pop(_chunk_order.popleft(), None)
+
+
+def _new_turnmap():
+    return {"t": [], "lv": [], "turn_start": None}
+
+
+def _turnmap_add(turnmap, at_seconds, chunk):
+    turnmap["t"].append(at_seconds)
+    turnmap["lv"].append(_chunk_levels.get(id(chunk), (0, 0)))
+    if len(turnmap["t"]) > 6000:     # ten minutes of 100 ms chunks on one connection
+        del turnmap["t"][:1000]
+        del turnmap["lv"][:1000]
+
+
+def _turn_source(turnmap, start_s=None, end_s=None, words=0):
+    if not turnmap or not turnmap["t"]:
+        return "unknown"
+    if not isinstance(end_s, (int, float)):
+        end_s = turnmap["t"][-1] + 0.1
+    if not isinstance(start_s, (int, float)) or start_s >= end_s:
+        start_s = end_s - max(1.5, min(15.0, words * 0.4))
     sys_n = mic_n = 0
-    for t, m, c in list(_levels):
-        if start <= t <= end:
+    for t, (m, c) in zip(turnmap["t"], turnmap["lv"]):
+        if start_s - 0.3 <= t <= end_s + 0.1:
             if c > _SPEECH_LEVEL:
                 sys_n += 1
             elif m > _SPEECH_LEVEL:
@@ -2205,8 +2240,8 @@ def _turn_source(turn_seconds=None, words=0):
     return "interviewer" if sys_n else "unknown"
 
 
-def _print_source(turn_seconds=None, text=""):
-    print(f">>> SOURCE {_turn_source(turn_seconds, len((text or '').split()))}", flush=True)
+def _print_source(turnmap, start_s=None, end_s=None, text=""):
+    print(f">>> SOURCE {_turn_source(turnmap, start_s, end_s, len((text or '').split()))}", flush=True)
 
 
 def _write_latest(text):
@@ -2758,6 +2793,7 @@ class MixedStream:
         if shutdown_requested and not recording_requested:
             raise RuntimeError("Shutdown requested")
 
+        _tag_chunk(data)
         return data
 
 class BufferedMixedStream:
@@ -3351,6 +3387,7 @@ async def _run_deepgram_loop(holder) -> str:
                 # means the connection is dead.
                 speech = {"unanswered_since": None}
                 sent_secs = {"s": 0.0}   # seconds of voice sent on this connection; Flux counts from 0 on each connection too
+                turnmap = _new_turnmap()  # each sent chunk's levels at its stream position on this connection
 
                 async def sender():
                     last_sent = time.monotonic()
@@ -3366,6 +3403,7 @@ async def _run_deepgram_loop(holder) -> str:
                             if speech["unanswered_since"] is None and _signal_level(chunk) > 500:
                                 speech["unanswered_since"] = now
                             sent_log.append((now, chunk))
+                            _turnmap_add(turnmap, sent_secs["s"], chunk)
                             sent_secs["s"] += len(chunk) / (SAMPLE_RATE * 2)   # the chunk is 16 bit mono before any encoding
                         elif (_deepgram_flux() and os.path.exists(PAUSE_FLAG)
                               and now - max(audio["last"], session_started) >= _FLUX_QUIET_REFRESH_SECONDS):
@@ -3435,8 +3473,7 @@ async def _run_deepgram_loop(holder) -> str:
                                     transcript["confirmed"] = f"{transcript['confirmed']} {text}".strip()
                                 transcript["partial"] = ""
                                 _write_latest(transcript["confirmed"])
-                                ws_, we_ = msg.get("audio_window_start"), msg.get("audio_window_end")
-                                _print_source((we_ - ws_) if isinstance(ws_, (int, float)) and isinstance(we_, (int, float)) else None, text)
+                                _print_source(turnmap, msg.get("audio_window_start"), msg.get("audio_window_end"), text)
                                 print(f">>> FINAL received ({len(transcript['confirmed'])} chars)", flush=True)
                                 if not transcript.get("eager"):
                                     print(">>> SPEECH FINAL", flush=True)
@@ -3457,8 +3494,7 @@ async def _run_deepgram_loop(holder) -> str:
                             _write_latest(display)
                             if event == "EagerEndOfTurn":
                                 transcript["eager"] = True
-                                ws_, we_ = msg.get("audio_window_start"), msg.get("audio_window_end")
-                                _print_source((we_ - ws_) if isinstance(ws_, (int, float)) and isinstance(we_, (int, float)) else None, text)
+                                _print_source(turnmap, msg.get("audio_window_start"), msg.get("audio_window_end"), text)
                                 print(f">>> FINAL received ({len(display)} chars)", flush=True)
                                 print(">>> SPEECH FINAL", flush=True)
                             else:
@@ -3496,6 +3532,8 @@ async def _run_deepgram_loop(holder) -> str:
                             transcript["partial"] = ""
                             if not text:
                                 continue
+                            if not transcript["confirmed"] or turnmap["turn_start"] is None:
+                                turnmap["turn_start"] = msg.get("start")
                             transcript["confirmed"] = f"{transcript['confirmed']} {text}".strip()
                             label = "FINAL"
                         else:
@@ -3512,7 +3550,10 @@ async def _run_deepgram_loop(holder) -> str:
                         # the pause between the last word and the first word of the answer.
                         # A separate line, so every older reader of this output is unaffected.
                         if label == "FINAL" and msg.get("speech_final"):
-                            _print_source(None, transcript["confirmed"])
+                            st, du = msg.get("start"), msg.get("duration")
+                            end_s = st + du if isinstance(st, (int, float)) and isinstance(du, (int, float)) else None
+                            _print_source(turnmap, turnmap["turn_start"], end_s, transcript["confirmed"])
+                            turnmap["turn_start"] = None
                             print(">>> SPEECH FINAL", flush=True)
 
                 tasks = [asyncio.create_task(sender()), asyncio.create_task(receiver()), asyncio.create_task(watchdog())]
