@@ -7186,8 +7186,9 @@ namespace InterviewCopilot
                 // Sound straight from Windows, the way Zoom and Teams capture (2026-10-21). The engine's own device
                 // search failed on a customer's laptop (-9996 on every speaker). Each feed that cannot open is simply
                 // left out and the engine captures that source the old way. Switchable from the server.
-                await RemoteAppConfig.RefreshAsync().ConfigureAwait(false);
-                if (generation != Volatile.Read(ref _engineStartGeneration)) return;
+                // In the background: speech never waits for the settings file (a blocked or slow line cost up to 3 s on
+                // every engine start). The current value is used now; a change applies from the next start.
+                _ = RemoteAppConfig.RefreshAsync();
                 StopNativeAudio();
                 if (RemoteAppConfig.NativeAudio && Environment.GetEnvironmentVariable("REPLYSIS_NATIVE_AUDIO") != "0")
                 {

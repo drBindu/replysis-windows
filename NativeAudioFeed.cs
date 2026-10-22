@@ -205,9 +205,13 @@ namespace InterviewCopilot
 
         private void StartCapture()
         {
+            // The old device is closed OUTSIDE the lock. Closing waits for its capture thread, and that thread may be
+            // inside OnData waiting for this lock: holding it here froze audio for good on a device change (review,
+            // 2026-10-22). Detaching first means a late callback from the old device is ignored.
+            (IWaveIn? oldCapture, MMDevice? oldDevice) = DetachCapture();
+            CloseCapture(oldCapture, oldDevice);
             lock (_lock)
             {
-                StopCaptureLocked();
                 using var en = new MMDeviceEnumerator();
                 MMDevice device = PickDevice(en);
 
@@ -224,6 +228,13 @@ namespace InterviewCopilot
                     throw new NotSupportedException($"sample format {fmt.Encoding} {fmt.BitsPerSample} bit");
                 }
 
+                if (_disposed)
+                {
+                    // Shut down while this was opening: never leave a device recording with nobody to stop it.
+                    try { capture.Dispose(); } catch { }
+                    try { device.Dispose(); } catch { }
+                    return;
+                }
                 capture.DataAvailable += OnData;
                 capture.RecordingStopped += OnStopped;
                 _src.Clear();
@@ -241,19 +252,32 @@ namespace InterviewCopilot
             }
         }
 
-        private void StopCaptureLocked()
+        /// <summary>Takes the current device out of use under the lock; the caller closes it after releasing the lock.</summary>
+        private (IWaveIn?, MMDevice?) DetachCapture()
         {
-            IWaveIn? old = _capture;
-            _capture = null;
+            lock (_lock)
+            {
+                IWaveIn? old = _capture;
+                MMDevice? dev = _device;
+                _capture = null;
+                _device = null;
+                if (old != null)
+                {
+                    old.DataAvailable -= OnData;
+                    old.RecordingStopped -= OnStopped;
+                }
+                return (old, dev);
+            }
+        }
+
+        private static void CloseCapture(IWaveIn? old, MMDevice? dev)
+        {
             if (old != null)
             {
-                old.DataAvailable -= OnData;
-                old.RecordingStopped -= OnStopped;
                 try { old.StopRecording(); } catch { }
                 try { old.Dispose(); } catch { }
             }
-            try { _device?.Dispose(); } catch { }
-            _device = null;
+            try { dev?.Dispose(); } catch { }
         }
 
         private void OnStopped(object? sender, StoppedEventArgs e)
@@ -375,7 +399,8 @@ namespace InterviewCopilot
             // The pipe first: a write the engine is not reading would hold the lock, and closing the pipe is
             // what releases it.
             try { _pipe.Dispose(); } catch { }
-            lock (_lock) StopCaptureLocked();
+            (IWaveIn? oldCapture, MMDevice? oldDevice) = DetachCapture();
+            CloseCapture(oldCapture, oldDevice);
         }
     }
 }

@@ -53,6 +53,14 @@ print(f"reads={reads} bytes={total} peak={peak} alive={s.alive} secs={time.monot
             var psi = new ProcessStartInfo("python", $"-I \"{reader}\" \"{engine}\" \"{feed.PipePath}\"")
                 { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
             using var p = Process.Start(psi)!;
+            // A device change while sound flows to a reading engine: reopening used to wait for the capture thread
+            // while holding the lock that thread needed, and froze for good. Ten reopens during the read must finish.
+            Task? reopen = null;
+            if (!loopback)
+            {
+                var restart = typeof(NativeAudioFeed).GetMethod("StartCapture", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+                reopen = Task.Run(() => { Thread.Sleep(600); for (int i = 0; i < 10; i++) { restart.Invoke(feed, null); Thread.Sleep(150); } });
+            }
             string outp = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
             p.WaitForExit(10000);
             Console.WriteLine("      " + outp.Trim());
@@ -60,6 +68,10 @@ print(f"reads={reads} bytes={total} peak={peak} alive={s.alive} secs={time.monot
             int reads = m.Success ? int.Parse(m.Groups[1].Value) : 0;
             // 3 s of 100 ms reads: about 30, each one exactly one chunk, silence-padded when nothing plays.
             Check(reads >= 26 && reads <= 34, $"{what}: the engine reads at real time ({reads} reads of 100 ms in 3 s)");
+            if (reopen != null)
+                Check(reopen.Wait(TimeSpan.FromSeconds(15)), $"{what}: ten reopens while the engine reads all finish (no freeze)");
+
+
         }
         return failed;
     }

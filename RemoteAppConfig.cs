@@ -35,7 +35,6 @@ namespace InterviewCopilot
                     win.TryGetProperty("nativeAudio", out JsonElement native) &&
                     (native.ValueKind == JsonValueKind.True || native.ValueKind == JsonValueKind.False))
                     NativeAudio = native.GetBoolean();
-                _fetchedUtc = DateTime.UtcNow;
                 DebugWindow.Log("CONFIG", $"Remote settings: nativeAudio={NativeAudio}");
             }
             catch (Exception ex)
@@ -44,6 +43,7 @@ namespace InterviewCopilot
             }
             finally
             {
+                _fetchedUtc = DateTime.UtcNow;   // a failure is remembered too, so it is not retried on every engine start
                 _gate.Release();
             }
         }
