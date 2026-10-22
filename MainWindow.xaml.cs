@@ -340,6 +340,9 @@ namespace InterviewCopilot
                 try
                 {
                     try { WindowStealth.SetStealthMode(this, _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", ex.Message); }
+                    // Always said, and kept for problem reports: the owner's own copy had stealth off and nothing showed it.
+                    DebugWindow.Log("STEALTH", _stealthMode ? "Stealth: on" : "Stealth: OFF (Replysis can be seen in a screen share)");
+                    ClientErrorReporter.StealthState = _stealthMode ? "STEALTH: on" : "STEALTH: OFF in Settings";
                     // Every window and popup the app ever shows is hidden from capture while stealth is on, not only the
                     // ones that ask for it (the mode menu and tooltips are separate windows).
                     try { WindowStealth.StartGlobalGuard(() => _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", "guard: " + ex.Message); }
@@ -1273,6 +1276,7 @@ namespace InterviewCopilot
         private void ToggleStealth()
         {
             _stealthMode = !_stealthMode;
+            ClientErrorReporter.StealthState = _stealthMode ? "STEALTH: on" : "STEALTH: OFF in Settings";
 
             // Persist BEFORE applying: every other window reads
             // SettingsWindow.GetStealthMode() in its constructor, so one created
@@ -8598,6 +8602,7 @@ namespace InterviewCopilot
                 // Re-apply stealth in case it was changed in Settings. This must reach
                 // the overlay too, not just the main window.
                 _stealthMode = SettingsWindow.GetStealthMode();
+                ClientErrorReporter.StealthState = _stealthMode ? "STEALTH: on" : "STEALTH: OFF in Settings";
                 ApplyStealthToAllWindows();
                 UpdateStealthBtn();
                 if (UserSession.IsLoggedIn)

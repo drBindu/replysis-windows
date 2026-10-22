@@ -98,7 +98,7 @@ namespace InterviewCopilot
         // answer, so nothing a person said leaves their computer.
         private static readonly Queue<string> _engineTail = new();
         private static readonly string[] TechWords = { "MIC", "SYSTEM AUDIO", "WASAPI", "loopback", "VB-Cable", "FATAL",
-            "WARNING", "failed", "error", "device", "MODE", "Deepgram", "connection", "NO_MICROPHONE", "ENGINE", "PROVIDER" };
+            "WARNING", "failed", "error", "device", "MODE", "Deepgram", "connection", "NO_MICROPHONE", "ENGINE", "PROVIDER", "STEALTH" };
         private static readonly string[] SpeechWords = { "words were", "DEBUG", "FINAL", "PARTIAL", "segment", "said" };
 
         internal static void NoteEngineLine(string line)
@@ -119,6 +119,9 @@ namespace InterviewCopilot
             }
             catch { }
         }
+
+        /// <summary>"STEALTH: on" or "STEALTH: OFF in Settings", set by the main window and put at the top of every report.</summary>
+        internal static string StealthState = "";
 
         private static string EngineTail()
         {
@@ -146,7 +149,8 @@ namespace InterviewCopilot
                     type = "Problem." + kind,
                     message = SanitizeMessage(message),
                     frames = "",
-                    detail = EngineTail(),
+                    // Stealth first, always: a copy with stealth off was invisible from admin (2026-10-22).
+                    detail = (StealthState.Length > 0 ? ">>> " + StealthState + " | " : "") + EngineTail(),
                 };
                 Post(payload);
             }

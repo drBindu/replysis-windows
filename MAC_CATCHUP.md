@@ -1,3 +1,11 @@
+## Fixes from the pre-release review (2026-10-22, Windows 1.0.48)
+
+1. NativeAudioFeed: closing the old device waited for its capture thread while holding the lock the thread needed in
+OnData; a device change mid-interview could freeze audio. Detach under the lock, close outside it.
+2. RemoteAppConfig no longer delays engine start; failures are remembered for 5 minutes.
+3. Every problem report starts with "STEALTH: on" or "STEALTH: OFF in Settings": the owner's own copy had stealth off
+and nothing showed it. Mac: include the same field.
+
 ## Warn at start when this computer cannot hide Replysis (2026-10-22, Windows)
 
 Proven, not trusted: StealthSelfTest shows a 16 px magenta square with hiding applied 4 s after start, copies that corner
