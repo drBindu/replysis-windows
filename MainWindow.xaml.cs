@@ -1352,6 +1352,53 @@ namespace InterviewCopilot
 
         private void HelpBtn_Click(object sender, RoutedEventArgs e) => ShowOnboarding();
 
+        /// <summary>
+        /// Invite a friend (owner 2026-10-21): copies this person's referral link. When the friend signs up through it, both get
+        /// five free answers; the website's /api/referral makes the code and pays the reward on the server.
+        /// </summary>
+        private async void ProfileInvite_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            try { if (ProfileDropdownPopup != null) ProfileDropdownPopup.IsOpen = false; } catch { }
+            if (!UserSession.IsLoggedIn)
+            {
+                ShowInAppAlert("Sign in to invite friends", "Sign in first, then your invite link is one click away.", report: false);
+                return;
+            }
+            try
+            {
+                await UserSession.EnsureFreshTokenAsync();
+                using var req = new HttpRequestMessage(HttpMethod.Get, "https://replysis.com/api/referral");
+                req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {UserSession.IdToken}");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                using HttpResponseMessage res = await SharedHttpClient.HttpShort.SendAsync(req, cts.Token);
+                string body = await res.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                string link = res.IsSuccessStatusCode && doc.RootElement.TryGetProperty("link", out var l) ? l.GetString() ?? "" : "";
+                if (link.Length == 0) throw new InvalidOperationException($"HTTP {(int)res.StatusCode}");
+
+                try { Clipboard.SetText(link); } catch { }
+                string share = "I use Replysis for interview practice and live help. Sign up with my link and we both get 5 free answers: " + link;
+                ShowInAppAlert("Invite link copied",
+                    $"Send it to a friend. When they sign up, you both get 5 free answers. {link}",
+                    persist: true, actionLabel: "Share on WhatsApp",
+                    action: () =>
+                    {
+                        try
+                        {
+                            Process.Start(new ProcessStartInfo("https://wa.me/?text=" + Uri.EscapeDataString(share)) { UseShellExecute = true });
+                        }
+                        catch { }
+                    },
+                    report: false);
+                DebugWindow.Log("INVITE", "Invite link copied.");
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log("INVITE", $"Invite link failed: {ex.GetType().Name} {ex.Message}");
+                ShowInAppAlert("Invite link not ready", "Try again in a moment, or open replysis.com/account to copy it there.", report: false);
+            }
+        }
+
         private void ProfileHowItWorks_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             try { if (ProfileDropdownPopup != null) ProfileDropdownPopup.IsOpen = false; } catch { }
@@ -1443,9 +1490,10 @@ namespace InterviewCopilot
         }
 
         internal void ShowInAppAlert(string title, string message, bool persist = false,
-                                    string? actionLabel = null, Action? action = null, bool isUpdate = false)
+                                    string? actionLabel = null, Action? action = null, bool isUpdate = false,
+                                    bool report = true)
         {
-            if (!isUpdate)
+            if (!isUpdate && report)
                 ReportProblem("alert", "alert-" + ClientErrorReporter.Slug(title),
                               title + ": " + (message.Length > 120 ? message[..120] : message));
             _bannerIsProblem = false;

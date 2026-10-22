@@ -1,3 +1,9 @@
+## Invite a friend in the account menu (2026-10-21, Windows, next release)
+
+A row under "How it works": "Invite a friend / You both get 5 free answers". It GETs https://replysis.com/api/referral with
+the Firebase ID token, copies the link, and shows a notice with "Share on WhatsApp" (wa.me/?text=...). The reward is paid
+by the website when the friend signs up. Mac: same row, same call.
+
 ## Sound straight from Windows, no device search (2026-10-21, Windows 1.0.42)
 
 The engine used to find the mic and speakers itself through PortAudio, walking a device list that differs on every
