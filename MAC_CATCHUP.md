@@ -1,3 +1,7 @@
+## Problem reports carry the signed-in email (2026-10-22, Windows)
+
+client-error payload has "user" (UserSession.Email); the server stores it and admin shows it. Mac: send the same field.
+
 ## When Windows refuses every sound device (2026-10-22, Windows, tester's Cirrus Logic laptop)
 
 Native mic 0x80070651, native speakers 0x8889000F (AUDCLNT_E_ENDPOINT_CREATE_FAILED), PortAudio -9999 / -9996:

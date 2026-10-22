@@ -151,6 +151,8 @@ namespace InterviewCopilot
                     frames = "",
                     // Stealth first, always: a copy with stealth off was invisible from admin (2026-10-22).
                     detail = (StealthState.Length > 0 ? ">>> " + StealthState + " | " : "") + EngineTail(),
+                    // Who it happened to, so admin can tell one customer's report from another's (owner, 2026-10-22).
+                    user = UserSession.Email ?? "",
                 };
                 Post(payload);
             }
