@@ -19,6 +19,13 @@ namespace InterviewCopilot
         /// <summary>Capture sound through Windows itself (NativeAudioFeed). Off means the engine's old capture.</summary>
         internal static volatile bool NativeAudio = true;
 
+        /// <summary>
+        /// Engine tuning numbers from "windows.engine" in the file, passed to the speech engine as environment variables
+        /// (REPLYSIS_*), so a threshold can be corrected for everyone without an update (2026-10-22). Only names that
+        /// start with REPLYSIS_ and whole numbers are passed; the engine clamps each to a safe range.
+        /// </summary>
+        internal static volatile System.Collections.Generic.Dictionary<string, string> EngineSettings = new();
+
         private static DateTime _fetchedUtc = DateTime.MinValue;
         private static readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -35,6 +42,16 @@ namespace InterviewCopilot
                     win.TryGetProperty("nativeAudio", out JsonElement native) &&
                     (native.ValueKind == JsonValueKind.True || native.ValueKind == JsonValueKind.False))
                     NativeAudio = native.GetBoolean();
+                if (doc.RootElement.TryGetProperty("windows", out JsonElement w2) &&
+                    w2.TryGetProperty("engine", out JsonElement eng) && eng.ValueKind == JsonValueKind.Object)
+                {
+                    var map = new System.Collections.Generic.Dictionary<string, string>();
+                    foreach (JsonProperty p in eng.EnumerateObject())
+                        if (p.Name.StartsWith("REPLYSIS_", StringComparison.Ordinal) && p.Value.ValueKind == JsonValueKind.Number &&
+                            p.Value.TryGetInt32(out int n))
+                            map[p.Name] = n.ToString();
+                    EngineSettings = map;
+                }
                 DebugWindow.Log("CONFIG", $"Remote settings: nativeAudio={NativeAudio}");
             }
             catch (Exception ex)

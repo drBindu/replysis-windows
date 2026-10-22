@@ -301,6 +301,7 @@ namespace InterviewCopilot
             isListening = false;
             WritePauseFlag();
             NuclearKillOldProcesses();
+            _ = RemoteAppConfig.RefreshAsync();   // early, so the first engine start already has the server's settings
             _ = ResolvePythonExecutableAsync();
             // Start transcription before the window is painted. The engine owns
             // an early-audio prebuffer, so an immediate Space press can open the
@@ -7244,6 +7245,9 @@ namespace InterviewCopilot
                 speechmaticsProcess.StartInfo.FileName = engineExe;
                 if (_nativeMic != null) speechmaticsProcess.StartInfo.EnvironmentVariables["REPLYSIS_MIC_PIPE"] = _nativeMic.PipePath;
                 if (_nativeSys != null) speechmaticsProcess.StartInfo.EnvironmentVariables["REPLYSIS_SYS_PIPE"] = _nativeSys.PipePath;
+                // Tuning numbers from the server (replysis.com/app-config.json), so a fix needs no update.
+                foreach (var kv in RemoteAppConfig.EngineSettings)
+                    speechmaticsProcess.StartInfo.EnvironmentVariables[kv.Key] = kv.Value;
                 WriteVocabFile();   // interview-specific terms → better STT accuracy
                 string deviceArg = _audioDeviceId >= 0 ? $" --device {_audioDeviceId}" : "";
                 // The name goes too, and the engine prefers it. Windows renumbers

@@ -2185,6 +2185,21 @@ def _write_lag(seconds_behind):
 # the candidate. Sound on both (no headphones, the interviewer leaking into the mic) counts as the interviewer. The app
 # answers the interviewer, and the candidate only when no interviewer has been heard (practising alone).
 _SPEECH_LEVEL = 500
+
+
+def _env_int(name, default, low, high):
+    """A tuning number the app passes from replysis.com/app-config.json, so it can change without an update."""
+    try:
+        v = int(os.environ.get(name, ""))
+        return v if low <= v <= high else default
+    except Exception:
+        return default
+
+
+# Peak level a chunk must reach to count as voice for the dead-connection watchdog (room hum peaked at 400 to 630).
+_WATCHDOG_VOICE_LEVEL = _env_int("REPLYSIS_WATCHDOG_VOICE_LEVEL", 2000, 300, 20000)
+# Seconds of unanswered voice before the connection is called dead.
+_WATCHDOG_SECONDS = _env_int("REPLYSIS_WATCHDOG_SECONDS", 0, 0, 30)
 # Levels are tied to the chunk itself, not to the clock: transcripts can come back seconds late on a slow line, and a
 # clock window then looked at the wrong sound (4 of 4 wrong in a test on a slow connection, 2026-10-22). The sender
 # records each chunk's levels at its position in the stream, and the speech service says which stream seconds a turn
@@ -3418,7 +3433,7 @@ async def _run_deepgram_loop(holder) -> str:
                             # Voice level, not room hum: a customer's mic hummed at peaks of 400 to 630 with no words, the
                             # service rightly said nothing, and this called a healthy connection dead (2026-10-22). Speech
                             # peaks at several thousand.
-                            if speech["unanswered_since"] is None and _signal_level(chunk) > 2000:
+                            if speech["unanswered_since"] is None and _signal_level(chunk) > _WATCHDOG_VOICE_LEVEL:
                                 speech["unanswered_since"] = now
                             sent_log.append((now, chunk))
                             _turnmap_add(turnmap, sent_secs["s"], chunk)
@@ -3452,6 +3467,8 @@ async def _run_deepgram_loop(holder) -> str:
                         fresh = now - audio["since"] < _DEEPGRAM_FIRST_ANSWER_WINDOW and rx["last"] < audio["since"]
                         limit = _DEEPGRAM_FIRST_ANSWER_SECONDS if fresh else (
                             _FLUX_SILENT_SECONDS if _deepgram_flux() else _DEEPGRAM_SILENT_SECONDS)
+                        if _WATCHDOG_SECONDS:
+                            limit = max(limit, _WATCHDOG_SECONDS)
                         if waited > limit:
                             raise DeadConnection(f"nothing came back from Deepgram for {waited:.0f}s while audio was going out")
 
