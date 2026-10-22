@@ -1137,7 +1137,7 @@
                                     <TextBlock Text="Listening controls" Foreground="#FAFBFD" FontSize="17"
                                                FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                 </StackPanel>
-                                <TextBlock Text="Choose how answers trigger and which audio Replysis should hear. You can change both later."
+                                <TextBlock Text="Replysis hears the interviewer and you, and knows who is speaking. Choose how answers start."
                                            Foreground="#8393A8" FontSize="11" FontFamily="Segoe UI"
                                            TextWrapping="Wrap" Margin="12,0,0,14"/>
 
@@ -1530,7 +1530,7 @@
                                                     VerticalAlignment="Center">
                                             <Ellipse Width="6" Height="6" Fill="#7F93AB" Margin="0,0,7,0"
                                                      VerticalAlignment="Center"/>
-                                            <TextBlock Text="INTERVIEWER" Foreground="#9DB1CC" FontSize="9"
+                                            <TextBlock Text="CONVERSATION" Foreground="#9DB1CC" FontSize="9"
                                                        FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </DockPanel>

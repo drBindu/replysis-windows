@@ -2037,7 +2037,8 @@ namespace InterviewCopilot
             // No Interview or Practice any more: the pill names how it answers.
             ModeMenuText.Text = AutoModeEnabled ? "Auto" : "Manual";
             ModeMenuIcon.Text = "\uE720";
-            ModeMenuSub.Text = "Listening";
+            ModeMenuSub.Text = "";
+            ModeMenuSub.Visibility = Visibility.Collapsed;
             answerWindow?.SetModeText(practice, ModeMenuText.Text, ModeMenuSub.Text);
         }
 
@@ -2123,13 +2124,13 @@ namespace InterviewCopilot
 
             Heading("How it answers");
             Row("Auto", "Answers by itself", "Ctrl+Shift+A", auto, () => SelectListeningMode(ListeningMode.Auto));
-            Row("Manual", "Press Space to listen and answer", "Ctrl+Shift+A", !auto, () => SelectListeningMode(ListeningMode.Manual));
+            Row("Manual", "Press Space to answer", "Ctrl+Shift+A", !auto, () => SelectListeningMode(ListeningMode.Manual));
             Line();
             Heading("Window");
             if (compact)
                 Row("Full window", "Back to the full Replysis window", "Ctrl+Shift+C", false, () => answerWindow?.ReturnToFullWindow());
             else
-                Row("Compact", "A slim bar for in person interviews", "Ctrl+Shift+C", false, () => CameraMode_Click(this, new RoutedEventArgs()));
+                Row("Compact", "A slim bar on your screen", "Ctrl+Shift+C", false, () => CameraMode_Click(this, new RoutedEventArgs()));
             Row(_keepOnTop ? "Unpin" : "Pin on top", _keepOnTop ? "Stops staying in front" : "Stays in front of other windows", "", _keepOnTop, () => PinWindowBtn_Click(this, new RoutedEventArgs()));
         }
 
