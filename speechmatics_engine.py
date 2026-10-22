@@ -2171,6 +2171,44 @@ def _write_lag(seconds_behind):
         pass
 
 
+# ── Who spoke (trial, 2026-10-22) ─────────────────────────────────────────────
+# The mic and the computer's sound are mixed into one stream for the speech service, so the words alone do not say who
+# said them. The levels do: every 100 ms chunk records how loud each source was, and when a turn ends the chunks it
+# covered decide. Computer sound means the interviewer (their voice comes out of the meeting app); the mic alone means
+# the candidate. Sound on both (no headphones, the interviewer leaking into the mic) counts as the interviewer. The app
+# answers the interviewer, and the candidate only when no interviewer has been heard (practising alone).
+_SPEECH_LEVEL = 500
+_levels = deque(maxlen=600)          # (monotonic time, mic level, computer level): the last minute
+
+
+def _note_levels(mic_amp, sys_amp):
+    _levels.append((time.monotonic(), int(mic_amp or 0), int(sys_amp or 0)))
+
+
+def _turn_source(turn_seconds=None, words=0):
+    span = turn_seconds if isinstance(turn_seconds, (int, float)) and turn_seconds > 0 else max(1.5, min(15.0, words * 0.4))
+    end = time.monotonic() - 0.2
+    start = end - span - 0.6
+    sys_n = mic_n = 0
+    for t, m, c in list(_levels):
+        if start <= t <= end:
+            if c > _SPEECH_LEVEL:
+                sys_n += 1
+            elif m > _SPEECH_LEVEL:
+                mic_n += 1
+    # Any real computer sound in the turn makes it the interviewer's: a laptop mic hears the speakers a moment late
+    # (room echo), which looked like the candidate talking after every question (trial run, 2026-10-22).
+    if sys_n >= 2:
+        return "interviewer"
+    if mic_n >= 2:
+        return "candidate"
+    return "interviewer" if sys_n else "unknown"
+
+
+def _print_source(turn_seconds=None, text=""):
+    print(f">>> SOURCE {_turn_source(turn_seconds, len((text or '').split()))}", flush=True)
+
+
 def _write_latest(text):
     """Atomically publish the current transcript to latest.txt (same contract as the
     Speechmatics path's nested _write)."""
@@ -2689,11 +2727,16 @@ class MixedStream:
                     sys_data = (resample_to_16k_mono(raw, _sys_native_rate, _sys_native_channels, num_frames)
                                 if (_sys_native_rate != SAMPLE_RATE or _sys_native_channels != 1)
                                 else raw)
-                    if _signal_level(sys_data) > 400:
+                    sys_amp = _signal_level(sys_data)
+                    if sys_amp > 400:
                         _last_sys_sound_at = time.time()
+                    _note_levels(mic_amp if mic_stream else 0, sys_amp)
                     data = mix_audio(mic_data, sys_data)
+                if raw is None:
+                    _note_levels(mic_amp if mic_stream else 0, 0)
             else:
                 data = mic_data
+                _note_levels(mic_amp if mic_stream else 0, 0)
 
         # Handle recording — all state changes under record_lock so
         # is_recording and recording_frames are always consistent.
@@ -3392,6 +3435,8 @@ async def _run_deepgram_loop(holder) -> str:
                                     transcript["confirmed"] = f"{transcript['confirmed']} {text}".strip()
                                 transcript["partial"] = ""
                                 _write_latest(transcript["confirmed"])
+                                ws_, we_ = msg.get("audio_window_start"), msg.get("audio_window_end")
+                                _print_source((we_ - ws_) if isinstance(ws_, (int, float)) and isinstance(we_, (int, float)) else None, text)
                                 print(f">>> FINAL received ({len(transcript['confirmed'])} chars)", flush=True)
                                 if not transcript.get("eager"):
                                     print(">>> SPEECH FINAL", flush=True)
@@ -3412,6 +3457,8 @@ async def _run_deepgram_loop(holder) -> str:
                             _write_latest(display)
                             if event == "EagerEndOfTurn":
                                 transcript["eager"] = True
+                                ws_, we_ = msg.get("audio_window_start"), msg.get("audio_window_end")
+                                _print_source((we_ - ws_) if isinstance(ws_, (int, float)) and isinstance(we_, (int, float)) else None, text)
                                 print(f">>> FINAL received ({len(display)} chars)", flush=True)
                                 print(">>> SPEECH FINAL", flush=True)
                             else:
@@ -3465,6 +3512,7 @@ async def _run_deepgram_loop(holder) -> str:
                         # the pause between the last word and the first word of the answer.
                         # A separate line, so every older reader of this output is unaffected.
                         if label == "FINAL" and msg.get("speech_final"):
+                            _print_source(None, transcript["confirmed"])
                             print(">>> SPEECH FINAL", flush=True)
 
                 tasks = [asyncio.create_task(sender()), asyncio.create_task(receiver()), asyncio.create_task(watchdog())]

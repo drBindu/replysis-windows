@@ -164,7 +164,9 @@ namespace InterviewCopilot
 
         // Interview / Practice. The same preference the Settings switch writes, so the
         // two can never disagree. Practice means the microphone is open too.
-        private static bool PracticeAudioOn => SettingsWindow.GetMicCaptureEnabled();
+        // One mode (2026-10-22): the microphone is always heard too, so everything that asked "is Practice on" is now yes.
+        // Who spoke is decided per turn (">>> SOURCE"), not by a mode the user has to pick.
+        private static bool PracticeAudioOn => true;
         private DispatcherTimer? _audioSourceWatchTimer;
         private bool _interviewTipShown;
         private bool _practiceTipShown;
@@ -1817,9 +1819,8 @@ namespace InterviewCopilot
 
         private const string NoMicrophoneTitle = "No microphone on this computer";
         private const string NoMicrophoneBody =
-            "Practice listens to your voice, and this computer has no microphone, so nothing you say can be heard. " +
-            "Plug in earphones with a mic and Replysis starts listening by itself. " +
-            "To use Replysis in a real interview, Interview mode hears the call on this computer and needs no microphone.";
+            "Replysis still hears the interview playing on this computer and answers it. " +
+            "To practise by speaking yourself, plug in earphones with a mic and Replysis starts hearing you by itself.";
 
         [System.Runtime.InteropServices.DllImport("winmm.dll")]
         private static extern uint waveInGetNumDevs();
@@ -1990,6 +1991,8 @@ namespace InterviewCopilot
         /// </summary>
         private void CheckAudioSourceTip()
         {
+            return;   // Trial: one mode, nothing to suggest switching to.
+#pragma warning disable CS0162
             try
             {
                 bool practice = PracticeAudioOn;
@@ -2023,6 +2026,7 @@ namespace InterviewCopilot
                 }
             }
             catch (Exception ex) { DebugWindow.Log("AUDIO", $"tip check failed: {ex.Message}"); }
+#pragma warning restore CS0162
         }
 
         // ── Minimal top bar: one pill, one menu ──────────────────────────────────────────────────────────────
@@ -2030,9 +2034,11 @@ namespace InterviewCopilot
         {
             if (ModeMenuText == null) return;
             bool practice = PracticeAudioOn;
-            ModeMenuText.Text = practice ? "Practice" : "Interview";
-            ModeMenuIcon.Text = practice ? "\uE720" : "\uE7F5";
-            ModeMenuSub.Text = AutoModeEnabled ? "Auto" : "Manual";
+            // No Interview or Practice any more: the pill names how it answers.
+            ModeMenuText.Text = AutoModeEnabled ? "Auto" : "Manual";
+            ModeMenuIcon.Text = "\uE720";
+            ModeMenuSub.Text = "";
+            ModeMenuSub.Visibility = Visibility.Collapsed;
             answerWindow?.SetModeText(practice, ModeMenuText.Text, ModeMenuSub.Text);
         }
 
@@ -2116,19 +2122,15 @@ namespace InterviewCopilot
             }
             void Line() => ModeMenuRows.Children.Add(new System.Windows.Controls.Border { Height = 1, Background = new SolidColorBrush(Color.FromRgb(0x18, 0x23, 0x38)), Margin = new Thickness(8, 6, 8, 2) });
 
-            Heading("What Replysis hears");
-            Row("Interview", "The call on this computer", "Ctrl+Shift+P", !practice, () => SelectAudioSource(practice: false));
-            Row("Practice", "Your voice, for practising", "Ctrl+Shift+P", practice, () => SelectAudioSource(practice: true));
-            Line();
             Heading("How it answers");
             Row("Auto", "Answers by itself", "Ctrl+Shift+A", auto, () => SelectListeningMode(ListeningMode.Auto));
-            Row("Manual", "Press Space to listen and answer", "Ctrl+Shift+A", !auto, () => SelectListeningMode(ListeningMode.Manual));
+            Row("Manual", "Press Space to answer", "Ctrl+Shift+A", !auto, () => SelectListeningMode(ListeningMode.Manual));
             Line();
             Heading("Window");
             if (compact)
                 Row("Full window", "Back to the full Replysis window", "Ctrl+Shift+C", false, () => answerWindow?.ReturnToFullWindow());
             else
-                Row("Compact", "A slim bar for in person interviews", "Ctrl+Shift+C", false, () => CameraMode_Click(this, new RoutedEventArgs()));
+                Row("Compact", "A slim bar on your screen", "Ctrl+Shift+C", false, () => CameraMode_Click(this, new RoutedEventArgs()));
             Row(_keepOnTop ? "Unpin" : "Pin on top", _keepOnTop ? "Stops staying in front" : "Stays in front of other windows", "", _keepOnTop, () => PinWindowBtn_Click(this, new RoutedEventArgs()));
         }
 
@@ -2209,8 +2211,16 @@ namespace InterviewCopilot
         /// longer touches the audio source, so the notice and the greying-out
         /// are gone with it.
         /// </summary>
-        private static string CaptureMode() =>
-            SettingsWindow.GetMicCaptureEnabled() ? "both" : "system";
+        // Trial (one mode, 2026-10-22): always the mic and the computer's sound. Who spoke is decided per turn by the
+        // engine (">>> SOURCE"), so there is no mode to choose and one failing device no longer silences the app.
+        private static string CaptureMode() => "both";
+
+        // Who said the last finished turn, from the engine's ">>> SOURCE" line: interviewer, candidate or unknown.
+        private string _lastTurnSource = "unknown";
+        private DateTime _lastInterviewerTurnUtc = DateTime.MinValue;
+
+        /// <summary>An interviewer has been heard in the last ten minutes: the candidate's own words are then never a question.</summary>
+        private bool InterviewerPresent() => DateTime.UtcNow - _lastInterviewerTurnUtc < TimeSpan.FromMinutes(10);
 
         /// <summary>
         /// Paints the Auto / Manual switch and clears any status message that
@@ -3478,6 +3488,20 @@ namespace InterviewCopilot
                     _lastAutoRejectedTranscript = question;
                     DebugWindow.Log("AUTO",
                         "That is our own answer being read aloud, not a new question. Ignored.");
+                }
+                return;
+            }
+
+            // The candidate's own words are never a question while an interviewer is present: they are answering, or
+            // asking the interviewer something ("can you repeat that?"). Alone, with no interviewer heard, they are
+            // practising, and their questions are answered.
+            if (_lastTurnSource == "candidate" && InterviewerPresent())
+            {
+                NoteAutoRejected(transcript, candidateQuestion);
+                if (!string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
+                {
+                    _lastAutoRejectedTranscript = question;
+                    DebugWindow.Log("AUTO", "The candidate is speaking (mic only) with an interviewer present. Not answered.");
                 }
                 return;
             }
@@ -6558,9 +6582,9 @@ namespace InterviewCopilot
                     TranscriptHintText.Text = "Connecting to your audio";
                     break;
                 case "auto-practice":
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Ask a question out loud") { FontWeight = FontWeights.SemiBold, Foreground = white });
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" or play one, and the answer appears here on its own. If it has not answered, press "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. When the interviewer "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("asks a question") { FontWeight = FontWeights.SemiBold, Foreground = white });
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(", the answer appears here on its own. Practising alone? Ask out loud. If it has not answered, press "));
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" to answer right away."));
                     TranscriptHintText.Text = "Listening to your microphone and computer audio";
@@ -7285,9 +7309,7 @@ namespace InterviewCopilot
                                 // microphone is plugged in.
                                 _ = Dispatcher.BeginInvoke(new Action(() =>
                                 {
-                                    ShowInAppAlert(NoMicrophoneTitle, NoMicrophoneBody, persist: true,
-                                                   actionLabel: "Use Interview instead",
-                                                   action: () => SelectAudioSource(practice: false));
+                                    ShowInAppAlert(NoMicrophoneTitle, NoMicrophoneBody, persist: true);
                                     StartWatchingForMicrophone();
                                 }));
                                 continue;
@@ -7370,6 +7392,13 @@ namespace InterviewCopilot
                                     if (audioEvidence.Observe(detectedAt, level))
                                         _lastSpeechDetectedUtc = detectedAt;
                                 }
+                            }
+                            else if (line.StartsWith(">>> SOURCE ", StringComparison.Ordinal))
+                            {
+                                string who = line.Substring(11).Trim();
+                                _lastTurnSource = who;
+                                if (who == "interviewer") _lastInterviewerTurnUtc = DateTime.UtcNow;
+                                DebugWindow.Log("AUTO", $"Turn spoken by: {who}{(who == "candidate" && InterviewerPresent() ? " (interviewer present, will not answer)" : "")}");
                             }
                             else if (line.Contains("UTTERANCE END", StringComparison.Ordinal))
                                 Interlocked.Exchange(ref _lastUtteranceEndUtcTicks, DateTime.UtcNow.Ticks);
@@ -8326,7 +8355,6 @@ namespace InterviewCopilot
             var mods = System.Windows.Input.Keyboard.Modifiers;
             if (mods == (System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift))
             {
-                if (e.Key == System.Windows.Input.Key.P) { e.Handled = true; SelectAudioSource(practice: !PracticeAudioOn); return; }
                 if (e.Key == System.Windows.Input.Key.A) { e.Handled = true; SelectListeningMode(AutoModeEnabled ? ListeningMode.Manual : ListeningMode.Auto); return; }
                 if (e.Key == System.Windows.Input.Key.C) { e.Handled = true; CameraMode_Click(this, new RoutedEventArgs()); return; }
             }
