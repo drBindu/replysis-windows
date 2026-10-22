@@ -1167,7 +1167,7 @@
                                     </Grid>
                                 </Border>
 
-                                <Border Background="#13FFFFFF" BorderBrush="#2A3A52" BorderThickness="1"
+                                <Border Visibility="Collapsed" Background="#13FFFFFF" BorderBrush="#2A3A52" BorderThickness="1"
                                         CornerRadius="11" Padding="13,11" Margin="0,0,0,9">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
