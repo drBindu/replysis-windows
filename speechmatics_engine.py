@@ -2803,6 +2803,7 @@ class BufferedMixedStream:
         """Put back a chunk that could not be sent, so the next connection sends it first."""
         with self._condition:
             self._chunks.appendleft(chunk)
+            self._put_back = getattr(self, "_put_back", 0) + 1
             self._condition.notify_all()
 
     def drop_stale(self):
@@ -2814,10 +2815,19 @@ class BufferedMixedStream:
         transcribed all of it: words assembled from audio nobody could hear,
         answered as if the interviewer had just said them.
         """
+        # Audio put back after a dead connection (push_front) is the question that was never answered, and it sits at
+        # the front. Dropping "the oldest" threw exactly that away: a question asked across a pause got no answer
+        # because its second half was put back and then dropped (trial run, 2026-10-22). It is kept; the stale audio
+        # behind it is what goes.
         with self._condition:
-            dropped = max(0, len(self._chunks) - self.KEEP_ON_RECONNECT)
+            keep_front = min(getattr(self, "_put_back", 0), len(self._chunks))
+            self._put_back = 0
+            front = [self._chunks.popleft() for _ in range(keep_front)]
+            dropped = max(0, len(self._chunks) - max(0, self.KEEP_ON_RECONNECT - keep_front))
             for _ in range(dropped):
                 self._chunks.popleft()
+            for chunk in reversed(front):
+                self._chunks.appendleft(chunk)
         if dropped:
             print(f">>> Dropped {dropped * 100}ms of audio recorded while disconnected.", flush=True)
         return dropped
