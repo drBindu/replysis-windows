@@ -1990,6 +1990,8 @@ namespace InterviewCopilot
         /// </summary>
         private void CheckAudioSourceTip()
         {
+            return;   // Trial: one mode, nothing to suggest switching to.
+#pragma warning disable CS0162
             try
             {
                 bool practice = PracticeAudioOn;
@@ -2023,6 +2025,7 @@ namespace InterviewCopilot
                 }
             }
             catch (Exception ex) { DebugWindow.Log("AUDIO", $"tip check failed: {ex.Message}"); }
+#pragma warning restore CS0162
         }
 
         // ── Minimal top bar: one pill, one menu ──────────────────────────────────────────────────────────────
@@ -2209,8 +2212,16 @@ namespace InterviewCopilot
         /// longer touches the audio source, so the notice and the greying-out
         /// are gone with it.
         /// </summary>
-        private static string CaptureMode() =>
-            SettingsWindow.GetMicCaptureEnabled() ? "both" : "system";
+        // Trial (one mode, 2026-10-22): always the mic and the computer's sound. Who spoke is decided per turn by the
+        // engine (">>> SOURCE"), so there is no mode to choose and one failing device no longer silences the app.
+        private static string CaptureMode() => "both";
+
+        // Who said the last finished turn, from the engine's ">>> SOURCE" line: interviewer, candidate or unknown.
+        private string _lastTurnSource = "unknown";
+        private DateTime _lastInterviewerTurnUtc = DateTime.MinValue;
+
+        /// <summary>An interviewer has been heard in the last ten minutes: the candidate's own words are then never a question.</summary>
+        private bool InterviewerPresent() => DateTime.UtcNow - _lastInterviewerTurnUtc < TimeSpan.FromMinutes(10);
 
         /// <summary>
         /// Paints the Auto / Manual switch and clears any status message that
@@ -3478,6 +3489,20 @@ namespace InterviewCopilot
                     _lastAutoRejectedTranscript = question;
                     DebugWindow.Log("AUTO",
                         "That is our own answer being read aloud, not a new question. Ignored.");
+                }
+                return;
+            }
+
+            // The candidate's own words are never a question while an interviewer is present: they are answering, or
+            // asking the interviewer something ("can you repeat that?"). Alone, with no interviewer heard, they are
+            // practising, and their questions are answered.
+            if (_lastTurnSource == "candidate" && InterviewerPresent())
+            {
+                NoteAutoRejected(transcript, candidateQuestion);
+                if (!string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
+                {
+                    _lastAutoRejectedTranscript = question;
+                    DebugWindow.Log("AUTO", "The candidate is speaking (mic only) with an interviewer present. Not answered.");
                 }
                 return;
             }
@@ -7370,6 +7395,13 @@ namespace InterviewCopilot
                                     if (audioEvidence.Observe(detectedAt, level))
                                         _lastSpeechDetectedUtc = detectedAt;
                                 }
+                            }
+                            else if (line.StartsWith(">>> SOURCE ", StringComparison.Ordinal))
+                            {
+                                string who = line.Substring(11).Trim();
+                                _lastTurnSource = who;
+                                if (who == "interviewer") _lastInterviewerTurnUtc = DateTime.UtcNow;
+                                DebugWindow.Log("AUTO", $"Turn spoken by: {who}{(who == "candidate" && InterviewerPresent() ? " (interviewer present, will not answer)" : "")}");
                             }
                             else if (line.Contains("UTTERANCE END", StringComparison.Ordinal))
                                 Interlocked.Exchange(ref _lastUtteranceEndUtcTicks, DateTime.UtcNow.Ticks);
