@@ -3415,7 +3415,10 @@ async def _run_deepgram_loop(holder) -> str:
                             if now - audio["last"] > 1.5:
                                 audio["since"] = now
                             audio["last"] = now
-                            if speech["unanswered_since"] is None and _signal_level(chunk) > 500:
+                            # Voice level, not room hum: a customer's mic hummed at peaks of 400 to 630 with no words, the
+                            # service rightly said nothing, and this called a healthy connection dead (2026-10-22). Speech
+                            # peaks at several thousand.
+                            if speech["unanswered_since"] is None and _signal_level(chunk) > 2000:
                                 speech["unanswered_since"] = now
                             sent_log.append((now, chunk))
                             _turnmap_add(turnmap, sent_secs["s"], chunk)

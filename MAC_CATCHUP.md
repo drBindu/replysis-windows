@@ -1,3 +1,8 @@
+## Speech watchdog: voice level only (2026-10-22, Windows)
+
+The "unanswered speech" watchdog counted any chunk peaking above 500; a customer's room hum (peaks 400 to 630) made a
+healthy Deepgram connection look dead and showed "Your connection keeps dropping". Now peaks above 2000 only.
+
 ## Problem reports carry the signed-in email (2026-10-22, Windows)
 
 client-error payload has "user" (UserSession.Email); the server stores it and admin shows it. Mac: send the same field.
