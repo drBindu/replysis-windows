@@ -343,6 +343,11 @@ namespace InterviewCopilot
                     // Every window and popup the app ever shows is hidden from capture while stealth is on, not only the
                     // ones that ask for it (the mode menu and tooltips are separate windows).
                     try { WindowStealth.StartGlobalGuard(() => _stealthMode); } catch (Exception ex) { DebugWindow.Log("STEALTH", "guard: " + ex.Message); }
+                    // Tested at every start, before any interview: if this computer cannot hide Replysis from a screen
+                    // share, the user is told now, not after the interviewer has seen it (owner, 2026-10-22).
+                    WindowStealth.HidingRefused += blackBox => Dispatcher.BeginInvoke(new Action(() => WarnHidingNotAvailable(blackBox)));
+                    if (_stealthMode && WindowStealth.HidingRefusedBlackBox is bool refused) WarnHidingNotAvailable(refused);
+                    else if (_stealthMode && WindowStealth.HidingUnsupportedByWindows) WarnHidingNotAvailable(true);
                     UpdateStealthBtn();
                     ApplyKeepOnTop();
                     UpdateAudioSourceUi();
@@ -1850,6 +1855,25 @@ namespace InterviewCopilot
         /// restart listening on it at once. Windows counts real recording devices here; speaker loopbacks are not
         /// included, so a plugged in headset is the only thing that changes the answer.
         /// </summary>
+        private bool _hidingWarned;
+
+        /// <summary>Warns, once per start, that this computer cannot hide Replysis from a screen share, and what to do.</summary>
+        private void WarnHidingNotAvailable(bool blackBox)
+        {
+            if (_hidingWarned || !_stealthMode) return;
+            _hidingWarned = true;
+            DebugWindow.Log("STEALTH", "Warned the user: this computer cannot hide Replysis from screen sharing.");
+            ShowInAppAlert(
+                "Screen sharing warning",
+                (blackBox
+                    ? "This computer cannot fully hide Replysis. If you share your entire screen, Replysis shows as a black box. "
+                    : "This computer cannot hide Replysis. If you share your entire screen, Replysis can be seen. ") +
+                "Share only the meeting window or a browser tab. Updating the computer's graphics driver usually fixes this.",
+                persist: true, actionLabel: "Get the driver",
+                action: () => OpenWindowsPage("ms-settings:windowsupdate-optionalupdates"),
+                report: false);
+        }
+
         private void StartWatchingForMicrophone()
         {
             if (_micWatchTimer != null) return;

@@ -1,3 +1,10 @@
+## Warn at start when this computer cannot hide Replysis (2026-10-22, Windows)
+
+Checked at every start, before any interview: if Windows refuses full hiding (or is older than 10 2004, build 19041,
+which silently only blacks the window out), a persistent notice says "Screen sharing warning": share only the meeting
+window or a browser tab, with "Get the driver" (Windows optional updates). Mac: warn the same way if sharingType
+.none is not honoured.
+
 ## Not a mic: Stereo Mix; nothing heard is reported; black box when hiding is refused (2026-10-22, Windows 1.0.47)
 
 1. A desktop with no mic had Stereo Mix enabled; Windows made it the default input and Replysis listened to it.

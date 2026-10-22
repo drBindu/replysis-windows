@@ -40,6 +40,18 @@ namespace InterviewCopilot
 
         private static int _hideFailureReported;
 
+        /// <summary>Set once Windows refuses full hiding on this computer: true when the black box took over, false when nothing hides.</summary>
+        internal static bool? HidingRefusedBlackBox { get; private set; }
+
+        /// <summary>Raised (once, on any thread) when full hiding is refused, so the user is warned before they share their screen.</summary>
+        internal static event Action<bool>? HidingRefused;
+
+        /// <summary>
+        /// Windows before 10 version 2004 (build 19041) accepts the hiding request but only blacks the window out, and
+        /// says nothing; treated the same as a refusal so the user is warned.
+        /// </summary>
+        internal static bool HidingUnsupportedByWindows => Environment.OSVersion.Version.Build < 19041;
+
         /// <summary>
         /// Hides a window from screen capture. When full exclusion is refused, the black-box level (WDA_MONITOR) is used
         /// so a screen share shows a black rectangle instead of the answers. A Windows 10 desktop refused exclusion with
@@ -57,6 +69,8 @@ namespace InterviewCopilot
                 ClientErrorReporter.NoteEngineLine($">>> STEALTH: full hiding refused (err {err}); black box {(blackBox ? "applied" : "refused")}; graphics device: {gpu}; Windows {Environment.OSVersion.Version}");
                 ClientErrorReporter.ReportProblem("stealth", "stealth-refused",
                     $"Hiding from screen share was refused (err {err}); black box {(blackBox ? "on" : "also refused")}; graphics: {gpu}");
+                HidingRefusedBlackBox = blackBox;
+                try { HidingRefused?.Invoke(blackBox); } catch { }
             }
             return blackBox;
         }
