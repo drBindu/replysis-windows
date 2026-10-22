@@ -2196,7 +2196,9 @@ def _turn_source(turn_seconds=None, words=0):
                 sys_n += 1
             elif m > _SPEECH_LEVEL:
                 mic_n += 1
-    if sys_n >= 2 and sys_n * 4 >= mic_n:
+    # Any real computer sound in the turn makes it the interviewer's: a laptop mic hears the speakers a moment late
+    # (room echo), which looked like the candidate talking after every question (trial run, 2026-10-22).
+    if sys_n >= 2:
         return "interviewer"
     if mic_n >= 2:
         return "candidate"
