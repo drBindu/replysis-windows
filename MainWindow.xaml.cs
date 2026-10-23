@@ -1910,10 +1910,12 @@ namespace InterviewCopilot
                 await Task.Delay(TimeSpan.FromSeconds(4));
                 if (!_stealthMode || _windowClosed) return;
                 var result = await StealthSelfTest.RunAsync();
-                DebugWindow.Log("STEALTH", $"Self-test: {result} ({StealthSelfTest.LastDetail}).");
+                string mainSetting = WindowStealth.AffinityOf(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+                DebugWindow.Log("STEALTH", $"Self-test: {result} ({StealthSelfTest.LastDetail}); main window: {mainSetting}.");
+                ClientErrorReporter.NoteEngineLine($">>> STEALTH self-test: {result}; main window: {mainSetting}");
                 if (result is StealthSelfTest.Result.Visible or StealthSelfTest.Result.BlackBox)
                 {
-                    ClientErrorReporter.NoteEngineLine($">>> STEALTH self-test: {result}; {StealthSelfTest.LastDetail}; Windows {Environment.OSVersion.Version}");
+                    ClientErrorReporter.NoteEngineLine($">>> STEALTH self-test detail: {StealthSelfTest.LastDetail}; Windows {Environment.OSVersion.Version}");
                     ClientErrorReporter.ReportProblem("stealth", "stealth-selftest", $"Screen share can see Replysis: self-test {result}");
                     WarnHidingNotAvailable(result == StealthSelfTest.Result.BlackBox);
                 }

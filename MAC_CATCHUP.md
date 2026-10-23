@@ -1,3 +1,11 @@
+## Hiding refusals name the window, and only an answer window warns the customer (2026-10-23, Windows)
+
+Three Windows 10 computers (none on 11) refused hiding with error 8, and the report could not say which window: the
+guard hides every window, dropdowns and tooltips too, and any refusal warned the customer. Now each refusal report names
+the window (kind, layered or not, size; at most 3 a run), only the main or answer window being refused warns
+("stealth-refused"), others report as "stealth-refused-minor". The self-test line now records the main window's actual
+capture setting. Mac: worth the same split if the Mac warns on any window.
+
 ## Hiding refused: the warning names the graphics maker and links its driver page (2026-10-23, Windows)
 
 A new user's Intel HD 520 plus AMD laptop refused hiding (err 8, black box refused too). The warning now says which

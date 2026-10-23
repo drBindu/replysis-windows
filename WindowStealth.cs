@@ -38,7 +38,8 @@ namespace InterviewCopilot
         private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
         private const uint WDA_MONITOR = 0x00000001;   // the window shows as a black box in a capture
 
-        private static int _hideFailureReported;
+        private static int _hideFailureReports;
+        private static int _warned;
 
         /// <summary>Set once Windows refuses full hiding on this computer: true when the black box took over, false when nothing hides.</summary>
         internal static bool? HidingRefusedBlackBox { get; private set; }
@@ -52,27 +53,88 @@ namespace InterviewCopilot
         /// </summary>
         internal static bool HidingUnsupportedByWindows => Environment.OSVersion.Version.Build < 19041;
 
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder name, int max);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT { public int Left, Top, Right, Bottom; }
+
+        private const int WS_EX_LAYERED = 0x00080000;
+
         /// <summary>
         /// Hides a window from screen capture. When full exclusion is refused, the black-box level (WDA_MONITOR) is used
-        /// so a screen share shows a black rectangle instead of the answers. A Windows 10 desktop refused exclusion with
-        /// error 8 (2026-10-22); the first refusal is reported with the graphics driver, which is the likely cause.
+        /// so a screen share shows a black rectangle instead of the answers.
+        ///
+        /// Three Windows 10 computers refused with error 8 (2026-10-22 and 23, none on Windows 11), and the report could not
+        /// say which window: the guard hides every window of the app, including dropdowns and tooltips, and the first refusal
+        /// of any of them raised the warning. Now each report names the window (its kind, whether it is layered, its size),
+        /// and the customer is warned only when a window that shows answers (the main window or the answer window) is the one
+        /// refused. A refused dropdown or tooltip is still reported, as minor, so the cause can be found from real computers.
         /// </summary>
         private static bool ApplyHide(IntPtr hwnd)
         {
             if (SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) != 0) return true;
             int err = Marshal.GetLastWin32Error();
             bool blackBox = SetWindowDisplayAffinity(hwnd, WDA_MONITOR) != 0;
-            DebugWindow.Log("STEALTH", $"Full hiding refused (err {err}); black box {(blackBox ? "applied" : "also refused")}.");
-            if (System.Threading.Interlocked.Exchange(ref _hideFailureReported, 1) == 0)
+            var (kind, showsAnswers) = Describe(hwnd);
+            DebugWindow.Log("STEALTH", $"Full hiding refused for {kind} (err {err}); black box {(blackBox ? "applied" : "also refused")}.");
+            if (System.Threading.Interlocked.Increment(ref _hideFailureReports) <= 3)
             {
                 string gpu = GraphicsDriverName();
-                ClientErrorReporter.NoteEngineLine($">>> STEALTH: full hiding refused (err {err}); black box {(blackBox ? "applied" : "refused")}; graphics device: {gpu}; Windows {Environment.OSVersion.Version}");
-                ClientErrorReporter.ReportProblem("stealth", "stealth-refused",
-                    $"Hiding from screen share was refused (err {err}); black box {(blackBox ? "on" : "also refused")}; graphics: {gpu}");
+                ClientErrorReporter.NoteEngineLine($">>> STEALTH: full hiding refused for {kind} (err {err}); black box {(blackBox ? "applied" : "refused")}; graphics device: {gpu}; Windows {Environment.OSVersion.Version}");
+                ClientErrorReporter.ReportProblem("stealth", showsAnswers ? "stealth-refused" : "stealth-refused-minor",
+                    $"Hiding from screen share was refused for {kind} (err {err}); black box {(blackBox ? "on" : "also refused")}; graphics: {gpu}");
+            }
+            if (showsAnswers && System.Threading.Interlocked.Exchange(ref _warned, 1) == 0)
+            {
                 HidingRefusedBlackBox = blackBox;
                 try { HidingRefused?.Invoke(blackBox); } catch { }
             }
             return blackBox;
+        }
+
+        /// <summary>What Windows says a window's capture setting is now: hidden, black box, or none. For the self-test's report.</summary>
+        internal static string AffinityOf(IntPtr hwnd)
+        {
+            try
+            {
+                if (hwnd == IntPtr.Zero || GetWindowDisplayAffinity(hwnd, out uint a) == 0) return "unknown";
+                return a == WDA_EXCLUDEFROMCAPTURE ? "hidden" : a == WDA_MONITOR ? "black box" : "none";
+            }
+            catch { return "unknown"; }
+        }
+
+        /// <summary>"MainWindow, layered, 930x560" and whether that window shows answers. Never fails.</summary>
+        private static (string kind, bool showsAnswers) Describe(IntPtr hwnd)
+        {
+            string name = "";
+            bool answers = false;
+            try
+            {
+                if (Application.Current?.Dispatcher.CheckAccess() == true && HwndSource.FromHwnd(hwnd)?.RootVisual is Window w)
+                {
+                    name = w.GetType().Name;
+                    answers = w is MainWindow || w is AnswerWindow;
+                }
+                else if (HwndSource.FromHwnd(hwnd) == null)
+                {
+                    var cls = new System.Text.StringBuilder(64);
+                    GetClassName(hwnd, cls, cls.Capacity);
+                    name = "class " + cls;
+                }
+                else name = "a popup";   // a WPF dropdown or tooltip, or a window looked at off the UI thread
+            }
+            catch { name = "unknown"; }
+            try
+            {
+                bool layered = (GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) != 0;
+                string size = GetWindowRect(hwnd, out RECT r) ? $"{r.Right - r.Left}x{r.Bottom - r.Top}" : "?";
+                return ($"{name}, {(layered ? "layered" : "not layered")}, {size}", answers);
+            }
+            catch { return (name, answers); }
         }
 
         /// <summary>The display adapter's name from the registry, e.g. "Microsoft Basic Display Adapter" when no driver is installed.</summary>
