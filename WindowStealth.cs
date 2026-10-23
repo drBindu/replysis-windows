@@ -76,7 +76,7 @@ namespace InterviewCopilot
         }
 
         /// <summary>The display adapter's name from the registry, e.g. "Microsoft Basic Display Adapter" when no driver is installed.</summary>
-        private static string GraphicsDriverName()
+        internal static string GraphicsDriverName()
         {
             try
             {

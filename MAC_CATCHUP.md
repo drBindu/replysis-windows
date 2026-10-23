@@ -1,3 +1,9 @@
+## Hiding refused: the warning names the graphics maker and links its driver page (2026-10-23, Windows)
+
+A new user's Intel HD 520 plus AMD laptop refused hiding (err 8, black box refused too). The warning now says which
+driver to update (Intel first on a two-chip laptop, then AMD, NVIDIA, else Windows optional updates), the button opens
+that maker's driver page, and it says to restart Replysis after. Mac: only if the Mac has an equivalent refusal path.
+
 ## Bug sweep, batch 2 (2026-10-22, Windows)
 
 (1) The engine says who is speaking while they speak (">>> SOURCE" on Flux updates, when it changes), not only at the

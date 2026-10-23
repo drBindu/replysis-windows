@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -1927,15 +1927,33 @@ namespace InterviewCopilot
             if (_hidingWarned || !_stealthMode) return;
             _hidingWarned = true;
             DebugWindow.Log("STEALTH", "Warned the user: this computer cannot hide Replysis from screen sharing.");
+            var (maker, page) = GraphicsDriverHelp(WindowStealth.GraphicsDriverName());
             ShowInAppAlert(
                 "Screen sharing warning",
                 (blackBox
                     ? "This computer cannot fully hide Replysis. If you share your entire screen, Replysis shows as a black box. "
                     : "This computer cannot hide Replysis. If you share your entire screen, Replysis can be seen. ") +
-                "Share only the meeting window or a browser tab. Updating the computer's graphics driver usually fixes this.",
-                persist: true, actionLabel: "Get the driver",
-                action: () => OpenWindowsPage("ms-settings:windowsupdate-optionalupdates"),
+                $"Share only the meeting window or a browser tab. To fix it, update the {maker} graphics driver, then restart Replysis.",
+                persist: true, actionLabel: $"Get the {maker} driver",
+                action: () => OpenWindowsPage(page),
                 report: false);
+        }
+
+        /// <summary>
+        /// Whose graphics driver to update, and where. Named, because "update the graphics driver" alone was not enough on
+        /// an Intel HD 520 plus AMD laptop that refused hiding (2026-10-23). On a two-chip laptop Intel draws the screen, so
+        /// Intel comes first. Anything else falls back to Windows' own optional driver updates.
+        /// </summary>
+        internal static (string maker, string page) GraphicsDriverHelp(string adapters)
+        {
+            string a = adapters ?? "";
+            if (a.Contains("Intel", StringComparison.OrdinalIgnoreCase))
+                return ("Intel", "https://www.intel.com/content/www/us/en/support/detect.html");
+            if (a.Contains("AMD", StringComparison.OrdinalIgnoreCase) || a.Contains("Radeon", StringComparison.OrdinalIgnoreCase))
+                return ("AMD", "https://www.amd.com/en/support/download/drivers.html");
+            if (a.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
+                return ("NVIDIA", "https://www.nvidia.com/en-us/drivers/");
+            return ("Windows", "ms-settings:windowsupdate-optionalupdates");
         }
 
         private void StartWatchingForMicrophone()

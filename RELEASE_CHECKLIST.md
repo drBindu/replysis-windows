@@ -69,4 +69,4 @@ Every client change goes in `MAC_CATCHUP.md` in the same commit.
 
 Owner clicks Run workflow (version + notes). Afterwards verify: installer and
 inner programs signed by Varoxel LLC, launch the shipped exe, bump
-`WINDOWS_DIRECT_DOWNLOAD` in the website and deploy.
+`WINDOWS_DIRECT_DOWNLOAD` in the website (frontend `app/lib/downloads.ts`, used by the home page and /start) and deploy.
