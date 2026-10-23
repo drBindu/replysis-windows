@@ -1,3 +1,11 @@
+## No hiding warning popup: a quiet "Screen share" row in setup instead (2026-10-23, Windows)
+
+Owner: "no need to warn, show in the setup whether it is visible or stealth". The warning popup scared new customers
+off before they pressed Start (3 of 4 new Windows users on 2026-10-23, at least partly false). Setup now has a
+"Screen share" row: Checking, Hidden (green), Black box or Visible (amber, with "share one window or a tab" and an
+"Update the Intel graphics driver" link), or Off when stealth is off. Filled from the self-test plus the main window's
+actual capture setting. Reports to admin are unchanged. Mac: same row if the Mac shows a hiding warning popup.
+
 ## Hiding refusals name the window, and only an answer window warns the customer (2026-10-23, Windows)
 
 Three Windows 10 computers (none on 11) refused hiding with error 8, and the report could not say which window: the

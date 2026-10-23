@@ -1187,7 +1187,7 @@
                                 </Border>
 
                                 <Border Background="#13FFFFFF" BorderBrush="#2A3A52" BorderThickness="1"
-                                        CornerRadius="11" Padding="13,11">
+                                        CornerRadius="11" Padding="13,11" Margin="0,0,0,9">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1202,6 +1202,33 @@
                                         </StackPanel>
                                         <local:MacSegmented x:Name="SetupLength" Grid.Column="1" VerticalAlignment="Center" LeftText="Short" RightText="Detailed"
                                                             SelectionRequested="SetupLength_Requested"/>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Screen share: what this computer's own check found, shown quietly here instead of a warning
+                                     popup (owner, 2026-10-23). Filled in by UpdateScreenShareStatus. -->
+                                <Border Background="#13FFFFFF" BorderBrush="#2A3A52" BorderThickness="1"
+                                        CornerRadius="11" Padding="13,11">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <TextBlock Text="Screen share" Foreground="#E2E8F0" FontSize="12"
+                                                       FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                            <TextBlock x:Name="ScreenShareHint" Text="Checking this computer"
+                                                       Foreground="#8A97A8" FontSize="10.5" FontFamily="Segoe UI"
+                                                       TextWrapping="Wrap" Margin="0,4,0,0" LineHeight="14"/>
+                                            <TextBlock x:Name="ScreenShareFix" Visibility="Collapsed" Cursor="Hand"
+                                                       Foreground="#34E08A" FontSize="10.5" FontFamily="Segoe UI" FontWeight="SemiBold"
+                                                       Margin="0,5,0,0" MouseLeftButtonUp="ScreenShareFix_Click"/>
+                                        </StackPanel>
+                                        <Border x:Name="ScreenShareChip" Grid.Column="1" VerticalAlignment="Center"
+                                                CornerRadius="8" Padding="10,4" Background="#1A8A97A8">
+                                            <TextBlock x:Name="ScreenShareChipText" Text="Checking" Foreground="#AEB8C6"
+                                                       FontSize="11" FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                                        </Border>
                                     </Grid>
                                 </Border>
                             </StackPanel>

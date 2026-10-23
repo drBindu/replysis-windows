@@ -353,6 +353,7 @@ namespace InterviewCopilot
                     if (_stealthMode && WindowStealth.HidingRefusedBlackBox is bool refused) WarnHidingNotAvailable(refused);
                     else if (_stealthMode && WindowStealth.HidingUnsupportedByWindows) WarnHidingNotAvailable(true);
                     else if (_stealthMode) _ = VerifyHidingAsync();
+                    UpdateScreenShareStatus();
                     UpdateStealthBtn();
                     ApplyKeepOnTop();
                     UpdateAudioSourceUi();
@@ -1296,6 +1297,8 @@ namespace InterviewCopilot
 
             ApplyStealthToAllWindows();
             UpdateStealthBtn();
+            UpdateScreenShareStatus();
+            if (_stealthMode && _hidingResult == "checking") _ = VerifyHidingAsync();
         }
 
         /// <summary>
@@ -1919,26 +1922,59 @@ namespace InterviewCopilot
                     ClientErrorReporter.ReportProblem("stealth", "stealth-selftest", $"Screen share can see Replysis: self-test {result}");
                     WarnHidingNotAvailable(result == StealthSelfTest.Result.BlackBox);
                 }
+                else if (_hidingResult == "checking")
+                {
+                    // The test square was hidden; the main window's own setting decides (it is what shows the answers).
+                    _hidingResult = mainSetting == "hidden" ? "hidden" : mainSetting == "black box" ? "blackbox" : mainSetting == "none" ? "visible" : "hidden";
+                    UpdateScreenShareStatus();
+                }
             }
             catch (Exception ex) { DebugWindow.Log("STEALTH", $"Self-test failed to run: {ex.GetType().Name}"); }
         }
 
-        /// <summary>Warns, once per start, that this computer cannot hide Replysis from a screen share, and what to do.</summary>
+        /// <summary>
+        /// This computer cannot hide Replysis (or only as a black box). Shown as the "Screen share" row in setup, never as a
+        /// popup: the warning popup scared new customers away before they pressed Start, and it was raised by a refused
+        /// dropdown or tooltip as often as by the answer window (owner, 2026-10-23: "no need to warn, show it in the setup").
+        /// </summary>
         private void WarnHidingNotAvailable(bool blackBox)
         {
-            if (_hidingWarned || !_stealthMode) return;
+            if (_hidingWarned) return;
             _hidingWarned = true;
-            DebugWindow.Log("STEALTH", "Warned the user: this computer cannot hide Replysis from screen sharing.");
-            var (maker, page) = GraphicsDriverHelp(WindowStealth.GraphicsDriverName());
-            ShowInAppAlert(
-                "Screen sharing warning",
-                (blackBox
-                    ? "This computer cannot fully hide Replysis. If you share your entire screen, Replysis shows as a black box. "
-                    : "This computer cannot hide Replysis. If you share your entire screen, Replysis can be seen. ") +
-                $"Share only the meeting window or a browser tab. To fix it, update the {maker} graphics driver, then restart Replysis.",
-                persist: true, actionLabel: $"Get the {maker} driver",
-                action: () => OpenWindowsPage(page),
-                report: false);
+            _hidingResult = blackBox ? "blackbox" : "visible";
+            DebugWindow.Log("STEALTH", $"Screen share status: {_hidingResult}.");
+            UpdateScreenShareStatus();
+        }
+
+        /// <summary>"checking", "hidden", "blackbox" or "visible": what this computer's check found, kept even while stealth is off.</summary>
+        private string _hidingResult = "checking";
+
+        private void UpdateScreenShareStatus()
+        {
+            if (ScreenShareChip == null) return;
+            string state = !_stealthMode ? "off" : _hidingResult;
+            var (maker, _) = GraphicsDriverHelp(WindowStealth.GraphicsDriverName());
+            (string chip, string hint, string fg, string bg, string fix) = state switch
+            {
+                "hidden"   => ("Hidden", "People you share your screen with cannot see Replysis.", "#34E08A", "#1A34E08A", ""),
+                "blackbox" => ("Black box", "Sharing your entire screen shows a black box here. Share one window or a tab instead.", "#F5B942", "#1AF5B942", $"Update the {maker} graphics driver"),
+                "visible"  => ("Visible", "Sharing your entire screen shows Replysis. Share one window or a tab instead.", "#F5B942", "#1AF5B942", $"Update the {maker} graphics driver"),
+                "off"      => ("Off", "Stealth is off, so screen sharing shows Replysis. Turn it on in Settings.", "#AEB8C6", "#1A8A97A8", ""),
+                _          => ("Checking", "Checking this computer", "#AEB8C6", "#1A8A97A8", ""),
+            };
+            ScreenShareChipText.Text = chip;
+            ScreenShareHint.Text = hint;
+            var conv = new System.Windows.Media.BrushConverter();
+            ScreenShareChipText.Foreground = (System.Windows.Media.Brush)conv.ConvertFromString(fg)!;
+            ScreenShareChip.Background = (System.Windows.Media.Brush)conv.ConvertFromString(bg)!;
+            ScreenShareFix.Text = fix;
+            ScreenShareFix.Visibility = fix.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ScreenShareFix_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var (_, page) = GraphicsDriverHelp(WindowStealth.GraphicsDriverName());
+            OpenWindowsPage(page);
         }
 
         /// <summary>
@@ -8689,6 +8725,8 @@ namespace InterviewCopilot
                 ClientErrorReporter.StealthState = _stealthMode ? "STEALTH: on" : "STEALTH: OFF in Settings";
                 ApplyStealthToAllWindows();
                 UpdateStealthBtn();
+                UpdateScreenShareStatus();
+                if (_stealthMode && _hidingResult == "checking") _ = VerifyHidingAsync();
                 if (UserSession.IsLoggedIn)
                     _ = FetchAndDisplayCreditsAsync().ContinueWith(t => {
                         if (t.IsFaulted) DebugWindow.Log("CREDITS_ERR", t.Exception?.GetBaseException().Message ?? "unknown");
