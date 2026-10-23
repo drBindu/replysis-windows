@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
@@ -43,6 +43,13 @@ namespace InterviewCopilot
                 var helper = new WindowInteropHelper(probe);
                 helper.EnsureHandle();
                 if (applyHiding) WindowStealth.TrySetCaptureExclusion(helper.Handle, true);
+                // When Windows refused to hide the test square itself, the square proves nothing about the answer window:
+                // inconclusive, and the caller falls back on the answer window's own setting (2026-10-23).
+                if (applyHiding && WindowStealth.AffinityOf(helper.Handle) != "hidden")
+                {
+                    LastDetail = "the test square itself could not be hidden";
+                    return Result.Unknown;
+                }
                 probe.Show();
                 await Task.Delay(350);   // let the compositor draw it
 

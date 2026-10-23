@@ -1962,6 +1962,7 @@ namespace InterviewCopilot
                 "off"      => ("Off", "Stealth is off, so screen sharing shows Replysis. Turn it on in Settings.", "#AEB8C6", "#1A8A97A8", ""),
                 _          => ("Checking", "Checking this computer", "#AEB8C6", "#1A8A97A8", ""),
             };
+            DebugWindow.Log("STEALTH", $"Screen share row: {chip}.");
             ScreenShareChipText.Text = chip;
             ScreenShareHint.Text = hint;
             var conv = new System.Windows.Media.BrushConverter();

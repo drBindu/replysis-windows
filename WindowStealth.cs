@@ -40,6 +40,7 @@ namespace InterviewCopilot
 
         private static int _hideFailureReports;
         private static int _warned;
+        private static readonly System.Collections.Generic.HashSet<IntPtr> _refusedLogged = new();
 
         /// <summary>Set once Windows refuses full hiding on this computer: true when the black box took over, false when nothing hides.</summary>
         internal static bool? HidingRefusedBlackBox { get; private set; }
@@ -76,11 +77,34 @@ namespace InterviewCopilot
         /// </summary>
         private static bool ApplyHide(IntPtr hwnd)
         {
+#if DEBUG
+            // Test builds only: REPLYSIS_TEST_REFUSE_HIDING=minor acts as if Windows refused the dropdowns and tooltips (what
+            // three customers' laptops did on 2026-10-23), =main as if it refused the answer windows. Never in a release build.
+            string simulate = Environment.GetEnvironmentVariable("REPLYSIS_TEST_REFUSE_HIDING") ?? "";
+            if (simulate.Length > 0)
+            {
+                var (_, answersWindow) = Describe(hwnd);
+                if ((simulate == "minor" && !answersWindow) || (simulate == "main" && answersWindow))
+                {
+                    SetWindowDisplayAffinity(hwnd, WDA_NONE);
+                    return Refused(hwnd, 8, false);
+                }
+            }
+#endif
             if (SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) != 0) return true;
             int err = Marshal.GetLastWin32Error();
             bool blackBox = SetWindowDisplayAffinity(hwnd, WDA_MONITOR) != 0;
+            return Refused(hwnd, err, blackBox);
+        }
+
+        /// <summary>Windows refused full hiding for this window: log it, report it, and warn only for a window that shows answers.</summary>
+        private static bool Refused(IntPtr hwnd, int err, bool blackBox)
+        {
             var (kind, showsAnswers) = Describe(hwnd);
-            DebugWindow.Log("STEALTH", $"Full hiding refused for {kind} (err {err}); black box {(blackBox ? "applied" : "also refused")}.");
+            // Logged once per window: the guard re-applies hiding every second, and a refused main window filled the log.
+            lock (_refusedLogged)
+                if (_refusedLogged.Add(hwnd))
+                    DebugWindow.Log("STEALTH", $"Full hiding refused for {kind} (err {err}); black box {(blackBox ? "applied" : "also refused")}.");
             if (System.Threading.Interlocked.Increment(ref _hideFailureReports) <= 3)
             {
                 string gpu = GraphicsDriverName();

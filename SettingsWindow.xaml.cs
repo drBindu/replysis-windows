@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -831,7 +831,12 @@ namespace InterviewCopilot
             return string.IsNullOrWhiteSpace(lang) ? "en" : lang.Trim();
         }
         public static string GetSarvamApiKey() => (LoadConfig().SarvamApiKey ?? "").Trim();
+#if DEBUG
+        // Test builds only: the hiding simulation (REPLYSIS_TEST_REFUSE_HIDING) needs stealth on whatever the saved setting is.
+        public static bool   GetStealthMode()       => Environment.GetEnvironmentVariable("REPLYSIS_TEST_REFUSE_HIDING") is { Length: > 0 } || LoadConfig().StealthMode;
+#else
         public static bool   GetStealthMode()       => LoadConfig().StealthMode;
+#endif
 
         public static double GetMainWindowOpacity()
         {
