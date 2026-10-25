@@ -218,6 +218,21 @@
                                   VerticalAlignment="Center" Margin="10,0,0,0" AutomationProperties.Name="Plain Space works in every app"/>
                     </Grid>
                 </Border>
+                <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Answers on my phone only" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                            <TextBlock Text="When you press Start, Replysis hides on this laptop and keeps listening. Answers show in the Replysis phone app, Companion tab, signed in to this account. Press Ctrl+Alt+H at any time to show it here again."
+                                       Foreground="#7E90A8" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" x:Name="PhoneOnlyCheckBox" Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Center" Margin="10,0,0,0" AutomationProperties.Name="Answers on my phone only"/>
+                    </Grid>
+                </Border>
                 <Border Style="{StaticResource ToggleCard}" Margin="0,0,0,20">
                     <Grid>
                         <Grid.ColumnDefinitions>

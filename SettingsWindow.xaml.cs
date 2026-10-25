@@ -88,6 +88,7 @@ namespace InterviewCopilot
             SaveAudioCheckBox.IsChecked   = cfg.SaveSessionAudio;
             ScreenKeysCheckBox.IsChecked  = cfg.ScreenKeysEverywhere;
             PlainSpaceCheckBox.IsChecked = cfg.PlainSpaceEverywhere;
+            PhoneOnlyCheckBox.IsChecked = cfg.PhoneOnly;
             SystemProxyCheckBox.IsChecked = cfg.UseSystemProxy;
 
             LoadLanguages(cfg.TranscriptLanguage);
@@ -468,6 +469,7 @@ namespace InterviewCopilot
                 SaveSessionAudio   = SaveAudioCheckBox.IsChecked == true,
                 ScreenKeysEverywhere = ScreenKeysCheckBox.IsChecked == true,
                 PlainSpaceEverywhere = PlainSpaceCheckBox.IsChecked == true,
+                PhoneOnly = PhoneOnlyCheckBox.IsChecked == true,
                 UseSystemProxy = SystemProxyCheckBox.IsChecked == true,
                 TranscriptLanguage = SelectedLanguageCode(),
                 // Carry the Sarvam key through — it's not an editable field here, so pull the
@@ -658,6 +660,9 @@ namespace InterviewCopilot
             // until the signed-in user explicitly opts in from Settings.
             public bool   CloudSyncEnabled   { get; set; } = false;
             public bool PlainSpaceEverywhere { get; set; } = false;
+            // Phone only (2026-10-24): Replysis hides itself on this laptop when Start is pressed, and the answers are seen
+            // only in the phone app. Ctrl+Alt+H shows it again at any time.
+            public bool PhoneOnly { get; set; } = false;
             public bool UseSystemProxy { get; set; } = false;
             // Stealth = exclude from screen capture + hide from taskbar/Alt-Tab.
             // On by default so the window is invisible to recorders out of the box.

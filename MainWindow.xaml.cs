@@ -452,6 +452,7 @@ namespace InterviewCopilot
                         _globalHotkey.OwnerWindowHandle = mainHwnd;
                         _globalHotkey.PlainSpaceEverywhere = SettingsWindow.LoadConfig().PlainSpaceEverywhere;
                         _globalHotkey.OnBringToFront = () => Dispatcher.BeginInvoke(() => BringToFront());
+                        _globalHotkey.OnTogglePhoneOnly = () => Dispatcher.BeginInvoke(() => SetPhoneOnlyHidden(!_phoneOnlyHidden, "Ctrl+Alt+H"));
                         _globalHotkey.OnPreviousAnswer = () => Dispatcher.BeginInvoke(GoToPreviousAnswer);
                         _globalHotkey.OnNextAnswer = () => Dispatcher.BeginInvoke(GoToNextAnswer);
                         // Cleanup is deliberately left to OnClosed rather than an
@@ -6485,6 +6486,10 @@ namespace InterviewCopilot
             if (_interviewStarted) return;
             _interviewStarted = true;
             AlwaysReady.HoldAwake(true);
+            // Phone only: hidden once Start has finished setting up, so the answers are seen only in the phone app.
+            if (SettingsWindow.LoadConfig().PhoneOnly)
+                Dispatcher.BeginInvoke(() => SetPhoneOnlyHidden(true, "Start with phone only on"),
+                    System.Windows.Threading.DispatcherPriority.Background);
             PresenceTracker.SetListening(true);
             _tailMergesThisInterview = 0;
             _wordsHeardThisInterview = false;
@@ -8675,6 +8680,7 @@ namespace InterviewCopilot
         /// </summary>
         private void BringToFront()
         {
+            _phoneOnlyHidden = false;
             try
             {
                 // Compact mode hides the main window on purpose. Showing it here
@@ -8699,6 +8705,28 @@ namespace InterviewCopilot
                 DebugWindow.Log("PIN", "Brought to front with Ctrl+Alt+R");
             }
             catch (Exception ex) { DebugWindow.Log("PIN", $"bring to front failed: {ex.Message}"); }
+        }
+
+        // Phone only (owner, 2026-10-24): the person chooses to see answers only on their phone. Every Replysis window
+        // on the laptop is hidden while listening, answering and the phone relay carry on exactly as before; nothing
+        // stops or pauses. Ctrl+Alt+H toggles it, Ctrl+Alt+R also brings the window back.
+        private bool _phoneOnlyHidden;
+
+        private void SetPhoneOnlyHidden(bool hide, string why)
+        {
+            if (hide == _phoneOnlyHidden) return;
+            try
+            {
+                if (hide)
+                {
+                    _phoneOnlyHidden = true;
+                    answerWindow?.Hide();
+                    Hide();
+                }
+                else BringToFront();
+                DebugWindow.Log("PHONE_ONLY", $"{(hide ? "Hidden on this laptop" : "Shown again")} ({why})");
+            }
+            catch (Exception ex) { DebugWindow.Log("PHONE_ONLY", $"could not {(hide ? "hide" : "show")}: {ex.Message}"); }
         }
 
         private void SettingsBtn_Click(object sender, RoutedEventArgs e)

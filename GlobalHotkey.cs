@@ -17,6 +17,7 @@ namespace InterviewCopilot
         private const int VK_F9  = 0x78;   // F9  = Analyze primary screen only (global)
         private const int VK_F12 = 0x7B;
         private const int VK_R   = 0x52;   // Ctrl+Alt+R = bring Replysis to the front
+        private const int VK_H   = 0x48;   // Ctrl+Alt+H = phone only: hide Replysis on this laptop, or show it again
         private const int VK_LEFT  = 0x25; // Ctrl+Alt+Left  = the previous answer
         private const int VK_RIGHT = 0x27; // Ctrl+Alt+Right = the next answer
         private const int VK_F4  = 0x73;   // Ctrl+Shift+F4 = kill app (no tray, no taskbar)
@@ -111,6 +112,17 @@ namespace InterviewCopilot
         public Action? OnBringToFront { get; set; }
 
         internal static bool BringToFrontChord(int vk, bool ctrlAltHeld) => vk == VK_R && ctrlAltHeld;
+
+        /// <summary>
+        /// Ctrl+Alt+H from any app: phone only. Hides every Replysis window on this laptop while it keeps listening and
+        /// answering, so the answers are seen only in the phone app (its Companion tab, same account). The same keys show
+        /// it again. Passed on, not swallowed, like Ctrl+Alt+R.
+        /// </summary>
+        public Action? OnTogglePhoneOnly { get; set; }
+
+        internal static bool PhoneOnlyChord(int vk, bool ctrlAltHeld) => vk == VK_H && ctrlAltHeld;
+
+        private bool _phoneOnlyDown = false;
 
         /// <summary>
         /// Ctrl+Alt+Left and Ctrl+Alt+Right walk back and forward through the
@@ -283,6 +295,15 @@ namespace InterviewCopilot
                     }
                 }
 
+                if (OnTogglePhoneOnly != null && PhoneOnlyChord(vkCode, CtrlAltHeld()))
+                {
+                    if (!_phoneOnlyDown)
+                    {
+                        _phoneOnlyDown = true;
+                        OnTogglePhoneOnly.Invoke();
+                    }
+                }
+
                 if (OnPreviousAnswer != null && PreviousAnswerChord(vkCode, CtrlAltHeld()))
                 {
                     if (!_prevAnswerDown)
@@ -345,6 +366,7 @@ namespace InterviewCopilot
                 if (vkCode == VK_F9) _f9Down = false;
                 if (vkCode == VK_F12) _f12Down = false;
                 if (vkCode == VK_R) _bringToFrontDown = false;
+                if (vkCode == VK_H) _phoneOnlyDown = false;
                 if (vkCode == VK_LEFT)  _prevAnswerDown = false;
                 if (vkCode == VK_RIGHT) _nextAnswerDown = false;
                 if (vkCode == VK_F4) _killChordDown = false;

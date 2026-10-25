@@ -1,3 +1,12 @@
+## Answers on the phone only, and the phone Companion screen (2026-10-24, Windows + server)
+
+The new phone app has a Companion tab: the server copies each answer, as it streams from /interview/ask and
+/analyze-screen, to the same account's phone (backend CompanionHub, GET /api/v1/companion/stream). No desktop change is
+needed for that, so it already works with the Mac app too. New on Windows: Settings "Answers on my phone only" (config
+PhoneOnly). When on, Start hides every Replysis window on the laptop while listening and answering carry on; Ctrl+Alt+H
+hides or shows it at any time and Ctrl+Alt+R also brings it back. Mac: same setting and a global shortcut to hide and
+show (no Dock or menu bar icon while hidden, matching stealth).
+
 ## No hiding warning popup: a quiet "Screen share" row in setup instead (2026-10-23, Windows)
 
 Owner: "no need to warn, show in the setup whether it is visible or stealth". The warning popup scared new customers
