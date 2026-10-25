@@ -332,6 +332,9 @@ namespace InterviewCopilot
                 // Report presence to Firestore so the admin dashboard shows
                 // accurate Live/last-seen (self-guards while logged out)
                 PresenceTracker.Start();
+                // The phone app's Companion screen: what this laptop hears, and its Stop button.
+                CompanionLink.OnStopRequested = () => Dispatcher.BeginInvoke(new Action(StopFromPhone));
+                CompanionLink.Start();
 
                 // Keep track of the window the user is actually working in, so
                 // pressing Analyze on our own window still reads their work
@@ -7089,6 +7092,7 @@ namespace InterviewCopilot
         {
             text ??= "";
             _transcriptTarget = text;
+            CompanionLink.Heard(text);
 
             // Nothing to type: clearing, an empty answer, or a person who has turned
             // animation off in Windows.
@@ -8711,6 +8715,18 @@ namespace InterviewCopilot
         // on the laptop is hidden while listening, answering and the phone relay carry on exactly as before; nothing
         // stops or pauses. Ctrl+Alt+H toggles it, Ctrl+Alt+R also brings the window back.
         private bool _phoneOnlyHidden;
+
+        /// <summary>
+        /// Stop pressed in the phone app. The same as Finish here, once any answer still being written has finished, so
+        /// the last turn is saved whole.
+        /// </summary>
+        private async void StopFromPhone()
+        {
+            for (int i = 0; i < 40 && (isProcessing || _flushing); i++) await Task.Delay(500);
+            if (!_interviewStarted) return;
+            DebugWindow.Log("COMPANION", "Finishing the interview: Stop pressed on the phone");
+            FinishInterviewBtn_Click(FinishInterviewBtn, new RoutedEventArgs());
+        }
 
         private void SetPhoneOnlyHidden(bool hide, string why)
         {

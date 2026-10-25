@@ -79,6 +79,7 @@ namespace InterviewCopilot
         /// </summary>
         public static void SetListening(bool on)
         {
+            CompanionLink.SetListening(on);   // the phone's Companion screen shows it too
             if (_listening == on) return;
             _listening = on;
             _ = PingNowAsync();

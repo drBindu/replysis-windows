@@ -1,3 +1,11 @@
+## The phone sees what the laptop hears, and can stop it (2026-10-25, Windows + server)
+
+CompanionLink.cs reports to POST /api/v1/companion/laptop {listening, heard}: the transcript words as they change (at
+most about 3 a second) while a phone has the Companion tab open, else only "listening or not" every 15 s with no words.
+The reply carries {phones, command}; command "stop" (from the phone's Stop button, POST /api/v1/companion/command) runs
+Finish once any answer being written is done. Server keeps only the latest value in memory. Mac: same reporter, hooked
+where the transcript is set and where listening starts and stops, and Finish on "stop".
+
 ## Answers on the phone only, and the phone Companion screen (2026-10-24, Windows + server)
 
 The new phone app has a Companion tab: the server copies each answer, as it streams from /interview/ask and
