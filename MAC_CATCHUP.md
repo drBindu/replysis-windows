@@ -1,3 +1,10 @@
+## Phone only answers by itself; the phone's Answer button (2026-10-25, Windows + server)
+
+Hiding for phone only now switches to Auto, because nobody can press Space on a hidden window and the owner expects
+answers on the phone, not only the words heard. The phone's Answer button sends command "answer" through
+/api/v1/companion/command; the laptop runs it as a Space press from source "PHONE" (not blocked by typing elsewhere).
+Mac: same two things.
+
 ## The phone sees what the laptop hears, and can stop it (2026-10-25, Windows + server)
 
 CompanionLink.cs reports to POST /api/v1/companion/laptop {listening, heard}: the transcript words as they change (at

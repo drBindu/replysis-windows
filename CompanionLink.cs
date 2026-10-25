@@ -33,6 +33,9 @@ namespace InterviewCopilot
         /// <summary>The phone asked the laptop to stop. Called on a background thread.</summary>
         public static Action? OnStopRequested { get; set; }
 
+        /// <summary>The phone's Answer button: answer what was just heard, like Space. Called on a background thread.</summary>
+        public static Action? OnAnswerRequested { get; set; }
+
         public static void Start()
         {
             if (_cts != null) return;
@@ -104,10 +107,16 @@ namespace InterviewCopilot
             int phones = doc.RootElement.TryGetProperty("phones", out var p) && p.TryGetInt32(out int n) ? n : 0;
             if (phones > 0 && _phones == 0) _changed = true;   // a phone just opened: send it the words at once
             _phones = phones;
-            if (doc.RootElement.TryGetProperty("command", out var c) && c.GetString() == "stop")
+            string command = doc.RootElement.TryGetProperty("command", out var c) ? c.GetString() ?? "" : "";
+            if (command == "stop")
             {
                 DebugWindow.Log("COMPANION", "Stop asked from the phone");
                 OnStopRequested?.Invoke();
+            }
+            else if (command == "answer")
+            {
+                DebugWindow.Log("COMPANION", "Answer asked from the phone");
+                OnAnswerRequested?.Invoke();
             }
         }
     }

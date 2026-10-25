@@ -334,6 +334,7 @@ namespace InterviewCopilot
                 PresenceTracker.Start();
                 // The phone app's Companion screen: what this laptop hears, and its Stop button.
                 CompanionLink.OnStopRequested = () => Dispatcher.BeginInvoke(new Action(StopFromPhone));
+                CompanionLink.OnAnswerRequested = () => Dispatcher.BeginInvoke(new Action(() => HandleSpacePress("PHONE")));
                 CompanionLink.Start();
 
                 // Keep track of the window the user is actually working in, so
@@ -4383,7 +4384,7 @@ namespace InterviewCopilot
         private bool TryAnswerNowInAuto(string source)
         {
             if (!isListening || isProcessing || _flushing || _autoTurnSubmitting) return false;
-            if (source != "BUTTON" && IsTypingInTextField()) return false;
+            if (source != "BUTTON" && source != "PHONE" && IsTypingInTextField()) return false;
             if (DateTime.UtcNow - _lastAnswerNowUtc < TimeSpan.FromSeconds(1)) return true;
 
             string heard = (ReadLatestTxtSafe() ?? "").Trim();
@@ -4434,7 +4435,7 @@ namespace InterviewCopilot
         // ask the next thing. This is what makes unmute feel instant, every time.
         private void InterruptAiAndListen(string source)
         {
-            if (source != "BUTTON" && IsTypingInTextField()) return;
+            if (source != "BUTTON" && source != "PHONE" && IsTypingInTextField()) return;
             DebugWindow.Log("MIC", $"[{source}] interrupt — cancelling, back to listening");
             try { _aiCts?.Cancel(); } catch { }
             _aiCts = null; // The cancelled task no longer owns the display.
@@ -8738,6 +8739,9 @@ namespace InterviewCopilot
                     _phoneOnlyHidden = true;
                     answerWindow?.Hide();
                     Hide();
+                    // Nobody can press Space on a hidden window, so it answers each question by itself (owner, 2026-10-25:
+                    // "it has to give answers, not only show what the laptop hears"). The phone's Answer button is the Space.
+                    if (!AutoModeEnabled) SelectListeningMode(ListeningMode.Auto);
                 }
                 else BringToFront();
                 DebugWindow.Log("PHONE_ONLY", $"{(hide ? "Hidden on this laptop" : "Shown again")} ({why})");
