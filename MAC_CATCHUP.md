@@ -1,3 +1,11 @@
+## Room voices kept out of the interviewer's question (2026-10-25, Windows engine)
+
+The engine mixes microphone and computer sound into one stream, so a TV in the room (Telugu, turned into random English
+words) sat inside the interviewer's question and the question never ended, so Auto never answered. duck_mic_for_call
+turns the microphone down to 10% while the computer plays sound and for 1.5 s after (that quiet ends the turn), unless
+the microphone peaks at 9000 or more (a close voice). Measured with a Telugu TV clip under an English question: before,
+no end of turn at all; after, the question ends cleanly. Mac: same, wherever the Mac mixes the two sources.
+
 ## Phone only answers by itself; the phone's Answer button (2026-10-25, Windows + server)
 
 Hiding for phone only now switches to Auto, because nobody can press Space on a hidden window and the owner expects

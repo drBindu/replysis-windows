@@ -1923,6 +1923,32 @@ def disable_unresponsive_system_audio(reason: str):
           "Running mic-only; your voice still transcribes normally.", flush=True)
 
 
+# A TV or people talking in the room reach the microphone, and with the computer sound mixed into the same stream they
+# landed inside the interviewer's question as random English words, and kept the question from ever ending, so Auto never
+# answered (owner, 2026-10-25, a Telugu TV in the room; reproduced: no end of turn at all with TV under the question).
+# While the computer plays sound (the interviewer on the call) and for a moment after, the microphone is turned down, so
+# the question reaches the speech service clean and is followed by the silence that ends it. A person at the microphone
+# talking clearly over the call still comes through.
+CALL_SOUND_LEVEL = 400        # system audio peak that counts as the call making sound (as _last_sys_sound_at uses)
+MIC_DUCK_AFTER_CALL_S = 1.5   # the quiet after the interviewer stops, which tells the speech service the turn ended
+MIC_OVER_CALL_LEVEL = 9000    # a close voice at the microphone: never turned down
+MIC_DUCK_GAIN = 0.1
+_call_sound_at = 0.0
+
+
+def duck_mic_for_call(mic_data: bytes, mic_amp: int, sys_amp: int, now: float = None) -> bytes:
+    """The microphone, turned down while the call is making sound and for MIC_DUCK_AFTER_CALL_S after."""
+    global _call_sound_at
+    now = time.time() if now is None else now
+    if sys_amp > CALL_SOUND_LEVEL:
+        _call_sound_at = now
+    if now - _call_sound_at > MIC_DUCK_AFTER_CALL_S or mic_amp >= MIC_OVER_CALL_LEVEL or not mic_data:
+        return mic_data
+    n = len(mic_data) // 2
+    samples = struct.unpack(f'<{n}h', mic_data[:n * 2])
+    return struct.pack(f'<{n}h', *(int(s * MIC_DUCK_GAIN) for s in samples))
+
+
 def mix_audio(mic_data: bytes, sys_data: bytes) -> bytes:
     """Preserve both sources and their duration in Practice mode.
 
@@ -2779,7 +2805,7 @@ class MixedStream:
                     raw = None
 
                 if raw is None:
-                    data = mic_data
+                    data = duck_mic_for_call(mic_data, mic_amp, 0)
                 else:
                     sys_data = (resample_to_16k_mono(raw, _sys_native_rate, _sys_native_channels, num_frames)
                                 if (_sys_native_rate != SAMPLE_RATE or _sys_native_channels != 1)
@@ -2788,7 +2814,7 @@ class MixedStream:
                     if sys_amp > 400:
                         _last_sys_sound_at = time.time()
                     _note_levels(mic_amp if mic_stream else 0, sys_amp)
-                    data = mix_audio(mic_data, sys_data)
+                    data = mix_audio(duck_mic_for_call(mic_data, mic_amp, sys_amp), sys_data)
                 if raw is None:
                     _note_levels(mic_amp if mic_stream else 0, 0)
             else:
