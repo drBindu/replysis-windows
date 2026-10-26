@@ -7093,7 +7093,9 @@ namespace InterviewCopilot
         {
             text ??= "";
             _transcriptTarget = text;
-            CompanionLink.Heard(text);
+            // The phone shows the interviewer only. Words the engine puts down to the microphone are the candidate, or a
+            // TV and voices in the room (owner, 2026-10-25), and the phone has no use for either.
+            CompanionLink.Heard(_lastTurnSource == "candidate" ? "" : text);
 
             // Nothing to type: clearing, an empty answer, or a person who has turned
             // animation off in Windows.
@@ -7601,6 +7603,7 @@ namespace InterviewCopilot
                                 string who = line.Substring(11).Trim();
                                 _lastTurnSource = who;
                                 if (who == "interviewer") _lastInterviewerTurnUtc = DateTime.UtcNow;
+                                if (who == "candidate") CompanionLink.Heard("");
                                 DebugWindow.Log("AUTO", $"Turn spoken by: {who}{(who == "candidate" && InterviewerPresent() ? " (interviewer present, will not answer)" : "")}");
                             }
                             else if (line.Contains("UTTERANCE END", StringComparison.Ordinal))

@@ -1,3 +1,8 @@
+## The phone shows the interviewer only (2026-10-25, Windows)
+
+CompanionLink sends the transcript to the phone only while the engine's live ">>> SOURCE" is not "candidate"; on
+"candidate" it sends empty. Microphone words (the candidate, or a TV in the room) never appear on the phone. Mac: same.
+
 ## Room voices kept out of the interviewer's question (2026-10-25, Windows engine)
 
 The engine mixes microphone and computer sound into one stream, so a TV in the room (Telugu, turned into random English
