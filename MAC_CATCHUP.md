@@ -1,3 +1,8 @@
+## Finish waits for the answer being written (2026-10-25, Windows)
+
+A customer pressed Finish mid-answer and was told "Answer still finishing, choose Finish again" (problem report, 1.0.51).
+Finish now shows Saving, waits up to 30 s for the answer to complete, then finishes. Mac: same if Mac refuses Finish mid-answer.
+
 ## The phone shows the interviewer only (2026-10-25, Windows)
 
 CompanionLink sends the transcript to the phone only while the engine's live ">>> SOURCE" is not "candidate"; on

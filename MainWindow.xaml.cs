@@ -9109,14 +9109,6 @@ namespace InterviewCopilot
         {
             if (_newSessionInProgress) return;
 
-            if (isProcessing || _flushing)
-            {
-                ShowInAppAlert(
-                    "Answer still finishing",
-                    "Wait for the current answer to finish, then choose Finish again so the complete turn is saved.");
-                return;
-            }
-
             _newSessionInProgress = true;
             var button = sender as System.Windows.Controls.Button;
             object? originalContent = button?.Content;
@@ -9128,6 +9120,18 @@ namespace InterviewCopilot
 
             try
             {
+                // Finish pressed while an answer is still being written: it waits for that answer and then finishes, so
+                // the whole turn is saved. It used to stop with "Answer still finishing, choose Finish again", which a
+                // customer hit on 2026-10-25 (problem report from 1.0.51). Never longer than 30 s.
+                for (int i = 0; i < 150 && (isProcessing || _flushing); i++) await Task.Delay(200);
+                if (isProcessing || _flushing)
+                {
+                    ShowInAppAlert(
+                        "Answer still finishing",
+                        "The current answer is taking unusually long. Your other answers are saved. Choose Finish again in a moment.");
+                    return;
+                }
+
                 // Finishing is not the same action as submitting a question. If
                 // the microphone is open, stop capture without sending a partial
                 // sentence to the model, then finalize the encrypted transcript.
