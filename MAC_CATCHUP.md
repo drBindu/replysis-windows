@@ -3,7 +3,8 @@
 Owner: plan numbers read as a small limit, so customer text never shows answer or interview counts for paid plans,
 and never says unlimited. When the free answers (or the free trial) run out, the message says Pro gives "a whole month
 of answers, enough for many interviews", and its button reads "Upgrade now" and opens replysis.com/pricing.
-Mac: same words, same button, same page.
+Pressing for an answer with the free answers used also shows that banner once, so there is always a direct
+Upgrade now button (the answer box itself says "Upgrade now at replysis.com/pricing"). Mac: same words, same button, same page.
 
 ## Finish waits for the answer being written (2026-10-25, Windows)
 

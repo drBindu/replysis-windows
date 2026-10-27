@@ -9701,15 +9701,17 @@ namespace InterviewCopilot
                     // No numbers for paid plans (owner, 2026-10-27: a number reads as a small limit).
                     ? "Your free answers are used.\n\n" +
                       "Pro gives you a whole month of answers, enough for many interviews, and you can cancel any time.\n" +
-                      "Click the answers count at the top to upgrade."
+                      "Upgrade now at replysis.com/pricing"
                     : OnFreeTrial()
                       ? "Your free answers are used.\n\n" +
                         "That is what Replysis does in a real interview. Pro gives you a whole month of answers, " +
                         "enough for many interviews, and you can cancel any time.\n" +
-                        "Click the answers count at the top to upgrade."
+                        "Upgrade now at replysis.com/pricing"
                       : "You are out of answers.\n\n" +
                         "Upgrade your plan or add answers to continue\n" +
                         "using Screen AI and other advanced features.";
+                // The answer box is plain text, so the direct link is the banner's Upgrade now button (owner, 2026-10-27).
+                if (isGuest || OnFreeTrial()) ShowProblemOnce(ListeningProblems.Kind.NoCredits);
                 return;
             }
 
