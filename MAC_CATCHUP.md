@@ -1,3 +1,13 @@
+## Maya: new face, fills the window, stays on the call (2026-10-27, website + phone embed)
+
+Live Maya is now "blazer Maya" (Simli legacy face 5894f072-8143-49f1-9cc4-e514dcaa9345, SIMLI_FACE_FIT=cover). All of it is
+server side and in the website's useMayaLive / /maya-embed, so any app that shows Maya through the website or /maya-embed
+gets it with no app change: the face, filling the window (fit=cover in the session reply), no 2 minute idle hang up, and
+rejoining by itself if the call drops. Her lines must wait for her face (the website waits up to 30 s; the phone app's
+whenReady does the same). Her replies are natural: a short real answer ("My name is Pawan") gets a human reply, never
+"didn't catch that". Mac: if Mac has its own Maya screen, use /maya-embed like the phone app, and wait for status "ready"
+before sending her first line.
+
 ## Free answers used: no numbers, button says Upgrade now (2026-10-27, Windows)
 
 Owner: plan numbers read as a small limit, so customer text never shows answer or interview counts for paid plans,
