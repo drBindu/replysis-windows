@@ -50,7 +50,7 @@ namespace InterviewCopilot
                 "Your free answers are used",
                 "That is what Replysis does in a real interview. Pro gives you a whole month of answers, " +
                 "enough for many interviews, and you can cancel any time. Or add a few answers with no subscription.",
-                NextStep.MoreAnswers),
+                NextStep.SeePlans),
 
             // The server keeps a hidden ceiling on how much a month can be used, so that an open microphone cannot cost money
             // (Free 15 minutes of speech, far more on paid plans). Customers are told about ANSWERS and nothing else (owner,
@@ -61,7 +61,7 @@ namespace InterviewCopilot
                 "Your free trial is over",
                 "That is what Replysis does in a real interview. Pro gives you a whole month, enough for many interviews, " +
                 "and you can cancel any time. Or add a few answers with no subscription.",
-                NextStep.MoreAnswers),
+                NextStep.SeePlans),
 
             Kind.NoListeningTime => new(
                 "MONTHLY LIMIT",

@@ -60,8 +60,8 @@ internal static class PlanFactsTests
         // in words, with no number that could drift from the server.
         var end = ListeningProblems.Describe(ListeningProblems.Kind.NoCredits, freeTrial: true);
         Check(end.Title == "Your free answers are used", "the end of the trial is named as the end of a trial");
-        Check(end.Body.Contains("Pro") && end.Step == ListeningProblems.NextStep.MoreAnswers,
-            "and points to Pro and to adding answers");
+        Check(end.Body.Contains("Pro") && end.Step == ListeningProblems.NextStep.SeePlans,
+            "and its button goes to the plans to upgrade (owner, 2026-10-27)");
         Check(!Regex.IsMatch(end.Title + end.Body, @"\d"), "and states no number");
         Check(!end.Body.Contains("renew", StringComparison.OrdinalIgnoreCase),
             "and never says the answers will renew");

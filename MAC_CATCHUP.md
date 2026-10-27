@@ -1,3 +1,10 @@
+## Free answers used: no numbers, button says Upgrade now (2026-10-27, Windows)
+
+Owner: plan numbers read as a small limit, so customer text never shows answer or interview counts for paid plans,
+and never says unlimited. When the free answers (or the free trial) run out, the message says Pro gives "a whole month
+of answers, enough for many interviews", and its button reads "Upgrade now" and opens replysis.com/pricing.
+Mac: same words, same button, same page.
+
 ## Finish waits for the answer being written (2026-10-25, Windows)
 
 A customer pressed Finish mid-answer and was told "Answer still finishing, choose Finish again" (problem report, 1.0.51).

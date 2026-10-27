@@ -53,7 +53,7 @@ internal static class ListeningProblemTests
         Check(time.Body.Contains("F8"), "monthly limit: says what still works");
         Check(time.Step == ListeningProblems.NextStep.None && time.Body.Contains("contact support"),
             "monthly limit: a paid plan is told to contact support, not sent to plans");
-        Check(trialOver.Title == "Your free trial is over" && trialOver.Step == ListeningProblems.NextStep.MoreAnswers,
+        Check(trialOver.Title == "Your free trial is over" && trialOver.Step == ListeningProblems.NextStep.SeePlans,
             "on the free trial the same limit is simply the end of the trial, with the way to continue");
         // The customer is told about answers and nothing else: no listening, minutes, hours or fair use, anywhere in it.
         foreach (var d in new[] { time, trialOver })

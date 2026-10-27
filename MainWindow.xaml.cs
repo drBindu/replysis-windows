@@ -3003,7 +3003,7 @@ namespace InterviewCopilot
             ShowInAppAlert(
                 d.Title, d.Body, persist: true,
                 actionLabel: d.Step == ListeningProblems.NextStep.MoreAnswers ? "Get more answers"
-                           : d.Step == ListeningProblems.NextStep.SeePlans ? "See plans" : null,
+                           : d.Step == ListeningProblems.NextStep.SeePlans ? "Upgrade now" : null,
                 action: d.Step != ListeningProblems.NextStep.None
                     ? () =>
                     {
@@ -9698,15 +9698,15 @@ namespace InterviewCopilot
                 int remaining = UserSession.Credits;
                 bool isGuest = !UserSession.IsLoggedIn;
                 AiAnswerBox.Text = isGuest
+                    // No numbers for paid plans (owner, 2026-10-27: a number reads as a small limit).
                     ? "Your free answers are used.\n\n" +
-                      $"Pro gives you {PlanFacts.Answers(PlanFacts.ProCredits):N0} answers a month, enough for about " +
-                      $"{PlanFacts.InterviewsFor(PlanFacts.ProCredits)} interviews.\n" +
-                      "Click the answers count at the top to add answers or upgrade."
+                      "Pro gives you a whole month of answers, enough for many interviews, and you can cancel any time.\n" +
+                      "Click the answers count at the top to upgrade."
                     : OnFreeTrial()
                       ? "Your free answers are used.\n\n" +
-                        $"That is what Replysis does in a real interview. Pro gives you {PlanFacts.Answers(PlanFacts.ProCredits):N0} answers a month, " +
-                        $"enough for about {PlanFacts.InterviewsFor(PlanFacts.ProCredits)} interviews.\n" +
-                        "Click the answers count at the top to add answers or upgrade."
+                        "That is what Replysis does in a real interview. Pro gives you a whole month of answers, " +
+                        "enough for many interviews, and you can cancel any time.\n" +
+                        "Click the answers count at the top to upgrade."
                       : "You are out of answers.\n\n" +
                         "Upgrade your plan or add answers to continue\n" +
                         "using Screen AI and other advanced features.";
