@@ -1081,6 +1081,9 @@ namespace InterviewCopilot
                 using var doc = JsonDocument.Parse(body);
                 int credits = doc.RootElement.TryGetProperty("credits", out var c) ? c.GetInt32() : 0;
                 string plan = doc.RootElement.TryGetProperty("plan", out var p) ? p.GetString() ?? "free" : "free";
+                // The Practice plan sits on a free account (2026-10-27): not the one-time free answers.
+                if (plan == "free" && doc.RootElement.TryGetProperty("practice", out var pr) && pr.ValueKind == JsonValueKind.True)
+                    plan = "practice";
                 bool isUnlimited = doc.RootElement.TryGetProperty("isUnlimited", out var u) ? u.GetBoolean() : false;
                 _minutesBalance = doc.RootElement.TryGetProperty("minutesBalance", out var mb) && mb.TryGetInt32(out int mbv)
                     ? Math.Max(0, mbv) : 0;

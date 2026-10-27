@@ -30,6 +30,9 @@ internal static class PlanFactsTests
         Check(PlanFacts.MonthlyCredits("pro") == 2_500 && PlanFacts.MonthlyCredits("MAX") == 7_500 &&
               PlanFacts.MonthlyCredits("lifetime") == 7_500 && PlanFacts.MonthlyCredits("free") == 25,
             "each plan resolves to its credits (case does not matter, retired Lifetime reads as Max)");
+        Check(PlanFacts.MonthlyCredits("practice") == 500 && !PlanFacts.IsFreeTrial("practice", true)
+              && PlanFacts.AllowanceText("practice", true).StartsWith("Practice plan"),
+              "the Practice plan is not the one-time free answers");
         Check(PlanFacts.MonthlyCredits("something new") == PlanFacts.FreeCredits && PlanFacts.MonthlyCredits(null) == PlanFacts.FreeCredits,
             "an unknown plan is treated as Free, never as paid");
 

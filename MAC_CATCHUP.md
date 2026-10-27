@@ -4286,3 +4286,11 @@ without knowing why a number was chosen the next session will change it back.
 `MAC_PARITY.md` in the same repo is the older feature-gap list and is
 **unverified** — it was built by grepping Windows class names against a stale
 Mac copy. Treat it as a prompt for questions, not as fact.
+
+## 2026-10-27: the Practice plan shows as "Practice", not the free answers
+The website now sells a **Practice plan** ($14.99 a month, Rs 499 in India): mock interviews with live Maya plus 100
+answers a month (50 in India). It sits on a free account, so the server's `GET /api/v1/interview/credits` keeps
+`plan: "free"` and adds **`practice: true`**. Windows (`MainWindow.xaml.cs` credits refresh, `PlanFacts.cs`): when
+`practice` is true and `plan` is `free`, the app uses plan `"practice"` (500 credits a month, not the one-time free trial;
+allowance text "Practice plan, answers refill each month"). **Mac: do the same**: read `practice`, and never show a
+Practice customer "5 answers, one time" or free-trial upgrade prompts. Older apps ignore the field (they show Free).

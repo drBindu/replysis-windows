@@ -22,6 +22,11 @@ namespace InterviewCopilot
         internal const int ProCredits = 2_500;
         internal const int MaxCredits = 7_500;
         internal const int TeamsCredits = 10_000;   // retired plan, kept so an old account reads correctly
+        /// <summary>
+        /// The Practice plan (website, 2026-10-27): mock interviews with Maya plus 100 answers a month (50 in India). It sits
+        /// on a free account; the server's credits reply says "practice": true and the app treats the plan as "practice".
+        /// </summary>
+        internal const int PracticeCredits = 500;
 
         /// <summary>One real interview is about 30 answers with Auto on (it sometimes answers twice).</summary>
         internal const int AnswersPerInterview = 30;
@@ -31,6 +36,7 @@ namespace InterviewCopilot
             "pro" => ProCredits,
             "max" or "lifetime" => MaxCredits,
             "teams" => TeamsCredits,
+            "practice" => PracticeCredits,
             _ => FreeCredits,
         };
 
@@ -67,6 +73,7 @@ namespace InterviewCopilot
         internal static string AllowanceText(string? plan, bool signedIn)
         {
             if (IsFreeTrial(plan, signedIn)) return $"{Answers(FreeCredits)} answers, one time";
+            if ((plan ?? "").Trim().ToLowerInvariant() == "practice") return "Practice plan, answers refill each month";
             return $"{Answers(MonthlyCredits(plan)):N0} answers each month";
         }
     }
