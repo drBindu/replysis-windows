@@ -4312,3 +4312,13 @@ answers a month (50 in India). It sits on a free account, so the server's `GET /
 `practice` is true and `plan` is `free`, the app uses plan `"practice"` (500 credits a month, not the one-time free trial;
 allowance text "Practice plan, answers refill each month"). **Mac: do the same**: read `practice`, and never show a
 Practice customer "5 answers, one time" or free-trial upgrade prompts. Older apps ignore the field (they show Free).
+
+## 2026-10-28: two false problem reports from real users (Windows, local, not released)
+
+- A window with no area (a 302x0 SysHeader32 on an AMD laptop) was refused hiding (err 87) and reported as a stealth
+  problem. The guard now skips windows with zero width or height; its one second sweep hides them once they have a size.
+  Mac: if the Mac hiding guard reports refused windows, skip zero sized ones the same way.
+- "Nothing heard yet" (after 90 s with no words) appeared twice to a paying customer in a coding round who was using
+  screen reads. It is no longer shown once the screen has been read in that interview. Mac: same rule.
+- Server (already live, nothing for Mac): admin speed now means the wait for the first words; `totalMs` keeps the whole
+  answer time.

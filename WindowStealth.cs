@@ -234,6 +234,10 @@ namespace InterviewCopilot
                 if (GetAncestor(hwnd, GA_ROOT) != hwnd) return;      // only top-level windows can be excluded
                 GetWindowThreadProcessId(hwnd, out uint owner);
                 if (owner != (uint)Environment.ProcessId) return;
+                // A window with no area shows nothing to a screen share, and Windows refuses to hide some of them (a 302x0
+                // SysHeader32 on an AMD laptop, err 87, 2026-10-28), which was reported as a problem. The sweep runs every
+                // second, so it is hidden as soon as it has a size.
+                if (!GetWindowRect(hwnd, out RECT r) || r.Right - r.Left <= 0 || r.Bottom - r.Top <= 0) return;
                 if (GetWindowDisplayAffinity(hwnd, out uint current) != 0 &&
                     (current == WDA_EXCLUDEFROMCAPTURE || current == WDA_MONITOR)) return;
                 ApplyHide(hwnd);

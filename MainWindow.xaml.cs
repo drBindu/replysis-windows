@@ -9692,6 +9692,10 @@ namespace InterviewCopilot
             // Guard: don't double-fire while already processing
             if (isProcessing || _isScreenAnalyzing) return;
 
+            // Someone reading their screen (a coding round) can be silent for minutes; "Nothing heard yet" told a paying
+            // customer something was wrong in the middle of one, twice (2026-10-28). Not shown once the screen is used.
+            _interviewSilentTipShown = true;
+
             // Credits check. A guest gets the free answers once (tracked by device ID).
             if (!UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold)
             {
