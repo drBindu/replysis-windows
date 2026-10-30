@@ -113,11 +113,12 @@ namespace InterviewCopilot
                 NextStep.None),
 
             Kind.UnstableConnection => new(
-                "UNSTABLE CONNECTION",
-                "Your connection keeps dropping",
-                "The link to the speech service keeps breaking, which happens on a slow or weak connection, such as a phone " +
-                "hotspot with a weak signal. Replysis reconnects on its own, but words said while it is down are lost. " +
-                "Move closer to your router, or switch to Wi-Fi or a stronger signal.",
+                // Not the customer's internet: on 2026-10-29 this showed while the speech provider itself was failing
+                // (owner: never blame the network).
+                "RECONNECTING",
+                "Listening is reconnecting",
+                "The speech service dropped a few times and Replysis reconnected each time. Words said during a reconnect " +
+                "can be missed, so the interviewer may need to repeat a question. Press Ctrl+Alt+F12 to see details.",
                 NextStep.None),
 
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Every problem needs a description."),

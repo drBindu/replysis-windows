@@ -114,8 +114,9 @@ internal static class ListeningProblemTests
         Check(ListeningProblems.Detect(false, 402, true, false, false, false, connectionKeepsDropping: true) == ListeningProblems.Kind.NoListeningTime,
             "a definite refusal still wins over a bad connection");
         var unstable = ListeningProblems.Describe(ListeningProblems.Kind.UnstableConnection);
-        Check(!unstable.Body.Contains("VPN", StringComparison.OrdinalIgnoreCase) && unstable.Body.Contains("hotspot", StringComparison.OrdinalIgnoreCase),
-            "the text names the real cause and does not send someone to a hotspot they may already be on");
+        Check(!unstable.Body.Contains("VPN", StringComparison.OrdinalIgnoreCase) && !unstable.Body.Contains("hotspot", StringComparison.OrdinalIgnoreCase)
+              && !unstable.Body.Contains("connection", StringComparison.OrdinalIgnoreCase),
+            "the text does not blame the person's internet: on 2026-10-29 it showed while the speech provider was failing");
 
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "listening problems: all passed" : $"listening problems: {failed} FAILED");

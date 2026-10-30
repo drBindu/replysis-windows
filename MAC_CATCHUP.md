@@ -4322,3 +4322,11 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
   screen reads. It is no longer shown once the screen has been read in that interview. Mac: same rule.
 - Server (already live, nothing for Mac): admin speed now means the wait for the first words; `totalMs` keeps the whole
   answer time.
+
+## 2026-10-30: "connection keeps dropping" no longer blames the customer's internet (Windows, local, not released)
+
+- A trial customer saw "Your connection keeps dropping ... weak connection, phone hotspot" on 2026-10-29 while Deepgram
+  itself was failing (HTTP 500 on the server's own checks). Now: "Listening is reconnecting", "The speech service dropped
+  a few times and Replysis reconnected each time. Words said during a reconnect can be missed, so the interviewer may need
+  to repeat a question. Press Ctrl+Alt+F12 to see details." Mac: if Mac has a similar message, word it the same way.
+- Server (live, nothing for Mac): the owner is emailed about a part being down only after 3 minutes down.
