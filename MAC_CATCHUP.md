@@ -4330,3 +4330,8 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
   a few times and Replysis reconnected each time. Words said during a reconnect can be missed, so the interviewer may need
   to repeat a question. Press Ctrl+Alt+F12 to see details." Mac: if Mac has a similar message, word it the same way.
 - Server (live, nothing for Mac): the owner is emailed about a part being down only after 3 minutes down.
+
+## 2026-11-01
+
+- Hiding reports: a window with no area (251x0, 302x0 SysHeader32, err 87) is no longer reported from ANY path, not only the guard. 1.0.52 still reported them from the popup path. Mac: nothing to do (Mac checks no window sizes).
+- Server, live: the "apps are reporting errors" email no longer counts expected states (no free answers left, trial ended, minor hiding reports). Nothing for Mac.

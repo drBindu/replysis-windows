@@ -105,6 +105,9 @@ namespace InterviewCopilot
             lock (_refusedLogged)
                 if (_refusedLogged.Add(hwnd))
                     DebugWindow.Log("STEALTH", $"Full hiding refused for {kind} (err {err}); black box {(blackBox ? "applied" : "also refused")}.");
+            // A window with no area shows nothing in a screen share. 1.0.52 skipped these in the guard only, and the popup path
+            // still reported a 251x0 and a 302x0 SysHeader32 (err 87) from two customers, which emailed the owner (2026-11-01).
+            if (!GetWindowRect(hwnd, out RECT area) || area.Right - area.Left <= 0 || area.Bottom - area.Top <= 0) return blackBox;
             if (System.Threading.Interlocked.Increment(ref _hideFailureReports) <= 3)
             {
                 string gpu = GraphicsDriverName();
