@@ -37,6 +37,7 @@ namespace InterviewCopilot
         private volatile bool _pipeBroken;
         private volatile bool _disposed;
         private volatile bool _captureStopped;
+        private int _watching;
 
         private IWaveIn? _capture;
         private MMDevice? _device;
@@ -292,6 +293,9 @@ namespace InterviewCopilot
         private void Watch()
         {
             if (_disposed) return;
+            // Closing a device can outlast the two second timer, and two reopens at once would leave one capture recording
+            // with nobody holding it.
+            if (Interlocked.Exchange(ref _watching, 1) == 1) return;
             try
             {
                 string? want = CurrentDefaultId();
@@ -301,7 +305,11 @@ namespace InterviewCopilot
                 bool silentDeath = !_loopback && DateTime.UtcNow - _lastDataUtc > TimeSpan.FromSeconds(5);
                 bool backoffOver = DateTime.UtcNow - _lastRestartUtc > TimeSpan.FromSeconds(5);
 
-                if ((moved || _captureStopped || silentDeath) && backoffOver)
+                // No capture at all: a move to another device failed to open, and the default then came back, so nothing above
+                // is true and the interviewer would go unheard with no notice.
+                bool noCapture = want != null && _capture == null;
+
+                if ((moved || _captureStopped || silentDeath || noCapture) && backoffOver)
                 {
                     if (moved) Note($">>> NATIVE {_label}: Windows default changed; moving to it.");
                     else if (silentDeath) Note($">>> NATIVE {_label}: no sound packets for 5 s; reopening the device.");
@@ -314,6 +322,7 @@ namespace InterviewCopilot
                 }
             }
             catch { }
+            finally { Interlocked.Exchange(ref _watching, 0); }
         }
 
         private void OnData(object? sender, WaveInEventArgs e)
