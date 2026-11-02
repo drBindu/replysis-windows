@@ -4339,3 +4339,4 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 ## 2026-11-02: bug fixes from the full audit (Windows, local, not released)
 
 - Engine: a dropped speech connection in the middle of a question no longer loses the words so far. The transcript is kept across reconnects, repeated words from the audio sent again are removed, and only reset.flag starts a new question. close_timeout=1 so a dead socket is left at once, not after 10 s. Mac uses the same engine file: take this.
+- Sign-in and screen messages no longer say connection, internet or network: 'Could not sign in just now. Please try again.', 'That took too long. Please try again.', 'That did not go through. Please try again.' Firebase errors with detail after the code ('WEAK_PASSWORD : ...') now match, and an unknown code never shows raw. Mac: same wording.

@@ -1718,11 +1718,12 @@ namespace InterviewCopilot
             }
             catch (TaskCanceledException)
             {
-                return (null, "Request timed out. Check your connection and try again.");
+                return (null, "That took too long. Please try again.");
             }
             catch (Exception ex)
             {
-                return (null, $"Network error: {ex.Message}");
+                DebugWindow.Log("SCREEN", $"Request failed: {ex.GetType().Name}: {ex.Message}");
+                return (null, "That did not go through. Please try again.");
             }
         }
 

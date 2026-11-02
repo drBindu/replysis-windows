@@ -122,6 +122,8 @@ namespace InterviewCopilot
                     if (doc.RootElement.TryGetProperty("error", out var err))
                     {
                         string code = err.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
+                        // Firebase adds detail after the code: "WEAK_PASSWORD : Password should be at least 6 characters".
+                        code = code.Split(" : ")[0].Trim();
                         errMsg = code switch
                         {
                             "EMAIL_NOT_FOUND"      => "No account found with this email.",
@@ -132,7 +134,7 @@ namespace InterviewCopilot
                             "USER_DISABLED"        => "This account has been disabled.",
                             "TOO_MANY_ATTEMPTS_TRY_LATER" => "Too many attempts. Try again later.",
                             "INVALID_LOGIN_CREDENTIALS" => "Incorrect email or password.",
-                            _ => $"Login failed: {code}"
+                            _ => errMsg
                         };
                     }
                     ShowError(errMsg);
@@ -155,7 +157,7 @@ namespace InterviewCopilot
             catch (Exception ex)
             {
                 DebugWindow.Log("LOGIN", $"Sign-in error: {ex.Message}");
-                ShowError("Connection error. Check your internet connection.");
+                ShowError("Could not sign in just now. Please try again.");
                 SetLoading(false);
             }
         }
@@ -194,7 +196,7 @@ namespace InterviewCopilot
             }
             catch
             {
-                ShowError("Connection error. Try again.");
+                ShowError("Could not send that just now. Please try again.");
             }
             finally
             {
