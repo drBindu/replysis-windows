@@ -24,14 +24,14 @@ SOURCE = Path(__file__).resolve().parents[2] / "speechmatics_engine.py"
 TREE = ast.parse(SOURCE.read_text(encoding="utf-8"))
 FUNCS = {"_run_deepgram_loop", "_send_with_stall_guard", "_slow_line_requested", "_pcm16_to_mulaw", "_build_mulaw_table",
          "_http_status", "_looks_like_no_network", "_network_is_down", "_is_line_problem", "_deepgram_only", "_deepgram_flux",
-         "_write_lag"}
+         "_write_lag", "_drop_replayed_words", "_note_flux_error", "_signal_level", "_new_turnmap", "_turnmap_add", "_turn_source", "_print_source"}
 CLASSES = {"SendStalled", "DeadConnection"}
 CONSTS = {"_MULAW_TABLE", "_SLOW_LINE_FLAG", "_SLOW_LINE_FRESH_SECONDS", "_DEEPGRAM_REFUSED", "_DEEPGRAM_MAX_FAILURES",
           "_DEEPGRAM_OPEN_SECONDS", "_DEEPGRAM_HEALTHY_SECONDS", "_DEEPGRAM_SILENT_SECONDS", "_DEEPGRAM_LINE_PROBLEMS_HEARD",
           "_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD", "_DEEPGRAM_REPLAY_CHUNKS", "_DEEPGRAM_REACH_EVERY",
           "_DEEPGRAM_REACH_UP_TO", "_DEEPGRAM_PING_EVERY", "_DEEPGRAM_PING_ALLOWED", "_DEEPGRAM_FIRST_ANSWER_SECONDS",
           "_DEEPGRAM_FIRST_ANSWER_WINDOW", "SAMPLE_RATE", "LAG_FILE",
-          "_FLUX_QUIET_REFRESH_SECONDS", "_FLUX_SILENT_SECONDS"}
+          "_FLUX_QUIET_REFRESH_SECONDS", "_FLUX_SILENT_SECONDS", "_flux_given_up", "_flux_server_errors"}
 
 
 def engine_scope(app, url, buffered_class, printed, deepgram_only=False):
@@ -201,6 +201,54 @@ class LineResilience(unittest.TestCase):
         connections = asyncio.run(main())
         self.assertEqual(connections, 1, "nine seconds muted, still one connection: " + " | ".join(printed[-4:]))
 
+
+    def run_flux_drop(self, reset_after_drop):
+        """A question cut by a dropped connection, with Flux. Returns everything written to latest.txt."""
+        printed, written = [], []
+
+        async def main():
+            app = tempfile.mkdtemp(prefix="line-")
+            seen = {"connections": 0}
+
+            async def handler(ws):
+                index = seen["connections"]
+                seen["connections"] += 1
+                if index == 0:
+                    await ws.send(json.dumps({"type": "TurnInfo", "event": "Update", "transcript": "tell me about your last project"}))
+                    await asyncio.sleep(0.3)
+                    await ws.close()
+                    return
+                if reset_after_drop:
+                    Path(app, "reset.flag").write_text("1")
+                await ws.send(json.dumps({"type": "TurnInfo", "event": "Update", "transcript": "your last project and the team"}))
+                await ws.send(json.dumps({"type": "TurnInfo", "event": "EndOfTurn", "transcript": "your last project and the team"}))
+                async for _ in ws:
+                    pass
+            os.environ["REPLYSIS_DEEPGRAM_MODEL"] = "flux"
+            try:
+                async with websockets.serve(handler, "127.0.0.1", 0) as server:
+                    port = server.sockets[0].getsockname()[1]
+                    FakeBuffered.instances.clear()
+                    scope = engine_scope(app, f"ws://127.0.0.1:{port}/", FakeBuffered, printed, deepgram_only=True)
+                    scope["_write_latest"] = written.append
+                    runner = asyncio.create_task(scope["_run_deepgram_loop"]({}))
+                    await asyncio.sleep(0.2)
+                    buffered = FakeBuffered.instances[0]
+                    buffered.app = app
+                    buffered.stop_at = time.monotonic() + 3
+                    await asyncio.wait_for(runner, 30)
+            finally:
+                os.environ.pop("REPLYSIS_DEEPGRAM_MODEL", None)
+        asyncio.run(main())
+        return written
+
+    def test_a_drop_in_the_middle_of_a_question_keeps_its_start(self):
+        written = self.run_flux_drop(reset_after_drop=False)
+        self.assertEqual(written[-1], "tell me about your last project and the team", written)
+
+    def test_a_new_question_after_a_drop_does_not_carry_the_old_words(self):
+        written = self.run_flux_drop(reset_after_drop=True)
+        self.assertEqual(written[-1], "your last project and the team", written)
 
     def test_a_muted_flux_connection_is_replaced_before_it_goes_stale(self):
         # Flux, muted for 20 s: one fresh connection after 15 s, without an OFFLINE for the app to show.

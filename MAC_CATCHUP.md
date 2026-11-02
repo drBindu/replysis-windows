@@ -4335,3 +4335,7 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 
 - Hiding reports: a window with no area (251x0, 302x0 SysHeader32, err 87) is no longer reported from ANY path, not only the guard. 1.0.52 still reported them from the popup path. Mac: nothing to do (Mac checks no window sizes).
 - Server, live: the "apps are reporting errors" email no longer counts expected states (no free answers left, trial ended, minor hiding reports). Nothing for Mac.
+
+## 2026-11-02: bug fixes from the full audit (Windows, local, not released)
+
+- Engine: a dropped speech connection in the middle of a question no longer loses the words so far. The transcript is kept across reconnects, repeated words from the audio sent again are removed, and only reset.flag starts a new question. close_timeout=1 so a dead socket is left at once, not after 10 s. Mac uses the same engine file: take this.

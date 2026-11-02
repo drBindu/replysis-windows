@@ -3282,6 +3282,24 @@ class DeadConnection(ConnectionError):
     """Audio is going out and nothing at all has come back: the connection is open here and gone there."""
 
 
+def _drop_replayed_words(carried, text):
+    """The words of a new connection, without those it repeats from before the drop.
+
+    Unanswered audio is sent again after a drop, so the first words back can be the last words already held. Two words at
+    least, because one matching word is as likely a real repeat ("the", "so"), and a doubled word does less harm than a lost one.
+    """
+    if not carried or not text:
+        return text
+    plain = lambda word: "".join(ch for ch in word if ch.isalnum()).lower()
+    held = [plain(word) for word in carried.split()]
+    words = text.split()
+    new = [plain(word) for word in words]
+    for count in range(min(len(held), len(new), 60), 1, -1):
+        if held[-count:] == new[:count]:
+            return " ".join(words[count:])
+    return text
+
+
 # A Flux connection that sat muted goes stale. Measured 2026-10-16 against the real service from the owner's PC: a fresh
 # connection heard the whole test question 5 times out of 5; after 30 to 45 s with no audio (pings only) the same question
 # came back cut 3 times out of 3 ("...URL shortener that had", about half the messages), and one 45 s quiet ended in
@@ -3394,6 +3412,9 @@ async def _run_deepgram_loop(holder) -> str:
     ever_heard = False    # Deepgram has answered at least once from this machine, so it is not blocked here
     line_problems = 0     # consecutive line problems, cleared by a session that was heard from and lasted
     line_trouble_until = 0.0   # the smaller voice format is used until then, whatever the app's own test said
+    # Kept across reconnects: a drop in the middle of a question left only the words after it, and that tail was what got
+    # answered (71 of 121 characters in a real log). Only reset.flag starts a new question.
+    transcript = {"confirmed": "", "partial": "", "carried": "", "eager": False}
 
     while True:
         if os.path.exists(SHUTDOWN_FLAG):
@@ -3423,9 +3444,12 @@ async def _run_deepgram_loop(holder) -> str:
             if slow_line:
                 print(">>> [DEEPGRAM] Weak connection: sending the voice in the smaller format.", flush=True)
             print(">>> [DEEPGRAM] Connecting...", flush=True)
+            # close_timeout: a dead connection never answers the closing handshake, and the default 10 s was spent here
+            # before the app was told speech had gone, while a question waited for its last words.
             async with websockets.connect(url, additional_headers=headers, max_size=None,
                                           open_timeout=_DEEPGRAM_OPEN_SECONDS + 2 * (failures + min(line_problems, 2)),
-                                          ping_interval=_DEEPGRAM_PING_EVERY, ping_timeout=_DEEPGRAM_PING_ALLOWED) as ws:
+                                          ping_interval=_DEEPGRAM_PING_EVERY, ping_timeout=_DEEPGRAM_PING_ALLOWED,
+                                          close_timeout=1) as ws:
                 # A reconnect starts from what is being said now, not from
                 # everything recorded while the connection was gone.
                 if sessions_opened:
@@ -3435,7 +3459,8 @@ async def _run_deepgram_loop(holder) -> str:
                 online = True
                 session_started = time.monotonic()
                 rx["last"] = session_started
-                transcript = {"confirmed": "", "partial": ""}
+                held = f"{transcript['confirmed']} {transcript['partial']}".strip()
+                transcript.update(confirmed=held, partial="", carried=held, eager=False)
                 audio = {"last": 0.0, "since": 0.0}   # when audio last went out, and when this stretch of audio began
                 # When speech (not silence) first went out with nothing answered since. The service may stay quiet for a
                 # few seconds while only silence goes out, and that was taken for a dead connection: 6 needless reconnects
@@ -3521,6 +3546,7 @@ async def _run_deepgram_loop(holder) -> str:
                             if os.path.exists(RESET_FLAG):
                                 transcript["confirmed"] = ""
                                 transcript["partial"] = ""
+                                transcript["carried"] = ""
                                 try:
                                     os.remove(RESET_FLAG)
                                 except Exception:
@@ -3528,11 +3554,12 @@ async def _run_deepgram_loop(holder) -> str:
                             if os.path.exists(PAUSE_FLAG):
                                 continue
                             event = msg.get("event") or ""
-                            text = (msg.get("transcript") or "").strip()
+                            text = _drop_replayed_words(transcript["carried"], (msg.get("transcript") or "").strip())
                             if event == "EndOfTurn":
                                 if text:
                                     transcript["confirmed"] = f"{transcript['confirmed']} {text}".strip()
                                 transcript["partial"] = ""
+                                transcript["carried"] = ""
                                 _write_latest(transcript["confirmed"])
                                 turnmap["live_source"] = None
                                 _print_source(turnmap, msg.get("audio_window_start"), msg.get("audio_window_end"), text)
@@ -3590,6 +3617,7 @@ async def _run_deepgram_loop(holder) -> str:
                         if os.path.exists(RESET_FLAG):
                             transcript["confirmed"] = ""
                             transcript["partial"] = ""
+                            transcript["carried"] = ""
                             try:
                                 os.remove(RESET_FLAG)
                             except Exception:
@@ -3598,9 +3626,10 @@ async def _run_deepgram_loop(holder) -> str:
                             continue
 
                         alternatives = (msg.get("channel") or {}).get("alternatives") or [{}]
-                        text = (alternatives[0].get("transcript") or "").strip()
+                        text = _drop_replayed_words(transcript["carried"], (alternatives[0].get("transcript") or "").strip())
                         if msg.get("is_final"):
                             transcript["partial"] = ""
+                            transcript["carried"] = ""
                             if not text:
                                 continue
                             if not transcript["confirmed"] or turnmap["turn_start"] is None:
@@ -3641,6 +3670,7 @@ async def _run_deepgram_loop(holder) -> str:
             if refresh["due"]:
                 # Not a drop and not a failure: the muted connection was swapped for a fresh one. Nothing is shown to the app.
                 print(">>> [DEEPGRAM] Fresh connection while muted, so the next question starts on a new line.", flush=True)
+                transcript.update(confirmed="", partial="", carried="", eager=False)
                 continue
             print(">>> STATUS: OFFLINE", flush=True)
             lasted = time.monotonic() - session_started
