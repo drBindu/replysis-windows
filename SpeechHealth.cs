@@ -144,6 +144,21 @@ namespace InterviewCopilot
         internal const int DropsThatMeanUnstable = 3;
         internal static readonly TimeSpan DropWindow = TimeSpan.FromMinutes(4);
 
+        /// <summary>
+        /// The engine's own line saying the speech provider refused it (no credit, forbidden, too many requests) or failed
+        /// (5xx). A 401 is not here: that is an expired token, and the app renews it.
+        /// </summary>
+        internal static bool IsProviderFaultLine(string line)
+        {
+            const string http = ">>> [DEEPGRAM] HTTP ";
+            const string refused = ">>> [DEEPGRAM] Refused with ";
+            int at = line.IndexOf(refused, StringComparison.Ordinal);
+            if (at >= 0)
+                return string.CompareOrdinal(line, at + refused.Length, "401", 0, 3) != 0;
+            at = line.IndexOf(http, StringComparison.Ordinal);
+            return at >= 0 && at + http.Length < line.Length && line[at + http.Length] == '5';
+        }
+
         internal static bool ConnectionKeepsDropping(System.Collections.Generic.IReadOnlyList<DateTime> dropsUtc, DateTime now)
         {
             int recent = 0;

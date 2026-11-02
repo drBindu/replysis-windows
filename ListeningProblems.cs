@@ -101,8 +101,8 @@ namespace InterviewCopilot
             Kind.NoMicrophone => new(
                 "NO MICROPHONE",
                 "No microphone found",
-                "Practice mode listens to your microphone, and this computer has none. Plug in earphones with a mic " +
-                "and Replysis starts listening by itself. Interview mode does not need a microphone.",
+                "Replysis listens to your microphone too, and this computer has none. Plug in earphones with a mic " +
+                "and it starts listening by itself.",
                 NextStep.None),
 
             Kind.NoSpeechService => new(
@@ -128,7 +128,7 @@ namespace InterviewCopilot
         internal static Kind? Detect(
             bool engineOnline, int speechStatusCode, bool outOfListeningTime,
             bool waitingToRetry, bool fatalNoMicrophone, bool connectionStalled,
-            bool outOfCredits = false, bool connectionKeepsDropping = false)
+            bool outOfCredits = false, bool connectionKeepsDropping = false, bool providerFault = false)
         {
             if (engineOnline) return null;
 
@@ -141,6 +141,9 @@ namespace InterviewCopilot
             if (speechStatusCode == 402) return Kind.NoCredits;
             if (speechStatusCode == 401) return Kind.SignInExpired;
             if (speechStatusCode is 502 or 503) return Kind.ServiceUnavailable;
+            // The speech provider itself said no or failed, seen in the engine's own lines. Nothing about the customer's
+            // line, so the wording below about networks and hotspots would send them looking in the wrong place.
+            if (providerFault) return Kind.ServiceUnavailable;
             // A connection that was working and keeps breaking is a different thing from one that never
             // worked, and from a short wait to reconnect. Saying "cannot reach the speech service" or "VPN"
             // to someone already on a hotspot is wrong and sends them looking in the wrong place.

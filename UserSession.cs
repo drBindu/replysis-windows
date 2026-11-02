@@ -709,6 +709,19 @@ namespace InterviewCopilot
         }
 
         /// <summary>
+        /// The answer path's version of EnsureFreshTokenAsync. The token counts as expired at 55 minutes but works for 60, and
+        /// a slow token service held a question for up to 30 s with nothing on screen. Until the last minute the refresh
+        /// runs behind the answer; after that it gets a short wait, and a 401 still recovers downstream.
+        /// </summary>
+        internal static async Task FreshEnoughForAnswerAsync(int capMs)
+        {
+            if (string.IsNullOrEmpty(IdToken) || string.IsNullOrEmpty(RefreshToken) || !IsTokenExpired()) return;
+            Task<bool> refresh = TryRefreshAsync();
+            if (DateTime.UtcNow - _savedAt < TimeSpan.FromMinutes(59)) return;
+            await Task.WhenAny(refresh, Task.Delay(capMs)).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Exchanges the refresh token for a new id token.
         ///
         /// <paramref name="force"/> exists because the ordinary path asks

@@ -27,6 +27,13 @@ namespace InterviewCopilot
         /// </summary>
         internal static readonly TimeSpan RecheckEvery = TimeSpan.FromMinutes(10);
 
+        /// <summary>
+        /// Held while an interview is open, not only while the mic is: a person reading an answer in Manual is not listening,
+        /// and in the compact window the notice used to replace that answer. Compact has nowhere else to show it.
+        /// </summary>
+        internal static bool HoldNotice(bool listening, bool interviewStarted, bool answering, bool flushing, bool compact) =>
+            listening || interviewStarted || answering || flushing || compact;
+
         /// <summary>A version is announced once, so a dismissed notice does not come back every half hour.</summary>
         internal static bool ShouldAnnounce(string? found, string? alreadyAnnounced) =>
             !string.IsNullOrWhiteSpace(found) &&

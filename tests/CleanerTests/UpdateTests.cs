@@ -37,6 +37,12 @@ internal static class UpdateTests
             var info = mgr.CheckForUpdatesAsync().GetAwaiter().GetResult();
             Check(info != null, $"Velopack on 1.0.40 sees the update through the feed file ({info?.TargetFullRelease.Version.ToString() ?? "nothing"})");
         }
+        Check(!UpdatePolicy.HoldNotice(false, false, false, false, false), "no interview: the notice shows");
+        Check(UpdatePolicy.HoldNotice(true, false, false, false, false), "held while listening");
+        Check(UpdatePolicy.HoldNotice(false, true, false, false, false), "held while reading an answer in Manual");
+        Check(UpdatePolicy.HoldNotice(false, false, true, false, false), "held while an answer streams");
+        Check(UpdatePolicy.HoldNotice(false, false, false, true, false), "held while the last words arrive");
+        Check(UpdatePolicy.HoldNotice(false, false, false, false, true), "held in the compact window, where it would replace the answer");
         Check(UpdatePolicy.ShouldAnnounce("1.0.28", null), "a new version is announced");
         Check(!UpdatePolicy.ShouldAnnounce("1.0.28", "1.0.28"), "the same version is not announced twice");
         Check(!UpdatePolicy.ShouldAnnounce("1.0.28", "1.0.28".ToUpperInvariant()), "case does not matter");

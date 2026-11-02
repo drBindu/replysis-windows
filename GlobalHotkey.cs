@@ -184,6 +184,19 @@ namespace InterviewCopilot
             }
         }
 
+        /// <summary>
+        /// Windows drops a low level hook without telling anyone if it answers too slowly, and a sleeping laptop is the likely
+        /// moment, so Space and F8 would be dead for the rest of the run. Installing a new one first means no key is missed.
+        /// </summary>
+        public void Reinstall()
+        {
+            IntPtr fresh = SetHook(_proc);
+            if (fresh == IntPtr.Zero) { DebugWindow.Log("HOOK", "Reinstall failed; keeping the existing hook."); return; }
+            IntPtr old = _hookId;
+            _hookId = fresh;
+            if (old != IntPtr.Zero) UnhookWindowsHookEx(old);
+        }
+
         private IntPtr SetHook(LowLevelKeyboardProc proc)
         {
             using var curProcess = Process.GetCurrentProcess();

@@ -248,6 +248,9 @@ namespace InterviewCopilot
         private Action? _cameraModeClosedHandler;   // stored so we can -= it in OnClosed
         private bool _guestTransitionInProgress;
 
+        private const string AnswerDidNotGoThrough = "That did not go through. Please try again.";
+        private static readonly TimeSpan FirstWordTimeout = TimeSpan.FromSeconds(20);
+
         private sealed class BackendRequestException : Exception
         {
             public BackendRequestException(string message) : base(message) { }
@@ -1033,6 +1036,20 @@ namespace InterviewCopilot
         // ══════════════════════════════════════════════════════════════════════
         // CREDITS
         // ══════════════════════════════════════════════════════════════════════
+        private bool OutOfAnswersHere() =>
+            !UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold && _minutesBalance <= 0;
+
+        private DateTime _lastCreditsOnFocusUtc;
+
+        /// <summary>Coming back from the website after paying: the new answers should be there, not five minutes later.</summary>
+        protected override void OnActivated(EventArgs e)
+        {
+            base.OnActivated(e);
+            if (!OutOfAnswersHere() || DateTime.UtcNow - _lastCreditsOnFocusUtc < TimeSpan.FromSeconds(20)) return;
+            _lastCreditsOnFocusUtc = DateTime.UtcNow;
+            _ = FetchAndDisplayCreditsAsync(force: true);
+        }
+
         private async Task FetchAndDisplayCreditsAsync(bool force = false)
         {
             await _creditsFetchGate.WaitAsync();
@@ -1529,7 +1546,9 @@ namespace InterviewCopilot
             // never be seen. The overlay is the visible surface there.
             if (_isCameraMode && answerWindow != null)
             {
-                answerWindow.UpdateAnswer(string.IsNullOrWhiteSpace(message) ? title : title + "\n\n" + message);
+                // An update notice is not worth an answer: it waits for the full window (UpdatePolicy.HoldNotice).
+                if (!isUpdate)
+                    answerWindow.UpdateAnswer(string.IsNullOrWhiteSpace(message) ? title : title + "\n\n" + message);
                 return;
             }
 
@@ -1605,13 +1624,16 @@ namespace InterviewCopilot
             _updateComingFor = version;
             _ = Dispatcher.BeginInvoke(new Action(() =>
             {
-                if (isListening || _updateAnnouncedFor == version) return;   // never during a live interview
+                if (HoldUpdateNotice() || _updateAnnouncedFor == version) return;   // never during a live interview
                 DebugWindow.Log("UPDATE", $"Update found, getting it ready: {version}.");
                 ShowInAppAlert($"Replysis {version} is on its way",
                     "Getting it ready in the background. Keep working; a Restart button appears here in a moment.",
                     persist: true, isUpdate: true);
             }));
         }
+
+        private bool HoldUpdateNotice() =>
+            UpdatePolicy.HoldNotice(isListening, _interviewStarted, isProcessing, _flushing, _isCameraMode);
 
         private async Task CheckForUpdateOnceAsync()
         {
@@ -1626,8 +1648,8 @@ namespace InterviewCopilot
             DebugWindow.Log("UPDATE", string.IsNullOrEmpty(found) ? "Checked for updates: none." : $"Checked for updates: {found} found.");
             if (!UpdatePolicy.ShouldAnnounce(found, _updateAnnouncedFor)) return;
 
-            // Never during a live interview: held until listening stops, then shown straight away.
-            while (isListening && !_windowClosed)
+            // Never during a live interview: held until it is over, then shown straight away.
+            while (HoldUpdateNotice() && !_windowClosed)
             {
                 try { await Task.Delay(TimeSpan.FromSeconds(10)); } catch { return; }
             }
@@ -2885,7 +2907,7 @@ namespace InterviewCopilot
             }
             else
             {
-                ShowListeningModeNotice("Not transcribing. Restart the app.");
+                ShowListeningModeNotice("Reconnecting speech");
             }
         }
 
@@ -2979,8 +3001,17 @@ namespace InterviewCopilot
                             (_engineRestartCount > 0 && DateTime.UtcNow < _nextEngineRestartUtc),
             fatalNoMicrophone: _engineAuthFailed &&
                                _engineFatalReason.StartsWith("No microphone", StringComparison.Ordinal),
-            connectionStalled: SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, ConnectionWaitBeganUtc),
-            connectionKeepsDropping: ConnectionKeepsDropping());
+            // Nothing to connect: the antivirus notice is the true one, not a word about networks.
+            connectionStalled: !EngineCannotStart && SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, ConnectionWaitBeganUtc),
+            connectionKeepsDropping: ConnectionKeepsDropping(),
+            providerFault: SpeechProviderAtFault());
+
+        // When the engine last printed that the speech provider refused it or failed (HTTP 402, 403, 429, 5xx). It keeps
+        // trying every few seconds, so a fault stops counting soon after the last one.
+        private long _lastProviderFaultUtcTicks;
+
+        private bool SpeechProviderAtFault() =>
+            DateTime.UtcNow - new DateTime(Interlocked.Read(ref _lastProviderFaultUtcTicks), DateTimeKind.Utc) < TimeSpan.FromSeconds(45);
 
         /// <summary>
         /// Says, once per occurrence, in words, why nothing is being heard. Every
@@ -3964,7 +3995,6 @@ namespace InterviewCopilot
 
         // Push-to-talk: DOWN = start listening, UP = fire AI.
         // Toggle callers (button, in-app Space) call both in sequence.
-        private string _listeningInitiator = "";
         private long _listeningStartTicks = 0;
         private bool _preserveAutoCapture;
         private string _autoCaptureConsumedText = "";
@@ -4008,7 +4038,6 @@ namespace InterviewCopilot
             _spaceHandling = true;
             try
             {
-                _listeningInitiator = source;
                 BeginInterviewPresentation();
                 _listeningStartTicks = Environment.TickCount64;
                 isMuted = false; isListening = true;
@@ -4093,9 +4122,6 @@ namespace InterviewCopilot
 
             if (source != "BUTTON" && source != "AUTO" && IsTypingInTextField()) { ReleaseAutoLatch(); return; }
             if (_spaceHandling || isProcessing || _flushing || isMuted) { ReleaseAutoLatch(); return; }
-
-            // If listening was started by UI button, do NOT let space key release mute it!
-            if (source != "BUTTON" && _listeningInitiator == "BUTTON") { ReleaseAutoLatch(); return; }
 
             // GLOBAL fires HandleSpacePress once per discrete toggle press. A sub-200ms hold
             // is an accidental double-fire, not a real utterance, so re-mute and bail.
@@ -4497,19 +4523,26 @@ namespace InterviewCopilot
                     DebugWindow.Log("AI", $"Ignored opening transcript filler: {rawQuestion.Length - q.Length} chars");
                 var answerTimer = System.Diagnostics.Stopwatch.StartNew();
 
-                if (UserSession.IsLoggedIn) await UserSession.TryRefreshAsync();
+                await UserSession.FreshEnoughForAnswerAsync(capMs: 3000);
+                aiCt.ThrowIfCancellationRequested();
+
+                // Someone who just bought answers on the website still shows none here until the five minute refresh, and was
+                // told so on every question. Only an empty balance waits for this, so no answer is slowed.
+                if (OutOfAnswersHere()) await FetchAndDisplayCreditsAsync(force: true);
                 aiCt.ThrowIfCancellationRequested();
 
                 // Block once credits have been fetched and confirmed exhausted.
                 // _creditsFetched prevents false-blocking before the first backend response.
                 // Bought minutes pay for live answers, so they also let the question go: a customer bought 45 minutes and
                 // was told "You have 0 answers left" for every question (2026-10-21). The server decides the charge.
-                if (!UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold && _minutesBalance <= 0)
+                if (OutOfAnswersHere())
                 {
                     // This fires the instant a user asks a question, so it used to
                     // put a Windows dialog on screen in the middle of a live,
                     // possibly shared, interview. Shown in-app instead.
-                    ShowInAppAlert(
+                    // The free trial's end gets the same banner as F8, with Upgrade now: it shows once, and this repeats.
+                    if (OnFreeTrial()) ShowProblemOnce(ListeningProblems.Kind.NoCredits);
+                    else ShowInAppAlert(
                         $"You have {PlanFacts.AnswersLabel(UserSession.Credits)} left",
                         "Open the answers badge at the top to add more. Your session stays open.");
                     isProcessing = false;
@@ -4536,15 +4569,21 @@ namespace InterviewCopilot
 
                 int tokenCount = 0;
 
+                // A request that hangs held Auto for up to 90 s (the client's own limit) with Space refused. Nobody in an
+                // interview is helped by a first word later than this.
+                using var firstWord = CancellationTokenSource.CreateLinkedTokenSource(aiCt);
+                firstWord.CancelAfter(FirstWordTimeout);
+
                 // The server performs provider recovery within one charge. Do not
                 // submit another billable POST: refunds are best-effort and the
                 // endpoint has no verified idempotency contract.
-                    await foreach (var token in StreamFromBackend(q, ResumeTextBox.Text, aiCt))
+                    await foreach (var token in StreamFromBackend(q, ResumeTextBox.Text, firstWord.Token))
                     {
                         aiCt.ThrowIfCancellationRequested();
                         streamedAnswer.Append(token); tokenCount++;
                         if (tokenCount == 1)
                         {
+                            firstWord.CancelAfter(Timeout.InfiniteTimeSpan);
                             thinkingTimer?.Stop();
                             ThinkingPanel.Visibility = Visibility.Collapsed;
                             long total = _turnStopwatch?.ElapsedMilliseconds ?? 0;
@@ -4618,7 +4657,7 @@ namespace InterviewCopilot
                     if (t.IsFaulted) DebugWindow.Log("CREDITS_ERR", t.Exception?.GetBaseException().Message ?? "unknown");
                 }, TaskScheduler.Default);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (aiCt.IsCancellationRequested)
             {
                 // User pressed Space to interrupt this answer — a fresh listening session
                 // has already taken over. Stay silent: no error text, no partial dump.
@@ -4659,7 +4698,7 @@ namespace InterviewCopilot
                 // their credits ran out sends them to check their wifi.
                 string failure = ex is InvalidOperationException && !string.IsNullOrWhiteSpace(ex.Message)
                     ? ex.Message
-                    : "Connection interrupted. Please try again.";
+                    : AnswerDidNotGoThrough;
                 ReportProblem("answer", "answer-failed-" + ex.GetType().Name,
                               $"{ex.GetType().Name}: {ex.Message}" + (ex.InnerException is null ? "" : $" <- {ex.InnerException.GetType().Name}"));
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(partial)
@@ -4678,7 +4717,15 @@ namespace InterviewCopilot
                 if (ReferenceEquals(_aiCts, requestOwner))
                 {
                     if (!isListening) StopThinkingUi();
-                    else isProcessing = false;
+                    else
+                    {
+                        // Keeps the mic state, but the thinking panel and pill must still end, or a request that
+                        // failed before its first word showed Thinking until the next answer.
+                        thinkingTimer?.Stop();
+                        ThinkingPanel.Visibility = Visibility.Collapsed;
+                        isProcessing = false;
+                        UpdateMicUi();
+                    }
                 }
             }
         }
@@ -4758,12 +4805,18 @@ namespace InterviewCopilot
         /// What the app does when the computer wakes: wait a moment for the network adapter, then reconnect speech at once instead
         /// of waiting for the dead connection to time out. A method of its own so a test can run it without sleeping the computer.
         /// </summary>
+        // Set on wake: the socket did not survive the sleep, whatever _engineOnline still says, so waiting six seconds for the
+        // engine to close it politely is six seconds nothing is heard.
+        private volatile bool _engineConnectionIsDead;
+
         private async Task ReconnectAfterWakeAsync(int waitMs)
         {
             await Task.Delay(waitMs);
             if (_windowClosed) return;
             DebugWindow.Log("ENGINE", "The computer woke up; reconnecting speech now instead of waiting for the old connection to time out.");
             _nextEngineRestartUtc = DateTime.MinValue;
+            _engineConnectionIsDead = true;
+            _globalHotkey?.Reinstall();
             StartSpeechmaticsEngine();
             _uplink.Reset();
             ApplyLineSpeedToCaptures();
@@ -5954,10 +6007,12 @@ namespace InterviewCopilot
             // Now: ask for a new token, forcing past that check, and try once more.
             // Signing out is for when the refresh itself is refused, which is the
             // only evidence that the session is really gone.
+            var refreshOutcome = UserSession.RefreshOutcome.Refreshed;
             if ((int)res.StatusCode == 401)
             {
                 DebugWindow.Log("AUTH", "Backend rejected the token; forcing a refresh before giving up.");
-                if (await UserSession.TryRefreshAsync(force: true))
+                refreshOutcome = await UserSession.RefreshAsync(force: true);
+                if (refreshOutcome == UserSession.RefreshOutcome.Refreshed)
                 {
                     res.Dispose();
                     res = await SendBackendRequestAsync(question, resume, ct);
@@ -5970,11 +6025,20 @@ namespace InterviewCopilot
             // ── 2. Handle non-200 status codes with plain yields (no try/catch) ─
             int status = (int)res.StatusCode;
             if (status == 402)
+            {
+                if (OnFreeTrial()) Dispatcher.Invoke(() => ShowProblemOnce(ListeningProblems.Kind.NoCredits));
                 throw new BackendRequestException("You are out of answers. Open the answers badge at the top to add more.");
+            }
             if (status == 401)
             {
-                Dispatcher.Invoke(() => { _ = SwitchToGuestSessionAsync(); });
-                throw new BackendRequestException("Your sign-in expired. Sign in again to continue.");
+                // A slow or failing token service is not a lost sign-in: the first version of this treated a timeout as a
+                // refusal and signed a paying customer out in the middle of an answer.
+                if (refreshOutcome == UserSession.RefreshOutcome.Refused)
+                {
+                    Dispatcher.Invoke(() => { _ = SwitchToGuestSessionAsync(); });
+                    throw new BackendRequestException("Your sign-in expired. Sign in again to continue.");
+                }
+                throw new BackendRequestException(AnswerDidNotGoThrough);
             }
             if (!res.IsSuccessStatusCode)
             {
@@ -6044,9 +6108,8 @@ namespace InterviewCopilot
             var payload = new { question, resume = transportResume, messages };
             string payloadJson = JsonSerializer.Serialize(payload);
             DebugWindow.Log("AI", $"Request prepared: {messages.Count} messages, {Encoding.UTF8.GetByteCount(payloadJson)} bytes");
-            // An hour-old token is rejected, and the 401 handler treats that as a
-            // sign-out: plan lost, guest credits, mid-answer.
-            await UserSession.EnsureFreshTokenAsync();
+            // An hour-old token is rejected. The answer path has already waited for this; it is only a short look here.
+            await UserSession.FreshEnoughForAnswerAsync(capMs: 500);
 
             using var request = new HttpRequestMessage(HttpMethod.Post,
                 $"{BackendUrl}/api/v1/interview/ask");
@@ -6100,7 +6163,7 @@ namespace InterviewCopilot
                 }
 
             throw new BackendRequestException(
-                "The answer service could not be reached. Please check your connection and try again.");
+                AnswerDidNotGoThrough);
         }
 
         /// <summary>
@@ -6850,7 +6913,8 @@ namespace InterviewCopilot
             // four seconds and at four minutes. On a shop-floor machine whose
             // network blocked the websocket it simply said connecting, forever,
             // and there was no way to find out that it never would.
-            else if (SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, ConnectionWaitBeganUtc))
+            else if (SpeechHealth.ConnectionStalled(_engineOnline, DateTime.UtcNow, ConnectionWaitBeganUtc)
+                     && !SpeechProviderAtFault() && !EngineCannotStart)
             {
                 c = Color.FromRgb(239, 68, 68);
                 label = "NO SPEECH SERVICE";
@@ -6868,6 +6932,9 @@ namespace InterviewCopilot
             else if (!_engineOnline) { c = Color.FromRgb(239, 68, 68); label = "MUTED"; }
             else if (isMuted) { c = Color.FromRgb(239, 68, 68); label = "MUTED"; }
             else { c = Color.FromRgb(239, 68, 68); label = isRecording && _savingSessionAudio ? "RECORDING" : "LISTENING"; }
+
+            // These two are the only labels that set a tooltip; left set, it kept saying so after speech came back.
+            if (label is not "NO SPEECH SERVICE" and not "NO MICROPHONE") MicBtn.ToolTip = null;
 
             var brush = new SolidColorBrush(c);
             MicIndicator.Fill = brush;
@@ -7382,7 +7449,25 @@ namespace InterviewCopilot
                 // otherwise any non-ASCII it prints arrives as mojibake.
                 speechmaticsProcess.StartInfo.StandardOutputEncoding = Encoding.UTF8;
                 speechmaticsProcess.StartInfo.StandardErrorEncoding = Encoding.UTF8;
-                speechmaticsProcess.Start();
+                try { speechmaticsProcess.Start(); }
+                catch (Exception ex)
+                {
+                    // An antivirus block or a file held during a scan. Left assigned, the monitor asked HasExited of a process
+                    // that never started, which throws every three seconds, so it was never retried and nothing was said.
+                    DebugWindow.Log("ENGINE_ERR", $"The speech engine could not start: {ex.GetType().Name}: {ex.Message}");
+                    if (_engineStartFailures == 0)
+                        ReportProblem("engine", "engine-start-failed", $"{ex.GetType().Name} 0x{ex.HResult:X8}");
+                    try { speechmaticsProcess.Dispose(); } catch { }
+                    speechmaticsProcess = null;
+                    if (++_engineStartFailures == EngineStartFailuresToSay) _ = Dispatcher.BeginInvoke(new Action(ShowEngineAuthError));
+                    return;
+                }
+                if (EngineCannotStart)
+                {
+                    _bannerIsProblem = true;   // the notice said it could not start, and now it has
+                    _ = Dispatcher.BeginInvoke(new Action(HideProblemBannerIfShowing));
+                }
+                _engineStartFailures = 0;
                 AlwaysReady.OptOutOfThrottling(speechmaticsProcess);
                 // When the wait began, so "CONNECTING" can stop being shown once
                 // it has stopped being true.
@@ -7465,6 +7550,9 @@ namespace InterviewCopilot
                                     _ = RecoverSpeechmaticsAuthenticationAsync()));
                                 continue;
                             }
+
+                            if (SpeechHealth.IsProviderFaultLine(line))
+                                Interlocked.Exchange(ref _lastProviderFaultUtcTicks, DateTime.UtcNow.Ticks);
 
                             // Problems the engine could always see but the user never could: they went to the
                             // hidden log only, so the app looked like it was listening while it heard nothing
@@ -7974,8 +8062,9 @@ namespace InterviewCopilot
                 // transcribing. Measured on a real session: the wait ran out in
                 // full, 6003ms, while the user was pressing Space to ask a
                 // question, and the whole restart took eleven seconds.
-                if (!_engineOnline)
+                if (!_engineOnline || _engineConnectionIsDead)
                 {
+                    _engineConnectionIsDead = false;
                     closeWatch.Stop();
                     try { proc.Kill(entireProcessTree: true); } catch { }
                     DebugWindow.Log("ENGINE",
@@ -8476,6 +8565,10 @@ namespace InterviewCopilot
                 StartSpeechmaticsEngine();
             }
         }
+
+        private int _engineStartFailures;
+        private const int EngineStartFailuresToSay = 3;
+        private bool EngineCannotStart => _engineStartFailures >= EngineStartFailuresToSay;
 
         private async Task RecoverSpeechmaticsAuthenticationAsync()
         {
@@ -9135,6 +9228,11 @@ namespace InterviewCopilot
                     return;
                 }
 
+                // Finished means finished. Auto's own timer put listening back on within a quarter of a second, with the
+                // mic open, the PC held awake and speech spending answers that were saved nowhere. Space, the mic, the
+                // Start button or a mode change bring it back.
+                _autoPausedForIdle = true;
+
                 // Finishing is not the same action as submitting a question. If
                 // the microphone is open, stop capture without sending a partial
                 // sentence to the model, then finalize the encrypted transcript.
@@ -9697,7 +9795,8 @@ namespace InterviewCopilot
             _interviewSilentTipShown = true;
 
             // Credits check. A guest gets the free answers once (tracked by device ID).
-            if (!UserSession.IsUnlimited && _creditsFetched && UserSession.Credits < CreditsCriticalThreshold)
+            if (OutOfAnswersHere()) await FetchAndDisplayCreditsAsync(force: true);
+            if (OutOfAnswersHere())
             {
                 int remaining = UserSession.Credits;
                 bool isGuest = !UserSession.IsLoggedIn;

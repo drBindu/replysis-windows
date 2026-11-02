@@ -74,6 +74,15 @@ internal static class ListeningProblemTests
         Check(D(code: 402, audio: false) == ListeningProblems.Kind.NoCredits, "402 for credits");
         Check(D(code: 401) == ListeningProblems.Kind.SignInExpired, "401 is a sign in problem");
         Check(D(code: 503) == ListeningProblems.Kind.ServiceUnavailable, "503 is the service");
+        Check(ListeningProblems.Detect(false, 0, false, false, false, true, providerFault: true) == ListeningProblems.Kind.ServiceUnavailable,
+              "the provider refusing is the service, not the customer's network");
+        Check(ListeningProblems.Detect(false, 0, false, false, false, true, connectionKeepsDropping: true, providerFault: true) == ListeningProblems.Kind.ServiceUnavailable,
+              "a provider fault outranks repeated drops");
+        Check(SpeechHealth.IsProviderFaultLine(">>> [DEEPGRAM] Refused with 402; waiting for a new token or credit, then trying again."), "402 is a provider fault");
+        Check(SpeechHealth.IsProviderFaultLine(">>> [DEEPGRAM] HTTP 503: server rejected WebSocket connection"), "503 is a provider fault");
+        Check(!SpeechHealth.IsProviderFaultLine(">>> [DEEPGRAM] Refused with 401; waiting for a new token or credit, then trying again."), "401 is a token to renew");
+        Check(!SpeechHealth.IsProviderFaultLine(">>> [DEEPGRAM] HTTP 401: nope"), "an HTTP 401 is a token to renew");
+        Check(!SpeechHealth.IsProviderFaultLine(">>> [DEEPGRAM] error: timed out"), "a line problem is not a provider fault");
         Check(D(wait: true) == ListeningProblems.Kind.WaitingToReconnect, "a backoff is a reconnect");
         Check(D(noMic: true) == ListeningProblems.Kind.NoMicrophone, "no microphone");
         Check(D(stalled: true) == ListeningProblems.Kind.NoSpeechService, "a stalled connection");
