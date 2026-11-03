@@ -2213,10 +2213,10 @@ namespace InterviewCopilot
                     _practiceTipShown = true;
                     ShowInAppAlert(
                         "Practising on your own?",
-                        "Interview hears the meeting only, so nothing you say is picked up. "
-                        + "Practice hears your microphone too.",
+                        "Right now Replysis hears the meeting only, so nothing you say is picked up. "
+                        + "It can hear your microphone too.",
                         persist: true,
-                        actionLabel: "Switch to Practice",
+                        actionLabel: "Use my microphone",
                         action: () => SelectAudioSource(practice: true));
                 }
             }
@@ -6838,9 +6838,7 @@ namespace InterviewCopilot
                 default:
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Auto is on. When the interviewer "));
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("asks a question in your meeting") { FontWeight = FontWeights.SemiBold, Foreground = white });
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(", the answer appears here on its own. Interview mode does not pick up your own voice. To try it by speaking, choose "));
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("Practice") { FontWeight = FontWeights.SemiBold, Foreground = white });
-                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(" above. If an answer does not come, press "));
+                    AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run(", the answer appears here on its own. If an answer does not come, press "));
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("SPACE") { FontWeight = FontWeights.SemiBold, Foreground = white });
                     AiAnswerHint.Inlines.Add(new System.Windows.Documents.Run("."));
                     TranscriptHintText.Text = "Listening for the interviewer on your computer audio";
@@ -6918,10 +6916,7 @@ namespace InterviewCopilot
             {
                 c = Color.FromRgb(239, 68, 68);
                 label = "NO SPEECH SERVICE";
-                MicBtn.ToolTip =
-                    "The app cannot reach the speech service. This is usually a network "
-                    + "that blocks it, such as a work, school or shop network, or a VPN. "
-                    + "Try a phone hotspot.";
+                MicBtn.ToolTip = ListeningProblems.Describe(ListeningProblems.Kind.NoSpeechService).Body;
             }
             // Auto is never "muted" from the user's point of view: it is starting,
             // paused, or about to listen again. A red MUTED after choosing

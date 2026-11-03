@@ -478,7 +478,7 @@
                                          the menu with both choices. The segments below stay for the code that drives them. -->
                                     <Border x:Name="ModeMenuPill" CornerRadius="4" Padding="9,5" Cursor="Hand"
                                             MouseLeftButtonDown="ModeMenuPill_Click"
-                                            ToolTip="What Replysis hears and how it answers. Ctrl+Shift+P switches Interview and Practice, Ctrl+Shift+A switches Auto and Manual.">
+                                            ToolTip="How Replysis answers. Ctrl+Shift+A switches Auto and Manual.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock x:Name="ModeMenuIcon" Text="&#xE7F5;" FontFamily="Segoe MDL2 Assets"
                                                        FontSize="10" Foreground="#FAFAFC" Margin="0,0,7,0" VerticalAlignment="Center"/>
@@ -513,7 +513,7 @@
                                             VerticalAlignment="Center"/>
                                     <Border x:Name="SegInterview" Visibility="Collapsed" CornerRadius="4" Padding="5,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegInterview_Click"
-                                            ToolTip="Interview. Hears the meeting only, so your own answers are never taken as questions. Use this for real interviews in Zoom, Meet or Teams.">
+                                            ToolTip="Hears the meeting only, so your own answers are never taken as questions.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock x:Name="SegInterviewIcon" Text="&#xE7F5;" FontFamily="Segoe MDL2 Assets"
                                                        FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -523,7 +523,7 @@
                                     </Border>
                                     <Border x:Name="SegPractice" Visibility="Collapsed" CornerRadius="4" Padding="5,5" Cursor="Hand"
                                             MouseLeftButtonDown="SegPractice_Click"
-                                            ToolTip="Practice. Hears the meeting and your microphone, for practising on your own or with someone in the room.">
+                                            ToolTip="Hears the meeting and your microphone.">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock x:Name="SegPracticeIcon" Text="&#xE720;" FontFamily="Segoe MDL2 Assets"
                                                        FontSize="10" Margin="0,0,6,0" VerticalAlignment="Center"/>

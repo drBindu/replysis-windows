@@ -95,7 +95,7 @@
                                 CornerRadius="6" Padding="9,5" Cursor="Hand"
                                 Background="#14FFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1"
                                 MouseLeftButtonDown="CompactModePill_Click"
-                                ToolTip="What Replysis hears and how it answers. Ctrl+Shift+P switches Interview and Practice, Ctrl+Shift+A switches Auto and Manual.">
+                                ToolTip="How Replysis answers. Ctrl+Shift+A switches Auto and Manual.">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock x:Name="CompactModeIcon" Text="&#xE7F5;" FontFamily="Segoe MDL2 Assets"
                                            FontSize="10" Foreground="#FAFAFC" Margin="0,0,6,0" VerticalAlignment="Center"/>

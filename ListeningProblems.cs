@@ -107,9 +107,9 @@ namespace InterviewCopilot
 
             Kind.NoSpeechService => new(
                 "NO SPEECH SERVICE",
-                "Cannot reach the speech service",
-                "This is usually a network that blocks it, such as a work or school network or a VPN. " +
-                "Try a phone hotspot. Press Ctrl+Alt+F12 to see details.",
+                "Still connecting to speech",
+                "Replysis is connecting to the speech service and keeps trying on its own. " +
+                "It starts listening by itself as soon as it connects. Press Ctrl+Alt+F12 to see details.",
                 NextStep.None),
 
             Kind.UnstableConnection => new(
@@ -142,11 +142,10 @@ namespace InterviewCopilot
             if (speechStatusCode == 401) return Kind.SignInExpired;
             if (speechStatusCode is 502 or 503) return Kind.ServiceUnavailable;
             // The speech provider itself said no or failed, seen in the engine's own lines. Nothing about the customer's
-            // line, so the wording below about networks and hotspots would send them looking in the wrong place.
+            // line, and "still connecting" would not be true.
             if (providerFault) return Kind.ServiceUnavailable;
             // A connection that was working and keeps breaking is a different thing from one that never
-            // worked, and from a short wait to reconnect. Saying "cannot reach the speech service" or "VPN"
-            // to someone already on a hotspot is wrong and sends them looking in the wrong place.
+            // worked, and from a short wait to reconnect, so each gets its own words.
             if (connectionKeepsDropping) return Kind.UnstableConnection;
             if (waitingToRetry) return Kind.WaitingToReconnect;
             if (fatalNoMicrophone) return Kind.NoMicrophone;

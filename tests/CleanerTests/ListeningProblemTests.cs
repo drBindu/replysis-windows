@@ -38,6 +38,10 @@ internal static class ListeningProblemTests
             Check(!Regex.IsMatch(words, @"\b(minutes?|hours?|mins?)\b", RegexOptions.IgnoreCase),
                 $"{kind}: never talks in minutes or hours, credits are the only meter");
 
+            // Never the customer's line, and there are no modes to name any more (owner, 2026-11-02).
+            Check(!Regex.IsMatch(d.Title + d.Body, @"(network|internet|wifi|wi-fi|hotspot|vpn|connection)|(interview|practice) mode", RegexOptions.IgnoreCase),
+                $"{kind}: blames no network and names no mode");
+
             // The owner's copy rules: no dashes, no middle dots.
             Check(!(d.Title + d.Body).Any(ch => ch is '—' or '–' or '·' or '•'),
                 $"{kind}: no dashes or middle dots");
