@@ -64,6 +64,11 @@ class ReconnectWords(unittest.TestCase):
         self.assertEqual(overlap("tell me about the", "then what happened"), ("then what happened", False))
         self.assertEqual(overlap("we used the", "where the data lives"), ("where the data lives", False))
 
+    def test_a_short_last_word_is_never_called_cut(self):
+        overlap, _ = load_overlap()
+        self.assertEqual(overlap("and so I", "so it was hard"), ("so it was hard", False))
+        self.assertEqual(overlap("we built a", "built an index"), ("built an index", False))
+
     def test_the_engine_keeps_words_across_connections(self):
         text = open(SOURCE, encoding="utf-8-sig").read()
         body = text[text.index("async def _run_deepgram_loop"):]

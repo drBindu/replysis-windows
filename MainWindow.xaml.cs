@@ -1541,6 +1541,7 @@ namespace InterviewCopilot
                 ReportProblem("alert", "alert-" + ClientErrorReporter.Slug(title),
                               title + ": " + (message.Length > 120 ? message[..120] : message));
             _bannerIsProblem = false;
+            _engineStartNoticeUp = false;
             _bannerIsUpdate = isUpdate;
             // In compact overlay the main window is hidden, so the banner would
             // never be seen. The overlay is the visible surface there.
@@ -2903,6 +2904,8 @@ namespace InterviewCopilot
                 _lastDeafnessRestartUtc = DateTime.UtcNow;
                 ShowListeningModeNotice("Reconnecting speech");
                 _nextEngineRestartUtc = DateTime.MinValue;
+                // Same as on wake: the connection carries nothing, so there is no session worth six seconds to close.
+                _engineConnectionIsDead = true;
                 StartSpeechmaticsEngine();
             }
             else
@@ -3020,7 +3023,7 @@ namespace InterviewCopilot
         /// concluded her laptop was broken (2026-09-29). The text lives in
         /// ListeningProblems, where a test fails if a problem has none.
         /// </summary>
-        private void ShowProblemOnce(ListeningProblems.Kind kind)
+        private void ShowProblemOnce(ListeningProblems.Kind kind, bool speechProblem = true)
         {
             if (!_problemsShown.Add(kind)) return;
             var d = ListeningProblems.Describe(kind, OnFreeTrial());
@@ -3048,7 +3051,9 @@ namespace InterviewCopilot
                     : null);
             // It stayed on screen after the problem was over, so "Cannot reach the speech service" sat above a transcript
             // that was plainly working. Now it comes down by itself when nothing is wrong any more (UpdateMicUi).
-            _bannerIsProblem = !_isCameraMode;
+            // Not an answer that was refused for want of answers: speech is fine then, so UpdateMicUi saw no problem and
+            // took the banner down the moment it went up.
+            _bannerIsProblem = !_isCameraMode && speechProblem;
         }
 
         /// <summary>
@@ -4528,7 +4533,8 @@ namespace InterviewCopilot
 
                 // Someone who just bought answers on the website still shows none here until the five minute refresh, and was
                 // told so on every question. Only an empty balance waits for this, so no answer is slowed.
-                if (OutOfAnswersHere()) await FetchAndDisplayCreditsAsync(force: true);
+                // Capped: the fetch refreshes the token and asks two endpoints, with nothing on screen while it runs.
+                if (OutOfAnswersHere()) await Task.WhenAny(FetchAndDisplayCreditsAsync(force: true), Task.Delay(3000));
                 aiCt.ThrowIfCancellationRequested();
 
                 // Block once credits have been fetched and confirmed exhausted.
@@ -4541,7 +4547,7 @@ namespace InterviewCopilot
                     // put a Windows dialog on screen in the middle of a live,
                     // possibly shared, interview. Shown in-app instead.
                     // The free trial's end gets the same banner as F8, with Upgrade now: it shows once, and this repeats.
-                    if (OnFreeTrial()) ShowProblemOnce(ListeningProblems.Kind.NoCredits);
+                    if (OnFreeTrial()) ShowProblemOnce(ListeningProblems.Kind.NoCredits, speechProblem: false);
                     else ShowInAppAlert(
                         $"You have {PlanFacts.AnswersLabel(UserSession.Credits)} left",
                         "Open the answers badge at the top to add more. Your session stays open.");
@@ -6026,7 +6032,7 @@ namespace InterviewCopilot
             int status = (int)res.StatusCode;
             if (status == 402)
             {
-                if (OnFreeTrial()) Dispatcher.Invoke(() => ShowProblemOnce(ListeningProblems.Kind.NoCredits));
+                if (OnFreeTrial()) Dispatcher.Invoke(() => ShowProblemOnce(ListeningProblems.Kind.NoCredits, speechProblem: false));
                 throw new BackendRequestException("You are out of answers. Open the answers badge at the top to add more.");
             }
             if (status == 401)
@@ -7457,13 +7463,28 @@ namespace InterviewCopilot
                         ReportProblem("engine", "engine-start-failed", $"{ex.GetType().Name} 0x{ex.HResult:X8}");
                     try { speechmaticsProcess.Dispose(); } catch { }
                     speechmaticsProcess = null;
-                    if (++_engineStartFailures == EngineStartFailuresToSay) _ = Dispatcher.BeginInvoke(new Action(ShowEngineAuthError));
+                    // The feeds opened above have no engine to read them: left open, the microphone stayed in use until
+                    // the next try, and with an antivirus block that is every try.
+                    StopNativeAudio();
+                    if (++_engineStartFailures == EngineStartFailuresToSay)
+                        _ = Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            ShowEngineAuthError();
+                            _engineStartNoticeUp = !_isCameraMode;   // after it: ShowInAppAlert clears it
+                        }));
                     return;
                 }
                 if (EngineCannotStart)
                 {
-                    _bannerIsProblem = true;   // the notice said it could not start, and now it has
-                    _ = Dispatcher.BeginInvoke(new Action(HideProblemBannerIfShowing));
+                    // The notice said it could not start, and now it has. Only that notice comes down: anything shown since
+                    // replaced it and is left alone.
+                    _ = Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (!_engineStartNoticeUp) return;
+                        _engineStartNoticeUp = false;
+                        _bannerIsProblem = true;
+                        HideProblemBannerIfShowing();
+                    }));
                 }
                 _engineStartFailures = 0;
                 AlwaysReady.OptOutOfThrottling(speechmaticsProcess);
@@ -8566,6 +8587,7 @@ namespace InterviewCopilot
 
         private int _engineStartFailures;
         private const int EngineStartFailuresToSay = 3;
+        private bool _engineStartNoticeUp;   // the "could not start" notice is the banner on screen
         private bool EngineCannotStart => _engineStartFailures >= EngineStartFailuresToSay;
 
         private async Task RecoverSpeechmaticsAuthenticationAsync()
@@ -9801,7 +9823,12 @@ namespace InterviewCopilot
             _interviewSilentTipShown = true;
 
             // Credits check. A guest gets the free answers once (tracked by device ID).
-            if (OutOfAnswersHere()) await FetchAndDisplayCreditsAsync(force: true);
+            if (OutOfAnswersHere())
+            {
+                await Task.WhenAny(FetchAndDisplayCreditsAsync(force: true), Task.Delay(3000));
+                // A second F8 got past the guard above while this waited.
+                if (isProcessing || _isScreenAnalyzing) return;
+            }
             if (OutOfAnswersHere())
             {
                 int remaining = UserSession.Credits;
@@ -9820,7 +9847,7 @@ namespace InterviewCopilot
                         "Upgrade your plan or add answers to continue\n" +
                         "using Screen AI and other advanced features.";
                 // The answer box is plain text, so the direct link is the banner's Upgrade now button (owner, 2026-10-27).
-                if (isGuest || OnFreeTrial()) ShowProblemOnce(ListeningProblems.Kind.NoCredits);
+                if (isGuest || OnFreeTrial()) ShowProblemOnce(ListeningProblems.Kind.NoCredits, speechProblem: false);
                 return;
             }
 

@@ -3311,6 +3311,9 @@ def _replay_overlap(carried, text, least=2):
     if least < 2:
         return text, False
     cut, before = held[-1], held[:-1]
+    # A word of one or two letters ("I", "a", "so") starts too many others to be called cut off.
+    if len(cut) < 3:
+        return text, False
     for count in range(min(len(before), len(new) - 1, 60), 0, -1):
         whole = new[count]
         if before[-count:] == new[:count] and cut and whole != cut and whole.startswith(cut):

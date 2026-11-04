@@ -215,41 +215,58 @@ namespace InterviewCopilot
             {
                 using var en = new MMDeviceEnumerator();
                 MMDevice device = PickDevice(en);
-
-                IWaveIn capture = _loopback
-                    ? new WasapiLoopbackCapture(device)
-                    : new WasapiCapture(device, true, 20);
-                WaveFormat fmt = capture.WaveFormat;
-
-                _isFloat = fmt.Encoding == WaveFormatEncoding.IeeeFloat ||
-                           (fmt is WaveFormatExtensible ext && ext.SubFormat == new Guid("00000003-0000-0010-8000-00aa00389b71"));
-                if (!_isFloat && fmt.BitsPerSample != 16 && fmt.BitsPerSample != 24 && fmt.BitsPerSample != 32)
+                IWaveIn? capture = null;
+                try
                 {
-                    capture.Dispose();
-                    throw new NotSupportedException($"sample format {fmt.Encoding} {fmt.BitsPerSample} bit");
+                    capture = _loopback
+                        ? new WasapiLoopbackCapture(device)
+                        : new WasapiCapture(device, true, 20);
+                    WaveFormat fmt = capture.WaveFormat;
+
+                    _isFloat = fmt.Encoding == WaveFormatEncoding.IeeeFloat ||
+                               (fmt is WaveFormatExtensible ext && ext.SubFormat == new Guid("00000003-0000-0010-8000-00aa00389b71"));
+                    if (!_isFloat && fmt.BitsPerSample != 16 && fmt.BitsPerSample != 24 && fmt.BitsPerSample != 32)
+                    {
+                        capture.Dispose();
+                        throw new NotSupportedException($"sample format {fmt.Encoding} {fmt.BitsPerSample} bit");
+                    }
+
+                    if (_disposed)
+                    {
+                        // Shut down while this was opening: never leave a device recording with nobody to stop it.
+                        try { capture.Dispose(); } catch { }
+                        try { device.Dispose(); } catch { }
+                        return;
+                    }
+                    capture.DataAvailable += OnData;
+                    capture.RecordingStopped += OnStopped;
+                    _src.Clear();
+                    _pos = 0;
+                    _format = fmt;
+                    _device = device;
+                    _deviceId = device.ID;
+                    DeviceName = device.FriendlyName ?? "";
+                    _captureStopped = false;
+                    _lastDataUtc = DateTime.UtcNow;
+                    _lastRestartUtc = DateTime.UtcNow;
+                    capture.StartRecording();
+                    _capture = capture;
+                    Note($">>> NATIVE {_label}: listening on \"{DeviceName}\" ({fmt.SampleRate}Hz {fmt.Channels}ch).");
                 }
-
-                if (_disposed)
+                catch
                 {
-                    // Shut down while this was opening: never leave a device recording with nobody to stop it.
-                    try { capture.Dispose(); } catch { }
+                    // A device that will not open is tried again every five seconds (Watch), so what this attempt opened
+                    // must be let go here, or each try leaks a capture and a device handle.
+                    if (capture != null)
+                    {
+                        capture.DataAvailable -= OnData;
+                        capture.RecordingStopped -= OnStopped;
+                        try { capture.Dispose(); } catch { }
+                    }
+                    if (ReferenceEquals(_device, device)) _device = null;
                     try { device.Dispose(); } catch { }
-                    return;
+                    throw;
                 }
-                capture.DataAvailable += OnData;
-                capture.RecordingStopped += OnStopped;
-                _src.Clear();
-                _pos = 0;
-                _format = fmt;
-                _device = device;
-                _deviceId = device.ID;
-                DeviceName = device.FriendlyName ?? "";
-                _captureStopped = false;
-                _lastDataUtc = DateTime.UtcNow;
-                _lastRestartUtc = DateTime.UtcNow;
-                capture.StartRecording();
-                _capture = capture;
-                Note($">>> NATIVE {_label}: listening on \"{DeviceName}\" ({fmt.SampleRate}Hz {fmt.Channels}ch).");
             }
         }
 

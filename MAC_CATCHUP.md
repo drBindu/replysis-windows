@@ -4353,3 +4353,12 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 - App: the wake flag that kills a dead engine at once is cleared at every engine start, so a later deliberate restart closes a
   healthy engine politely and keeps the end of the question.
 - App: New session resumes Auto when Finish (or idle) had paused it.
+
+## 2026-11-04: code review fixes on the audit work (Windows, local, not released)
+
+- Out of answers banner for free users no longer disappears on the next mic refresh (ShowProblemOnce speechProblem false).
+- A failed engine start closes the mic and system audio feeds at once; only the "could not start" notice is cleared when it finally starts.
+- F8 rechecks busy after waiting for the balance (no double screen read); the balance wait is capped at 3 s on the answer path and F8.
+- A failed audio device open releases its capture and device handle (no leak on the 5 s retry).
+- The "hearing sound but no words" restart skips the polite close, like wake.
+- Engine: a held last word of one or two letters ("I", "a", "so") is never treated as cut off on reconnect. Mac engine needs the same.
