@@ -3288,16 +3288,39 @@ def _drop_replayed_words(carried, text):
     Unanswered audio is sent again after a drop, so the first words back can be the last words already held. Two words at
     least, because one matching word is as likely a real repeat ("the", "so"), and a doubled word does less harm than a lost one.
     """
+    return _replay_overlap(carried, text)[0]
+
+
+def _replay_overlap(carried, text, least=2):
+    """(new words, whether the last held word was cut off and comes back whole in them).
+
+    A drop can cut the last word held ("url short" for "url shortener"). Then nothing matches exactly and the whole phrase came
+    back twice, so the match is tried again without that word, when it starts the word that comes back in its place. The caller
+    then drops the cut word, since the whole one follows, and passes least=1 from then on: the held words it compares with
+    are one shorter, and every later message of that turn repeats the same overlap.
+    """
     if not carried or not text:
-        return text
+        return text, False
     plain = lambda word: "".join(ch for ch in word if ch.isalnum()).lower()
     held = [plain(word) for word in carried.split()]
     words = text.split()
     new = [plain(word) for word in words]
-    for count in range(min(len(held), len(new), 60), 1, -1):
-        if held[-count:] == new[:count]:
-            return " ".join(words[count:])
-    return text
+    for count in range(min(len(held), len(new), 60), least - 1, -1):
+        if count and held[-count:] == new[:count]:
+            return " ".join(words[count:]), False
+    if least < 2:
+        return text, False
+    cut, before = held[-1], held[:-1]
+    for count in range(min(len(before), len(new) - 1, 60), 0, -1):
+        whole = new[count]
+        if before[-count:] == new[:count] and cut and whole != cut and whole.startswith(cut):
+            return " ".join(words[count:]), True
+    return text, False
+
+
+def _without_last_word(text):
+    """The text without its last word."""
+    return text.rsplit(" ", 1)[0] if " " in text.strip() else ""
 
 
 # A Flux connection that sat muted goes stale. Measured 2026-10-16 against the real service from the owner's PC: a fresh
@@ -3414,7 +3437,7 @@ async def _run_deepgram_loop(holder) -> str:
     line_trouble_until = 0.0   # the smaller voice format is used until then, whatever the app's own test said
     # Kept across reconnects: a drop in the middle of a question left only the words after it, and that tail was what got
     # answered (71 of 121 characters in a real log). Only reset.flag starts a new question.
-    transcript = {"confirmed": "", "partial": "", "carried": "", "eager": False}
+    transcript = {"confirmed": "", "partial": "", "carried": "", "least": 2, "eager": False}
 
     while True:
         if os.path.exists(SHUTDOWN_FLAG):
@@ -3460,7 +3483,7 @@ async def _run_deepgram_loop(holder) -> str:
                 session_started = time.monotonic()
                 rx["last"] = session_started
                 held = f"{transcript['confirmed']} {transcript['partial']}".strip()
-                transcript.update(confirmed=held, partial="", carried=held, eager=False)
+                transcript.update(confirmed=held, partial="", carried=held, least=2, eager=False)
                 audio = {"last": 0.0, "since": 0.0}   # when audio last went out, and when this stretch of audio began
                 # When speech (not silence) first went out with nothing answered since. The service may stay quiet for a
                 # few seconds while only silence goes out, and that was taken for a dead connection: 6 needless reconnects
@@ -3554,7 +3577,11 @@ async def _run_deepgram_loop(holder) -> str:
                             if os.path.exists(PAUSE_FLAG):
                                 continue
                             event = msg.get("event") or ""
-                            text = _drop_replayed_words(transcript["carried"], (msg.get("transcript") or "").strip())
+                            text, cut = _replay_overlap(transcript["carried"], (msg.get("transcript") or "").strip(), transcript["least"])
+                            if cut:
+                                transcript["confirmed"] = _without_last_word(transcript["confirmed"])
+                                transcript["carried"] = _without_last_word(transcript["carried"])
+                                transcript["least"] = 1
                             if event == "EndOfTurn":
                                 if text:
                                     transcript["confirmed"] = f"{transcript['confirmed']} {text}".strip()
@@ -3626,7 +3653,11 @@ async def _run_deepgram_loop(holder) -> str:
                             continue
 
                         alternatives = (msg.get("channel") or {}).get("alternatives") or [{}]
-                        text = _drop_replayed_words(transcript["carried"], (alternatives[0].get("transcript") or "").strip())
+                        text, cut = _replay_overlap(transcript["carried"], (alternatives[0].get("transcript") or "").strip(), transcript["least"])
+                        if cut:
+                            transcript["confirmed"] = _without_last_word(transcript["confirmed"])
+                            transcript["carried"] = _without_last_word(transcript["carried"])
+                            transcript["least"] = 1
                         if msg.get("is_final"):
                             transcript["partial"] = ""
                             transcript["carried"] = ""

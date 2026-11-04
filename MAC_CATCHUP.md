@@ -4343,3 +4343,13 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 - Audio feed: a failed device switch left no capture and, if the default came back, it was never reopened. It reopens now, and two reopens cannot overlap. Mac: nothing to do (Windows audio only).
 - App behaviour, Mac please match where it applies: Finish in Auto no longer restarts listening (Space or the mic resumes). Update notices wait for the whole interview and never replace an answer in the compact window. A timeout or 5xx from Google's token service no longer signs anyone out; only a refused refresh does. The answer path no longer waits on a slow token refresh while the token still works (capped at 3 s in its last minute). No first word in 20 s ends the request with 'That did not go through. Please try again.' A speech provider refusal (402, 403, 429, 5xx) shows the service as unavailable, not a network problem. An empty balance is refreshed before blocking and when the window gets focus, so a customer who just paid is not blocked. Free users who run out by voice get the same banner with Upgrade now as F8. Space works after the mic button started listening. An engine that fails to start is retried and says so after 3 tries. Wake reconnects at once and reinstalls the keyboard hook.
 - Wording: the stalled speech message no longer mentions networks, VPNs or hotspots. It is now 'Still connecting to speech: Replysis is connecting to the speech service and keeps trying on its own. It starts listening by itself as soon as it connects.' The Interview and Practice mode names are gone from tooltips, Settings ('Use my microphone') and hints. A first word limit of 20 s stays. Mac: match both.
+
+## 2026-11-04: reconnect cut word, wake flag, New session resumes Auto (Windows, local, not released)
+
+- Engine (`speechmatics_engine.py`, shared with the Mac bundle): after a drop the last held word can be cut ("url short"), so
+  the replayed audio matched nothing and the phrase came back twice. `_replay_overlap` now also matches without that word when
+  it starts the word that comes back, drops the cut word, and matches the rest of that turn on one word or more
+  (`transcript["least"]`). Tests in `tests/engine/test_reconnect_words.py`. The Mac engine needs the same change.
+- App: the wake flag that kills a dead engine at once is cleared at every engine start, so a later deliberate restart closes a
+  healthy engine politely and keeps the end of the question.
+- App: New session resumes Auto when Finish (or idle) had paused it.

@@ -7285,6 +7285,9 @@ namespace InterviewCopilot
                     // Another restart was asked for while this one waited; that one owns the start now.
                     if (generation != Volatile.Read(ref _engineStartGeneration)) return;
                 }
+                // The wake flag is about the engine that was running at wake. With none running, it was never read, and the next
+                // deliberate restart would kill a healthy engine at once and lose the end of a question.
+                _engineConnectionIsDead = false;
                 if (_engineOnline) _engineOfflineSinceUtc = DateTime.UtcNow;   // a deliberate restart: the wait starts now
                 _engineOnline      = false; // fresh process: not ready to transcribe yet
                 _engineReportsEndpoints = false;   // until its start-up line says which service it is on
@@ -9317,6 +9320,14 @@ namespace InterviewCopilot
                 AiAnswerBox.Text = $"Session {sessionNumber} started. The previous audio recording could not be confirmed saved. Check disk space and permissions. Transcript saving is separate from audio.";
             else
                 AiAnswerBox.Text = $"Session {sessionNumber} started. Your resume and role are still loaded.";
+
+            // A new session is the person starting the next interview, so Auto stops waiting after Finish and listens again.
+            if (isRecording && AutoModeEnabled && _autoPausedForIdle)
+            {
+                _autoPausedForIdle = false;
+                DebugWindow.Log("MODE", "Auto resumed by New session.");
+                StartAutoListeningIfReady();
+            }
             }
             catch (Exception ex)
             {
