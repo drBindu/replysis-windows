@@ -794,3 +794,19 @@ Needs: a website deploy, and the next Windows version.
 **Checks:** app and all test projects build with 0 errors; CleanerTests all passed, including section 32. No website or server code changed this round.
 
 **Needs the owner:** ships with the next Windows version.
+
+## Round 34: dead code and risky leftovers (2026-11-07)
+
+Removed, after checking every client (website, Windows, Mac, phone app, server) calls none of it:
+- Website `app/lib/credits.ts`: six old helpers that wrote answer balances and plans straight to the database from the browser (create the account record, take answers, upgrade a plan, cancel a plan, and two readers only they used). Nothing called them, and the database rules put live today refuse those writes anyway. Left in, they invited someone to wire a browser-side charge or plan change back in. The sync check now fails if that file ever writes again.
+- Website page `/real-interview/popup`: an old floating interview window that read a resume and settings from the web address. Nothing opens it any more (the interview page passes its settings another way), so it was a page a crafted link could still open with someone else's text.
+
+Left in place, on purpose:
+- Server `/api/v1/resume/analyze` and `/api/v1/resume/load/{id}`: no app calls them today, but both check the sign-in, charge and refund correctly, and only return the caller's own resume. Removing them gains little.
+- Server `/api/v1/voice/*`: the phone call feature is paused, not dropped.
+- Windows: the hidden Interview and Practice switch in the main window XAML (top bar area, locked), and the developer-only screen capture files (only in Debug builds, never shipped).
+- No website API route was unused: every one has a caller.
+
+Checks: website type check clean and a full production build passes (from a separate copy, so the other chat's dev server was untouched; its stale generated files still name the removed page until it rebuilds), sync check ALL IN SYNC, all 11 script checks pass. No server or Windows code changed.
+
+Needs the owner: a website deploy.
