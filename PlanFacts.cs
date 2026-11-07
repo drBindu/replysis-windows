@@ -86,6 +86,26 @@ namespace InterviewCopilot
         /// <summary>What a balance can actually buy: rounded down, never overstated (12 credits is 2 answers).</summary>
         internal static int Answers(int credits) => Math.Max(0, credits) / AnswerCost;
 
+        /// <summary>
+        /// What the server writes into the answer stream when the charge finds no answers left (InterviewController
+        /// noAnswersLeftEvent). The question's own reply, so the app must recognise it as out of answers, not a fault.
+        /// </summary>
+        internal const string ServerNoAnswersLeft = "You have no answers left.";
+
+        internal static bool IsServerNoAnswersLeft(string? said) =>
+            string.Equals((said ?? "").Trim(), ServerNoAnswersLeft, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The app's own words for being out of answers, the same whichever way the server said it.</summary>
+        internal const string OutOfAnswersMessage = "You are out of answers. Open the answers badge at the top to add more.";
+
+        /// <summary>
+        /// The problem name an answer failure is reported under. Running out of answers is a normal state, not a fault, so
+        /// it carries "nocredits", which the server's alert rule (DiagnosticsController.isRealError) never counts. Reported
+        /// as an ordinary failure, every customer reaching the end of their answers counted towards an outage email.
+        /// </summary>
+        internal static string AnswerProblemKind(bool noAnswersLeft, string slug) =>
+            noAnswersLeft ? "answer-nocredits" : "answer-" + slug;
+
         /// <summary>"12", or "1.5k" on the badge.</summary>
         internal static string AnswersShort(int credits)
         {

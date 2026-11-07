@@ -253,7 +253,11 @@ namespace InterviewCopilot
 
         private sealed class BackendRequestException : Exception
         {
-            public BackendRequestException(string message) : base(message) { }
+            public BackendRequestException(string message, bool noAnswersLeft = false) : base(message)
+                => NoAnswersLeft = noAnswersLeft;
+
+            /// <summary>The server refused the charge for want of answers: a normal state, not a fault.</summary>
+            public bool NoAnswersLeft { get; }
         }
 
         private int sessionNumber = 1;
@@ -4694,7 +4698,10 @@ namespace InterviewCopilot
             {
                 if (aiCt.IsCancellationRequested || !ReferenceEquals(_aiCts, requestOwner)) return;
                 DebugWindow.Log("AI_ERR", ex.Message);
-                ReportProblem("answer", "answer-" + ClientErrorReporter.Slug(ex.Message), ex.Message);
+                ReportProblem("answer", PlanFacts.AnswerProblemKind(ex.NoAnswersLeft, ClientErrorReporter.Slug(ex.Message)), ex.Message);
+                // Most out of answers replies come inside the stream (the charge runs there), and only the 402 path ever
+                // showed the trial's Upgrade banner. Either way the trial's end now gets it.
+                if (ex.NoAnswersLeft && OnFreeTrial()) ShowProblemOnce(ListeningProblems.Kind.NoCredits, speechProblem: false);
                 string partial = CleanAiOutput(streamedAnswer.ToString());
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(partial)
                     ? ex.Message
@@ -4706,6 +4713,11 @@ namespace InterviewCopilot
             catch (Exception ex)
             {
                 if (aiCt.IsCancellationRequested || !ReferenceEquals(_aiCts, requestOwner)) return;
+                // Cancelled without anyone pressing anything: the first word limit ran out. Named, so the log and the
+                // admin panel say "no first word in 20 s" rather than a bare TaskCanceledException.
+                bool firstWordTimedOut = ex is OperationCanceledException && streamedAnswer.Length == 0;
+                if (firstWordTimedOut)
+                    DebugWindow.Log("AI_ERR", $"No first word within {FirstWordTimeout.TotalSeconds:0} s; the request was stopped.");
                 // The type and the inner exception, not just the message. A
                 // message alone cannot distinguish a dropped socket from a
                 // rejected payload from a bug in our own capture path, and those
@@ -4726,7 +4738,7 @@ namespace InterviewCopilot
                 string failure = ex is InvalidOperationException && !string.IsNullOrWhiteSpace(ex.Message)
                     ? ex.Message
                     : AnswerDidNotGoThrough;
-                ReportProblem("answer", "answer-failed-" + ex.GetType().Name,
+                ReportProblem("answer", firstWordTimedOut ? "answer-first-word-timeout" : "answer-failed-" + ex.GetType().Name,
                               $"{ex.GetType().Name}: {ex.Message}" + (ex.InnerException is null ? "" : $" <- {ex.InnerException.GetType().Name}"));
                 AiAnswerBox.Text = string.IsNullOrWhiteSpace(partial)
                     ? failure
@@ -6052,10 +6064,7 @@ namespace InterviewCopilot
             // ── 2. Handle non-200 status codes with plain yields (no try/catch) ─
             int status = (int)res.StatusCode;
             if (status == 402)
-            {
-                if (OnFreeTrial()) Dispatcher.Invoke(() => ShowProblemOnce(ListeningProblems.Kind.NoCredits, speechProblem: false));
-                throw new BackendRequestException("You are out of answers. Open the answers badge at the top to add more.");
-            }
+                throw new BackendRequestException(PlanFacts.OutOfAnswersMessage, noAnswersLeft: true);
             if (status == 401)
             {
                 // A slow or failing token service is not a lost sign-in: the first version of this treated a timeout as a
@@ -6269,6 +6278,9 @@ namespace InterviewCopilot
                     string? said = error.ValueKind == JsonValueKind.String ? error.GetString()
                         : error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var msg)
                           && msg.ValueKind == JsonValueKind.String ? msg.GetString() : null;
+                    // The answer path charges inside the stream, so running out arrives here, not as a 402.
+                    if (PlanFacts.IsServerNoAnswersLeft(said))
+                        throw new BackendRequestException(PlanFacts.OutOfAnswersMessage, noAnswersLeft: true);
                     throw new BackendRequestException(string.IsNullOrWhiteSpace(said)
                         ? "The answer service could not complete this request." : said);
                 }

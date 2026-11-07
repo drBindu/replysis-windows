@@ -4388,3 +4388,12 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
   the minutes back into the meter, sent with the next report (capped at an hour). Timeouts and other errors are not
   kept, since the server may have counted them. ListeningBilling.KeepFailedReport + MainWindow.KeepUnreportedMinutes.
   The Mac meter likely drops failed reports the same way.
+
+## 2026-11-07: bug round 4, answer engine (Windows, local, not released)
+
+- The answer stream's in-band "You have no answers left." (server noAnswersLeftEvent; the /ask charge runs inside the
+  stream, so this is the usual way it arrives, not a 402) is now treated as out of answers: reported as kind
+  "answer-nocredits" (never counted by DiagnosticsController.isRealError, so no owner outage email), and a free trial
+  gets its Upgrade banner. Both paths show "You are out of answers. Open the answers badge at the top to add more."
+  Mac: check how the Mac app reports this reply; if it sends it as a generic answer error it raises false alerts too.
+- A cancelled request with no words yet (the 20 s first word limit) is logged and reported as "answer-first-word-timeout".

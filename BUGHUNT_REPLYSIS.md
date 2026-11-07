@@ -115,3 +115,45 @@ Checked and found fine, with numbers where it mattered:
 Noted, not changed: if Speechmatics is down at the server AND Deepgram refuses the connection, the engine falls back
 to the placeholder Speechmatics key, is refused, and the app renews the speech pass and restarts listening. That is
 a retry loop only when both providers fail at once; before 2026-11-04 listening could not start at all in that case.
+
+## Round 4, 2026-11-07: the answer engine
+
+Checked: how a heard question becomes an answer in the Windows app (the wait for the last words after Space, Auto's
+"answer now", the canned replies to hello and small talk, the prompt and its history and context limits, the request,
+the 401 refresh and retry, the stream reader, the 20 second first word limit, cancelling with Space, the answer
+history and the compact window) and the server's answer path (the charge running alongside the model, the backup on a
+server error or a rate limit, the race against a silent model, the held back opening that catches refusals, refunds
+when nothing reached the person, and charging once 120 characters have been read).
+
+Fixed:
+
+1. **Windows: running out of answers emailed the owner as if the app were failing.** The server charges for an answer
+   inside the answer stream, so "You have no answers left." arrives there, not as a 402. The app reported it as an
+   ordinary answer failure, and the server counts those towards the "apps are reporting errors" email. Every customer
+   reaching the end of their answers, two of them within ten minutes, was enough. It is now reported as "nocredits",
+   which the server's alert rule never counts, on both the stream path and the 402 path.
+2. **Windows: a free trial that ran out in the middle of answering got no Upgrade button.** Round 2 added the trial's
+   Upgrade banner to the 402 path and the check before asking, but the usual way the server says it is inside the
+   stream (the balance on screen can lag by one answer when Auto answers twice quickly). That reply now gets the same
+   banner, and both paths show the same words: "You are out of answers. Open the answers badge at the top to add more."
+3. **Windows: the 20 second first word limit was logged as a bare TaskCanceledException.** It is now named in the log
+   and reported as "answer-first-word-timeout", so the admin panel says what actually happened. A stream cut by the
+   connection's own limit after words had arrived is not mislabelled as this. No change to what the person sees.
+
+Tests in PlanFactsTests (the server's words are recognised, a real fault is not mistaken for them, the report name).
+
+Checked and found fine:
+
+- The wait for the last words after Space is capped at about 1.3 s and only stretched while the speech service is
+  provably behind; nothing to cut without losing the end of questions.
+- The prompt is bounded: four turns of history, 4,000 characters of question, 12,000 of resume facts, and older code
+  collapsed. History is only touched on the window's own thread.
+- The canned replies subtract the pleasantry and answer only when nothing else was said, so "How are you handling
+  state in React?" still reaches the model.
+- A 401 is refreshed and asked once more; auth failures are not charged, so the repeat is not a second charge.
+- The server answers from the backup at once on a 5xx or 429 when one is configured, races a silent main model after
+  the hedge delay, refunds anything that never reached the person, and keeps the up front charge off the first word.
+
+Noted, not changed: the server holds the first 64 characters of every answer to catch a model's refusal before the
+person sees it. That costs the time to generate those characters (tens of milliseconds on the fast models) on every
+answer. Changing it is a product decision, because it trades speed against an apology occasionally reaching the screen.

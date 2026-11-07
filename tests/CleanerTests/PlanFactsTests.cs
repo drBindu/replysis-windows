@@ -91,6 +91,20 @@ internal static class PlanFactsTests
         Check(!Regex.IsMatch(ListeningProblems.Describe(ListeningProblems.Kind.NoCredits).Title + ListeningProblems.Describe(ListeningProblems.Kind.NoCredits).Body, "credit", RegexOptions.IgnoreCase),
             "and no screen the app shows says credits");
 
+        // The answer path charges inside the stream, so running out arrives as the server's own words, not a 402.
+        Check(PlanFacts.IsServerNoAnswersLeft("You have no answers left.") && PlanFacts.IsServerNoAnswersLeft(" you have no answers left. "),
+            "the server's in-stream out of answers reply is recognised");
+        Check(!PlanFacts.IsServerNoAnswersLeft("The AI service is temporarily unavailable. Please try again.")
+              && !PlanFacts.IsServerNoAnswersLeft(null) && !PlanFacts.IsServerNoAnswersLeft(""),
+            "and a real fault is not mistaken for it");
+        // Running out is reported under a name the server's alert rule never counts (isRealError skips "nocredits").
+        Check(PlanFacts.AnswerProblemKind(true, "you-have-no-answers-left") == "answer-nocredits",
+            "out of answers is reported as nocredits, never as an outage");
+        Check(PlanFacts.AnswerProblemKind(false, "answers-are-busy") == "answer-answers-are-busy",
+            "a real failure keeps its own name");
+        Check(PlanFacts.OutOfAnswersMessage.Contains("answers badge") && !PlanFacts.OutOfAnswersMessage.Contains("credit", StringComparison.OrdinalIgnoreCase),
+            "the app says out of answers the same way whichever path the server used");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "plan facts: all passed" : $"plan facts: {failed} FAILED");
         return failed;
