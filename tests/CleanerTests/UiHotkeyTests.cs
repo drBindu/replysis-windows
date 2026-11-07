@@ -58,6 +58,10 @@ internal static class UiHotkeyTests
               "Ctrl+Alt+Space always toggles, even right after another Space");
         Check(GlobalHotkey.ListeningShortcutAllowed(now + GlobalHotkey.TypingWindowMs, longAgo, false, false, true, false, now),
               "a Space a full typing window after the last one toggles again");
+        Check(GlobalHotkey.ListeningShortcutAllowed(now + 150, longAgo, false, false, true, false, now),
+              "in Replysis itself a quick second Space still toggles (stop, then interrupt)");
+        Check(!GlobalHotkey.ListeningShortcutAllowed(now + 150, longAgo, false, false, false, true, now),
+              "in another app a quick second Space is still typing");
         Check(GlobalHotkey.ListeningShortcutAllowed(now, longAgo, false, false, true, false),
               "callers that do not pass a last Space time behave as before");
 

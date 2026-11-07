@@ -155,6 +155,15 @@ internal static class ListeningProblemTests
         string body = once < 0 || end < 0 ? "" : main[once..end];
         Check(body.Contains("ListeningProblems.ReportKind(kind)") && body.Contains("report: false"),
             "a problem banner is reported once, by its kind, not again by its title");
+        // Information banners are not app errors: reported by their title, a microphone being found or a bank asking
+        // to approve minutes within ten minutes counted toward the outage email (round 22).
+        foreach (string title in new[] { "ShowInAppAlert(\"Microphone found\"", "\"Nothing heard yet\",", "\"Your minutes are almost over\"" })
+        {
+            int at = main.IndexOf(title, StringComparison.Ordinal);
+            int close = at < 0 ? -1 : main.IndexOf(");", at, StringComparison.Ordinal);
+            string call = at < 0 || close < 0 ? "" : main[at..close];
+            Check(call.Contains("report: false"), $"the {title} banner is not reported as an app error");
+        }
 
         return failed;
     }

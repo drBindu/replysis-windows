@@ -4457,3 +4457,8 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 - Space counts as typing in ANY editable field of any app window (the Windows list missed the pay box: spaces were swallowed and a pause started listening). Check the Mac's field list the same way.
 - A plain Space within 1 s of the previous Space is typing (indenting code with "Space works in any app" sent charged answers). Ctrl+Alt+Space always toggles.
 - Compact answer window: lines inside a code fence keep their indentation even when the answer has bullets (they were trimmed). Check the Mac overlay's formatter.
+
+## 2026-11-07: round 22, checking the Windows changes together (Windows, local, not released)
+
+- Round 20's "quick second Space is typing" rule now applies only when another app is in front. Inside Replysis a quick second press (stop, then interrupt the answer) works again. If the Mac copies round 20, copy this limit too.
+- "Microphone found", "Nothing heard yet" and "Your minutes are almost over" banners are no longer reported as app errors (they counted toward the outage email). Check the Mac does not report information banners as errors.

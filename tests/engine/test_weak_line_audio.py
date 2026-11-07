@@ -13,7 +13,7 @@ source = Path(__file__).resolve().parents[2] / "speechmatics_engine.py"
 tree = ast.parse(source.read_text(encoding="utf-8"))
 func_names = {"_build_mulaw_table", "_pcm16_to_mulaw", "_slow_line_requested", "_deepgram_url", "_deepgram_keyterms", "_deepgram_flux"}
 const_names = {"_MULAW_TABLE", "_SLOW_LINE_FLAG", "_SLOW_LINE_FRESH_SECONDS", "DEEPGRAM_URL", "DEEPGRAM_MAX_KEYTERMS",
-               "_DEEPGRAM_BUILTIN_TERMS", "SAMPLE_RATE"}
+               "_DEEPGRAM_BUILTIN_TERMS", "SAMPLE_RATE", "_flux_given_up"}
 scope = {"struct": struct, "os": os, "time": time, "urllib": urllib, "args": SimpleNamespace(utterance_silence=1.0),
          "SAMPLE_RATE": 16000, "DEEPGRAM_URL": "wss://api.deepgram.com/v1/listen", "DEEPGRAM_MAX_KEYTERMS": 100,
          "_DEEPGRAM_BUILTIN_TERMS": ["Replysis"], "_load_extra_vocab": lambda: [], "APP_DATA": tempfile.gettempdir()}

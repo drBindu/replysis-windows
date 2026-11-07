@@ -2070,7 +2070,7 @@ namespace InterviewCopilot
                     if (inputs > baseline && PracticeAudioOn)
                     {
                         DebugWindow.Log("AUDIO", "A microphone was plugged in; restarting listening on it.");
-                        ShowInAppAlert("Microphone found", "Replysis is listening to your microphone now.", persist: false);
+                        ShowInAppAlert("Microphone found", "Replysis is listening to your microphone now.", persist: false, report: false);
                         RestartEngineBetweenQuestions();
                     }
                 }
@@ -2805,7 +2805,7 @@ namespace InterviewCopilot
                     "Nothing heard yet",
                     "Replysis has not heard any voice. Practising? Speak into your microphone; earphones with a mic work best. " +
                     "In an online interview, the interviewer is heard from this computer's sound.",
-                    persist: false);
+                    persist: false, report: false);
             }
 
             WarnIfHearingButNotTranscribing(now);
@@ -3279,7 +3279,7 @@ namespace InterviewCopilot
                     Dispatcher.Invoke(() => ShowInAppAlert(
                         "Your minutes are almost over",
                         "Your bank asks you to approve the 15 minutes. Tap to pay, and the interview keeps going meanwhile.",
-                        persist: true,
+                        persist: true, report: false,
                         actionLabel: "Add 15 minutes",
                         action: () =>
                         {

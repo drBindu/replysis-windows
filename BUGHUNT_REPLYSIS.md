@@ -519,3 +519,30 @@ Checked and fine: resume upload limits and scanned PDF message, the Windows app'
 Skipped: resume import from a file is free and calls the AI, limited to 6 a minute per account. That is deliberate (it is how someone starts), noted here only.
 
 Checks: npx tsc --noEmit clean, check-sync ALL IN SYNC, the new scripts/check-prompt-text.mjs passes, and the listening, resume text, safe path and refunds checks pass. Not run in a browser and no live model calls.
+
+## Round 22, 2026-11-07: checking all the Windows changes together
+
+All 30 Windows commits since 1.0.52 (89a202f) were read as one change, to catch fixes that clash with each other.
+
+Fixed:
+1. The quick second Space rule from round 20 also applied inside Replysis itself. There a quick second press is meant: stop listening, then a moment later press again to interrupt the answer. Inside Replysis that second press was ignored for a second. The rule now applies only when another app is in front (indenting code in an editor), which is the case round 20 was for. Replysis's own text boxes were already safe.
+2. Three information banners still counted as app errors toward the "apps are reporting errors" email: "Microphone found", "Nothing heard yet" (already reported once by its own kind) and "Your minutes are almost over" (a bank asking to approve minutes). Two of those within ten minutes, on two computers, was enough for a false outage email. They are no longer reported as errors.
+3. Test repair: tests/engine/test_weak_line_audio.py had been failing since 1.0.41 because it did not load one engine flag. It passes now. No engine code changed.
+
+Checked and fine together: Space and Auto rules (typing in a field, Auto paused after Finish and resumed by Space, the mic, Start or New session, answer now in Auto at most once a second), problem report kinds against the server's rule, the update notice hold and the stuck notice fix, the second launch bring-back, and no new waits on the answer path.
+
+Still failing, same as before these rounds: 3 older tests in test_line_resilience.py.
+
+Checks: the app and all 5 test projects build with 0 errors; CleanerTests all passed (5 new checks); every engine test file passes except those 3 older ones.
+
+What the next Windows version contains (all local, nothing released):
+- Listening: the start of a question is kept when the speech connection drops; no repeated words after a reconnect; faster recovery after sleep; listening time is no longer lost when a report fails; a single speech service error no longer stops listening for other languages; an antivirus or Store microphone block gets clear advice.
+- Answers: no sign out on a slow refresh; a 20 second limit when no words arrive; Thinking never sticks; out of answers shows the upgrade button for trials; no false outage emails from customers running out, updates failing, wrong passwords or information banners.
+- Auto: no restart after Finish; New session resumes it; no slowdown in long interviews.
+- Screen share: the black box stays on during screen reads; the right monitor is read with two screens.
+- Settings: Save no longer resets other settings; an unplugged microphone is remembered.
+- Keyboard: spaces work in every text box; indenting code in another app no longer sends answers; code keeps its indentation in the small answer window.
+- Trial: shown as Free trial with correct numbers, never Pro.
+- Updates: no stuck update notice; no update notice during an interview.
+- Safety: audio passed to the speech engine is readable by this Windows user only; opening Replysis again brings back a hidden window.
+- Needs before release: engine-dist rebuild, one try on a black box laptop, a second monitor, a Store install microphone switch, and the owner's yes.

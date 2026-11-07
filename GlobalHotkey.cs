@@ -76,11 +76,13 @@ namespace InterviewCopilot
         /// A plain Space within the typing window of the previous one is typing too: indenting code in an editor during a
         /// coding interview is several spaces in a row after a pause, and each used to toggle, starting and sending answers
         /// that were charged (round 20). The first Space after a pause still toggles; Ctrl+Alt+Space always does.
+        /// Only in another app: in Replysis itself a quick second press (stop, then interrupt the answer) is meant, and its
+        /// own text fields are already handled by IsTypingInTextField (round 22).
         /// </summary>
         internal static bool ListeningShortcutAllowed(long now, long lastTyped, bool modifiers,
             bool explicitChord, bool ownerForeground, bool plainEverywhere, long lastSpaceMs = long.MinValue / 2) =>
             explicitChord || ((ownerForeground || plainEverywhere) &&
-                              IsSpaceAToggle(now, Math.Max(lastTyped, lastSpaceMs), modifiers));
+                              IsSpaceAToggle(now, ownerForeground ? lastTyped : Math.Max(lastTyped, lastSpaceMs), modifiers));
 
         private long _lastPlainSpaceMs = long.MinValue / 2;
 
