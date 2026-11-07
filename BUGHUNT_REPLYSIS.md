@@ -255,3 +255,24 @@ Skipped:
 - The resume template list has middle dots between email, phone and place. That is the customer's own resume layout, not Replysis text.
 
 Checks: npx tsc --noEmit clean, check-sync ALL IN SYNC, check-resume-text and check-safe-path ok. No browser run.
+
+## Round 10, 2026-11-07: the backend API and the website's other API routes
+
+**Fixed (server, commit in uiii/backend, needs a deploy):**
+- **Free screen reads for accounts with nothing left.** While listening, the app sends the screen to the server every few
+  seconds so a screen answer can start sooner. Each one made the server start a paid picture read with the AI model, up to
+  six a minute, even for a signed-in account with 0 answers left that could never pay for the answer. A free account that
+  ran out and kept listening cost money every minute, and anyone could make throwaway accounts to do it on purpose. The
+  server now checks once a minute whether the account can pay for a screen answer (answers left, bought minutes, or an
+  unlimited plan) and skips the read ahead if not. The check runs in the background, so sending the screen and paying
+  users' answers are not slower. If the balance cannot be read, the read ahead still runs. 3 new tests.
+
+**Checked and fine:** interview history (only your own, by verified email), referral rewards (one claim per new account,
+capped per person), unsubscribe and the hourly follow-up timer (signed tokens), Stripe portal and checkout return
+addresses (fixed list, not taken from the request), listening reports (mock minutes still count), companion and presence
+(your own account only), account delete request, resume save and load (your own only), screenshot hand-over (only the
+person who sent it can use it), question sets and feedback (charged, refunded on failure), admin routes (owner's verified
+email).
+
+**Left as it is:** a free account that has not begun its one free Maya interview gets practice question sets and feedback
+free until it begins it. Known since the 2026-11-02 audit and kept because the phone app never begins one.
