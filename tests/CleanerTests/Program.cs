@@ -225,6 +225,9 @@ internal static class Program
         Console.WriteLine("\n27. Saving Settings keeps what is not on the form");
         _failed += SettingsSaveTests.Run();
 
+        Console.WriteLine("\n28. A first run works on any Windows (removed engine, Thai calendar, Store microphone switch)");
+        _failed += FirstRunTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

@@ -150,7 +150,7 @@ namespace InterviewCopilot
                 // Does not wait for it and cannot fail the beat.
                 _ = PingServerAsync(token);
 
-                string nowIso = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                string nowIso = FirstRunRules.ServerTimestamp(DateTime.UtcNow);   // the same on every Windows calendar
                 string fields = includeLogin
                     ? $"\"lastActive\":{{\"timestampValue\":\"{nowIso}\"}},\"lastLogin\":{{\"timestampValue\":\"{nowIso}\"}}"
                     : $"\"lastActive\":{{\"timestampValue\":\"{nowIso}\"}}";

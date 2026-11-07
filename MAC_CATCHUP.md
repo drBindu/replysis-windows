@@ -4429,3 +4429,13 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
   per answered part and only checks the transcript still starts with the same characters (0.07 ms two hours in); any other
   change falls back to the full match, so results are identical. Mac: check whether its Auto poll re-matches the whole
   transcript each tick the same way.
+
+## 2026-11-07: round 16, a new user's first run (Windows, local, not released)
+
+- If an antivirus removes the bundled speech engine, the app now says part of Replysis is missing and to allow it in
+  the antivirus and reinstall, instead of telling a customer to install Python. Check the Mac falls back the same way.
+- Store package declares the microphone (DeviceCapability), and the privacy check reads the Store copy's own switch.
+  Mac: check the hardened runtime / Info.plist microphone usage text is present.
+- Times sent to the server and read from session files use a fixed calendar (a Thai Windows sent the year 2569).
+  Mac: check any custom date format sent to the server uses en_US_POSIX.
+- The app passes APP_DATA_DIR to the engine so both use the same folder (the Mac already does).

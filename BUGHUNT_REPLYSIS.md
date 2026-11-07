@@ -395,3 +395,33 @@ Fixed (backend):
    Tests: EarlyVisionTests (when it starts, and that an unused one is always closed, even if it arrives late). 172 backend tests pass.
 
 Left for later, on purpose: deciding "coding or not" from the interviewer's words instead of the whole instruction text would skip the read entirely on ordinary screens, but it changes which path answers, so it needs a side by side check first. Needs the owner: a server deploy.
+
+## Round 16, 2026-11-07: a new user's first run on any Windows
+
+Checked: first launch with no settings, the engine and app agreeing on where the transcript lives, non English
+Windows (number and date formats, calendars), user folders with accents or Indian scripts, microphone privacy
+switches for the website copy and the Store copy, an antivirus removing the speech engine, and the first Start.
+
+Fixed:
+1. **An antivirus that removed the speech engine made Replysis tell a customer to install Python.** PyInstaller
+   programs are often quarantined. With speechmatics_engine.exe gone, the app fell back to the developer path and
+   said "Install Python 3.11 or newer, then run: pip install -r requirements.txt". Now an installed copy whose
+   engine is missing says part of Replysis is missing, the antivirus may have removed it, allow Replysis there and
+   install it again from replysis.com. It is retried like a failed start and said once, after 3 tries.
+2. **The Store copy never asked Windows for the microphone.** Its package listed only internet and full trust, so
+   Windows shows no microphone switch for it and can keep the microphone from it. The package now declares the
+   microphone. Needs the next Store package to take effect.
+3. **A Store user who switched Replysis off in microphone privacy was told to restart the computer.** The check
+   only looked at the desktop apps switch, which does not apply to a Store app. It now reads the Store copy's own
+   switch, so they are told to allow the microphone.
+4. **On a Thai Windows the app sent lastActive 543 years ahead and showed past sessions in 1483.** A custom date
+   format still follows the computer's calendar (Buddhist on Thai, Hijri on Saudi Arabian Windows). The time sent to
+   the server and the session date read back now use a fixed calendar.
+5. Quality: the app now tells the engine which folder to write the transcript to (APP_DATA_DIR), instead of each
+   working it out its own way.
+
+Checked and fine: decimal numbers between engine and app are read with a fixed format; the engine opens every text
+file as UTF-8, so accented or Indian script user folders work; first launch without settings uses safe defaults.
+
+Tests: 26 new checks in FirstRunTests (removed engine, six cultures incl. Thai and Saudi, Store and website
+microphone switches, the manifest).

@@ -332,7 +332,7 @@ namespace InterviewCopilot
                     int.TryParse(parts[0].Replace("SESSION", "").Trim(), out sessionNum);
                 if (parts.Length >= 2)
                     modelName = parts[1].Trim();
-                if (parts.Length >= 3 && DateTime.TryParse(parts[2].Trim(), out var parsedDate))
+                if (parts.Length >= 3 && FirstRunRules.TryReadSessionHeaderTime(parts[2], out var parsedDate))
                     sessionDate = parsedDate;
             }
 

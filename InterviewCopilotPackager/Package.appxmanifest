@@ -44,5 +44,8 @@
   <Capabilities>
     <Capability Name="internetClient" />
     <rescap:Capability Name="runFullTrust" />
+    <!-- The Store copy is a packaged app: without this Windows lists no microphone switch for Replysis and can keep the
+         microphone from it. Round 16, 2026-11-07. -->
+    <DeviceCapability Name="microphone" />
   </Capabilities>
 </Package>

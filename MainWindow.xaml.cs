@@ -1938,18 +1938,17 @@ namespace InterviewCopilot
         /// <summary>True only when a Windows microphone privacy switch is actually off (machine, user, or desktop apps).</summary>
         private static bool MicPrivacyBlocked()
         {
-            const string path = @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone";
-            static bool Deny(Microsoft.Win32.RegistryKey root, string sub)
+            static string? Read(Microsoft.Win32.RegistryKey root, string sub)
             {
                 try
                 {
                     using var k = root.OpenSubKey(sub);
-                    return string.Equals(k?.GetValue("Value") as string, "Deny", StringComparison.OrdinalIgnoreCase);
+                    return k?.GetValue("Value") as string;
                 }
-                catch { return false; }
+                catch { return null; }
             }
-            return Deny(Microsoft.Win32.Registry.LocalMachine, path) || Deny(Microsoft.Win32.Registry.CurrentUser, path)
-                || Deny(Microsoft.Win32.Registry.CurrentUser, path + @"\NonPackaged");
+            return FirstRunRules.MicrophoneRefused(p => Read(Microsoft.Win32.Registry.LocalMachine, p),
+                p => Read(Microsoft.Win32.Registry.CurrentUser, p), FirstRunRules.PackageFamilyName());
         }
 
         private static bool IsPaidPlan(string? plan) =>
@@ -7361,6 +7360,24 @@ namespace InterviewCopilot
                 // Only the script path needs a Python interpreter behind it. When the
                 // self-contained engine ships alongside the app there is nothing for
                 // the user to install, so a missing script is not a problem.
+                // An installed copy whose engine was taken away (antivirus quarantine) must not fall back to the developer
+                // path: that told a customer to install Python. Counted like a failed start, so it is retried and said once.
+                if (!haveBundledEngine && FirstRunRules.BundledEngineRemoved(AppContext.BaseDirectory))
+                {
+                    DebugWindow.Log("ENGINE_ERR", "The bundled speech engine is missing from the engine folder (antivirus quarantine?)");
+                    if (_engineStartFailures == 0)
+                        ReportProblem("engine", "engine-missing", "speechmatics_engine.exe missing from engine folder");
+                    if (++_engineStartFailures == EngineStartFailuresToSay)
+                    {
+                        _engineFatalReason = FirstRunRules.EngineRemovedMessage;
+                        _ = Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            ShowEngineAuthError();
+                            _engineStartNoticeUp = !_isCameraMode;
+                        }));
+                    }
+                    return;
+                }
                 if (!haveBundledEngine && !File.Exists(pyScript))
                 {
                     DebugWindow.Log("ENGINE", "Engine not found under: " + scriptFolder);
@@ -7494,6 +7511,9 @@ namespace InterviewCopilot
                 // engine hands over to Speechmatics on its own if Deepgram refuses or
                 // cannot connect, so an empty token simply means Speechmatics.
                 speechmaticsProcess.StartInfo.EnvironmentVariables["DG_TOKEN"] = UserSession.DeepgramToken;
+                // The folder the app reads latest.txt from, so the engine never works it out differently (it used the
+                // LOCALAPPDATA variable while the app asks Windows for the folder).
+                speechmaticsProcess.StartInfo.EnvironmentVariables["APP_DATA_DIR"] = AppDataFolder;
                 // Sarvam key for Telugu / other Speechmatics-unsupported languages. Passed via
                 // env (never on the command line) exactly like the Speechmatics key.
                 speechmaticsProcess.StartInfo.EnvironmentVariables["SARVAM_API_KEY"] = SettingsWindow.GetSarvamApiKey();
