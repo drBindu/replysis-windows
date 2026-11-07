@@ -124,18 +124,7 @@ namespace InterviewCopilot
                         string code = err.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
                         // Firebase adds detail after the code: "WEAK_PASSWORD : Password should be at least 6 characters".
                         code = code.Split(" : ")[0].Trim();
-                        errMsg = code switch
-                        {
-                            "EMAIL_NOT_FOUND"      => "No account found with this email.",
-                            "EMAIL_EXISTS"          => "An account already exists with this email. Sign in instead.",
-                            "WEAK_PASSWORD"         => "Use a password with at least 6 characters.",
-                            "INVALID_PASSWORD"     => "Incorrect password. Please try again.",
-                            "INVALID_EMAIL"        => "Invalid email address.",
-                            "USER_DISABLED"        => "This account has been disabled.",
-                            "TOO_MANY_ATTEMPTS_TRY_LATER" => "Too many attempts. Try again later.",
-                            "INVALID_LOGIN_CREDENTIALS" => "Incorrect email or password.",
-                            _ => errMsg
-                        };
+                        errMsg = FirebaseErrorMessage(code) ?? errMsg;
                     }
                     ShowError(errMsg);
                     SetLoading(false);
@@ -564,7 +553,9 @@ namespace InterviewCopilot
             }
 
             ShowSuccess($"Welcome, {name}!");
-            await Task.Delay(800, _windowToken);
+            // The session is saved: closing the window during this pause is a finished sign-in, not a failure.
+            try { await Task.Delay(800, _windowToken); }
+            catch (OperationCanceledException) { return; }
             if (!IsLoaded) return;
             LoginSuccess = true;
             DebugWindow.Log("GOOGLE", "S10 success, closing login window");
@@ -604,6 +595,33 @@ namespace InterviewCopilot
             byte[] hash = SHA256.HashData(Encoding.ASCII.GetBytes(verifier));
             return Convert.ToBase64String(hash).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
+
+        /// <summary>The plain words for a Firebase sign-in error code, or null for a code with no words of its own.</summary>
+        internal static string? FirebaseErrorMessage(string code) => code switch
+        {
+            "EMAIL_NOT_FOUND"             => "No account found with this email.",
+            "EMAIL_EXISTS"                => "An account already exists with this email. Sign in instead.",
+            "WEAK_PASSWORD"               => "Use a password with at least 6 characters.",
+            "INVALID_PASSWORD"            => "Incorrect password. Please try again.",
+            "INVALID_EMAIL"               => "Invalid email address.",
+            "USER_DISABLED"               => "This account has been disabled.",
+            "TOO_MANY_ATTEMPTS_TRY_LATER" => "Too many attempts. Try again later.",
+            "INVALID_LOGIN_CREDENTIALS"   => "Incorrect email or password.",
+            _ => null,
+        };
+
+        /// <summary>
+        /// Whether a sign-in message is about what the person typed (a wrong password, an unknown email) rather than the
+        /// app failing. Those still reach admin, marked minor: as real errors, two people mistyping a password within ten
+        /// minutes would send the owner an "apps are reporting errors" alert.
+        /// </summary>
+        internal static bool IsTypingMistake(string message) =>
+            message == "Login failed. Check your email and password." || TypingMistakeCodes.Exists(code => FirebaseErrorMessage(code) == message);
+
+        private static readonly List<string> TypingMistakeCodes = new()
+        {
+            "EMAIL_NOT_FOUND", "EMAIL_EXISTS", "WEAK_PASSWORD", "INVALID_PASSWORD", "INVALID_EMAIL", "INVALID_LOGIN_CREDENTIALS",
+        };
 
         private static string GetStr(JsonDocument doc, string key) =>
             doc.RootElement.TryGetProperty(key, out var p) ? p.GetString() ?? "" : "";
@@ -657,10 +675,14 @@ namespace InterviewCopilot
 
         private void ShowError(string msg)
         {
-            // Sign-in problems reach admin like every other problem; typing mistakes do not (2026-10-19).
-            if (!msg.StartsWith("Please enter", StringComparison.Ordinal) && !msg.StartsWith("Enter your email", StringComparison.Ordinal))
-                ClientErrorReporter.ReportProblem("signin", "signin-" + ClientErrorReporter.Slug(msg), msg);
+            // A window already closed has nothing left to report: a person closing it during the welcome pause made a
+            // successful sign-in would report "could not sign in".
             if (_windowToken.IsCancellationRequested) return;
+            // Sign-in problems reach admin like every other problem; empty fields do not (2026-10-19), and typing
+            // mistakes are marked minor so they never raise an alert.
+            if (!msg.StartsWith("Please enter", StringComparison.Ordinal) && !msg.StartsWith("Enter your email", StringComparison.Ordinal))
+                ClientErrorReporter.ReportProblem("signin",
+                    "signin-" + ClientErrorReporter.Slug(msg) + (IsTypingMistake(msg) ? "-minor" : ""), msg);
             ErrorText.Text = msg;
             HideBanner(SuccessBanner);
             AnimateBannerIn(ErrorBanner, ErrorBannerShift);

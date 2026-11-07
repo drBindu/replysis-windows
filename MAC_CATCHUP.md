@@ -4362,3 +4362,9 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 - A failed audio device open releases its capture and device handle (no leak on the 5 s retry).
 - The "hearing sound but no words" restart skips the polite close, like wake.
 - Engine: a held last word of one or two letters ("I", "a", "so") is never treated as cut off on reconnect. Mac engine needs the same.
+
+## 2026-11-07: bug round 1, sign in (Windows, local, not released)
+
+- Sign-in typing mistakes (wrong password, unknown email, bad email, short password, email already used) are reported marked minor ("-minor" on the problem type), so they never raise the "apps are reporting errors" alert. Disabled account, lockout and real failures still count.
+- Closing the sign-in window during the welcome pause no longer reports a failed sign-in; a closed window reports nothing.
+- Sign-out also deletes the saved speech token; a refresh overtaken by another sign-in is not treated as refused (refused signs people out).

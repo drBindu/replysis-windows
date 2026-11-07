@@ -43,6 +43,18 @@ internal static class ClientErrorReporterTests
             "an outage, a rate limit or a timeout never signs anybody out");
         Check(!UserSession.ContinueOfflineWithSavedSession(), "with nothing saved there is nothing to continue with");
 
+        // Sign-in mistakes the person typed reach admin marked minor, so they never raise an "apps are reporting errors" alert.
+        Check(LoginWindow.FirebaseErrorMessage("INVALID_LOGIN_CREDENTIALS") == "Incorrect email or password.", "a wrong password has its own words");
+        Check(LoginWindow.FirebaseErrorMessage("SOMETHING_NEW") == null, "an unknown code keeps the general message");
+        Check(LoginWindow.IsTypingMistake("Incorrect email or password.") && LoginWindow.IsTypingMistake("Invalid email address.")
+              && LoginWindow.IsTypingMistake("Use a password with at least 6 characters.")
+              && LoginWindow.IsTypingMistake("Login failed. Check your email and password."),
+            "wrong password, bad email and a short password are typing mistakes");
+        Check(!LoginWindow.IsTypingMistake("This account has been disabled.") && !LoginWindow.IsTypingMistake("Too many attempts. Try again later.")
+              && !LoginWindow.IsTypingMistake("Could not sign in just now. Please try again.")
+              && !LoginWindow.IsTypingMistake("Google sign-in failed. Please try again or contact support. (E6-502)"),
+            "a disabled account, a lockout and app failures are still real problems");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "client error reporter: all passed" : $"client error reporter: {failed} FAILED");
         return failed;

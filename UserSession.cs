@@ -558,6 +558,10 @@ namespace InterviewCopilot
             }
             IsGuestSession   = false;
             _savedAt         = DateTime.MinValue;
+            _savedIdToken    = "";
+            // The saved speech token belongs to the account signing out; left on disk, the next start reused it for up
+            // to an hour before anyone had signed in.
+            DeleteCachedSpeechmaticsKey();
             try { if (File.Exists(SessionPath)) File.Delete(SessionPath); } catch (Exception ex) { DebugWindow.Log("SESSION", $"Delete session file failed: {ex.Message}"); }
             });
         }
@@ -773,7 +777,10 @@ namespace InterviewCopilot
             {
                 // Re-check after acquiring: a concurrent caller may have already refreshed
                 var snapshot = Identity.Capture(() => RefreshToken);
-                if (snapshot.Generation != identity || string.IsNullOrEmpty(snapshot.Value)) return RefreshOutcome.Refused;
+                // A different sign-in took over while this waited: its own state is fine, so this refresh is not a
+                // refusal of it (a Refused here signs the current person out).
+                if (snapshot.Generation != identity) return RefreshOutcome.NoConnection;
+                if (string.IsNullOrEmpty(snapshot.Value)) return RefreshOutcome.Refused;
                 if (!force && !IsTokenExpired()) return RefreshOutcome.Refreshed;
 
                 string url = $"https://securetoken.googleapis.com/v1/token?key={FirebaseApiKey}";
@@ -812,7 +819,7 @@ namespace InterviewCopilot
 #endif
                     SaveToDisk();
                 });
-                return applied ? RefreshOutcome.Refreshed : RefreshOutcome.Refused;
+                return applied ? RefreshOutcome.Refreshed : RefreshOutcome.NoConnection;
             }
             catch (Exception ex)
             {
