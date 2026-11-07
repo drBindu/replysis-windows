@@ -438,3 +438,27 @@ Skipped: two laptops on one account both pick up a phone command, whichever repo
 
 Checks: the app and all test projects build with 0 errors; CleanerTests all passed (12 new checks); server tests 173 run, 0 failed.
 Needs the owner: the server part needs a deploy; the app part needs the next Windows version.
+
+## Round 18, 2026-11-07: local security and privacy of the Windows app
+
+**Fixed: another account on the same PC could listen to the microphone and the interviewer.**
+The app hands the microphone and the computer's sound to the speech engine through two named pipes. They were made
+with Windows' default security, which lets Everyone and Anonymous open a pipe for reading (checked on this laptop:
+"Everyone Read", "ANONYMOUS LOGON Read"). Pipe names can be listed by any program. On a shared PC, with another
+account signed in or a remote desktop session, a program of that account could connect first and receive the live
+sound; our engine would then quietly fall back to its old capture. The pipes now allow this Windows user only.
+The engine runs as the same user, so nothing changes for it, and no time is added. Test: section 29 of
+CleanerTests (access list is this user only, nothing for Everyone or Anonymous, same user still reads).
+
+**Checked and fine:**
+- Session, settings, resumes, job context and the speech token are encrypted for this Windows user.
+- latest.txt and reset.flag sit in the user's own app data folder and latest.txt is deleted on close.
+- The engine gets its keys through environment variables, never the command line, and its arguments take no free
+  user text except the microphone name, with quotes removed.
+- The bring back signal from round 17 lives in this sign-in session only and carries no data.
+- Google sign in uses PKCE and checks the state value.
+- The debug log and problem reports hold lengths, not what was said, read on screen or typed.
+- Screen captures and answers written to the temp folder exist in developer builds only.
+
+**Skipped:** the speech vocabulary file holds words from the resume in plain text in the user's own folder.
+Only this user (and administrators) can read it, the same as the encrypted files' location, so it is not a hole.

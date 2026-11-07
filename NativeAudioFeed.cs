@@ -62,8 +62,7 @@ namespace InterviewCopilot
             _label = loopback ? "SYSTEM AUDIO" : "MIC";
             string name = $"replysis-{(loopback ? "sys" : "mic")}-{Environment.ProcessId}-{Guid.NewGuid():N}";
             PipePath = @"\\.\pipe\" + name;
-            _pipe = new NamedPipeServerStream(name, PipeDirection.Out, 1, PipeTransmissionMode.Byte,
-                                              PipeOptions.Asynchronous, 0, 1 << 16);
+            _pipe = CreateEnginePipe(name);
             _ = WaitForEngineAsync();
 
             try
@@ -77,6 +76,18 @@ namespace InterviewCopilot
             }
             _watch = new Timer(_ => Watch(), null, 2000, 2000);
         }
+
+        /// <summary>
+        /// The pipe the engine reads this source's sound from. Only this Windows user may open it.
+        ///
+        /// A pipe made without that option gets Windows' default security, which lets Everyone open it for reading,
+        /// and pipe names can be listed. On a shared PC (another account signed in, or a remote desktop session)
+        /// a program of that other account could connect before the engine and hear the microphone or the
+        /// interviewer, while our engine fell back to its old capture without a word (2026-11-07, bug round 18).
+        /// </summary>
+        internal static NamedPipeServerStream CreateEnginePipe(string name) =>
+            new(name, PipeDirection.Out, 1, PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly, 0, 1 << 16);
 
         /// <summary>The feed, or null when Windows would not give us the device (the engine then captures as before).</summary>
         internal static NativeAudioFeed? TryStart(bool loopback, string? preferredName)

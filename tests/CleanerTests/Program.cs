@@ -228,6 +228,9 @@ internal static class Program
         Console.WriteLine("\n28. A first run works on any Windows (removed engine, Thai calendar, Store microphone switch)");
         _failed += FirstRunTests.Run();
 
+        Console.WriteLine("\n29. The sound pipes to the engine are this Windows user's only");
+        _failed += EnginePipeSecurityTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;
