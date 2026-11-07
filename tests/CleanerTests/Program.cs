@@ -1,4 +1,4 @@
-using InterviewCopilot;
+﻿using InterviewCopilot;
 
 namespace CleanerTests;
 
@@ -236,6 +236,9 @@ internal static class Program
 
         Console.WriteLine("\n31. Sign-in window names for screen readers");
         _failed += SignInAccessibilityTests.Run();
+
+        Console.WriteLine("\n32. Local sessions stay with the account that recorded them");
+        _failed += SessionAccountTests.Run();
 
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");

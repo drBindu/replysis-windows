@@ -109,6 +109,8 @@ namespace InterviewCopilot
                 {
                     var info = ParseSessionFile(file);
                     if (info.QuestionCount <= 0) continue;
+                    // Another account's transcript on this Windows login stays out of the list.
+                    if (!SessionAccount.Visible(info.AccountTag, UserSession.UserId)) continue;
                     _sessions.Add(info);
                     SessionsList.Items.Add(info);
                 }
@@ -323,6 +325,7 @@ namespace InterviewCopilot
             string header = lines.Length > 0 ? lines[0].Trim() : "";
             int sessionNum = 0;
             string modelName = "";
+            string? accountTag = null;
             DateTime sessionDate = created;
 
             if (header.StartsWith("SESSION "))
@@ -334,6 +337,7 @@ namespace InterviewCopilot
                     modelName = parts[1].Trim();
                 if (parts.Length >= 3 && FirstRunRules.TryReadSessionHeaderTime(parts[2], out var parsedDate))
                     sessionDate = parsedDate;
+                accountTag = SessionAccount.ReadTag(parts);
             }
 
             int qCount = lines.Count(l => l.StartsWith("Q: "));
@@ -355,6 +359,7 @@ namespace InterviewCopilot
                 AnswerCount = aCount,
                 DurationSeconds = durationSeconds,
                 ModelName = modelName,
+                AccountTag = accountTag,
                 AllLines = lines
             };
         }
@@ -902,6 +907,7 @@ namespace InterviewCopilot
         public int      AnswerCount    { get; set; }
         public int      DurationSeconds { get; set; }
         public string   ModelName      { get; set; } = "";
+        public string?  AccountTag     { get; set; }
         public string[] AllLines       { get; set; } = Array.Empty<string>();
 
         // ── Formatted display properties (used by XAML DataTemplate bindings) ──

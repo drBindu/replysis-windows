@@ -6553,7 +6553,7 @@ namespace InterviewCopilot
             _recordingSessionId = Guid.NewGuid().ToString("N");
 
             // Write header with timestamp so the Sessions window can parse it
-            string header = $"SESSION {sessionNumber} | {SettingsWindow.GetActiveModelId()} | {DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)}";
+            string header = $"SESSION {sessionNumber} | {SettingsWindow.GetActiveModelId()} | {DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)}" + SessionAccount.HeaderSuffix(UserSession.UserId);
             try
             {
                 SecureDataProtector.WriteProtectedFile(sessionLogPath, header + "\n\n");

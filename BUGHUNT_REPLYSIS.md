@@ -780,3 +780,17 @@ Checked and fine: no page scrolls sideways at 375 wide (home, pricing, start, an
 Skipped: "Try live copilot now" at the bottom of /pricing is a 20 pixel tall text link, small but tappable. The Windows main window has no screen reader names on its icon buttons either; it is large and part of the locked top bar, so it is left for a separate change the owner asks for.
 
 Needs: a website deploy, and the next Windows version.
+
+## Round 33, 2026-11-07: caching and data leaking between accounts
+
+**Fixed (Windows): a second account on the same Windows login saw the first account's past interviews.** Local transcripts are saved in one folder per Windows user, and the Sessions list showed every file in it. When a different Replysis account signed in on the same Windows login (a shared family PC, or someone switching accounts), Sessions listed the first account's questions and answers. New session files now carry a short account tag (made from the account id, not the id itself), and the list shows only the signed-in account's files. Files written before this have no tag and are listed as before, because nothing says whose they are. Files: `SessionAccount.cs` (new), `MainWindow.xaml.cs` (session header), `SessionsPanel.xaml.cs` (filter), `tests/CleanerTests/SessionAccountTests.cs` (14 checks).
+
+**Checked and fine:**
+- Website: every per-user API route is dynamic (Next 16 does not cache route handlers that read the request), and pages like /pricing are cached as static pages with no account data in them. No shared cache sits in front of the site: nginx has no proxy cache and the API location sets `proxy_cache off`.
+- Website memory caches (Maya and voice allow caches, rate limits, listening report counts) are keyed by account or address, never shared between accounts. A "yes" for Maya lasts up to a minute after an account runs out, by design.
+- Server memory: screenshots handed over ahead of a question are stored with their owner and refused to anyone else; the read-ahead check is keyed by account; the phone answer feed is keyed by the verified account.
+- The standby server copy only takes traffic when the main one fails (nginx `backup`), so the two copies never split one person's requests and their memory never disagrees in use.
+
+**Checks:** app and all test projects build with 0 errors; CleanerTests all passed, including section 32. No website or server code changed this round.
+
+**Needs the owner:** ships with the next Windows version.

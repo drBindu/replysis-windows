@@ -4466,3 +4466,8 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 ## 2026-11-07: sign-in window names for screen readers (Windows, local, not released)
 
 - Bug round 32: the Windows sign-in email and password boxes and the close and show password icon buttons now carry AutomationProperties.Name, and the show password name follows its tooltip. Nothing visible changed. Mac: check the sign-in fields and icon buttons have accessibility labels (VoiceOver), and that the sign-in sheet scrolls on a short screen.
+
+## 2026-11-07: local sessions stay with the account that recorded them (Windows, local, not released)
+
+- Local session files sat in one folder per OS user and Sessions listed all of them, so a second Replysis account on the same login saw the first account's transcripts.
+- New session headers end with ` | acct <16 hex>`, the first 8 bytes of SHA256("replysis-session:" + uid). Sessions lists a file only when its tag matches the signed-in account; untagged older files stay listed. Mac: check whether its local sessions folder has the same problem.
