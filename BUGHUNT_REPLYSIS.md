@@ -628,3 +628,37 @@ Left as it is:
 - On 1.0.52 and older, when Speechmatics is down and the person listens in a language other than English, the server's placeholder key makes the old engine stop with an antivirus message until the app is restarted. Before 2026-11-04 the server refused the whole request instead, which stopped English listening too. English is unaffected. The next Windows version fixes it in the engine (round 12).
 
 Deploy order: either order works. The server first is slightly better, because it stops the old apps' false alerts at once.
+
+## Round 27, 2026-11-07: customer emails and scheduled jobs
+
+Every customer email was traced: welcome (server, a minute after signup), follow-up (website timer, 6 to 72 hours after
+signup), upgrade emails "Keep practising with Maya" and "You have used your answers" or "Your free trial has ended"
+(website timer), trial reminder 4 hours before the end and India month renew reminder 3 days before (server), plus the
+owner's own alerts. Production was read only: 52 accounts, nobody has unsubscribed yet, 6 test accounts, and the sent log
+shows a trial reminder followed 35 minutes later by a follow-up, and another by an out of answers email 4.5 hours later.
+
+Fixed:
+1. Two emails could go to one person in the same minute. The Maya nudge and the out of answers email are separate kinds,
+   so someone who had their free Maya interview and used their answers got both in one run. Now one upgrade email per
+   person per run (out of answers first; the Maya one comes on a later day), and no follow-up or upgrade email goes within
+   12 hours of any other email from us, including the server's trial reminder. The welcome is left out of that, so the
+   follow-up still arrives about 6 hours after signup while the 1 day trial runs. Website 6891a425.
+2. A paying Pro customer without the Maya add-on got "Keep practising with Maya" selling the Practice plan. Paying
+   customers no longer get that nudge. Website 6891a425.
+3. A failed send was lost for good. Every email is claimed first so two server copies never both send it, but the claim
+   stayed when the mail service failed, so that person never got their welcome, trial reminder, follow-up or upgrade
+   email. The claim is now given back on a failed send and the next look tries again. Server 3a01b86, website 6891a425.
+4. The trial reminder ("choose a plan") ignored unsubscribe and went to the owner's test accounts. It now skips both,
+   like the website's emails. Server 3a01b86.
+
+Checked and fine: the two server copies never both send (every email is claimed in _alerts first); the trial timings
+line up (welcome at signup, follow-up at 6 hours, reminder at about 20 hours, ended email after that); times are stored
+in UTC and the India renew date is shown in India time; batch limits of 100 per run are far above today's numbers; no
+email text has dashes, middle dots, plan counts or blames the network.
+
+Left for the owner: the welcome and trial reminder (sent by the server) have no unsubscribe line, unlike the website's
+emails. Adding one needs the website's unsubscribe secret on the server. Low risk today (nobody has unsubscribed), but
+worth doing before sending more marketing from the server.
+
+Checks: new scripts/check-email-plan.mjs passes, npx tsc --noEmit clean, check-sync ALL IN SYNC, server tests 177 run,
+0 failed (2 new). No email was sent. Needs a website and server deploy.
