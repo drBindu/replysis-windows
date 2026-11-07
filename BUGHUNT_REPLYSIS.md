@@ -276,3 +276,15 @@ email).
 
 **Left as it is:** a free account that has not begun its one free Maya interview gets practice question sets and feedback
 free until it begins it. Known since the 2026-11-02 audit and kept because the phone app never begins one.
+
+## Round 11, 2026-11-07: payments and webhooks (second look)
+
+Found 3 real bugs, all on the website, fixed in uiii/frontend (not live until a website deploy).
+
+1. **Refunding the Maya add-on cancelled the whole plan.** Adding Maya to a running Pro plan charges a separate mid-month invoice. If that charge was refunded in full (or disputed), the webhook treated it like a month of the plan and cancelled the whole Pro subscription at once, so a customer who only wanted the add-on back lost Pro too. Now a refunded mid-month charge only takes the Maya add-on off; if it paid for some other change, the plan stays and the owner is told to check by hand. Checked by scripts/check-refunds.mjs.
+2. **An auto add of minutes approved through checkout could not be refunded properly.** When a bank asked the person to approve an auto add, the checkout made for it did not put the account on the payment itself, so a later refund or dispute of it could not be matched and the minutes stayed. The payment now carries the account and minutes, like every other purchase.
+3. **An auto add could charge the card and add nothing.** The saved card was charged first and the minutes written after. If that write failed once, the person had paid and got no minutes, and no webhook would ever add them; the next auto add would charge again. The write is now tried three times (it can never add twice, it is keyed on the payment), and if it still fails the owner gets an email to add or refund by hand.
+
+Checked and fine: every checkout price is chosen on the server (country from the address, packs and minutes from fixed lists); every purchase is granted once per payment; packs, India months and minutes wait for paid money; refunds of packs, minutes, India months and Practice.
+
+Left for the owner: refunding an OLD month of a subscription that is still running cancels the current month too (the rule agreed on 2026-11-02 is "a full refund removes paid access"). A won dispute does not give access back on its own.
