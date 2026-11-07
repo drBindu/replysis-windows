@@ -546,3 +546,26 @@ What the next Windows version contains (all local, nothing released):
 - Updates: no stuck update notice; no update notice during an interview.
 - Safety: audio passed to the speech engine is readable by this Windows user only; opening Replysis again brings back a hidden window.
 - Needs before release: engine-dist rebuild, one try on a black box laptop, a second monitor, a Store install microphone switch, and the owner's yes.
+
+## Round 23 (2026-11-07): website and server checked together before the next deploy
+
+No regressions found. Nothing changed in the website or server this round.
+
+What was read as one change: every website commit (6) and server commit (4) since the Nov 4 deploy, rounds 1 to 21.
+- Fixes that touch the same code do not fight: the payment refund rules, the minutes auto add, the trial ended email and the sign-in redirect each stand alone.
+- Phone and Mac apps: the only shared route that changed is the website answer route, and only the browser interview's message list uses the new prompt limits. Maya, her voice, practice questions and listening tokens are unchanged. The server's new alert rule only makes more customer states count as minor, so Mac and iPhone reports raise fewer false alerts, never more.
+- Speed: the browser interview now sends the whole system prompt instead of cutting it at 6,000 characters. For a normal resume that is about 1,500 more words of reading for the model, a few hundredths of a second at the speed these models read. A pasted resume of the full 30,000 characters could add more, for that one person only; left as is because cutting it is what lost the coding and answer style instructions. Windows answers are not touched.
+- Screen answers: the early picture answer only starts after the answer is paid for, guests never reach the new read ahead balance check, and an unused early answer is always closed.
+- Billing: no change to what anything costs. The free mock interview steps rule is still the same on the website and the server (neither file changed).
+
+Checks: website type check clean; all six website checks pass (listening start, prompt text, refunds, resume text, safe path, sync: ALL IN SYNC); a full website production build passes (built from a separate copy so the running dev server was not touched); server tests 173 run, 0 failed.
+
+Waiting in the next website and server deploy, in plain words:
+- Sign in: the after sign-in link can no longer send someone to another website.
+- Emails: an ended free trial gets "Your free trial has ended", not "you used all your answers"; no "Hi User".
+- Resume PDF keeps text written in angle brackets; no middle dots in two places.
+- Browser interview: the microphone never stays on after stop; a held or double Space cannot start two listeners; an interview is saved once; spaces and accented letters in the resume reach the AI; the AI gets its whole instructions.
+- Payments: refunding the Maya add-on takes only Maya off; bank approved minute top ups can be refunded; a charged top up always adds its minutes or emails the owner.
+- Server: no paid screen read ahead for accounts with nothing left; screen answers about 1 s faster on screens without code; voice answer timings record which app asked; out of answers and no microphone from older Windows apps no longer trigger outage emails.
+
+Safe to deploy: yes, from these checks. Still untried: a real browser on the browser interview fixes, and the screen answer change against the live AI.
