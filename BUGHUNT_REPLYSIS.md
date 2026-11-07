@@ -845,3 +845,11 @@ Waiting in the next website and server deploy, in plain words:
 - Phone fit for the sign in box and first run guide; removed old unused code.
 
 Go or no go: GO. Deploy the server first (it stops the old apps' false alerts at once), then the website. Still not tried for real: the browser interview fixes in a real browser and the faster screen answers against the live AI.
+
+## Round 36: pending website fixes tried in a real browser (2026-11-07, stopped after 3 hours)
+
+Ran a separate copy of the website against local test databases (no live data, no money). Tried and passed: sign up shows the 1 day free trial, and the Account page shows "Free trial", "for 1 day" and the right end date.
+
+Found and fixed: the name typed at sign up never reached the account record, so the account kept the "User" placeholder (and emails said "Hi User"). Sign up set the name and then sent the old sign in token, which has no name in it. The token is now refreshed after the name is set. Check: scripts/check-signup-name.mjs. Needs a website deploy.
+
+Not finished (the round ran too long and was stopped): pricing buy button in Stripe test mode, the browser interview Space and End session checks, resume PDF preview, admin deletion requests, the phone size sign in box. These still need a real browser try.
