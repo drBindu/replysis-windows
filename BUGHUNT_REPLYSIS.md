@@ -84,3 +84,34 @@ the one free Maya interview is claimed once in a transaction.
 
 Not tested by running: the emails were changed in code only (nothing was sent). The Mac app may read the trial the
 same way the Windows app did; it is noted in MAC_CATCHUP.md.
+
+## Round 3, 2026-11-07: listening and audio devices
+
+Checked: the Windows sound capture (microphone and the computer's sound, default device changes, a headset or
+Bluetooth connecting, devices that will not open or stop by themselves, 8 kHz Bluetooth mics, 44.1 and 48 kHz
+speakers, 16, 24 and 32 bit and float formats), the pipe to the speech engine and how the engine reads it, mute and
+unmute, the mix of microphone and computer sound, the listening meter and its reports to the server, presence, and
+the speech pass from the server.
+
+Fixed:
+
+1. **Windows: listening time was lost whenever its report failed.** The app reports listening time to the server
+   every few minutes, and a report that failed was simply dropped. A sign-in that had just expired (401), the server
+   restarting during a deploy (502 to 504), a busy reply (429) or a connection that never opened meant those minutes
+   were never counted, so the fair use limit under-counted long sessions. Those minutes are now kept and sent with
+   the next report. A timeout or a lost reply is not kept, because the server may already have counted it and
+   charging twice is worse than missing a minute; kept time never piles up past an hour. Tests in BillingTests.
+
+Checked and found fine, with numbers where it mattered:
+
+- The computer's sound is read without waiting, at most one chunk at a time. A model of real timing (10 ms speaker
+  packets, a microphone paced at 100 ms with jitter and the occasional 40 ms stall) put the interviewer's sound at
+  10 ms behind on average and 60 ms at worst, so no change was needed.
+- The engine side reader empties the pipe all the time, so a slow engine can never block the capture thread.
+- A device that fails to open or stops is reopened every 5 seconds with nothing leaked (fixed 2026-11-04).
+- 8 kHz, 44.1 kHz and 48 kHz devices, mono to 8 channels, and 16, 24, 32 bit and float samples all convert to 16 kHz
+  mono correctly.
+
+Noted, not changed: if Speechmatics is down at the server AND Deepgram refuses the connection, the engine falls back
+to the placeholder Speechmatics key, is refused, and the app renews the speech pass and restarts listening. That is
+a retry loop only when both providers fail at once; before 2026-11-04 listening could not start at all in that case.

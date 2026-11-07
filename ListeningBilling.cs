@@ -71,6 +71,25 @@ namespace InterviewCopilot
             return minutes;
         }
 
+        /// <summary>
+        /// Whether minutes whose report failed are kept and sent with the next report.
+        ///
+        /// A failed report used to drop its minutes for good: an expired sign-in (401), the server restarting during a
+        /// deploy (502 to 504) or a busy answer (429) meant that time was never counted. Kept only when the server cannot
+        /// have counted them: those answers, or a connection that never opened. A timeout or a dropped reply is not kept,
+        /// because the server may already have counted it, and charging twice is worse than missing a minute.
+        /// </summary>
+        internal static bool KeepFailedReport(int? status, Exception? error)
+        {
+            if (status is 401 or 429 or 502 or 503 or 504) return true;
+            for (Exception? e = error; e != null; e = e.InnerException)
+                if (e is System.Net.Sockets.SocketException) return true;
+            return false;
+        }
+
+        /// <summary>Kept minutes never pile up past an hour: a server that refuses for days must not bill it all at once.</summary>
+        internal const double MaxKeptSeconds = 3600;
+
         /// <summary>How long a remainder must be to be billed at all.</summary>
         internal const double ShortTurnFloorSeconds = 30;
 

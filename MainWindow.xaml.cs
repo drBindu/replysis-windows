@@ -3171,10 +3171,20 @@ namespace InterviewCopilot
                 req.Content = new StringContent("{\"minutes\":" + minutes + "}",
                     System.Text.Encoding.UTF8, "application/json");
 
-                using var res = await _creditsClient.SendAsync(req);
+                HttpResponseMessage response;
+                try { response = await _creditsClient.SendAsync(req); }
+                catch (Exception sendError)
+                {
+                    // No answer at all: kept only when the connection never opened (see KeepFailedReport).
+                    DebugWindow.Log("METER", $"Report not sent: {sendError.Message}");
+                    KeepUnreportedMinutes(minutes, null, sendError);
+                    return;
+                }
+                using var res = response;
                 if (!res.IsSuccessStatusCode)
                 {
                     DebugWindow.Log("METER", $"Report failed: HTTP {(int)res.StatusCode}");
+                    KeepUnreportedMinutes(minutes, (int)res.StatusCode, null);
                     return;
                 }
 
@@ -3195,6 +3205,14 @@ namespace InterviewCopilot
                 }
             }
             catch (Exception ex) { DebugWindow.Log("METER", $"Report error: {ex.Message}"); }
+        }
+
+        /// <summary>Minutes the server cannot have counted go back into the meter and ride along with the next report.</summary>
+        private void KeepUnreportedMinutes(int minutes, int? status, Exception? error)
+        {
+            if (!ListeningBilling.KeepFailedReport(status, error)) return;
+            _unreportedListeningSeconds = Math.Min(ListeningBilling.MaxKeptSeconds, _unreportedListeningSeconds + minutes * 60.0);
+            DebugWindow.Log("METER", $"Kept {minutes} min to send with the next report.");
         }
 
         /// <summary>

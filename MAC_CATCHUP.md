@@ -4381,3 +4381,10 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
   time"; a guest still sees "5 answers, one time".
 - Plan names read "Free trial", "Starter plan", "Pro plan", "Max plan", "Practice plan" (no lower case "pro plan").
 - Mac: please check the Mac app reads "trial" the same way.
+
+## 2026-11-07: listening minutes kept when their report fails (Windows, local, not released)
+
+- POST /api/v1/usage/listening that fails with 401, 429, 502, 503, 504 or a connection that never opened now puts
+  the minutes back into the meter, sent with the next report (capped at an hour). Timeouts and other errors are not
+  kept, since the server may have counted them. ListeningBilling.KeepFailedReport + MainWindow.KeepUnreportedMinutes.
+  The Mac meter likely drops failed reports the same way.

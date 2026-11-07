@@ -146,6 +146,24 @@ internal static class BillingTests
         Console.WriteLine($"        ten short turns: {actual:0.0} min listened, {billed} min billed "
                         + $"({(billed / actual - 1) * 100:0}% over)");
 
+        // A failed report keeps its minutes only when the server cannot have counted them (round 3, 2026-11-07).
+        void Keep(string label, bool got, bool want)
+        {
+            bool ok = got == want;
+            Console.WriteLine($"{(ok ? "ok  " : "FAIL")}  {label}  ->  {(got ? "kept" : "dropped")}");
+            if (!ok) failed++;
+        }
+        Keep("expired sign-in 401", ListeningBilling.KeepFailedReport(401, null), true);
+        Keep("server restarting 503", ListeningBilling.KeepFailedReport(503, null), true);
+        Keep("busy 429", ListeningBilling.KeepFailedReport(429, null), true);
+        Keep("server error 500 (may have counted)", ListeningBilling.KeepFailedReport(500, null), false);
+        Keep("bad request 400", ListeningBilling.KeepFailedReport(400, null), false);
+        Keep("connection never opened",
+             ListeningBilling.KeepFailedReport(null, new System.Net.Http.HttpRequestException("x",
+                 new System.Net.Sockets.SocketException(10061))), true);
+        Keep("timeout (may have counted)",
+             ListeningBilling.KeepFailedReport(null, new TaskCanceledException()), false);
+
         return failed;
     }
 }
