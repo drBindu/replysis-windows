@@ -4415,3 +4415,9 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 ## 2026-11-07: Bug round 8, updates (Windows, local, not released)
 
 - The "on its way" update notice stayed up for good when the download then failed; it is now taken down when a check ends with nothing ready, and announced again at the next check. A failed update download is reported as minor (update-download-failed-minor) so it never triggers the owner's "apps are reporting errors" email. Check whether the Mac Sparkle path shows a similar notice that can get stuck, and how it reports download failures.
+
+## 2026-11-07: speech engine, Speechmatics path (Windows, local, not released; same engine file on Mac)
+
+- speechmatics_engine.py: `_clear_ws_session_error()` and the "Connecting" print now run for every key, not only inside the raw key minting branch. Before, with the server's ready made JWT, one session error made every reconnect fail at once for the rest of the session (non-English languages).
+- The server's placeholder key "speech-backup-unavailable" (sent when Speechmatics has no token but Deepgram does) now makes the engine print ">>> [SPEECH] No speech key from the server right now; the app will fetch a new one." and exit with code 2, with no FATAL line. Windows treats exit 2 for non-Sarvam languages as "renew the key and restart". Mac: check that exit code 2 without FATAL is retried with a fresh key, not shown as a permanent key error.
+- Rebuild the bundled engine for both apps.

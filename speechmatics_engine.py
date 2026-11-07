@@ -779,6 +779,16 @@ def is_realtime_jwt(token: str) -> bool:
     return len(parts) == 3 and token.startswith('eyJ')
 
 
+# What the server sends as the Speechmatics key when it has no Speechmatics token but does have a Deepgram one
+# (backend SttController.SPEECHMATICS_UNAVAILABLE_KEY). Never a real key.
+SPEECH_KEY_UNAVAILABLE = "speech-backup-unavailable"
+
+
+def _speech_key_unavailable(key: str) -> bool:
+    """True when there is no usable Speechmatics key: empty, or the server's placeholder."""
+    return not (key or "").strip() or (key or "").strip() == SPEECH_KEY_UNAVAILABLE
+
+
 def mint_realtime_jwt(raw_key: str, ttl: int = 60) -> str:
     req = urllib.request.Request(
         SM_MANAGEMENT_URL,
@@ -3900,6 +3910,13 @@ async def main():
         for endpoint in endpoints:
             try:
                 raw_key = args.key.strip()
+                if _speech_key_unavailable(raw_key):
+                    # The server had no Speechmatics token to give (that provider was out) and sent its placeholder.
+                    # Minting with it can only fail, and the FATAL line that followed made the app stop listening for
+                    # the rest of the session with an antivirus message, even after the provider came back. Exit code 2
+                    # without FATAL is the app's "fetch a fresh key and start again", paced by the app.
+                    print(">>> [SPEECH] No speech key from the server right now; the app will fetch a new one.", flush=True)
+                    sys.exit(2)
                 if is_realtime_jwt(raw_key):
                     rt_token = raw_key   # already a short-lived RT token minted by our backend
                 else:
@@ -3913,10 +3930,11 @@ async def main():
                             sys.exit(2)
                         continue
 
-                    # Cleared per attempt. Left set, the first dropped session would make
-                    # every reconnect raise at once and the engine would never recover.
-                    _clear_ws_session_error()
-                    print(f">>>[Attempt {attempt}] Connecting to {endpoint}...", flush=True)
+                # Cleared per attempt, whatever kind of key. Left set, the first dropped session would make every
+                # reconnect raise at once and the engine would never recover. This sat inside the branch that mints a
+                # raw key, so with the server's ready-made token (the normal case) it never ran at all.
+                _clear_ws_session_error()
+                print(f">>>[Attempt {attempt}] Connecting to {endpoint}...", flush=True)
 
                 # The relay reads the token from the query string, not the
                 # Authorization header the SDK sets. Not a preference: a

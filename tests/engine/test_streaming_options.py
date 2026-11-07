@@ -11,7 +11,9 @@ names = {"_deepgram_keyterms", "_deepgram_url", "_deepgram_flux"}
 scope = {"os": __import__("os"), "urllib": urllib, "args": SimpleNamespace(utterance_silence=1.0), "SAMPLE_RATE": 16000,
          "DEEPGRAM_URL": "wss://api.deepgram.com/v1/listen", "DEEPGRAM_MAX_KEYTERMS": 100,
          "_DEEPGRAM_BUILTIN_TERMS": ["Replysis", "Python", "Java", "Kubernetes"],
-         "_load_extra_vocab": lambda: []}
+         "_load_extra_vocab": lambda: [],
+         # _deepgram_flux reads this module flag (added with the Flux fallback); without it the test died with a NameError.
+         "_flux_given_up": False}
 constants = {"DEEPGRAM_URL", "DEEPGRAM_MAX_KEYTERMS", "_DEEPGRAM_BUILTIN_TERMS", "SAMPLE_RATE"}
 for node in tree.body:
     if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id in constants for t in node.targets):

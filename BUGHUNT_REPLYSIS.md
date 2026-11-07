@@ -288,3 +288,16 @@ Found 3 real bugs, all on the website, fixed in uiii/frontend (not live until a 
 Checked and fine: every checkout price is chosen on the server (country from the address, packs and minutes from fixed lists); every purchase is granted once per payment; packs, India months and minutes wait for paid money; refunds of packs, minutes, India months and Practice.
 
 Left for the owner: refunding an OLD month of a subscription that is still running cancels the current month too (the rule agreed on 2026-11-02 is "a full refund removes paid access"). A won dispute does not give access back on its own.
+
+## Round 12, 2026-11-07: the speech engine (second pass)
+
+Found 2 real bugs, both on the path used for languages other than English (Speechmatics). English runs on Deepgram only and is not affected. Fixed in speechmatics_engine.py; the bundled engine (engine-dist) must be rebuilt for the next Windows version, and the Mac ships the same engine.
+
+1. **After one error from the speech service, listening never came back.** When Speechmatics ends a session with an error, the engine remembers it so the session closes. It was meant to forget it before every new connection, but that line sat inside the branch for a raw key typed into Settings, so with the normal key from our server it never ran. Every reconnect after the first error closed at once, and listening stayed dead until the app was restarted. It now forgets the error before every connection.
+2. **A Speechmatics outage stopped listening for the whole session, with a wrong antivirus message.** Since 2026-11-04 the server sends a placeholder key when Speechmatics has no token but Deepgram does. A Spanish or Hindi user (Speechmatics only) then got an engine that tried to use the placeholder, failed, printed FATAL, and the app showed "your antivirus may be blocking Replysis" and stopped trying, even after Speechmatics came back. The engine now recognises the placeholder and exits with the app's normal "fetch a fresh key and start again" code, without FATAL, so the app keeps retrying on its own pace.
+
+Also repaired: tests/engine/test_streaming_options.py had been failing since the Flux fallback flag was added (the test did not define it). New test: tests/engine/test_speech_key_and_session_error.py.
+
+Checked and fine: the transcript kept across Deepgram reconnects and the replayed audio, the muted Flux refresh (the app always starts a new question with reset.flag, so clearing on refresh loses nothing), atomic latest.txt writes, the bounded memory of the turn map, chunk levels and replay log over a long session, the paced idle loop, keepalives on nova-3 and pings on Flux.
+
+Not changed: a Flux turn left open by a very quick Space press could in theory carry the end of the previous question into the next one in Manual; this needs the live service to confirm, so it is only noted. The three older failures in test_line_resilience.py are unchanged from before this round.
