@@ -379,3 +379,19 @@ that a poll two hours in stays under 1 ms.
   a later engine round.
 - The answer window can only be dragged within the main screen's work area, so it cannot be moved onto a second monitor.
   That matches the Mac and looks deliberate.
+
+## Round 15, 2026-11-07: screen answer speed
+
+Where the wait goes, from the server's own timing lines and the web server log (read only):
+
+- Every screen answer since the Nov 4 deploy (3 of them, all F8 with the picture sent in the question) went the same way: the charge took about 0.1 s, then a full screen read took 1.4 s, 2.6 s and 3.0 s, and that read only said "not a coding screen". The read was thrown away and the picture model was then asked for the answer from scratch, which takes about another second before the first words.
+- Why: the server decides whether to do that read by looking for words like "code", "fix" or "error" in the app's whole instruction text, and the app's instructions always contain them. So every screen, coding or not, waited for a read first.
+- The read made ahead of the question (while listening) would hide this, but it only helps when the screen was sent ahead. F8 sends the picture with the question, so it never helps there.
+- The app side was checked and is already tuned on purpose (picture fitted to a set size, squeezed under a byte limit before sending), so nothing there was changed.
+
+Fixed (backend):
+
+1. The picture answer now starts at the same moment as the screen read, not after it. If the read finds a coding problem, the coding path answers as before and the early picture answer is closed so the model stops. If not, the picture answer is already on its way. Expected: about one second off every screen answer on a non-coding screen (from read plus answer, to about the read alone). Coding screens are as fast as before. A read finished ahead of the question still skips this. Answers, refusal hold, billing and refunds are unchanged. Cost: on coding screens one extra short picture call is started and closed, a fraction of a cent.
+   Tests: EarlyVisionTests (when it starts, and that an unused one is always closed, even if it arrives late). 172 backend tests pass.
+
+Left for later, on purpose: deciding "coding or not" from the interviewer's words instead of the whole instruction text would skip the read entirely on ordinary screens, but it changes which path answers, so it needs a side by side check first. Needs the owner: a server deploy.
