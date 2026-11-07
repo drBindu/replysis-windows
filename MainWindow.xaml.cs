@@ -1549,6 +1549,7 @@ namespace InterviewCopilot
                               title + ": " + (message.Length > 120 ? message[..120] : message));
             _bannerIsProblem = false;
             _engineStartNoticeUp = false;
+            _updateComingNoticeFor = null;
             _bannerIsUpdate = isUpdate;
             // In compact overlay the main window is hidden, so the banner would
             // never be seen. The overlay is the visible surface there.
@@ -1625,6 +1626,9 @@ namespace InterviewCopilot
 
         private string? _updateComingFor;
 
+        // The version whose "on its way" notice is the banner on screen right now; null once anything replaces it.
+        private string? _updateComingNoticeFor;
+
         /// <summary>The early notice: an update was found and is downloading. Replaced by "ready" when it is staged.</summary>
         private void OnUpdateFound(string version)
         {
@@ -1637,6 +1641,7 @@ namespace InterviewCopilot
                 ShowInAppAlert($"Replysis {version} is on its way",
                     "Getting it ready in the background. Keep working; a Restart button appears here in a moment.",
                     persist: true, isUpdate: true);
+                _updateComingNoticeFor = version;
             }));
         }
 
@@ -1654,6 +1659,19 @@ namespace InterviewCopilot
                 : await SettingsWindow.GetNewerVersionOrNullAsync();
 
             DebugWindow.Log("UPDATE", string.IsNullOrEmpty(found) ? "Checked for updates: none." : $"Checked for updates: {found} found.");
+            if (UpdatePolicy.WithdrawComingNotice(found, _updateComingFor))
+            {
+                // The download did not finish, so the promised Restart button is not coming this time.
+                _updateComingFor = null;
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (_updateComingNoticeFor == null) return;
+                    _updateComingNoticeFor = null;
+                    if (InAppAlert != null) InAppAlert.Visibility = Visibility.Collapsed;
+                    DebugWindow.Log("UPDATE", "The update did not finish downloading; its notice was taken down until the next check.");
+                    RestoreProblemNoticeAfterUpdateNotice();
+                });
+            }
             if (!UpdatePolicy.ShouldAnnounce(found, _updateAnnouncedFor)) return;
 
             // Never during a live interview: held until it is over, then shown straight away.

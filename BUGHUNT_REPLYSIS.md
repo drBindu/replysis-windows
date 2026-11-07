@@ -228,3 +228,15 @@ Looked at and left alone, on purpose:
 - Running the screen read's charge alongside the picture model (as voice answers already do) would save about 0.1 s of the 2.8 s, but it changes how "no answers left" reaches the app on screen reads and starts a paid picture read before the money is confirmed. Not worth the risk for 4 percent.
 - The 64 letter hold before first words: kept, owner's decision.
 - Making screen reads faster for real means a faster picture model. That changes answer quality, so it is the owner's call and needs a side by side test first.
+
+## Round 8, 2026-11-07: updates
+
+**Fixed (2):**
+1. When an update was found, the top notice said "Replysis 1.0.x is on its way ... a Restart button appears here in a moment". If the download then failed (a dropped line, a full disk, antivirus holding the file), no Restart button ever came and that notice stayed up for the rest of the session, promising something that would not happen. Now, when a check ends with nothing ready, the notice is taken down quietly and any speech problem notice it covered comes back. The next check (10 minutes later) announces the version again.
+2. A failed update download was reported to the server as a real error, so two customers whose download failed within ten minutes (for example during a short GitHub hiccup) emailed the owner "apps are reporting errors", though nobody's app had stopped working. It is now reported as minor: still visible in the admin Live panel, never an outage email.
+
+**Checked and fine:** the Store copy never runs the Velopack updater (the channel comes from the package identity, and Velopack only acts on its own installs); nothing installs while the app is open, and Restart and update goes through the normal close, which asks first during a session; checks queue behind each other instead of failing; a stalled download is cancelled and retried; versions are compared as numbers, not text; the update feed is the public latest release only, so a draft or prerelease never reaches customers; the speech engine is stopped before the app exits, and Velopack's own updater closes anything still running from the install folder before it swaps files.
+
+**Left as is:** the release workflow builds unsigned when no signing secrets are set and says so in the log. That is the current decision (signed .exe deferred), not a bug.
+
+**Tests:** 4 new checks in UpdateTests (update policy).

@@ -35,6 +35,21 @@ namespace InterviewCopilot
             listening || interviewStarted || answering || flushing || compact;
 
         /// <summary>A version is announced once, so a dismissed notice does not come back every half hour.</summary>
+        /// <summary>
+        /// The "on its way" notice says a Restart button follows in a moment. When the download then fails (a dropped
+        /// line, a full disk, antivirus holding the file) no button ever came and the notice stayed up for good, so it
+        /// is taken down quietly once a check ends with nothing ready; the next check announces the version again.
+        /// </summary>
+        internal static bool WithdrawComingNotice(string? found, string? comingNoticeFor) =>
+            string.IsNullOrWhiteSpace(found) && !string.IsNullOrWhiteSpace(comingNoticeFor);
+
+        /// <summary>
+        /// A download that failed on one computer is not an outage: the app keeps working on the version it has and
+        /// tries again at the next check. Reported as minor, so two such computers in ten minutes do not email the
+        /// owner that apps are reporting errors. It still shows in the admin Live panel.
+        /// </summary>
+        internal const string DownloadFailedKind = "update-download-failed-minor";
+
         internal static bool ShouldAnnounce(string? found, string? alreadyAnnounced) =>
             !string.IsNullOrWhiteSpace(found) &&
             !string.Equals(found, alreadyAnnounced, StringComparison.OrdinalIgnoreCase);

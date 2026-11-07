@@ -4411,3 +4411,7 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 ## 2026-11-07: Bug round 6, settings (Windows, local, not released)
 
 - Settings Save built a blank config, so Keep on top, Detailed answers and the 30% opacity move marker were reset on every save, and the next start put the chosen opacity back to 30%. Now Save starts from a copy of the stored settings. Fresh settings carry the marker. A missing microphone in the list keeps the saved one. Check whether the Mac Settings save has the same blank-object pattern.
+
+## 2026-11-07: Bug round 8, updates (Windows, local, not released)
+
+- The "on its way" update notice stayed up for good when the download then failed; it is now taken down when a check ends with nothing ready, and announced again at the next check. A failed update download is reported as minor (update-download-failed-minor) so it never triggers the owner's "apps are reporting errors" email. Check whether the Mac Sparkle path shows a similar notice that can get stuck, and how it reports download failures.

@@ -49,6 +49,11 @@ internal static class UpdateTests
         Check(UpdatePolicy.ShouldAnnounce("1.0.29", "1.0.28"), "a still newer version is announced");
         Check(!UpdatePolicy.ShouldAnnounce(null, null) && !UpdatePolicy.ShouldAnnounce("", null) && !UpdatePolicy.ShouldAnnounce("  ", "x"),
             "nothing found means nothing announced");
+        Check(UpdatePolicy.WithdrawComingNotice(null, "1.0.53"), "a failed download takes the 'on its way' notice down");
+        Check(!UpdatePolicy.WithdrawComingNotice("1.0.53", "1.0.53"), "a finished download keeps it for the Ready notice to replace");
+        Check(!UpdatePolicy.WithdrawComingNotice(null, null), "nothing to take down when no update was on its way");
+        Check(UpdatePolicy.DownloadFailedKind.EndsWith("-minor"),
+            "a failed download is reported as minor, so it never emails the owner an outage alert");
 
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "update policy: all passed" : $"update policy: {failed} FAILED");

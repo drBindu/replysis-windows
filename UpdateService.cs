@@ -156,7 +156,7 @@ namespace InterviewCopilot
                 if (!downloaded)
                 {
                     DebugWindow.Log("UPDATE", $"{version} could not be downloaded; will try again at the next check.");
-                    ClientErrorReporter.ReportProblem("update", "update-download-failed", $"Update {version} could not be downloaded");
+                    ClientErrorReporter.ReportProblem("update", UpdatePolicy.DownloadFailedKind, $"Update {version} could not be downloaded");
                     return (UpdateCheckOutcome.Failed, null);
                 }
 
