@@ -586,3 +586,28 @@ Fix: `uiii/firestore.rules` now refuses every client create; the server already 
 Production, read only: 52 accounts. 7 free accounts hold 100 answers with no trial fields, which matches the old Free plan before trials, and one has 20 interview minutes. Nothing here proves anyone used the hole, but it cannot be ruled out from the data.
 
 Needs the owner: the rules only change when deployed, with `firebase deploy --only firestore:rules` from the uiii folder. It touches no app and no website code; the website, Windows and Mac apps only write activity fields, which stay allowed. Note `uiii/firestore.rules` is not in any git repo, so it has no history.
+
+## Round 25, 2026-11-07: cloud settings (Firebase, keys, CORS, headers), read only
+
+Everything was read without changing anything live. One real risk found, which only the owner can switch off in the console.
+
+**Risk: phone number sign in is switched on in Firebase, but no Replysis app uses it.**
+- Firebase Authentication has the "Phone" provider enabled. No website, Windows, Mac or phone code calls it (searched for signInWithPhoneNumber, PhoneAuthProvider and RecaptchaVerifier: none).
+- An enabled, unused SMS sign in is the usual target of "SMS pumping": a script asks Firebase to text codes to expensive numbers, and each text is billed to the project on the Blaze plan. It brings no customer benefit to keep it on.
+- I only sent one test request with an invalid number, so no text went out, and I did not try to get past Google's own bot checks. So this is a risk to close, not a proven attack.
+- **Owner steps:** console.firebase.google.com, project copilotx-ai, Authentication, Sign-in method, Phone, switch Enable off, Save. Nothing in the apps changes.
+
+**Checked and fine:**
+- **Website bundle:** the live site's browser files contain no Stripe secret or webhook keys, no private keys, and no Deepgram, Gemini, Cerebras, Groq, OpenAI or Resend keys. The only key is the public Firebase web key, which is meant to be public.
+- **That public key:** it is limited to certain Google services. A test from a made-up site was refused for Gemini and Translate ("API_KEY_SERVICE_BLOCKED"), so nobody can spend the AI bill with it. Maps is not switched on for the project. The same key is in the Windows app.
+- **Firebase Auth:** email enumeration protection is on, email and Google sign in are on, Apple is off. Authorized domains are localhost, the two Firebase domains, replysis.com, www.replysis.com, coopilotxai.com, verchor.com and www.verchor.com; all the custom ones still point at our own server.
+- **Storage and Realtime Database:** their management APIs are not even switched on for the project, so neither is in use.
+- **Database rules:** the fixed rules from round 24 were put live by the main session (rollback ruleset recorded in memory).
+- **Server CORS:** answers only replysis.com, www.replysis.com, the old coopilotxai.com and localhost, with credentials off. A request from another site is refused (403). Sign in is by a token header, not cookies, so the localhost entries cannot be used to read anyone's data.
+- **Website headers:** HSTS with preload, a content security policy, X-Frame-Options, nosniff, a referrer policy and a permissions policy are all present. The policy still allows inline scripts, already noted on 2026-11-02.
+
+**Low, owner's choice:**
+- `uiii/firestore.rules` is not in any git repository, so a future change has no history and could be overwritten by an old copy, which is how the live rules fell behind. Moving it into the frontend repo would fix that.
+- When the old domains coopilotxai.com and verchor.com are let go, remove them from Firebase authorized domains and from CorsConfig.java first, so a new owner of the name cannot use them.
+
+No code changed this round.
