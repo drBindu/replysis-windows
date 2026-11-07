@@ -82,6 +82,26 @@ internal static class FirstRunTests
         if (File.Exists(manifest))
             Check(File.ReadAllText(manifest).Contains("<DeviceCapability Name=\"microphone\" />"), "the Store manifest declares the microphone");
 
+        // Round 17 (2026-11-07): with phone only on every window is hidden and Replysis is not in the taskbar. Opening it
+        // again must bring the running copy back, not say "check your system tray" where it is not.
+        string app = System.IO.File.ReadAllText(System.IO.Path.GetFullPath(System.IO.Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "App.xaml.cs")));
+        int gate = app.IndexOf("if (!_ownsSingleInstanceMutex)", StringComparison.Ordinal);
+        int ask = gate < 0 ? -1 : app.IndexOf("AskRunningCopyToShow()", gate, StringComparison.Ordinal);
+        int box = gate < 0 ? -1 : app.IndexOf("MessageBox.Show(", gate, StringComparison.Ordinal);
+        Check(ask > 0 && box > ask, "a second launch asks the running copy to show itself before any message");
+        Check(app.Contains("ListenForShowRequests();") && app.Contains("main.ShowFromSecondLaunch()"),
+            "the running copy listens for a second launch and shows its window");
+        Check(InterviewCopilot.App.ShowSignalName.StartsWith("Local\\", StringComparison.Ordinal),
+            "the show request stays within this user's session, like the single instance lock");
+        using (var running = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.AutoReset,
+                   @"Local\ReplysisTest_Show_" + Environment.ProcessId))
+        using (var second = System.Threading.EventWaitHandle.OpenExisting(@"Local\ReplysisTest_Show_" + Environment.ProcessId))
+        {
+            second.Set();
+            Check(running.WaitOne(1000), "a signal from a second copy reaches the running one");
+        }
+
         return failed;
     }
 }

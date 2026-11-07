@@ -4439,3 +4439,8 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 - Times sent to the server and read from session files use a fixed calendar (a Thai Windows sent the year 2569).
   Mac: check any custom date format sent to the server uses en_US_POSIX.
 - The app passes APP_DATA_DIR to the engine so both use the same folder (the Mac already does).
+
+## 2026-11-07: round 17, phone only and alert emails (Windows, local, not released)
+
+- Banners were reported to admin by their title, so "No answers left this month", "You have 0 answers left", the month's limit and "no microphone" counted towards the "apps are reporting errors" email. Windows now reports a problem once by its kind, with "-minor" for a customer's own state (NoCredits, NoListeningTime, NoMicrophone). The server (DiagnosticsController.isRealError) also now ignores those titles from older apps. Mac: check whether its banners report by title the same way.
+- A second launch now asks the running copy to show itself (named event Local\InterviewCopilot_Show), so a window hidden by phone only can always be brought back. Mac: reopening the app from the Dock should do the same if phone only can hide every window there.

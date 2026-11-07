@@ -425,3 +425,16 @@ file as UTF-8, so accented or Indian script user folders work; first launch with
 
 Tests: 26 new checks in FirstRunTests (removed engine, six cultures incl. Thai and Saudi, Store and website
 microphone switches, the manifest).
+
+## Round 17, 2026-11-07: phone only, phone commands, admin and alert emails
+
+Fixed:
+1. Two customers simply running out of answers could email the owner "apps are reporting errors". Every banner the app shows was also sent to admin under its own title, and the alert rule only recognised a few words ("nocredits", "free answers", "trial"). A paid customer out of answers sent "No answers left this month", and every Space press with an empty balance sent "You have 0 answers left"; neither matched, so two such customers within ten minutes made the outage email. The month's limit and "no microphone" did the same. Now the app reports a problem once, by its kind, and marks a customer's own state (out of answers, this month's limit, no microphone) as minor. They still show in the admin Live panel. The server also recognises the titles older Windows versions send, so this stops as soon as the server is deployed, before any app update. Real problems (speech service busy, still connecting, reconnecting, sign in expired) still count.
+2. With "Answers on my phone only", every Replysis window is hidden and it is not in the taskbar. If Ctrl+Alt+H or Ctrl+Alt+R did not work (forgotten, or another program holding the keys), opening Replysis again only said "already running, check your system tray or taskbar", where it was not, and the only way back was Task Manager. Opening Replysis again now brings the running window back. An older copy that cannot do this still gets the old message.
+
+Checked and fine: the phone's Stop and Answer reach only the same signed in account's laptop and expire after 30 seconds; the phone stream only ever shows that account's own answers, guests are never relayed, and the phone's own answers are not repeated to it; a dropped answer still marks the phone's copy finished; old turns go after two hours; the laptop stops sending what it hears when no phone is open.
+
+Skipped: two laptops on one account both pick up a phone command, whichever reports first gets it. Rare, and changing it needs the phone app too.
+
+Checks: the app and all test projects build with 0 errors; CleanerTests all passed (12 new checks); server tests 173 run, 0 failed.
+Needs the owner: the server part needs a deploy; the app part needs the next Windows version.

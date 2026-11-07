@@ -3052,7 +3052,9 @@ namespace InterviewCopilot
             if (!_problemsShown.Add(kind)) return;
             var d = ListeningProblems.Describe(kind, OnFreeTrial());
             DebugWindow.Log("MODE", $"Problem shown to the user: {kind}.");
-            ReportProblem("listening", "listening-" + kind, d.Title);
+            // Reported once, here; the banner below does not report its title again (that counted every problem twice
+            // towards the outage email). A customer's own state (no answers, the month's limit, no microphone) is minor.
+            ReportProblem("listening", ListeningProblems.ReportKind(kind), d.Title);
             // Out of answers goes to the account, where "Add more answers" (no subscription) and the
             // plans are both offered; the listening limit goes to the plans.
             string page = d.Step == ListeningProblems.NextStep.MoreAnswers
@@ -3072,7 +3074,8 @@ namespace InterviewCopilot
                         }
                         catch (Exception ex) { DebugWindow.Log("UPDATE", $"Could not open pricing: {ex.GetType().Name}"); }
                     }
-                    : null);
+                    : null,
+                report: false);
             // It stayed on screen after the problem was over, so "Cannot reach the speech service" sat above a transcript
             // that was plainly working. Now it comes down by itself when nothing is wrong any more (UpdateMicUi).
             // Not an answer that was refused for want of answers: speech is fine then, so UpdateMicUi saw no problem and
@@ -4592,9 +4595,16 @@ namespace InterviewCopilot
                     // possibly shared, interview. Shown in-app instead.
                     // The free trial's end gets the same banner as F8, with Upgrade now: it shows once, and this repeats.
                     if (OnFreeTrial()) ShowProblemOnce(ListeningProblems.Kind.NoCredits, speechProblem: false);
-                    else ShowInAppAlert(
-                        $"You have {PlanFacts.AnswersLabel(UserSession.Credits)} left",
-                        "Open the answers badge at the top to add more. Your session stays open.");
+                    else
+                    {
+                        // A customer out of answers is not an app error: reported as "nocredits", which never counts towards
+                        // the outage email. As the banner's own title it did, once for every Space press.
+                        ReportProblem("answer", PlanFacts.AnswerProblemKind(true, ""), "Out of answers before asking");
+                        ShowInAppAlert(
+                            $"You have {PlanFacts.AnswersLabel(UserSession.Credits)} left",
+                            "Open the answers badge at the top to add more. Your session stays open.",
+                            report: false);
+                    }
                     isProcessing = false;
                     UpdateMicUi();
                     return;
@@ -8875,6 +8885,13 @@ namespace InterviewCopilot
         /// Raising through Topmost works even when Windows refuses to hand focus to
         /// a background app, so the window always becomes visible.
         /// </summary>
+        /// <summary>Replysis opened again while this copy runs: show it, even when phone only had hidden every window.</summary>
+        internal void ShowFromSecondLaunch()
+        {
+            DebugWindow.Log("PIN", "Opened again while running: showing the window");
+            BringToFront();
+        }
+
         private void BringToFront()
         {
             _phoneOnlyHidden = false;

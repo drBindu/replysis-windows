@@ -133,6 +133,29 @@ internal static class ListeningProblemTests
 
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "listening problems: all passed" : $"listening problems: {failed} FAILED");
+        // Round 17 (2026-11-07): a customer's own state never counts towards the outage email. The server's rule
+        // (DiagnosticsController.isRealError) treats "nocredits", "free-answers", "trial", "upgrade" and a "-minor" ending
+        // as not an error; the same rule is copied here so the app's kinds are checked against it.
+        static bool ServerCountsAsError(string kind)
+        {
+            string t = ("Problem." + kind).ToLowerInvariant();
+            return !(t.Contains("nocredits") || t.Contains("free-answers") || t.Contains("trial") || t.Contains("upgrade")
+                     || t.EndsWith("-minor"));
+        }
+        foreach (var k in new[] { ListeningProblems.Kind.NoCredits, ListeningProblems.Kind.NoListeningTime, ListeningProblems.Kind.NoMicrophone })
+            Check(!ServerCountsAsError(ListeningProblems.ReportKind(k)), $"{k} is the customer's own state, never an outage alert");
+        foreach (var k in new[] { ListeningProblems.Kind.ServiceUnavailable, ListeningProblems.Kind.NoSpeechService,
+                                  ListeningProblems.Kind.UnstableConnection, ListeningProblems.Kind.SignInExpired })
+            Check(ServerCountsAsError(ListeningProblems.ReportKind(k)), $"{k} still counts as a real problem");
+        Check(!ServerCountsAsError(PlanFacts.AnswerProblemKind(true, "")), "out of answers before asking is never an outage alert");
+        string main = System.IO.File.ReadAllText(System.IO.Path.GetFullPath(System.IO.Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "MainWindow.xaml.cs")));
+        int once = main.IndexOf("private void ShowProblemOnce(", StringComparison.Ordinal);
+        int end = once < 0 ? -1 : main.IndexOf("_bannerIsProblem = ", once, StringComparison.Ordinal);
+        string body = once < 0 || end < 0 ? "" : main[once..end];
+        Check(body.Contains("ListeningProblems.ReportKind(kind)") && body.Contains("report: false"),
+            "a problem banner is reported once, by its kind, not again by its title");
+
         return failed;
     }
 }

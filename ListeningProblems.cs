@@ -124,6 +124,14 @@ namespace InterviewCopilot
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Every problem needs a description."),
         };
 
+        /// <summary>
+        /// The kind sent to admin for a problem shown. A customer's own state (out of answers, this month's limit, no
+        /// microphone) ends in "-minor", so it shows in the Live panel but never counts towards the "apps are reporting
+        /// errors" email (DiagnosticsController.isRealError). Two customers out of answers had been enough for one.
+        /// </summary>
+        internal static string ReportKind(Kind kind) =>
+            "listening-" + kind + (kind is Kind.NoCredits or Kind.NoListeningTime or Kind.NoMicrophone ? "-minor" : "");
+
         /// <summary>The state the app is in, from the facts it already tracks. Null when nothing is wrong.</summary>
         internal static Kind? Detect(
             bool engineOnline, int speechStatusCode, bool outOfListeningTime,

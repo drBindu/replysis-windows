@@ -10,6 +10,11 @@ namespace InterviewCopilot
     {
         private static Mutex? _singleInstanceMutex;
         private static bool _ownsSingleInstanceMutex;
+        // A second launch asks the running copy to show itself (2026-11-07). With "Answers on my phone only" every window
+        // is hidden and Replysis is not in the taskbar, so opening it again only said "already running, check your system
+        // tray or taskbar", where it was not: without Ctrl+Alt+H or Ctrl+Alt+R the window could not be got back.
+        internal const string ShowSignalName = "Local\\InterviewCopilot_Show";
+        private static EventWaitHandle? _showSignal;
         private bool _showAuthenticationPreview;
 
         // Suppression window so a repeating fault (e.g. a timer throwing every
@@ -46,6 +51,7 @@ namespace InterviewCopilot
             }
             if (!_ownsSingleInstanceMutex)
             {
+                if (AskRunningCopyToShow()) { Shutdown(); return; }
                 MessageBox.Show(
                     "Replysis AI is already running.\n\nCheck your system tray or taskbar.",
                     "Already Running", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -58,6 +64,7 @@ namespace InterviewCopilot
             // is created, and with the default rule that moment - zero windows
             // open - would shut the app down before it ever started.
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            ListenForShowRequests();
 
             // Load the speech engine's files now, while the person is signing in or filling in Setup, so the real
             // start does not pay for a new computer scanning them (see EngineWarmup).
@@ -354,6 +361,46 @@ namespace InterviewCopilot
                 ClientErrorReporter.Report(source, ex);
             }
             catch { /* logging must never itself crash the handler */ }
+        }
+
+        /// <summary>Tells the copy already running to bring its window back. False when it is an older copy that cannot.</summary>
+        private static bool AskRunningCopyToShow()
+        {
+            try
+            {
+                using var signal = EventWaitHandle.OpenExisting(ShowSignalName);
+                signal.Set();
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
+
+        /// <summary>Waits, off the UI thread, for a second launch, and then shows this copy's window.</summary>
+        private void ListenForShowRequests()
+        {
+            try
+            {
+                _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSignalName);
+                var listener = new Thread(() =>
+                {
+                    while (true)
+                    {
+                        try { _showSignal.WaitOne(); }
+                        catch (Exception) { return; }   // disposed on exit
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            try
+                            {
+                                if (MainWindow is MainWindow main) main.ShowFromSecondLaunch();
+                                else MainWindow?.Activate();
+                            }
+                            catch (Exception ex) { DebugWindow.Log("PIN", $"second launch could not show the window: {ex.Message}"); }
+                        }));
+                    }
+                }) { IsBackground = true, Name = "show-requests" };
+                listener.Start();
+            }
+            catch (Exception ex) { DebugWindow.Log("PIN", $"could not listen for a second launch: {ex.Message}"); }
         }
 
         protected override void OnExit(ExitEventArgs e)
