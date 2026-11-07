@@ -298,6 +298,41 @@ namespace InterviewCopilot
         private static string[] Words(string s) =>
             Regex.Matches((s ?? "").ToLowerInvariant(), @"[\p{L}\p{N}']+").Select(m => m.Value).ToArray();
 
+        /// <summary>
+        /// UnconsumedTranscript for the Auto poll, which runs every 40 ms on the UI thread. In Auto the transcript holds
+        /// the whole interview, so matching it from the start each time grew with the interview: about 4 ms a poll after
+        /// an hour of talk (a tenth of the UI thread) and 8 ms after two, measured 2026-11-07. Between answers the
+        /// answered part does not change, so once it has matched exactly, later polls only check that the transcript
+        /// still starts with the same characters and return what follows; the full match runs again only when that
+        /// check fails or the answered part changes.
+        /// </summary>
+        internal sealed class UnconsumedTail
+        {
+            private string? _consumed;
+            private string? _decided;
+
+            internal string Get(string captured, string consumed)
+            {
+                captured ??= "";
+                consumed ??= "";
+                string? decided = _decided;
+                if (decided != null && consumed == _consumed && captured.StartsWith(decided, StringComparison.Ordinal) &&
+                    (captured.Length == decided.Length || !IsWordChar(captured[decided.Length])))
+                {
+                    string tail = captured[decided.Length..];
+                    // No word after the answered part is nothing new, as in the full match.
+                    return tail.Any(IsWordChar) ? tail.TrimStart(' ', '?', '.', '!', ',', ';', ':') : "";
+                }
+                string result = UnconsumedTranscript(captured, consumed, out int decidedBy);
+                _consumed = consumed;
+                _decided = decidedBy > 0 ? captured[..decidedBy] : null;
+                return result;
+            }
+
+            // The regex's [\p{L}\p{N}'], and any surrogate counted as a word so an unusual character only costs a full match.
+            private static bool IsWordChar(char c) => char.IsLetter(c) || char.IsNumber(c) || c == '\'' || char.IsSurrogate(c);
+        }
+
         /// <summary>How long a pause must be before words already judged not to be a question are set aside.</summary>
         internal static readonly TimeSpan StaleRejectedSpeechPause = TimeSpan.FromSeconds(3);
 
@@ -335,8 +370,18 @@ namespace InterviewCopilot
         /// it is. A transcript that differs earlier than that is a fresh one (the
         /// engine restarted) and is returned whole, as before.
         /// </summary>
-        internal static string UnconsumedTranscript(string captured, string consumed)
+        internal static string UnconsumedTranscript(string captured, string consumed) =>
+            UnconsumedTranscript(captured, consumed, out _);
+
+        /// <summary>
+        /// The same, plus how much of the start of <paramref name="captured"/> decided the answer when the answered
+        /// words matched exactly: everything up to the end of the last answered word. Any later transcript that starts
+        /// with exactly those characters, followed by a non word character, gives the same cut. -1 when the result
+        /// depended on more than that (a revised tail, or a fresh transcript).
+        /// </summary>
+        internal static string UnconsumedTranscript(string captured, string consumed, out int decidedBy)
         {
+            decidedBy = -1;
             string[] done = Words(consumed);
             var matches = Regex.Matches(captured ?? "", @"[\p{L}\p{N}']+");
             if (done.Length == 0) return captured ?? "";
@@ -394,6 +439,7 @@ namespace InterviewCopilot
                 return captured ?? "";
             }
 
+            if (cut > 0 && same == done.Length) decidedBy = matches[cut - 1].Index + matches[cut - 1].Length;
             if (cut >= matches.Count) return "";
             if (cut == 0) return captured ?? "";
             Match last = matches[cut - 1];

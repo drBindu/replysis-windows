@@ -4421,3 +4421,11 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 - speechmatics_engine.py: `_clear_ws_session_error()` and the "Connecting" print now run for every key, not only inside the raw key minting branch. Before, with the server's ready made JWT, one session error made every reconnect fail at once for the rest of the session (non-English languages).
 - The server's placeholder key "speech-backup-unavailable" (sent when Speechmatics has no token but Deepgram does) now makes the engine print ">>> [SPEECH] No speech key from the server right now; the app will fetch a new one." and exit with code 2, with no FATAL line. Windows treats exit 2 for non-Sarvam languages as "renew the key and restart". Mac: check that exit code 2 without FATAL is retried with a fresh key, not shown as a permanent key error.
 - Rebuild the bundled engine for both apps.
+
+## 2026-11-07: Auto no longer slows down as the interview gets longer (Windows, local, not released)
+
+- In Auto the transcript holds the whole interview and the app matched all of it against the answered part every 40 ms on
+  the UI thread: about 4 ms a poll after an hour, 8 ms after two. AutoTurnRules.UnconsumedTail now caches the exact match
+  per answered part and only checks the transcript still starts with the same characters (0.07 ms two hours in); any other
+  change falls back to the full match, so results are identical. Mac: check whether its Auto poll re-matches the whole
+  transcript each tick the same way.

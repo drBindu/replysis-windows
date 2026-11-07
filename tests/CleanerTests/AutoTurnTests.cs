@@ -152,6 +152,44 @@ internal static class AutoTurnTests
             consumed = cumulative;
         }
         Check(replayPassed, "50 successive turns preserve arriving extensions without duplicate replay");
+
+        // The Auto poll's cache gives exactly what the full match gives, poll after poll, including revised tails,
+        // a word extended across the answered boundary, punctuation only, an apostrophe and a fresh transcript.
+        var tail = new AutoTurnRules.UnconsumedTail();
+        string answered = "Tell me about the rest full API you built.";
+        string[] polls =
+        {
+            "Tell me about the rest full API you built.",
+            "Tell me about the rest full API you built. And",
+            "Tell me about the rest full API you built. And how",
+            "Tell me about the rest full API you built. And how did you test it?",
+            "Tell me about the rest full API you built.!",
+            "Tell me about the rest full API you built. -",
+            "Tell me about the rest full API you builtin tools",
+            "Tell me about the rest full API you built's tests",
+            "Tell me about the RESTful API you built. And how did you test it?",
+            "Tell me about the RESTful API you built. And how did you test it? Also",
+            "Something else entirely now",
+            "Tell me about the rest full API you built. Last one",
+        };
+        bool cacheSame = true;
+        foreach (string p in polls)
+            cacheSame &= tail.Get(p, answered) == AutoTurnRules.UnconsumedTranscript(p, answered);
+        Check(cacheSame, "the Auto poll's cache returns exactly what the full match returns");
+        Check(tail.Get("Explain caching. Then", "Explain caching.") == "Then" &&
+              tail.Get("Explain caching. Then queues", "Explain caching.") == "Then queues",
+            "the cache follows a new answered part");
+
+        // Two hours of Auto: 18,000 words. The full match took about 8 ms a poll on the UI thread; the cache must not.
+        var big = new System.Text.StringBuilder();
+        for (int i = 0; i < 18000; i++) big.Append(i % 15 == 14 ? "word. " : "word ");
+        string longAnswered = big.ToString().TrimEnd();
+        var longTail = new AutoTurnRules.UnconsumedTail();
+        longTail.Get(longAnswered + " and what next", longAnswered);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 100; i++) longTail.Get(longAnswered + " and what next about " + i, longAnswered);
+        Check(watch.Elapsed.TotalMilliseconds / 100 < 1.0,
+            $"a poll two hours into Auto takes under 1 ms ({watch.Elapsed.TotalMilliseconds / 100:F3} ms)");
         Check(AutoTurnRules.CanContinueAfterPause("and where have you used it in your last project?", submitted, submitted.AddSeconds(5)),
               "linked extension survives four seconds of silence plus recognition delay");
         Check(!AutoTurnRules.CanContinueAfterPause("And what is Kubernetes?", submitted, submitted.AddSeconds(5)),

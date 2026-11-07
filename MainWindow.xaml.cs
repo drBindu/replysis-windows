@@ -4047,6 +4047,8 @@ namespace InterviewCopilot
         private bool _preserveAutoCapture;
         private string _autoCaptureConsumedText = "";
         private string _lastRawTranscriptRead = "";
+        // The Auto poll's match against the answered part, kept so it does not grow with the interview.
+        private readonly AutoTurnRules.UnconsumedTail _unconsumedTail = new();
         private long _lastFinalResultUtcTicks;
         private long _lastPartialResultUtcTicks;
 
@@ -7188,7 +7190,7 @@ namespace InterviewCopilot
                     string captured = sr.ReadToEnd();
                     _lastRawTranscriptRead = captured;
                     if (AutoModeEnabled && !string.IsNullOrWhiteSpace(_autoCaptureConsumedText))
-                        return AutoTurnRules.UnconsumedTranscript(captured, _autoCaptureConsumedText);
+                        return _unconsumedTail.Get(captured, _autoCaptureConsumedText);
                     return captured;
                 }
                 catch { }

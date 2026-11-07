@@ -350,3 +350,32 @@ Recommendation: swap the two Gemini models, so gemini-3.1-flash-lite reads the s
 Also learned: the model itself takes about 0.9 s here, but customers wait about 2.8 s for a screen answer (round 7). Most of the difference is outside the model (bigger real screenshots, several images when scrolled, the two step path for coding screens), which is the next place to look for speed.
 
 Cost of the test: about 290,000 tokens in and 90,000 out across all models, roughly 20 to 30 US cents.
+
+## Round 14, 2026-11-07: long sessions and stability
+
+**Fixed: Auto got slower the longer the interview went on.** In Auto the transcript is never cleared between answers, so it
+holds the whole interview. Every 40 ms, on the same thread that draws the window and handles Space, the app matched that
+whole transcript word by word against the part already answered. Measured: under 1 ms a poll for the first few minutes,
+about 4 ms after an hour of talk (a tenth of that thread's time) and about 8 ms after two hours (a fifth). That is time
+taken from typing out the transcript and reacting to Space and Auto, exactly when an answer is needed.
+
+Now the full match runs once after each answer. Later polls only check that the transcript still starts with the same
+answered words and take what follows, which costs about 0.07 ms even two hours in. If anything about the start changes
+(the recogniser rewrites the last answered words, or a new transcript starts), the full match runs again as before, so the
+result is always exactly what it was. A test checks the cached result against the full match across twelve edge cases and
+that a poll two hours in stays under 1 ms.
+
+**Checked and fine:**
+- Timers: every timer is created once or stopped before it is replaced; none pile up across New session or reconnects.
+- The debug log on disk rotates at 20 MB, and the on screen log keeps 200 lines and only redraws while open.
+- The transcript typing hooks into screen frames only while it is typing, and unhooks after.
+- Crashes: async handlers fall back to the app wide handlers, which log and keep the app running.
+- The power (sleep and wake) handler is added once and removed on close.
+- Saving each answer to the session file happens in the background queue, never on the answer path.
+
+**Not changed, noted:**
+- The speech engine also keeps the whole Auto transcript and rewrites it to disk on every update, up to about 100 KB several
+  times a second two hours in. That is disk writes, not answer time; changing it needs an engine rebuild, so it is left for
+  a later engine round.
+- The answer window can only be dragged within the main screen's work area, so it cannot be moved onto a second monitor.
+  That matches the Mac and looks deliberate.
