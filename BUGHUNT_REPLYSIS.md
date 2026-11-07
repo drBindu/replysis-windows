@@ -701,3 +701,18 @@ Steps to release once the owner says yes:
 4. Publish the draft (draft false, make latest), then change app/lib/downloads.ts on the website to 1.0.53 and deploy the website.
 5. Dispatch build-windows-msix.yml with version 1.0.53 and upload the Store package in Partner Center.
 6. Tell Mac Claude in CHANNEL.md; MAC_CATCHUP.md already lists every change.
+
+## Round 29, 2026-11-07: the owner's admin panel numbers
+
+Production was read only, counts only: 52 accounts, 6 marked as yours or friends, 1 stranger paying (an India Pro month paid once), no trials running, 2 India month receipts and 1 minutes receipt.
+
+Fixed (website, local, needs a deploy):
+1. Monthly revenue counted the India month customer twice. It priced them as a $34.99 Pro subscription and then added the rupees they paid on top. It also added every rupee sale ever made, so the "monthly" figure grew forever. Now subscriptions are priced at the dollar price, and only rupee sales of the last 30 days are added.
+2. Conversion and Free accounts used every account, including your own 3 Max and 1 Pro test accounts. Conversion showed about 9.6% when it is about 2%. Both now use real users and real payers, like the Real users card.
+3. India sales: plan_passes also holds dollar answer pack receipts and refund receipts. A dollar pack was added as rupees and a refund was counted as a purchase and a buyer. Only rupee receipts with an amount count now; refunds that took something back are shown on their own ("N refunds taken back").
+4. A friend's account marked as yours while still on the trial was taken off the paying count twice, showing one paying customer fewer.
+5. Giving a trial account a plan by hand in admin kept it marked as a trial, so the trial job put it back to free a day later and the panel counted it as a trial. A plan set by hand on a trial now stops the trial (planSource "admin"); the audit row records the old planSource.
+
+Checked and fine: every admin action is owner only (verified email must match ADMIN_EMAIL), each runs in a transaction with its admin_audit row, and the user id is checked; delete refuses your own account. The "email everyone" list skips unsubscribed people. Latency uses latencyMs (first words). The backend /admin-api/stats is not used by the panel. Dismissed deletion requests are not shown as open (the panel does not list deletion requests at all).
+
+Test: scripts/check-admin-metrics.mjs. Type check clean, check-sync ALL IN SYNC, all script checks pass.
