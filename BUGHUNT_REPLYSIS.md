@@ -301,3 +301,23 @@ Also repaired: tests/engine/test_streaming_options.py had been failing since the
 Checked and fine: the transcript kept across Deepgram reconnects and the replayed audio, the muted Flux refresh (the app always starts a new question with reset.flag, so clearing on refresh loses nothing), atomic latest.txt writes, the bounded memory of the turn map, chunk levels and replay log over a long session, the paced idle loop, keepalives on nova-3 and pings on Flux.
 
 Not changed: a Flux turn left open by a very quick Space press could in theory carry the end of the previous question into the next one in Manual; this needs the live service to confirm, so it is only noted. The three older failures in test_line_resilience.py are unchanged from before this round.
+
+## Round 13, 2026-11-07: running the website and server fixes, not just reading them
+
+No new bugs. This round ran every payment fix since the 2026-11-04 deploy end to end on this laptop: the website against local copies of the database and sign-in (emulators), Stripe in test mode only, email switched off. A probe confirmed nothing reached the live database before any test ran.
+
+Results: 58 of 58 scenarios pass.
+- 35 earlier webhook scenarios (plans, renewals, India months, packs, Practice, refunds, disputes, two subscriptions). One old test was out of date: since 2026-11-04 only a failed renewal holds off the monthly refill, and the test sent a failure with no reason. The test now checks both: a failed mid-month charge does not hold the refill, a failed renewal does.
+- 6 signed-in checks (checkout, stored customer reused, second subscription refused, another person's account refused, Maya's replies and voice refused for a spent free account).
+- 17 new checks for round 11, on real Stripe test payments:
+  - Refunding the mid-month Maya add-on charge keeps Pro running and takes only Maya off; the account stays Pro without Maya; a repeat refund event changes nothing.
+  - Refunding a mid-month Pro to Max change charge keeps the plan and its items, and the account is untouched.
+  - Refunding a first month still cancels the plan, as agreed on 2026-11-02.
+  - An auto add of minutes charges once and lands its minutes; pressing again inside the lock neither charges nor adds; the payment carries the account and minutes; its refund takes the minutes back.
+  - A card that needs bank approval gets a checkout link and no minutes yet; a payment carrying that checkout's details is refunded correctly.
+
+Not run end to end: the three tries when writing auto add minutes fails (a database write cannot be made to fail on demand here). Read instead: each try checks the payment's receipt inside the same write, so a retry can never add twice. Completing a hosted Stripe checkout page cannot be done from a script, so test D used a payment with the same details.
+
+Also checked: website checks (safe path, resume text, refunds, sync, type check) and server tests (168, none failed) all pass. Commits since the deploy were read together: the two server changes to InterviewController touch different parts (the charge thread and the screen read ahead) and do not interfere; resume escaping cannot double escape (resume fields hold no formatting); the website and server rules for free mock interview steps still match branch for branch.
+
+Ready for the owner's deploy: website (4 commits) and server (2 commits) since 2026-11-04.
