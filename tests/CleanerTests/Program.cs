@@ -222,6 +222,9 @@ internal static class Program
         Console.WriteLine("\n26. Sound straight from Windows reaches the engine at real time");
         _failed += NativeAudioFeedTests.Run();
 
+        Console.WriteLine("\n27. Saving Settings keeps what is not on the form");
+        _failed += SettingsSaveTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

@@ -4407,3 +4407,7 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
   Mac: check whether reading the screen ever lowers sharingType on our windows and restores it to something visible.
 - Two screens: with Replysis in front (Analyze button), the last work window was clipped to Replysis's monitor and the
   wrong screen was read. Now the monitor of the window being read is used (ScreenAnalyzer.ChooseMonitorWindow).
+
+## 2026-11-07: Bug round 6, settings (Windows, local, not released)
+
+- Settings Save built a blank config, so Keep on top, Detailed answers and the 30% opacity move marker were reset on every save, and the next start put the chosen opacity back to 30%. Now Save starts from a copy of the stored settings. Fresh settings carry the marker. A missing microphone in the list keeps the saved one. Check whether the Mac Settings save has the same blank-object pattern.

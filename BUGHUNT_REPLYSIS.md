@@ -194,3 +194,19 @@ Checked and found fine:
 
 Needs a real run before release: the black box case can only be seen on one of the computers that refuse hiding; the
 two screen case on a laptop with a second monitor. Both are covered by the tests above, not by watching a screen share.
+
+## Round 6, 2026-11-07: settings
+
+**Fixed**
+
+1. Saving Settings reset settings that are not on the Settings form. The Save button built a brand new settings object instead of starting from the saved one. So every save:
+   - turned Keep on top back on for someone who had unpinned the window,
+   - turned Detailed answers back off,
+   - dropped the marker that says the one time move to 30% opacity already happened, so on the next start the opacity the person had just chosen went back to 30%.
+   Now Save starts from a copy of the stored settings and only changes what is on the form. Because it is a copy, a failed save leaves the settings in use untouched, as the "Nothing was changed" message says.
+2. A new install lost its first opacity choice after a restart for the same reason: the default settings had no 30% marker. Fresh settings now carry it.
+3. Opening Settings while the chosen microphone was unplugged and pressing Save forgot that microphone, so after plugging it back in the app used the Windows default. Save now keeps the saved microphone when none is picked in the list.
+
+**Checked and fine:** the settings file is encrypted with Windows' per user protection and written to a temp file then moved into place, so a crash mid write cannot leave half a file; a file that cannot be read falls back to defaults with stealth on and the microphone off; the backend address only accepts replysis.com, the old domain or loopback; the language picker falls back to English; the remote app-config.json only switches native audio on or off and passes whole numbers to REPLYSIS_ engine settings that the engine clamps.
+
+**Tests:** SettingsSaveTests (6 checks) in CleanerTests.

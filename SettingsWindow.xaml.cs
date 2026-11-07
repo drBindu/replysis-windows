@@ -444,38 +444,41 @@ namespace InterviewCopilot
 
         private void SaveBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (AudioDeviceCombo.SelectedIndex > -1 && deviceIndices.Count > AudioDeviceCombo.SelectedIndex)
+            // A microphone missing from the list (unplugged while Settings is open) keeps the one chosen before.
+            bool micPicked = AudioDeviceCombo.SelectedIndex > -1 && deviceIndices.Count > AudioDeviceCombo.SelectedIndex;
+            if (micPicked)
+            {
                 SelectedDeviceIndex = deviceIndices[AudioDeviceCombo.SelectedIndex];
                 SelectedDeviceName  = AudioDeviceCombo.SelectedItem?.ToString() ?? "";
+            }
 
+            // Start from what is stored, not a blank AppConfig: settings that are not on this form (Keep on top, Detailed
+            // answers, the opacity move marker, the Sarvam key) were reset on every save. A copy, so a failed save leaves
+            // the settings in use untouched.
+            var cfg = CopyConfig(LoadConfig());
             // The model picker was removed: the backend chooses the model and ignores
             // this value. It now only feeds the provider label and a log header.
-            int modelIdx = IdxGroq;
-
-            var cfg = new AppConfig
+            cfg.ModelIndex        = IdxGroq;
+            cfg.BackendUrl        = BackendUrlBox.Text?.Trim()       ?? "";
+            cfg.CoopilotEmail     = CoopilotEmailBox.Text?.Trim()    ?? "";
+            cfg.Temperature       = Math.Round(TempSlider.Value, 1);
+            cfg.MainWindowOpacity = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 3);
+            cfg.OverlayOpacity    = cfg.MainWindowOpacity;
+            cfg.MicCaptureEnabled = MicCaptureCheckBox.IsChecked == true;
+            if (micPicked)
             {
-                ModelIndex        = modelIdx,
-                BackendUrl        = BackendUrlBox.Text?.Trim()       ?? "",
-                CoopilotEmail     = CoopilotEmailBox.Text?.Trim()    ?? "",
-                Temperature       = Math.Round(TempSlider.Value, 1),
-                MainWindowOpacity = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 3),
-                OverlayOpacity    = Math.Round(0.50 + (MainOpacitySlider.Value - 1) / 99.0 * 0.50, 3),
-                MicCaptureEnabled = MicCaptureCheckBox.IsChecked == true,
-                AudioDeviceIndex  = SelectedDeviceIndex,   // persist the chosen mic across restarts
-                AudioDeviceName   = SelectedDeviceName,     // and the name, which outlives the number
-                CloudSyncEnabled  = CloudSyncCheckBox.IsChecked == true,
-                StealthMode       = StealthCheckBox.IsChecked == true,
-                WatchScreenEnabled = WatchScreenCheckBox.IsChecked == true,
-                SaveSessionAudio   = SaveAudioCheckBox.IsChecked == true,
-                ScreenKeysEverywhere = ScreenKeysCheckBox.IsChecked == true,
-                PlainSpaceEverywhere = PlainSpaceCheckBox.IsChecked == true,
-                PhoneOnly = PhoneOnlyCheckBox.IsChecked == true,
-                UseSystemProxy = SystemProxyCheckBox.IsChecked == true,
-                TranscriptLanguage = SelectedLanguageCode(),
-                // Carry the Sarvam key through — it's not an editable field here, so pull the
-                // stored value. Without this, saving Settings would wipe it (fresh AppConfig).
-                SarvamApiKey      = GetSarvamApiKey(),
-            };
+                cfg.AudioDeviceIndex = SelectedDeviceIndex;   // persist the chosen mic across restarts
+                cfg.AudioDeviceName  = SelectedDeviceName;    // and the name, which outlives the number
+            }
+            cfg.CloudSyncEnabled     = CloudSyncCheckBox.IsChecked == true;
+            cfg.StealthMode          = StealthCheckBox.IsChecked == true;
+            cfg.WatchScreenEnabled   = WatchScreenCheckBox.IsChecked == true;
+            cfg.SaveSessionAudio     = SaveAudioCheckBox.IsChecked == true;
+            cfg.ScreenKeysEverywhere = ScreenKeysCheckBox.IsChecked == true;
+            cfg.PlainSpaceEverywhere = PlainSpaceCheckBox.IsChecked == true;
+            cfg.PhoneOnly            = PhoneOnlyCheckBox.IsChecked == true;
+            cfg.UseSystemProxy       = SystemProxyCheckBox.IsChecked == true;
+            cfg.TranscriptLanguage   = SelectedLanguageCode();
             if (!SaveConfig(cfg))
             {
                 StealthDialog.Show(this, "Settings Not Saved",
@@ -711,10 +714,20 @@ namespace InterviewCopilot
             catch (Exception ex) { DebugWindow.Log("SETTINGS", $"LoadConfig failed: {ex.Message}"); }
 
             // First run / missing file — cache defaults too so getters don't keep hitting disk
-            _cachedConfig = new AppConfig();
+            _cachedConfig = FreshConfig();
             _cacheTime    = DateTime.UtcNow;
             return _cachedConfig;
         }
+
+        /// <summary>A separate copy of the settings, so changing it does not change the ones in use until it is saved.</summary>
+        internal static AppConfig CopyConfig(AppConfig cfg) =>
+            JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(cfg)) ?? new AppConfig();
+
+        /// <summary>
+        /// Settings for a copy with no settings file, or one that could not be read. Marked as already moved to 30%, or
+        /// the first save would write no marker and the next start would put a level the user chose back to 30%.
+        /// </summary>
+        internal static AppConfig FreshConfig() => new AppConfig { OpacityDefaultVersion = 3 };
 
         public static bool SaveConfig(AppConfig cfg)
         {
