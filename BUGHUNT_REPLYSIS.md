@@ -810,3 +810,38 @@ Left in place, on purpose:
 Checks: website type check clean and a full production build passes (from a separate copy, so the other chat's dev server was untouched; its stale generated files still name the removed page until it rebuilds), sync check ALL IN SYNC, all 11 script checks pass. No server or Windows code changed.
 
 Needs the owner: a website deploy.
+
+## Round 35, 2026-11-07: everything waiting to deploy, checked together
+
+What I checked: the 13 website commits and 7 server commits since the Nov 4 deploy, read as one change. The new ones since round 23 (rules check, emails, admin numbers, speech stand-in, account deletion, phone fit, dead code, older app alerts, failed email retries, speech spend email) don't fight each other:
+- Payment webhook: the deletion guard (round 31) only stops a deleted account being recreated; the refund rules from round 11 are untouched.
+- Customer emails: the 12 hour gap (round 27) and the trial ended wording (round 2) sit in the same job and agree; the server's trial reminder uses the same claim format, so the gap sees it.
+- Problem report alerts: rounds 17 and 26 both only make more reports minor. The server's copy of the old app's naming matches what Windows 1.0.52 really sends.
+- Phone and Mac apps: Maya, her voice, speech keys and the out of answers text behave as before for them. The free mock interview rules on the website and server weren't touched, so they still match.
+- replysisv@gmail.com: still an internal Max account; nothing pending changes how it works.
+- Speed: nothing new on the answer path.
+
+No regressions found, so no code changed this round.
+
+Checks, all run today:
+- Website: type check clean, full production build passes (from a separate copy, with dummy public settings, so the other chat's dev server wasn't touched), sync check ALL IN SYNC, all 11 script checks pass.
+- Server: 180 tests run, 0 failed.
+- Payment test (local database copy and Stripe test mode only; a probe confirmed nothing reached the live database; email off; the server's resume delete went to a local stand-in): 71 of 71 pass. That is the 35 webhook checks, 6 signed in checks, 17 round 13 checks, and 13 new round 31 checks:
+  - deleting an account cancels its live Stripe subscription, removes the record, marks the request completed without its email, deletes problem reports with that email, keeps billing rows without the email, and deletes resumes through the server;
+  - Stripe's late "subscription ended" and "subscription updated" events don't bring the deleted account back;
+  - the admin page lists waiting requests only, never dismissed or completed ones;
+  - if Stripe can't be reached, nothing is deleted; someone who isn't the owner is refused.
+- One harness note: the Maya refund check needs the test Maya price passed to the test website; with it, it passes.
+- Test subscriptions from this run were cancelled; the local servers and database copy are stopped.
+
+Waiting in the next website and server deploy, in plain words:
+- Sign in links can't send people to another site.
+- Emails: an ended trial gets "Your free trial has ended"; no "Hi User"; at most one email in 12 hours; no Maya sales email to paying customers; a failed send is tried again; the trial reminder skips unsubscribed and test accounts.
+- Resume PDF keeps all text; browser interview: mic turns off, no double listening, one saved copy, the AI gets the whole resume and full instructions.
+- Payments: refunding Maya removes only Maya; bank approved top ups can be refunded; a charged top up always adds its minutes.
+- Account deletion cancels the subscription first, removes leftover emails, and the admin page shows waiting requests.
+- Admin numbers: revenue, conversion, India sales and paying customers counted correctly.
+- Server: no paid screen read ahead for empty accounts; screen answers about 1 s faster on screens without code; voice answer timings record the app; older Windows apps no longer trigger false outage emails; a daily email if speech use passes 12 hours.
+- Phone fit for the sign in box and first run guide; removed old unused code.
+
+Go or no go: GO. Deploy the server first (it stops the old apps' false alerts at once), then the website. Still not tried for real: the browser interview fixes in a real browser and the faster screen answers against the live AI.
