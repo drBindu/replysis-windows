@@ -71,9 +71,23 @@ namespace InterviewCopilot
             !modifierHeld && nowMs - lastTypingKeyMs >= TypingWindowMs;
 
         public bool PlainSpaceEverywhere { get; set; }
+
+        /// <summary>
+        /// A plain Space within the typing window of the previous one is typing too: indenting code in an editor during a
+        /// coding interview is several spaces in a row after a pause, and each used to toggle, starting and sending answers
+        /// that were charged (round 20). The first Space after a pause still toggles; Ctrl+Alt+Space always does.
+        /// </summary>
         internal static bool ListeningShortcutAllowed(long now, long lastTyped, bool modifiers,
-            bool explicitChord, bool ownerForeground, bool plainEverywhere) =>
-            explicitChord || ((ownerForeground || plainEverywhere) && IsSpaceAToggle(now, lastTyped, modifiers));
+            bool explicitChord, bool ownerForeground, bool plainEverywhere, long lastSpaceMs = long.MinValue / 2) =>
+            explicitChord || ((ownerForeground || plainEverywhere) &&
+                              IsSpaceAToggle(now, Math.Max(lastTyped, lastSpaceMs), modifiers));
+
+        private long _lastPlainSpaceMs = long.MinValue / 2;
+
+        /// <summary>An editable text field or password box has keyboard focus: a Space there is text, never a toggle.</summary>
+        internal static bool IsEditableTextFocus(object? focused) =>
+            focused is System.Windows.Controls.PasswordBox ||
+            (focused is System.Windows.Controls.Primitives.TextBoxBase box && !box.IsReadOnly);
 
         /// <summary>
         /// Whether plain F7, F8 and F9 read the screen from any app. On by default,
@@ -401,8 +415,10 @@ namespace InterviewCopilot
                         (GetAsyncKeyState(0x10) & 0x8000) == 0 &&
                         (GetAsyncKeyState(0x5B) & 0x8000) == 0 &&
                         (GetAsyncKeyState(0x5C) & 0x8000) == 0;
+                    long lastSpace = _lastPlainSpaceMs;
+                    if (!explicitChord && !modifierHeld) _lastPlainSpaceMs = now;
                     if (ListeningShortcutAllowed(now, _lastTypingKeyMs, modifierHeld,
-                        explicitChord, IsAppWindowForeground(), PlainSpaceEverywhere))
+                        explicitChord, IsAppWindowForeground(), PlainSpaceEverywhere, lastSpace))
                     {
                         DebugWindow.Log("HOOK", "SPACE TOGGLE PRESS");
                         _onSpacePressed?.Invoke();
@@ -412,7 +428,7 @@ namespace InterviewCopilot
                         _lastIgnoreLogMs = now;
                         DebugWindow.Log("HOOK", modifierHeld
                             ? "Space ignored: pressed with Ctrl, Shift or Win, which is a shortcut"
-                            : $"Space ignored: typing ({now - _lastTypingKeyMs}ms after a key)");
+                            : $"Space ignored: typing ({now - Math.Max(_lastTypingKeyMs, lastSpace)}ms after a key)");
                     }
                 }
                 else if (isUp)

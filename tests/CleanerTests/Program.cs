@@ -231,6 +231,9 @@ internal static class Program
         Console.WriteLine("\n29. The sound pipes to the engine are this Windows user's only");
         _failed += EnginePipeSecurityTests.Run();
 
+        Console.WriteLine("\n30. Space in the app's own fields, repeated spaces while indenting, code in the compact window");
+        _failed += UiHotkeyTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

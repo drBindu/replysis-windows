@@ -4058,9 +4058,12 @@ namespace InterviewCopilot
         // Space must insert a space character there, not toggle the mic. Checked here
         // (rather than only in a WPF key handler) so the global hook's unconditional
         // Space toggle still respects it regardless of call source.
+        // Any editable field of any Replysis window counts, not a list of names: the pay box was missing from the list, so
+        // its spaces were swallowed and a pause before one started listening (round 20).
         private bool IsTypingInTextField() =>
             ResumeTextBox.IsKeyboardFocusWithin || AskBox.IsKeyboardFocusWithin ||
-            CompanyNameBox.IsKeyboardFocusWithin || JobDescBox.IsKeyboardFocusWithin;
+            CompanyNameBox.IsKeyboardFocusWithin || JobDescBox.IsKeyboardFocusWithin ||
+            GlobalHotkey.IsEditableTextFocus(System.Windows.Input.Keyboard.FocusedElement);
 
         private void HandleSpaceDown(string source)
         {
@@ -4421,6 +4424,9 @@ namespace InterviewCopilot
         //   LISTENING  -> stop and fire the AI
         private void HandleSpacePress(string source)
         {
+            // A space typed into one of the app's own fields is text. The Auto branches below used to run first and
+            // resumed a paused Auto or answered from it while the candidate was typing.
+            if (source == "GLOBAL" && IsTypingInTextField()) return;
             // Auto owns the listening lifecycle. Global Space presses in an Auto mode used
             // to cancel the active answer and launch many tiny requests, exhausting Groq and
             // forcing a slow fallback. Manual Space behavior is unchanged in Manual mode.

@@ -387,10 +387,11 @@ namespace InterviewCopilot
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
-        private static string FormatForReading(string text)
+        internal static string FormatForReading(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return text;
             text = text.Replace("\r\n", "\n").Replace("\r", "\n");
+            bool hasBullets = text.Contains("•");
 
             // Take the fences off without taking the code out.
             //
@@ -403,17 +404,36 @@ namespace InterviewCopilot
             //
             // The code itself stays. In compact mode this window is the only
             // place it appears.
-            text = System.Text.RegularExpressions.Regex.Replace(
-                text, @"^[ \t]*```[A-Za-z0-9+#_-]*[ \t]*$\n?", "",
-                System.Text.RegularExpressions.RegexOptions.Multiline);
-            text = text.Replace("```", "");
-            if (!text.Contains("•")) return text.Trim();
+            if (!hasBullets)
+            {
+                text = System.Text.RegularExpressions.Regex.Replace(
+                    text, @"^[ \t]*```[A-Za-z0-9+#_-]*[ \t]*$\n?", "",
+                    System.Text.RegularExpressions.RegexOptions.Multiline);
+                return text.Replace("```", "").Trim();
+            }
 
+            // With bullets, lines outside code are tidied. Lines inside a fence are kept as written: trimming them took
+            // every indent out of the code, which for Python is a different program (round 20).
             var lines  = text.Split('\n');
             var result = new System.Text.StringBuilder();
+            bool inCode = false;
             foreach (var line in lines)
             {
                 string trimmed = line.Trim();
+                if (trimmed.StartsWith("```"))
+                {
+                    inCode = !inCode;
+                    string rest = trimmed[3..].Trim();
+                    // A fence with code on the same line after it ("```x = 1") keeps that code; a language tag does not.
+                    if (rest.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(rest, @"^[A-Za-z0-9+#_-]+$"))
+                        result.AppendLine(rest.Replace("```", ""));
+                    continue;
+                }
+                if (inCode)
+                {
+                    result.AppendLine(line.TrimEnd().Replace("```", ""));
+                    continue;
+                }
                 if (trimmed.StartsWith("•"))
                 {
                     // No blank line between bullets any more. It was there to keep
@@ -425,10 +445,10 @@ namespace InterviewCopilot
                 }
                 else if (!string.IsNullOrWhiteSpace(trimmed))
                 {
-                    result.AppendLine(trimmed);
+                    result.AppendLine(trimmed.Replace("```", ""));
                 }
             }
-            return result.ToString().Trim();
+            return result.ToString().TrimStart('\n', '\r').TrimEnd();
         }
     }
 }

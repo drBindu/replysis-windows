@@ -495,3 +495,14 @@ in a transaction; listening minutes use a fresh sign in token and are sent with 
 
 **Skipped:** the ready made replies to a hello or small talk are not auto saved until the next AI answer or End
 session; both save the whole history, so nothing is lost unless the tab is closed right after a hello.
+
+## Round 20, 2026-11-07: the Windows app's screens and keyboard shortcuts
+
+Fixed (Windows, local only, not released):
+1. **Spaces vanished from the pay expectation box, and a pause before one started listening.** The app decides "the candidate is typing in one of our fields" from a fixed list of four boxes, and the pay box was not on it. So in that box every space was swallowed (typing "20 to 25 lakhs" gave "20to25lakhs"), and a space after a pause of a second also started listening and jumped from setup to the interview. Now any editable field or password box in any Replysis window counts, and read-only boxes (the answer, the code panel) still do not block Space. The Auto branches of a Space press (resume a paused Auto, answer now) now also respect typing in a field; they ran before that check.
+2. **Indenting code with spaces sent answers.** With "Space works in any app" switched on, indenting a line in a code editor after a pause is several spaces in a row. Each one toggled listening: start, answer (charged), start, answer. Now a Space within a second of the previous Space counts as typing, like a Space right after a letter. The first Space after a pause still toggles, and Ctrl+Alt+Space always does.
+3. **Code lost its indentation in the compact window when the answer had bullets.** With a MORE TO SAY list, every line of the answer was trimmed, so Python code read from the compact window had no indents, which is a different program. Lines inside a code block are now kept as written; only the prose and bullets are tidied.
+
+Checked and fine: F7, F8 and F9 debounce and pass-through, Ctrl+Alt shortcuts, injected keys from dictation tools ignored, the hook never throws, the main window's code panel and complexity line, the compact window's scroll to the start of a new answer.
+
+Tests: `tests/CleanerTests/UiHotkeyTests.cs` (16 checks). Ships with the next Windows version.

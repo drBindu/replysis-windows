@@ -4451,3 +4451,9 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
   (Everyone and Anonymous can read). Now PipeOptions.CurrentUserOnly (NativeAudioFeed.CreateEnginePipe).
   Mac: check any local socket, FIFO or file the Mac app uses to pass audio or transcript to the engine is readable
   by the current user only (0600 / user only), not world readable in /tmp.
+
+## 2026-11-07: round 20, screens and shortcuts (Windows, local, not released)
+
+- Space counts as typing in ANY editable field of any app window (the Windows list missed the pay box: spaces were swallowed and a pause started listening). Check the Mac's field list the same way.
+- A plain Space within 1 s of the previous Space is typing (indenting code with "Space works in any app" sent charged answers). Ctrl+Alt+Space always toggles.
+- Compact answer window: lines inside a code fence keep their indentation even when the answer has bullets (they were trimmed). Check the Mac overlay's formatter.
