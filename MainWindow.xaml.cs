@@ -764,7 +764,7 @@ namespace InterviewCopilot
             {
                 PopupCreditsAmount.Text = "Unlimited";
                 PopupCreditsAmount.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFFFFF"));
-                PopupCreditsPlan.Text = $"{UserSession.Plan} plan";
+                PopupCreditsPlan.Text = PlanFacts.PlanLabel(UserSession.Plan, loggedIn);
                 PopupSignInCardBtn.Visibility = Visibility.Collapsed;
             }
             else if (!_creditsFetched)
@@ -773,7 +773,7 @@ namespace InterviewCopilot
                 // When the fetch completes it will re-invoke UpdateProfileDropdown if the popup is still open.
                 PopupCreditsAmount.Text = "Loading...";
                 PopupCreditsAmount.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6b7280"));
-                PopupCreditsPlan.Text = loggedIn ? $"{UserSession.Plan} plan" : "Free trial";
+                PopupCreditsPlan.Text = PlanFacts.PlanLabel(UserSession.Plan, loggedIn);
                 PopupSignInCardBtn.Visibility = loggedIn ? Visibility.Collapsed : Visibility.Visible;
                 _ = FetchAndDisplayCreditsAsync().ContinueWith(_ =>
                     Dispatcher.InvokeAsync(() => { if (ProfileDropdownPopup.IsOpen) UpdateProfileDropdown(); }),
@@ -785,7 +785,7 @@ namespace InterviewCopilot
                 PopupCreditsAmount.Text = PlanFacts.BadgeText(credits);
                 string color = credits > 5 ? "#FFFFFF" : "#F87171";
                 PopupCreditsAmount.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
-                PopupCreditsPlan.Text = loggedIn ? $"{UserSession.Plan} plan" : "Free trial";
+                PopupCreditsPlan.Text = PlanFacts.PlanLabel(UserSession.Plan, loggedIn);
                 PopupSignInCardBtn.Visibility = loggedIn ? Visibility.Collapsed : Visibility.Visible;
             }
 
@@ -1098,9 +1098,12 @@ namespace InterviewCopilot
                 using var doc = JsonDocument.Parse(body);
                 int credits = doc.RootElement.TryGetProperty("credits", out var c) ? c.GetInt32() : 0;
                 string plan = doc.RootElement.TryGetProperty("plan", out var p) ? p.GetString() ?? "free" : "free";
-                // The Practice plan sits on a free account (2026-10-27): not the one-time free answers.
-                if (plan == "free" && doc.RootElement.TryGetProperty("practice", out var pr) && pr.ValueKind == JsonValueKind.True)
-                    plan = "practice";
+                // The Practice plan sits on a free account (2026-10-27): not the one-time free answers. The free trial runs on
+                // "pro" but is not Pro: read as "trial", it is never called Pro, never promised a refill, and its last answer
+                // brings the upgrade prompt (a trial customer saw "pro plan" and "500 answers each month").
+                bool practiceFlag = doc.RootElement.TryGetProperty("practice", out var pr) && pr.ValueKind == JsonValueKind.True;
+                bool trialFlag = doc.RootElement.TryGetProperty("trial", out var tr) && tr.ValueKind == JsonValueKind.True;
+                plan = PlanFacts.PlanFromReply(plan, trialFlag, practiceFlag);
                 bool isUnlimited = doc.RootElement.TryGetProperty("isUnlimited", out var u) ? u.GetBoolean() : false;
                 _minutesBalance = doc.RootElement.TryGetProperty("minutesBalance", out var mb) && mb.TryGetInt32(out int mbv)
                     ? Math.Max(0, mbv) : 0;

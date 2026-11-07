@@ -20,8 +20,7 @@ namespace InterviewCopilot
         public void RefreshFromSession()
         {
 
-            string plan = string.IsNullOrWhiteSpace(UserSession.Plan) ? "guest" : UserSession.Plan;
-            string planLabel = char.ToUpperInvariant(plan[0]) + plan[1..] + " plan";
+            string planLabel = PlanFacts.PlanLabel(UserSession.Plan, UserSession.IsLoggedIn);
 
             if (UserSession.IsUnlimited)
             {

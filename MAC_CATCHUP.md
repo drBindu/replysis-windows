@@ -4368,3 +4368,16 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 - Sign-in typing mistakes (wrong password, unknown email, bad email, short password, email already used) are reported marked minor ("-minor" on the problem type), so they never raise the "apps are reporting errors" alert. Disabled account, lockout and real failures still count.
 - Closing the sign-in window during the welcome pause no longer reports a failed sign-in; a closed window reports nothing.
 - Sign-out also deletes the saved speech token; a refresh overtaken by another sign-in is not treated as refused (refused signs people out).
+
+## 2026-11-07: the free trial is never shown as Pro (Windows, local, not released)
+
+- The server's GET /api/v1/interview/credits reply has "trial": true for the 1 day free trial, which runs on plan "pro".
+  Windows ignored it, so a trial customer saw "pro plan", "500 answers each month" with a refill date, and no upgrade
+  button when the 50 answers ran out ("No answers left this month ... until they renew").
+- Windows now reads it (PlanFacts.PlanFromReply: trial -> "trial", practice -> "practice"), TrialCredits = 250, and:
+  plan label "Free trial"; credits window "50 answers to try everything" and "Not refreshed"; running out shows
+  "Your free answers are used" with the plans button.
+- A signed in free account (trial ended, 0 answers) now reads "Free answers do not refresh" instead of "5 answers, one
+  time"; a guest still sees "5 answers, one time".
+- Plan names read "Free trial", "Starter plan", "Pro plan", "Max plan", "Practice plan" (no lower case "pro plan").
+- Mac: please check the Mac app reads "trial" the same way.

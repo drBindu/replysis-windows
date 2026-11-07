@@ -43,3 +43,44 @@ verified on every protected page; the server checks the token on every request.
 For the owner to decide: anyone can make unlimited new accounts with throwaway emails, and each gets the 1 day
 trial (50 answers). Stopping it needs a rule such as a few trials per address a day or a verified email before the
 trial, and either can turn away real people on a shared office or mobile network.
+
+## Round 2, 2026-11-07: credits and plans for a brand new Free user
+
+Checked, in order: a guest before sign in, a new account getting the 1 day free trial (50 answers), the trial
+running, the reminder and follow up emails, the trial ending, the account after the trial with no answers, running
+out of answers in the Windows app (voice, F8, typed), the badge, the credits window, the Account page, the upgrade
+buttons and the one free interview with Maya. Numbers were compared across the Windows app, the website and the
+server.
+
+Fixed:
+
+1. **Windows: a free trial customer was shown "pro plan" and "500 answers each month".** On the server the trial
+   runs on the Pro plan, and the server's answers reply has said "trial": true since 2026-10-27 so the apps can tell.
+   The Windows app never read it. A trial customer saw "pro plan" in the profile menu, "Pro plan, 500 answers each
+   month" with a refill date in the answers window, and when the 50 answers ran out the message said "No answers left
+   this month ... until they renew" with no upgrade button, because the app thought they were paying. The app now
+   reads the trial flag: the trial is called "Free trial", the answers window says "50 answers to try everything" and
+   "Not refreshed", and running out shows "Your free answers are used" with the button to the plans.
+2. **Windows: a signed in free account was told "5 answers, one time".** Since the trial replaced the 5 free answers,
+   an account whose trial has ended holds 0 answers, and the website removed that line (owner, 2026-11-02). The
+   answers window now says "Free answers do not refresh", as the website does. A guest, who does get 5 free answers on
+   the device, still sees "5 answers, one time".
+3. **Windows: plan names were shown in lower case** ("pro plan", "free plan"). They now read like the website:
+   "Free trial", "Starter plan", "Pro plan", "Max plan", "Practice plan".
+4. **Website: a trial that ran out of time got the email "You have used all your answers".** The out of answers email
+   picks accounts with almost no answers left that used at least one. A 1 day trial that ends leaves 0 answers, so
+   anyone who asked even one question was told they had used them all, which was not true. Those accounts now get
+   "Your free trial has ended" instead, with the same plans link. One email per person, as before.
+5. **Website: the upgrade emails could start "Hi User".** "User" is the placeholder name before sign up finishes. The
+   follow up email already dropped it; the upgrade emails now do too.
+
+Guard added: the website's sync check now fails if the trial size differs between the website, the server and the
+Windows app, or if the Windows app stops reading the trial flag.
+
+Checked and fine: the website and the server create the same trial (1 day, 250 credits, 120 listening minutes); the
+trial end moves the account to free with only bought answers kept and no monthly refill; the 4 hour reminder only
+goes to trial accounts; the website badge and Account page call the trial "Free trial" and the ended trial "Starter";
+the one free Maya interview is claimed once in a transaction.
+
+Not tested by running: the emails were changed in code only (nothing was sent). The Mac app may read the trial the
+same way the Windows app did; it is noted in MAC_CATCHUP.md.

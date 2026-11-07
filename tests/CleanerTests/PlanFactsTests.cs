@@ -43,7 +43,27 @@ internal static class PlanFactsTests
         // Free is a one-time trial, and the words must not promise a refill.
         Check(PlanFacts.IsFreeTrial("free", true) && PlanFacts.IsFreeTrial(null, false) && !PlanFacts.IsFreeTrial("pro", true),
             "Free and guests are the trial; Pro is not");
-        Check(PlanFacts.AllowanceText("free", true) == "5 answers, one time", "the credits window says one time for Free");
+        Check(PlanFacts.AllowanceText(null, false) == "5 answers, one time", "the credits window says one time for a guest");
+        Check(PlanFacts.AllowanceText("free", true) == "Free answers do not refresh",
+            "a signed in free account has used its trial and is not promised 5 answers (the website says the same)");
+
+        // The free trial runs on plan "pro" on the server; the credits reply says "trial": true (2026-11-07: a trial
+        // customer saw "pro plan", "500 answers each month" and no upgrade prompt when the 50 ran out).
+        Check(PlanFacts.PlanFromReply("pro", trial: true, practice: false) == "trial"
+              && PlanFacts.PlanFromReply("pro", trial: false, practice: false) == "pro"
+              && PlanFacts.PlanFromReply("free", trial: false, practice: true) == "practice"
+              && PlanFacts.PlanFromReply("free", trial: true, practice: false) == "free"
+              && PlanFacts.PlanFromReply(null, false, false) == "free",
+            "the credits reply is read as trial, practice or the plan itself");
+        Check(PlanFacts.IsFreeTrial("trial", true) && PlanFacts.MonthlyCredits("trial") == PlanFacts.TrialCredits
+              && PlanFacts.Answers(PlanFacts.TrialCredits) == 50,
+            "the trial is 50 free answers that never refill, so running out brings the upgrade prompt");
+        Check(PlanFacts.AllowanceText("trial", true) == "50 answers to try everything",
+            "the credits window states the trial, not a monthly Pro allowance");
+        Check(PlanFacts.PlanLabel("trial", true) == "Free trial" && PlanFacts.PlanLabel("pro", true) == "Pro plan"
+              && PlanFacts.PlanLabel("free", true) == "Starter plan" && PlanFacts.PlanLabel("max", true) == "Max plan"
+              && PlanFacts.PlanLabel("practice", true) == "Practice plan" && PlanFacts.PlanLabel("pro", false) == "Free trial",
+            "plan names read like the website: the trial is never Pro and nothing is lower case");
         Check(PlanFacts.AllowanceText("pro", true) == "500 answers each month" && PlanFacts.AllowanceText("max", true) == "1,500 answers each month",
             "the answers window says each month for paid plans");
         Check(PlanFacts.BadgeText(15) == "3 answers" && PlanFacts.BadgeText(5) == "1 answer" && PlanFacts.BadgeText(0) == "0 answers" &&
