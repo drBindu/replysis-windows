@@ -569,3 +569,20 @@ Waiting in the next website and server deploy, in plain words:
 - Server: no paid screen read ahead for accounts with nothing left; screen answers about 1 s faster on screens without code; voice answer timings record which app asked; out of answers and no microphone from older Windows apps no longer trigger outage emails.
 
 Safe to deploy: yes, from these checks. Still untried: a real browser on the browser interview fixes, and the screen answer change against the live AI.
+
+## Round 24, 2026-11-07: two writers on one account record (website and server)
+
+Looked for lost updates and double refills where the website and the Java server both change the same account record (answers, used count, bought packs, minutes, refill date, plan, trial end, Practice).
+
+Code: every balance change on both sides already runs inside a transaction (charges, refunds, monthly refills, listening minutes, trial start, trial and India month end, webhook grants), so two of them at once are put in order by the database and neither is lost. The trial end re-reads the account and skips it if a month was bought in between. No code race found.
+
+The real hole was in the database rules, which decide what a signed-in browser may write directly. The live rules are an old copy from 2026-06-22, not the stricter file on disk:
+1. Any new account could create its own record before the server did, with any extra field it liked. Example: sign up through Google's sign-in API, then write your own record with minutesBalance 99999 and mockPlan true. The server then treats every live answer as paid for by bought minutes (no answers taken) and opens Maya as if Practice were bought. Unlimited free answers and Maya for anyone who tries.
+2. Any existing account could set its own used count back to 0. A customer with a bought pack could keep resetting it so the pack is never spent and comes back in full at every monthly refill.
+Proved on the Firestore emulator with the live rules (both allowed) and with the fixed rules (both refused, while the apps' own presence writes still work).
+
+Fix: `uiii/firestore.rules` now refuses every client create; the server already makes every record itself (website sign-in and the server's first balance check, both with the 1 day trial). The update rule on disk already keeps credits and creditsUsed server only. New check `scripts/check-rules.mjs` in the website repo fails if a client could ever write a balance, plan or minutes field again.
+
+Production, read only: 52 accounts. 7 free accounts hold 100 answers with no trial fields, which matches the old Free plan before trials, and one has 20 interview minutes. Nothing here proves anyone used the hole, but it cannot be ruled out from the data.
+
+Needs the owner: the rules only change when deployed, with `firebase deploy --only firestore:rules` from the uiii folder. It touches no app and no website code; the website, Windows and Mac apps only write activity fields, which stay allowed. Note `uiii/firestore.rules` is not in any git repo, so it has no history.
