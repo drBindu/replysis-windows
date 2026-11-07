@@ -662,3 +662,42 @@ worth doing before sending more marketing from the server.
 
 Checks: new scripts/check-email-plan.mjs passes, npx tsc --noEmit clean, check-sync ALL IN SYNC, server tests 177 run,
 0 failed (2 new). No email was sent. Needs a website and server deploy.
+
+## Round 28: release readiness of the next Windows version (2026-11-07)
+
+Nothing broke. Nothing was released, pushed or dispatched.
+
+What I checked:
+- The bundled speech engine was rebuilt from the current source (tools\build-engine.ps1, the same script the release workflow runs). The built engine says it came from source 704c72cbb381, which is exactly the committed speechmatics_engine.py. engine-dist is not in git, so nothing large was committed.
+- The built engine, run on its own with no windows: starts and says WARMUP OK, ignores arguments it does not know, stops with exit 1 and FATAL when it has no key, and on the server's placeholder key stops with exit 2 and no FATAL (so the app fetches a fresh key instead of showing the antivirus message). Its output reads correctly as UTF-8.
+- The reconnect and reset behaviour can only be tested on the source file, because the built engine always talks to the real speech services. Those source tests pass. test_line_resilience.py still has its 3 old failures, the same ones it had before any of these rounds.
+- The app built in Release the way the release workflow builds it, with the engine inside it. All 3 test projects build with 0 errors, and CleanerTests all passed.
+- The release workflow's version stamp works on the project file (checked on a copy, the real file is untouched), and packing the installer locally, unsigned, produced Setup.exe, the portable zip and the update package. Those were deleted afterwards. The Store package manifest is valid and asks for the microphone.
+
+What the next Windows version contains, in plain words:
+- Listening keeps the whole question after a drop, does not repeat words after a reconnect, and recovers faster after sleep.
+- Languages other than English recover from a speech service error and no longer show a wrong antivirus message during an outage.
+- No sign-out when a sign-in refresh is slow. Answers that never start stop after 20 seconds, and Thinking never sticks.
+- A free trial shows as Free trial with the right numbers and an upgrade button when it runs out.
+- Auto does not restart after Finish, New session resumes it, and it no longer slows down in long interviews.
+- Screen share hiding holds during screen reads, and the right monitor is read on two screens.
+- Settings Save no longer resets other settings, and an unplugged microphone is remembered.
+- Spaces work in every text box, indenting code in another app no longer sends paid answers, and code keeps its indentation in the small answer window.
+- Update notices never stick and never show during an interview.
+- No false "apps are reporting errors" emails from customers running out, failed updates, wrong passwords or information banners.
+- On a shared PC, another Windows account can no longer listen to the audio. Opening Replysis again brings back a hidden window.
+- Clear advice when antivirus removes the engine, the Store copy asks Windows for the microphone, and Thai Windows dates are right.
+
+Checks still needed on real laptops before release:
+1. A laptop where Replysis hides as a black box: share the screen, press F8, check the answers never show in the share.
+2. A laptop with a second monitor: put the interview on one screen and Replysis on the other, press F8, check the right screen is read.
+3. A Store install: switch Replysis's microphone off and on in Windows Settings, Privacy, Microphone, and check the app's message each time.
+4. Swathi's laptop: a short real interview, then paste the debug log.
+
+Steps to release once the owner says yes:
+1. Push windowsNative main.
+2. Delete any old draft, then dispatch release-windows.yml with version 1.0.53, the notes, and publish false.
+3. Run the verify script and the ReplysisSmoke scheduled task on the draft.
+4. Publish the draft (draft false, make latest), then change app/lib/downloads.ts on the website to 1.0.53 and deploy the website.
+5. Dispatch build-windows-msix.yml with version 1.0.53 and upload the Store package in Partner Center.
+6. Tell Mac Claude in CHANNEL.md; MAC_CATCHUP.md already lists every change.
