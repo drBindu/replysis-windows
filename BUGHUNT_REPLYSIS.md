@@ -210,3 +210,21 @@ two screen case on a laptop with a second monitor. Both are covered by the tests
 **Checked and fine:** the settings file is encrypted with Windows' per user protection and written to a temp file then moved into place, so a crash mid write cannot leave half a file; a file that cannot be read falls back to defaults with stealth on and the microphone off; the backend address only accepts replysis.com, the old domain or loopback; the language picker falls back to English; the remote app-config.json only switches native audio on or off and passes whole numbers to REPLYSIS_ engine settings that the engine clamps.
 
 **Tests:** SettingsSaveTests (6 checks) in CleanerTests.
+
+## Round 7, 2026-11-07: speed (time to first words)
+
+Real numbers from the last 14 days of answers, measured on the server from the moment a question arrives to the first words sent back:
+
+- Voice answers (222 of them): typical 0.29 s, 9 in 10 within 0.76 s, slowest 2.1 s. Prompt size makes no difference. The few slow ones are the answer model itself being slow to start; the server already asks the backup model when the main one is silent for 0.9 s.
+- Screen reads (50): typical 2.8 s, 9 in 10 within 3.7 s, slowest 4.3 s. This is the slow path. Almost all of it is the picture model reading the screen (about 1.4 to 3 s); charging the answer takes about 0.1 s before that.
+- The app side was traced too: the answer connection is kept warm every 25 s (every 8 s while listening), so the first question does not pay for a new connection; after Space the app waits only until the last words have landed, usually 0.1 s, at most 1.28 s when the sentence clearly is not finished.
+
+What was fixed:
+
+1. Voice answers were saved without saying which app asked them (every one showed as an unknown app and version), because the charge runs on a separate thread that had no request to read the app from. Screen reads were fine. Now the app and version travel with the charge, so speed can be compared between app versions after each release. No effect on speed itself. Backend commit, needs a deploy.
+
+Looked at and left alone, on purpose:
+
+- Running the screen read's charge alongside the picture model (as voice answers already do) would save about 0.1 s of the 2.8 s, but it changes how "no answers left" reaches the app on screen reads and starts a paid picture read before the money is confirmed. Not worth the risk for 4 percent.
+- The 64 letter hold before first words: kept, owner's decision.
+- Making screen reads faster for real means a faster picture model. That changes answer quality, so it is the owner's call and needs a side by side test first.
