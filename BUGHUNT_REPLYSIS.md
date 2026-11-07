@@ -506,3 +506,16 @@ Fixed (Windows, local only, not released):
 Checked and fine: F7, F8 and F9 debounce and pass-through, Ctrl+Alt shortcuts, injected keys from dictation tools ignored, the hook never throws, the main window's code panel and complexity line, the compact window's scroll to the start of a new answer.
 
 Tests: `tests/CleanerTests/UiHotkeyTests.cs` (16 checks). Ships with the next Windows version.
+
+## Round 21, 2026-11-07: resume and AI tools
+
+Found 2 real bugs, both in the website's browser interview (/real-interview). Fixed in website commit c3157600, not live until a website deploy.
+
+1. Every space in the resume and job description was sent to the AI as a hyphen. The resume cleaner had a pattern meant for long dashes that had become "[- - ]", which matches a plain space, so "Senior Engineer at Acme Corp" reached the model as "Senior-Engineer-at-Acme-Corp". It also dropped every letter outside plain English, so an accented name like Jose with an accent lost that letter. This has been there since the first commit and is live today. Now spaces and letters stay; only long dashes, smart quotes and hidden characters are made plain.
+2. The answer route cut every prompt turn at 6,000 characters. The rules part of the system prompt is about 7,500 characters on its own, so the coding interview and system design instructions and the chosen answer style, which sit at the end, were always cut off, and a resume over about 5,500 characters was cut part way. The system turn may now be up to 40,000 characters; other turns keep their 6,000 cap. The prompt is now as long as it was designed to be, about 2,000 to 3,000 more input words for the model, which is a few tens of milliseconds at most on these models.
+
+Checked and fine: resume upload limits and scanned PDF message, the Windows app's resume size caps and what it sends with each answer (the resume rides inside the prompt, well under the server's limits), refunds on failed analysis and tailoring, and that the costs on /pricing (analysis 1 answer, tailor 4, question set 1, feedback 1, rewrite 1) match what the website and server charge.
+
+Skipped: resume import from a file is free and calls the AI, limited to 6 a minute per account. That is deliberate (it is how someone starts), noted here only.
+
+Checks: npx tsc --noEmit clean, check-sync ALL IN SYNC, the new scripts/check-prompt-text.mjs passes, and the listening, resume text, safe path and refunds checks pass. Not run in a browser and no live model calls.
