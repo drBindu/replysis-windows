@@ -729,3 +729,37 @@ Real cost today, read only: Deepgram transcribed 7.9 hours in the last 14 days (
 The 1 day trial, in numbers: one throwaway account can take at most 50 answers (about 10 US cents of AI), 120 reported listening minutes (about 1 dollar of speech) and one free Maya interview. Ten fake accounts a day would cost around 10 to 15 dollars a day. Options: (a) leave it as is and rely on the new spend email (recommended now, nothing is being abused); (b) require a verified email before the trial (stops scripts cheaply, adds one step for real people); (c) a few trials per address a day (can turn away an office or a mobile network sharing one address).
 
 Checks: backend 180 tests, 0 failed; website tsc clean, check-sync ALL IN SYNC, all 10 script checks pass. No Windows code changed.
+
+## Round 31, 2026-11-07: account deletion and what is left behind
+
+Apple needs account deletion to work, and the privacy page promises a finished deletion within 30 days. A person asks
+from the phone app (POST /api/v1/account/delete-request) and the owner completes it with Delete in the admin user list.
+Production today, read only: 1 request ever, the Apple reviewer account's, still dismissed (left as it is).
+
+Fixed (website 1db0e8b1, test scripts/check-account-deletion.mjs):
+1. Deleting a paying customer left their subscription charging. Delete removed the account but never touched Stripe,
+   so the card was charged every month for an account that no longer existed. Delete now cancels every subscription on
+   that Stripe customer that still charges (plan, Practice, any spare) before anything is removed. If Stripe cannot be
+   reached, nothing is deleted and the owner sees "Could not cancel this account's subscription at Stripe, so nothing
+   was deleted. Try again."
+2. A late "subscription ended" event from Stripe brought a deleted account back as a blank Free record (the webhook
+   writes with merge). It now does nothing when the account no longer exists.
+3. Deletion requests were invisible in the admin panel. The only sign was one email, and nothing marked a request done,
+   so the 30 day promise depended on that email. Waiting requests now show at the top of the admin page with how many
+   days they have waited, and Delete marks the request completed and removes its email.
+4. Personal data left behind after Delete: problem reports (client_errors) kept the person's email in "user", and the
+   billing rows (usage_events) kept it in "email". Problem reports are now deleted and billing rows keep their numbers
+   but lose the email.
+
+Checked and fine: interview history and the old usage log are deleted by email, resumes in postgres are deleted through
+the backend first (Delete stops if that fails), the Firebase sign-in is disabled first then deleted, companion memory
+ends within 2 hours, the database rules stop a deleted person writing anything, and Delete is owner only and audited.
+
+Gaps between the privacy page and reality, for the owner:
+- Daily database backups (14 days on the server, 30 days on the laptop) still hold a deleted person's resume until they
+  roll off. The privacy page does not say backups are kept that long.
+- Stripe keeps its own customer record and receipts; that is a legal billing record and is fine, but not mentioned.
+- The page tells people to email support to delete; the phone app has a Delete my account button, and the website and
+  Windows app have none.
+Owner steps: deploy the website for these fixes; consider one privacy line about backups (up to 30 days) and Stripe
+billing records; decide whether the website Account page should get its own delete request button.
