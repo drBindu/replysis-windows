@@ -611,3 +611,20 @@ Everything was read without changing anything live. One real risk found, which o
 - When the old domains coopilotxai.com and verchor.com are let go, remove them from Firebase authorized domains and from CorsConfig.java first, so a new owner of the name cannot use them.
 
 No code changed this round.
+
+## Round 26: older Windows versions against the current and next server (2026-11-07)
+
+Who runs what (Firestore, read only): Windows 1.0.52 on 2 accounts, 1.0.51 on 3, 1.0.50 on 4, and one each on 1.0.46, 1.0.40, 1.0.39 and 1.0.34. Only 1.0.51 and 1.0.52 opened the app in the last 14 days (4 accounts). Phones: iPhone 1.0.0 on 3, Android 1.0.0 on 1.
+
+Checked and fine:
+- The new database rules (live today): every Windows version back to 1.0.34 writes only lastActive and lastLogin, to a record that already exists. Both are still allowed.
+- The server waiting to deploy (local HEAD): the screen read ahead skip, the screen answer started beside the screen read, and the app labels change nothing an old app sees in its replies. The listening report still accepts up to 120 minutes, more than the next app ever sends (an hour at most).
+- The next Windows version against today's live server: everything it reads (the trial flag, the out of answers reply, the placeholder speech key) is already live, so the app can ship before the server.
+
+Fixed (server, waiting for deploy):
+1. Older apps could still send the owner a false "apps are reporting errors" email. 1.0.52 and older report a mistyped password, a failed update download and three information banners ("Microphone found", "Nothing heard yet", "Your minutes are almost over") as real errors. The next app marks them minor, but customers stay on old versions for weeks. The server now recognises those exact old reports. A disabled account, a Google sign-in failure and a failed install still alert. 2 new tests.
+
+Left as it is:
+- On 1.0.52 and older, when Speechmatics is down and the person listens in a language other than English, the server's placeholder key makes the old engine stop with an antivirus message until the app is restarted. Before 2026-11-04 the server refused the whole request instead, which stopped English listening too. English is unaffected. The next Windows version fixes it in the engine (round 12).
+
+Deploy order: either order works. The server first is slightly better, because it stops the old apps' false alerts at once.
