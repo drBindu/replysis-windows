@@ -462,3 +462,36 @@ CleanerTests (access list is this user only, nothing for Everyone or Anonymous, 
 
 **Skipped:** the speech vocabulary file holds words from the resume in plain text in the user's own folder.
 Only this user (and administrators) can read it, the same as the encrypted files' location, so it is not a hole.
+
+## Round 19, 2026-11-07: the website's interview flows (browser real interview and Maya mock interview)
+
+**Fixed (website, not live until a website deploy):**
+
+1. **The microphone could stay on after listening was stopped.** In the browser real interview, opening the
+   microphone can take seconds (the permission prompt, a Bluetooth headset waking up). If Space was pressed again in
+   that time, the microphone opened after listening had already stopped: the browser kept its red recording dot, the
+   screen said "Listening…", and nothing was sent anywhere until the tab was closed. The listening client now checks
+   after each step that it is still the live one and closes a late microphone at once.
+2. **A second Space press, or a held Space key, started a second listener.** Starting reads the sign in token first,
+   and a press in that short gap started another listener. Two microphones fed the same transcript, so words showed
+   twice, listening minutes were counted twice against the customer's fair use, and the first listener could not be
+   stopped because nothing pointed at it any more. A held Space key repeats about 30 times a second, so this was easy
+   to hit. Now only the first press counts, a second start is refused, and an error from a replaced listener cannot
+   end the live one.
+3. **One interview could be saved twice in the history.** The first save creates the interview and the next ones
+   update it, but a second save sent before the first reply came back (End session pressed right after an answer)
+   had no id yet and created a second copy. Saves now run one at a time.
+4. **Copy rule:** two ready made spoken replies had a dash ("great to be here - really looking forward", "exciting
+   challenge - I've been following"). Now full stops.
+
+Test: `scripts/check-listening-start.mjs` (fails on the old listening client, passes now): a microphone opened after
+stop is closed and nothing says Listening, a normal start still listens, the hook ignores a held Space and a second
+start, saves wait for the one before, and the spoken replies have no dash.
+
+**Checked and fine:** the answer request never trusts the email or model sent by the browser (server verified email,
+model allowlist and plan clamp); session saves and reads check the signed in owner; the Maya face session checks the
+plan, the free interview, the daily and lifetime join caps and the month's count; the free interview is claimed once
+in a transaction; listening minutes use a fresh sign in token and are sent with keepalive when the tab closes.
+
+**Skipped:** the ready made replies to a hello or small talk are not auto saved until the next AI answer or End
+session; both save the whole history, so nothing is lost unless the tab is closed right after a hello.
