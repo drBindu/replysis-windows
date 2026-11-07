@@ -240,3 +240,18 @@ Looked at and left alone, on purpose:
 **Left as is:** the release workflow builds unsigned when no signing secrets are set and says so in the log. That is the current decision (signed .exe deferred), not a bug.
 
 **Tests:** 4 new checks in UpdateTests (update policy).
+
+## Round 9, 2026-11-07: the website pages
+
+Fixed (website commit 30c8d9f3, local, needs a deploy):
+1. Resume PDF lost text. The builder shows resume text as text, but the PDF was built by pasting the text straight into a web page. A bullet like "Built the <Header> component" came out as "Built the component", and "&nbsp;" or "&copy;" turned into symbols. Every resume field is now escaped once before the PDF page is built, so the PDF matches the preview. It also stops resume text being read as page code inside the PDF service. Check: scripts/check-resume-text.mjs.
+2. Two middle dots in visible text: the filler words line in the web interview report, and the reviewer line on /proof. Now commas.
+
+Checked and fine: raw HTML on the site is only fixed styles, the template thumbnails and the question page data, none of it from other people; answers from the AI are shown as text; the balance updates live after a purchase; paid buttons on the resume page are blocked while busy; the admin API checks for the owner's verified email; the resume draft kept in the browser is stored per account.
+
+Skipped:
+- The old /real-interview/popup page reads a resume from its address. Nothing links to it any more; it is dead code, worth deleting later.
+- Signing out leaves the resume draft in that browser (stored under the account, never shown to another account). Clearing it on sign out would lose edits not yet saved, so it was left.
+- The resume template list has middle dots between email, phone and place. That is the customer's own resume layout, not Replysis text.
+
+Checks: npx tsc --noEmit clean, check-sync ALL IN SYNC, check-resume-text and check-safe-path ok. No browser run.
