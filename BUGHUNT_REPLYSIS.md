@@ -716,3 +716,16 @@ Fixed (website, local, needs a deploy):
 Checked and fine: every admin action is owner only (verified email must match ADMIN_EMAIL), each runs in a transaction with its admin_audit row, and the user id is checked; delete refuses your own account. The "email everyone" list skips unsubscribed people. Latency uses latencyMs (first words). The backend /admin-api/stats is not used by the panel. Dismissed deletion requests are not shown as open (the panel does not list deletion requests at all).
 
 Test: scripts/check-admin-metrics.mjs. Type check clean, check-sync ALL IN SYNC, all script checks pass.
+
+## Round 30, 2026-11-07: the hidden fair use guard and cost abuse
+
+What was checked: listening allowances per plan (trial 120 minutes, guest 10, Pro, Max 1,800, Practice, India), the 402 "monthly limit" answer on Windows and the website, how listening is metered, speech token lifetime and reuse, where the speech keys live, and the screen, Maya and voice limits from earlier rounds.
+
+1. **Speech can be used without being metered (cost hole, not fixed in code, now watched).** Listening minutes are counted from what the apps report. A speech token from /api/v1/stt/key lasts an hour and Deepgram lets one token open any number of connections, which stay open after the hour. Someone who pulled the token out of the app could stream audio for hours and never report a minute, so the allowance never runs out and tokens keep coming (60 an hour per account). Making the token short would force a fresh token on every reconnect, which slows listening, so instead the server now watches the bill: once an hour it reads today's Deepgram hours and emails the owner once a day if they pass 12 hours (normal is under 4). Server commit below, 3 new tests. The server's own key can read Deepgram usage (checked, 200).
+2. **Mock interview could fall back to a fake key.** When Speechmatics gave no key, the server sends the stand-in "speech-backup-unavailable". The website's mock interview passed it to the browser as a real key, so a Deepgram failure fell back to a connection that could only be refused. The route now drops the stand-in. New check scripts/check-speech-placeholder.mjs keeps the word the same on both sides.
+
+Real cost today, read only: Deepgram transcribed 7.9 hours in the last 14 days (about 4 US dollars). 32 real signups in 30 days, 2 used more than 40 answers, 96 listening minutes reported in total, 108 guest devices ever. No sign of abuse.
+
+The 1 day trial, in numbers: one throwaway account can take at most 50 answers (about 10 US cents of AI), 120 reported listening minutes (about 1 dollar of speech) and one free Maya interview. Ten fake accounts a day would cost around 10 to 15 dollars a day. Options: (a) leave it as is and rely on the new spend email (recommended now, nothing is being abused); (b) require a verified email before the trial (stops scripts cheaply, adds one step for real people); (c) a few trials per address a day (can turn away an office or a mobile network sharing one address).
+
+Checks: backend 180 tests, 0 failed; website tsc clean, check-sync ALL IN SYNC, all 10 script checks pass. No Windows code changed.
