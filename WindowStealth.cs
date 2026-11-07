@@ -349,9 +349,12 @@ namespace InterviewCopilot
                 IntPtr hwnd = new WindowInteropHelper(window).Handle;
                 if (hwnd == IntPtr.Zero) return false;
 
-                if (GetWindowDisplayAffinity(hwnd, out uint current) != 0 &&
-                    current == WDA_EXCLUDEFROMCAPTURE)
-                    return true;
+                bool known = GetWindowDisplayAffinity(hwnd, out uint current) != 0;
+                switch (PlanCloak(known, current))
+                {
+                    case CloakStart.AlreadyHidden: return true;
+                    case CloakStart.KeepBlackBox: return false;   // full hiding was refused; the black box stays up
+                }
 
                 if (SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) == 0) return false;
                 SetWindowDisplayAffinity(hwnd, WDA_NONE);
@@ -360,9 +363,39 @@ namespace InterviewCopilot
             catch { return false; }
         }
 
+        /// <summary>What a screen read should do with one of our windows, from its capture setting now.</summary>
+        internal enum CloakStart
+        {
+            /// <summary>Already hidden (stealth is on): nothing to do, and nothing to undo afterwards.</summary>
+            AlreadyHidden,
+            /// <summary>
+            /// Shown as a black box because Windows refused full hiding. Left exactly as it is: trying to hide it again
+            /// fails, and the undo used to clear the black box, so the answers showed in a screen share until the guard put
+            /// it back up to a second later, after every screen read (found 2026-11-07).
+            /// </summary>
+            KeepBlackBox,
+            /// <summary>Not hidden: hide it for the capture and undo that afterwards.</summary>
+            TryHide,
+        }
+
+        internal static CloakStart PlanCloak(bool settingKnown, uint current) =>
+            settingKnown && current == WDA_EXCLUDEFROMCAPTURE ? CloakStart.AlreadyHidden
+            : settingKnown && current == WDA_MONITOR ? CloakStart.KeepBlackBox
+            : CloakStart.TryHide;
+
+        /// <summary>
+        /// Whether the hiding a screen read put on a window is taken off again: only when the read itself put it there and
+        /// stealth is still off. Turning stealth on during a read must not end with the window visible.
+        /// </summary>
+        internal static bool ShouldUndoCloak(bool hiddenByThisRead, bool stealthOnNow) => hiddenByThisRead && !stealthOnNow;
+
+        /// <param name="alreadyExcluded">
+        /// True when this call changed nothing, so <see cref="EndCaptureHidden"/> must leave the window alone: it was
+        /// already hidden, it shows as a black box, or Windows refused to hide it.
+        /// </param>
         public static bool TryBeginCaptureHidden(Window? window, out bool alreadyExcluded)
         {
-            alreadyExcluded = false;
+            alreadyExcluded = true;
             if (window == null) return false;
 
             try
@@ -370,14 +403,16 @@ namespace InterviewCopilot
                 IntPtr hwnd = new WindowInteropHelper(window).Handle;
                 if (hwnd == IntPtr.Zero) return false;
 
-                if (GetWindowDisplayAffinity(hwnd, out uint current) != 0 &&
-                    current == WDA_EXCLUDEFROMCAPTURE)
+                bool known = GetWindowDisplayAffinity(hwnd, out uint current) != 0;
+                switch (PlanCloak(known, current))
                 {
-                    alreadyExcluded = true;
-                    return true;
+                    case CloakStart.AlreadyHidden: return true;
+                    case CloakStart.KeepBlackBox: return false;
                 }
 
-                return SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) != 0;
+                if (SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) == 0) return false;
+                alreadyExcluded = false;
+                return true;
             }
             catch (Exception ex)
             {
@@ -387,13 +422,15 @@ namespace InterviewCopilot
         }
 
         /// <summary>
-        /// Undoes <see cref="TryBeginCaptureHidden"/>. Does nothing when the window
-        /// was already excluded before the capture, so a user running in Stealth
-        /// mode is never quietly taken out of it by taking a screenshot.
+        /// Undoes <see cref="TryBeginCaptureHidden"/>. Does nothing when that call changed nothing, or when stealth is on now,
+        /// so a user in Stealth mode is never quietly taken out of it by a screen read.
         /// </summary>
         public static void EndCaptureHidden(Window? window, bool wasAlreadyExcluded)
         {
-            if (window == null || wasAlreadyExcluded) return;
+            if (window == null) return;
+            bool stealthOnNow = false;
+            try { stealthOnNow = _guardEnabled?.Invoke() == true; } catch { }
+            if (!ShouldUndoCloak(!wasAlreadyExcluded, stealthOnNow)) return;
 
             try
             {

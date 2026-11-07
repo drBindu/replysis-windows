@@ -374,9 +374,11 @@ namespace InterviewCopilot
                     !GetWindowRect(hwnd, out r))
                     return false;
 
-                // Clip to the monitor. A maximised window reports slightly beyond
-                // its screen, and off-screen coordinates make the copy fail.
-                if (TryGetActiveMonitorBounds(out int mx, out int my, out int mw, out int mh))
+                // Clip to the monitor showing this window. A maximised window reports slightly beyond its screen, and
+                // off-screen coordinates make the copy fail. It is the monitor of the window being read, not of the one in
+                // front: after pressing Analyze on Replysis, Replysis is in front, and on two screens clipping the work
+                // window to Replysis's screen left nothing, so the other screen was read instead (found 2026-11-07).
+                if (TryGetMonitorBounds(hwnd, out int mx, out int my, out int mw, out int mh))
                 {
                     int left   = Math.Max(r.Left,   mx);
                     int top    = Math.Max(r.Top,    my);
@@ -449,10 +451,27 @@ namespace InterviewCopilot
         /// </summary>
         private static bool TryGetActiveMonitorBounds(out int x, out int y, out int w, out int h)
         {
+            IntPtr front = GetForegroundWindow();
+            GetWindowThreadProcessId(front, out uint pid);
+            IntPtr last = _lastExternalWindow;
+            IntPtr target = ChooseMonitorWindow(front, pid == (uint)Environment.ProcessId, last, last != IntPtr.Zero && IsWindow(last));
+            return TryGetMonitorBounds(target, out x, out y, out w, out h);
+        }
+
+        /// <summary>
+        /// The window whose monitor is read: the one in front, unless that is Replysis itself (the Analyze button was
+        /// pressed, or the answer was being read), when the last window the user worked in is used. On two screens the
+        /// monitor holding Replysis is rarely the one the question is on.
+        /// </summary>
+        internal static IntPtr ChooseMonitorWindow(IntPtr front, bool frontIsOurs, IntPtr lastExternal, bool lastExternalAlive) =>
+            (front == IntPtr.Zero || frontIsOurs) && lastExternalAlive ? lastExternal : front;
+
+        private static bool TryGetMonitorBounds(IntPtr hwnd, out int x, out int y, out int w, out int h)
+        {
             x = y = w = h = 0;
             try
             {
-                IntPtr monitor = MonitorFromWindow(GetForegroundWindow(), MONITOR_DEFAULTTOPRIMARY);
+                IntPtr monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
                 if (monitor == IntPtr.Zero) return false;
 
                 var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };

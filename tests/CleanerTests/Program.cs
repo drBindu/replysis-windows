@@ -167,6 +167,7 @@ internal static class Program
         _failed += XamlTemplateTests.Run();
         _failed += MacSegmentedTests.Run();
         _failed += StealthDialogTests.Run();
+        _failed += StealthCaptureTests.Run();
         _failed += UpdateDownloadGuardTests.Run();
         _failed += VocabResumeTests.Run();
 

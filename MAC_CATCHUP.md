@@ -4397,3 +4397,13 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
   gets its Upgrade banner. Both paths show "You are out of answers. Open the answers badge at the top to add more."
   Mac: check how the Mac app reports this reply; if it sends it as a generic answer error it raises false alerts too.
 - A cancelled request with no words yet (the 20 s first word limit) is logged and reported as "answer-first-word-timeout".
+
+## 2026-11-07: bug round 5, screen share and stealth (Windows, local, not released)
+
+- A screen read hides our windows for that one capture and undoes it after. On a computer where full hiding is refused the
+  window carries the black box (WDA_MONITOR); the read tried to hide it, failed, and the undo set WDA_NONE, so answers
+  showed in a screen share until the guard re-applied it. Now a black box window is never touched by a read, and the undo
+  runs only when the read itself hid the window and stealth is still off (WindowStealth.PlanCloak / ShouldUndoCloak).
+  Mac: check whether reading the screen ever lowers sharingType on our windows and restores it to something visible.
+- Two screens: with Replysis in front (Analyze button), the last work window was clipped to Replysis's monitor and the
+  wrong screen was read. Now the monitor of the window being read is used (ScreenAnalyzer.ChooseMonitorWindow).

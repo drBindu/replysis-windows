@@ -157,3 +157,40 @@ Checked and found fine:
 Noted, not changed: the server holds the first 64 characters of every answer to catch a model's refusal before the
 person sees it. That costs the time to generate those characters (tens of milliseconds on the fast models) on every
 answer. Changing it is a product decision, because it trades speed against an apology occasionally reaching the screen.
+
+## Round 5, 2026-11-07: screen share and stealth
+
+Checked: how every Replysis window and popup is hidden from screen sharing (the per window setting, the guard that hides
+any new window the moment it shows and sweeps every second, native dialogs), what happens on computers where Windows
+refuses full hiding (the black box fallback, the quiet Screen share row, the problem reports and their filters), the
+screen reading path (F8, the Analyze button, the select area picker, reading while listening, which is on purpose and
+stays), which window and which screen is read, and what a problem report can carry.
+
+Fixed:
+
+1. **Windows: on a computer that can only show Replysis as a black box, every screen read took the black box away.**
+   Before reading the screen the app hides its own windows from that one capture, then undoes it. On a computer where
+   Windows refuses full hiding (three Windows 10 laptops so far), the window carries the black box instead. The read
+   tried to hide it, Windows refused, and the undo then cleared the setting entirely, so the answers were plainly
+   visible in the interviewer's screen share until the once a second guard put the black box back. With F8 or reading
+   while listening, that was up to a second of visible answers after every read. A black box window is now never
+   touched by a screen read, and a read that changed nothing undoes nothing.
+2. **Windows: turning stealth on during a screen read could leave the window visible.** The undo cleared the hiding it
+   had put on, even if stealth had been switched on meanwhile. It now leaves the window hidden whenever stealth is on.
+3. **Windows: on two screens, pressing Analyze read the wrong screen.** Pressing the button brings Replysis to the
+   front, so the app reads the last window the user worked in, but it then clipped that window to the screen holding
+   Replysis. With the work on the other screen nothing was left, and it read Replysis's own screen instead. Watch
+   screen had the same mistake whenever Replysis was clicked. Both now use the screen of the window being read.
+
+Tests in StealthCaptureTests (what a read does to a hidden, black box and visible window, the undo rule, and which
+window's screen is read).
+
+Checked and found fine:
+
+- The guard skips other processes' windows and windows with no area, and logs a refused window once.
+- Problem reports carry only allowlisted technical lines, never screen words or speech.
+- Screen words are logged by length only, never the text.
+- The select area picker closes before the capture.
+
+Needs a real run before release: the black box case can only be seen on one of the computers that refuse hiding; the
+two screen case on a laptop with a second monitor. Both are covered by the tests above, not by watching a screen share.
