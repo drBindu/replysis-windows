@@ -763,3 +763,20 @@ Gaps between the privacy page and reality, for the owner:
   Windows app have none.
 Owner steps: deploy the website for these fixes; consider one privacy line about backups (up to 30 days) and Stripe
 billing records; decide whether the website Account page should get its own delete request button.
+
+## Round 32, 2026-11-07: accessibility and phone width on the signup and money paths
+
+Checked on the live site at phone width (375 wide), read only, and in the code.
+
+Fixed:
+- **The sign-in box could not be closed or finished on a short phone.** On a 375 by 548 screen (an iPhone SE in Safari) the box is 677 tall, the page behind it is locked, and the box itself did not scroll. Its close button sat above the top of the screen and the bottom was cut off. With the keyboard open, "Create account" was hidden under the keyboard on most phones. The box now never grows taller than the screen and scrolls inside itself. Checked by applying the same style to the live page: the box fits (16 to 532 of 548), the close button shows and "Create account" can be scrolled to. Website.
+- **The first-run guide that every new signup sees had the same problem.** On a phone its three steps stack into a box taller than the screen, so its close button and "I will explore myself" could not be reached. Same fix. Website.
+- **Windows sign-in window was silent to screen readers.** The email and password boxes and the close and show password buttons had no names, so Narrator said "edit" or "button" with nothing else. They now have names, and the show password button's name follows its tooltip. Nothing visible changed.
+
+Test: `scripts/check-dialog-fit.mjs` (fails on the old code, passes now) and CleanerTests section 31.
+
+Checked and fine: no page scrolls sideways at 375 wide (home, pricing, start, and the signed-in pages redirect to sign-in); the pricing buy buttons are a normal size; every input on these pages has a label; Escape closes the sign-in box and Tab stays inside it; Enter signs in on Windows from either field.
+
+Skipped: "Try live copilot now" at the bottom of /pricing is a 20 pixel tall text link, small but tappable. The Windows main window has no screen reader names on its icon buttons either; it is large and part of the locked top bar, so it is left for a separate change the owner asks for.
+
+Needs: a website deploy, and the next Windows version.

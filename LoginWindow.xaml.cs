@@ -748,6 +748,7 @@ namespace InterviewCopilot
                 PasswordPlainBox.CaretIndex = PasswordPlainBox.Text.Length;
                 PasswordPlainBox.Focus();
                 RevealPasswordBtn.ToolTip = "Hide password";
+                System.Windows.Automation.AutomationProperties.SetName(RevealPasswordBtn, "Hide password");
             }
             else
             {
@@ -756,6 +757,7 @@ namespace InterviewCopilot
                 PasswordBox.Visibility = Visibility.Visible;
                 PasswordBox.Focus();
                 RevealPasswordBtn.ToolTip = "Show password";
+                System.Windows.Automation.AutomationProperties.SetName(RevealPasswordBtn, "Show password");
             }
 
             // Same eye glyph throughout, tinted when active. Swapping to a second

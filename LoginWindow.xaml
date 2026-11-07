@@ -241,7 +241,7 @@
                      white for the app's dark glass windows, which disappears
                      against this page's white background. A small local
                      template keeps the same shape without the mismatch. -->
-                <Button Click="CloseBtn_Click" Width="32" Height="32" Cursor="Hand"
+                <Button Click="CloseBtn_Click" AutomationProperties.Name="Close" Width="32" Height="32" Cursor="Hand"
                         HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,16,0" ToolTip="Close"
                         FocusVisualStyle="{StaticResource KeyboardFocus}">
                     <Button.Template>
@@ -354,7 +354,7 @@
                                           Data="M2.5,6.5 L12,13.5 L21.5,6.5"/>
                                 </Canvas>
                             </Viewbox>
-                            <TextBox Grid.Column="1" x:Name="EmailBox" Background="Transparent" Foreground="#16150F"
+                            <TextBox Grid.Column="1" x:Name="EmailBox" AutomationProperties.Name="Email" Background="Transparent" Foreground="#16150F"
                                      BorderThickness="0" Padding="2,0,15,0" FontSize="13.5" CaretBrush="#1C7A3E"
                                      VerticalContentAlignment="Center"
                                      GotFocus="EmailBox_GotFocus" LostFocus="EmailBox_LostFocus" KeyDown="Input_KeyDown"/>
@@ -381,16 +381,16 @@
                                           Data="M7,11 L7,7 C7,4.24 9.24,2 12,2 C14.76,2 17,4.24 17,7 L17,11"/>
                                 </Canvas>
                             </Viewbox>
-                            <PasswordBox Grid.Column="1" x:Name="PasswordBox" Background="Transparent" Foreground="#16150F"
+                            <PasswordBox Grid.Column="1" x:Name="PasswordBox" AutomationProperties.Name="Password" Background="Transparent" Foreground="#16150F"
                                          BorderThickness="0" Padding="2,0" FontSize="13.5" CaretBrush="#1C7A3E"
                                          VerticalContentAlignment="Center"
                                          GotFocus="PasswordBox_GotFocus" LostFocus="PasswordBox_LostFocus" KeyDown="Input_KeyDown"/>
-                            <TextBox Grid.Column="1" x:Name="PasswordPlainBox" Visibility="Collapsed" Background="Transparent"
+                            <TextBox Grid.Column="1" x:Name="PasswordPlainBox" AutomationProperties.Name="Password" Visibility="Collapsed" Background="Transparent"
                                      Foreground="#16150F" BorderThickness="0" Padding="2,0" FontSize="13.5"
                                      VerticalContentAlignment="Center"
                                      CaretBrush="#1C7A3E" GotFocus="PasswordBox_GotFocus"
                                      LostFocus="PasswordBox_LostFocus" KeyDown="Input_KeyDown"/>
-                            <Button Grid.Column="2" x:Name="RevealPasswordBtn" Click="RevealPasswordBtn_Click"
+                            <Button Grid.Column="2" x:Name="RevealPasswordBtn" AutomationProperties.Name="Show password" Click="RevealPasswordBtn_Click"
                                     Width="38" Height="34" Margin="0,0,5,0" Cursor="Hand"
                                     VerticalAlignment="Center" ToolTip="Show password"
                                     FocusVisualStyle="{StaticResource KeyboardFocus}">

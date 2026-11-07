@@ -4462,3 +4462,7 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 
 - Round 20's "quick second Space is typing" rule now applies only when another app is in front. Inside Replysis a quick second press (stop, then interrupt the answer) works again. If the Mac copies round 20, copy this limit too.
 - "Microphone found", "Nothing heard yet" and "Your minutes are almost over" banners are no longer reported as app errors (they counted toward the outage email). Check the Mac does not report information banners as errors.
+
+## 2026-11-07: sign-in window names for screen readers (Windows, local, not released)
+
+- Bug round 32: the Windows sign-in email and password boxes and the close and show password icon buttons now carry AutomationProperties.Name, and the show password name follows its tooltip. Nothing visible changed. Mac: check the sign-in fields and icon buttons have accessibility labels (VoiceOver), and that the sign-in sheet scrolls on a short screen.
