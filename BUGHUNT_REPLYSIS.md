@@ -321,3 +321,32 @@ Not run end to end: the three tries when writing auto add minutes fails (a datab
 Also checked: website checks (safe path, resume text, refunds, sync, type check) and server tests (168, none failed) all pass. Commits since the deploy were read together: the two server changes to InterviewController touch different parts (the charge thread and the screen read ahead) and do not interfere; resume escaping cannot double escape (resume fields hold no formatting); the website and server rules for free mock interview steps still match branch for branch.
 
 Ready for the owner's deploy: website (4 commits) and server (2 commits) since 2026-11-04.
+
+## Screen read model test, 2026-11-07 (owner approved; nothing live changed)
+
+What was tested: the model that reads the screen now (gemini-3.5-flash-lite), its backup (gemini-3.1-flash-lite), Google's moving "flash lite latest" name, and the faster looking options the existing keys can reach (Qwen 3.8 27B on Cerebras and on Groq). The two newer Gemini Flash models answered in about 5 s on the first try, and OpenAI refused every call ("account is not active"), so those were dropped early.
+
+How: 12 made-up screens, no customer data, drawn with headless Chrome at 1920 x 1080: a LeetCode problem, a SQL task, a system design brief, an aptitude question, a Teams chat question, a busy desktop with a sticky note, a Java compile error, a problem cut off at the bottom, a settings page with nothing asked, a failing Python test, a Python output quiz and a Zoom shared coding task. Each model got the app's exact F8 screen prompt and the same request the server sends, 3 times per screen, run from inside the website container so no key left the server. 180 calls in all.
+
+Time to first words (straight to the model, so lower than what customers see end to end):
+
+| Model | Typical | 9 in 10 within | Slowest | Right answers |
+|---|---|---|---|---|
+| gemini-3.5-flash-lite (now) | 0.94 s | 1.58 s | 2.17 s | 30 of 36 |
+| gemini-3.1-flash-lite (now the backup) | 0.87 s | 1.15 s | 1.37 s | 32 of 36 |
+| gemini flash lite latest | 0.84 s | 1.33 s | 1.85 s | 30 of 36 |
+| Qwen 3.8 27B on Cerebras | 1.10 s | 2.89 s | 3.16 s | 34 of 34, but 2 blank answers |
+| Qwen 3.8 27B on Groq | 0.42 s | 0.60 s | 1.30 s | 28 of 36 calls refused (free plan limit) |
+
+What stood out:
+- The current model answered the Python quiz wrong twice in three ("16", then corrected itself in the middle of the answer). The backup got it right every time and was also the steadiest.
+- Every Gemini model solved the cut-off problem from what it could see instead of asking to scroll for the missing constraints. Only Qwen asked.
+- Qwen on Cerebras thinks before it writes: twice it spent its whole allowance thinking and returned nothing after 3.6 s, which would be a blank answer in front of an interviewer. Not safe as it is.
+- Groq is fastest but its free plan refused most calls, so it cannot carry real traffic.
+- "flash lite latest" is a moving name Google can repoint at any time, so it is not a safe fixed choice.
+
+Recommendation: swap the two Gemini models, so gemini-3.1-flash-lite reads the screen first and gemini-3.5-flash-lite becomes the backup. It was a little faster on typical screens, much steadier on slow ones (slowest 1.4 s against 2.2 s) and more often right. It is two lines in InterviewController.java (VISION_MODEL_GEMINI and SECOND_CHOICE_MODEL) and needs the owner's yes plus a server deploy. Not changed.
+
+Also learned: the model itself takes about 0.9 s here, but customers wait about 2.8 s for a screen answer (round 7). Most of the difference is outside the model (bigger real screenshots, several images when scrolled, the two step path for coding screens), which is the next place to look for speed.
+
+Cost of the test: about 290,000 tokens in and 90,000 out across all models, roughly 20 to 30 US cents.
