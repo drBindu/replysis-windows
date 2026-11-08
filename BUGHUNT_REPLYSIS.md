@@ -977,3 +977,22 @@ Proposed for the server, waiting for the owner's yes, in docs/SERVER_SCRIPT_FIXE
 4. No free disk check before a build (71% used).
 
 Checked and fine: all seven containers come back after a reboot (restart always plus podman-restart with linger), certificate renewal, postgres backup and follow-up timers are running, the backend rollback image exists, build failures touch nothing.
+
+## Round 45: the Microsoft Store copy (2026-11-07)
+
+No real bug found in code, so nothing changed. What was checked, read from the code, the package manifest and build-windows-msix.yml:
+
+- Files: settings, sign in, past interviews, the debug log, latest.txt and the crash and freeze flags all live under the user's local app data folder. In the Store copy Windows keeps these in a private folder for the package. The speech engine is started from inside the package, so it sees the same private folder as the app, and it only writes there (never next to itself in the read only install folder). Uninstalling the Store copy removes these files, which is the right privacy behaviour.
+- The audio pipes from round 18 work inside the package, because the app and the engine are in the same package and run as the same user.
+- Google sign in: the Store copy runs with full trust, so the 127.0.0.1 sign in listener is allowed. The log already records "packaged=" for each Google sign in, which is the line to read if one ever fails.
+- No start on login feature exists, so the packaged startup rules do not apply.
+- Updates: the Store copy never runs the website updater; it asks the Store, a mandatory update shows the launch gate, an optional one is installed by the Store when the app is closed, and the top bar notice only opens the Store page. Nothing interrupts a session.
+- Build: the workflow builds the speech engine first, refuses to finish without it, opens the bundle to confirm the engine is inside, stamps the same version into the package and the app, and leaves the package unsigned for Partner Center as Microsoft wants.
+
+Low, not changed: the optional sideload .appinstaller the workflow writes names the package by an old ID instead of Varoxel.Replysis, so it would not install. Nothing uses it (no server secrets, no link on the website). If sideloading is ever wanted, that name has to be fixed first.
+
+Check on a real Store install before release (one short session):
+1. Microphone: Windows Settings, Privacy, Microphone shows Replysis; switching it off shows the quiet microphone message, switching it on lets listening start (round 16).
+2. Google sign in completes.
+3. Start, ask one question, get an answer; Finish; reopen the app and the past interview is listed.
+4. If anything fails, the debug log is at %LOCALAPPDATA%\Packages\Varoxel.Replysis_<id>\LocalCache\Local\InterviewCopilot\debug.log, not the usual folder.
