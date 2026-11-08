@@ -7910,11 +7910,7 @@ namespace InterviewCopilot
             }
         }
 
-        // Languages the engine routes to Sarvam AI (Speechmatics can't do them).
-        // Keep in sync with SARVAM_LANG_MAP in speechmatics_engine.py.
-        private static readonly HashSet<string> _sarvamLangs =
-            new(StringComparer.OrdinalIgnoreCase) { "te", "kn", "ml", "gu", "pa", "or", "as" };
-        private static bool IsSarvamLanguage(string code) => _sarvamLangs.Contains((code ?? "").Trim());
+        private static bool IsSarvamLanguage(string code) => LanguageRules.IsSarvamLanguage(code);
 
         // Common words that get capitalized at sentence starts — never useful as STT vocab.
         private static readonly HashSet<string> _vocabStop = new(StringComparer.OrdinalIgnoreCase)

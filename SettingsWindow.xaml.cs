@@ -190,7 +190,6 @@ namespace InterviewCopilot
             ("English",              "en"),
             ("Hindi",                "hi"),
             ("Tamil",                "ta"),
-            ("Telugu (Sarvam AI)",   "te"),
             ("Bengali",              "bn"),
             ("Marathi",              "mr"),
             ("Urdu",                 "ur"),
@@ -845,8 +844,8 @@ namespace InterviewCopilot
         }
         public static string GetTranscriptLanguage()
         {
-            var lang = LoadConfig().TranscriptLanguage;
-            return string.IsNullOrWhiteSpace(lang) ? "en" : lang.Trim();
+            var cfg = LoadConfig();
+            return LanguageRules.EngineLanguage(cfg.TranscriptLanguage, cfg.SarvamApiKey);
         }
         public static string GetSarvamApiKey() => (LoadConfig().SarvamApiKey ?? "").Trim();
 #if DEBUG

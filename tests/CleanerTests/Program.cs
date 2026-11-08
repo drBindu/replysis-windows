@@ -249,6 +249,9 @@ internal static class Program
         Console.WriteLine("\n35. A long question keeps its end, where the question is");
         _failed += PromptTruncationTests.Run();
 
+        Console.WriteLine("\n36. Every language a customer can pick starts listening");
+        _failed += LanguageRulesTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

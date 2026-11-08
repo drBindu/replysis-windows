@@ -1091,3 +1091,11 @@ Check: scripts/check-maya-repeat.mjs (fails on the old code).
 Checked and fine: her voice tones are all ones the voice accepts; a model reply that is not JSON falls back to the plain next question; the monthly Maya count ignores a second begin for the same interview; the phone app's response shape is unchanged (no server code changed).
 
 Noted, not changed: the server lets the model end the interview before two warnings. The prompt forbids it and nothing shows it happening, and changing the reply after the fact would leave her goodbye followed by more questions.
+
+## Round 53: languages end to end (2026-11-07)
+
+**Fixed: picking Telugu meant listening never started.** Settings offered "Telugu (Sarvam AI)". Telugu runs on a different speech service that needs its own key, and no customer can enter one: Settings has no field for it and our server gives out none. So the engine stopped the moment it started, the app showed "your antivirus may be blocking Replysis", stopped retrying, and every launch sent an engine error report (which counts toward your outage email). The label also named a provider. Telugu is now out of the picker, and anyone who saved it before (or any other language that needs that key) listens in English instead, which interviews in India are usually held in. A developer with that key still gets Telugu. New check: CleanerTests section 36. Files: LanguageRules.cs (new), SettingsWindow.xaml.cs, MainWindow.xaml.cs, tests/CleanerTests/LanguageRulesTests.cs (new), tests/CleanerTests/Program.cs. No engine change, so no engine rebuild.
+
+**Checked and fine:** English goes to Deepgram and the other listed languages to Speechmatics; the browser interview listens in English only and offers no picker, so it can not disagree; Hindi and Hinglish speech arrive as text and the answer is written in English.
+
+**Your decision:** answers are always written in English, whatever language the interviewer speaks ("Answer ... using natural spoken English" in PromptBuilder). If you want answers in the interviewer's language when Spanish, French or German is picked, say so; it is a one line rule.
