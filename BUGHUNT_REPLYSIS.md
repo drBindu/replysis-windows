@@ -1057,3 +1057,26 @@ Found and fixed one cost hole.
 Read and fine: the paused phone call code (switched off on the live server, and every call needs Twilio's signature), Google sign in exchange (only a 127.0.0.1 return address, rate limited, no personal data logged), the rate limiter (cleans itself, and behind nginx it uses the real visitor address, which nginx overwrites so it cannot be faked), the resume store (only Spring's own queries, every read checks the owner), the CORS list, the health page (nothing about customers), question sets, feedback and scripts (charge once, refund on failure), listening and presence reports (the mock flag cannot dodge the limit, it only keeps bought minutes for real interviews), the signup alert and welcome email (each sent once, the "User" placeholder is skipped).
 
 Checks: server tests 186 run, 0 failed. Website type check clean apart from the known stale popup entries, sync check all in sync, every script check passes.
+
+## Round 51: regression review of the website and server changes since round 42 (2026-11-07)
+
+No regressions found, no code changed.
+
+Read together: the listening counter period field (server 9b4984c, website 6ae18d2b), unsubscribe asks first (dc35eac1), past interviews keep the newest 50 (dc35eac1), prices in the visitor's currency (06a7b15a).
+- Listening counter: the server and website use the same rule and store the same number (the reset date in milliseconds, both from the same "Z" date string), so they never undo each other. Every place that moves the reset date (renewal, trial end, monthly refill) still zeroes the counter as on Nov 4; the new field then zeroes it once more only for a later date. One harmless leftover: minutes listened between the reset date passing and the next answer are wiped when that answer moves the date, which only ever favours the customer.
+- Unsubscribe: opening the link shows a button; the button and a mail app's one click unsubscribe both send a POST that the site accepts (same origin form, the site's form rule allows it; nginx sends /api/unsubscribe to the website, not the server). Every customer email from the website carries the one click headers. The server's welcome and trial reminder still have no unsubscribe line (noted in round 27).
+- Past interviews: the query is one field equal to a value with no ordering, so Firestore needs no extra index. Nothing for the owner to create.
+- Prices: the page starts in dollars on the server and in the browser, then switches after /api/geo answers, so there is no hydration mismatch; the home sections file sits inside a client page.
+
+Checks: type check clean and a full production build passes from a separate copy (no env files copied, dummy public settings). check-sync ALL IN SYNC (3 warnings: no Stripe prices in the local copy), all 16 script checks pass, server tests 186 run, 0 failed.
+
+### Waiting in the next website and server deploy (everything since the Nov 4 deploy)
+- Sign in: links after sign in stay on replysis.com; the name typed at sign up reaches the account, and sign up never fails because of it.
+- Emails: trial ended wording, no "Hi User", at most one email in 12 hours, no Maya sales email to payers, failed sends retried, unsubscribe asks before acting and cannot bring back a deleted account.
+- Browser interview and resume: mic turns off after stop, no double listening, saved once, whole resume and instructions reach the AI, the PDF keeps all text, newest 50 past interviews shown.
+- Payments: Maya refund removes only Maya, bank approved top ups refundable, a charged top up always adds minutes, prices shown in the currency the checkout charges.
+- Accounts: deletion cancels the subscription first and removes leftover emails; admin shows waiting deletion requests and correct revenue, conversion and India numbers.
+- Server: no paid screen read ahead for empty accounts, screen answers about 1 second faster on screens without code, app labels on voice timings, no false outage emails from old Windows apps, daily email if speech passes 12 hours, refill date in the credits reply, listening limit that keeps counting after the reset date passes.
+- Phone and cleanup: sign in box and first run guide fit a phone, old unused code removed.
+
+Go/no-go: GO. Deploy the server first, then the website. No Firestore index or Stripe change is needed. After deploy, about 10 minutes of clicking on the live site with a real test account covers what was never tried in a browser (browser interview Space and End session, resume preview, pricing buy button, phone size sign in box, unsubscribe page).
