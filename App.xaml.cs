@@ -75,6 +75,15 @@ namespace InterviewCopilot
                 ClientErrorReporter.ReportProblem("STARTUP", "previous-run-crashed", "The previous run ended in a crash at " + lastCrash);
             }
 
+            // The last run froze and was ended while frozen (bug round 40): report it once, then start watching this run.
+            string? lastFreeze = FreezeWatchdog.TakeFlag(CrashMarker.DefaultFolder);
+            if (lastFreeze != null)
+            {
+                DebugWindow.Log("FREEZE", $"the previous run was ended while not responding ({lastFreeze})");
+                ClientErrorReporter.ReportProblem("STARTUP", "previous-run-froze", "The previous run was ended while not responding, from " + lastFreeze);
+            }
+            FreezeWatchdog.Start(Dispatcher, CrashMarker.DefaultFolder);
+
             // Load the speech engine's files now, while the person is signing in or filling in Setup, so the real
             // start does not pay for a new computer scanning them (see EngineWarmup).
             EngineWarmup.Start();

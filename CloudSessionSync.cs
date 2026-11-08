@@ -77,7 +77,11 @@ namespace InterviewCopilot
             lock (StateLock)
                 requestedGeneration = _sessionGeneration;
 
-            await SyncGate.WaitAsync();
+            // ConfigureAwait(false) on every await below (bug round 40): nothing here touches the window, and closing the app
+            // waits on this gate from the window's own thread (DrainAsync().Wait). With the default, the rest of a sync
+            // already in flight needed that same thread to go on, so the close always waited its full 3 s and the last
+            // answer never reached the cloud.
+            await SyncGate.WaitAsync().ConfigureAwait(false);
 
             try
             {
@@ -104,7 +108,7 @@ namespace InterviewCopilot
                 }
 
                 // Keep the Firebase ID token fresh (expires after 1 hour)
-                if (UserSession.IsTokenExpired() && !await UserSession.TryRefreshAsync())
+                if (UserSession.IsTokenExpired() && !await UserSession.TryRefreshAsync().ConfigureAwait(false))
                     return;
 
                 string token = UserSession.IdToken;
@@ -136,8 +140,8 @@ namespace InterviewCopilot
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
                 req.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                using var res = await Http.SendAsync(req);
-                string respBody = await res.Content.ReadAsStringAsync();
+                using var res = await Http.SendAsync(req).ConfigureAwait(false);
+                string respBody = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
 
                 if (!res.IsSuccessStatusCode)
                 {

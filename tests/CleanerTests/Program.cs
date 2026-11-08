@@ -243,6 +243,9 @@ internal static class Program
         Console.WriteLine("\n33. A crash reaches admin even when the process dies first");
         _failed += CrashMarkerTests.Run();
 
+        Console.WriteLine("\n34. A window that stops responding is noticed and reported quietly");
+        _failed += FreezeWatchdogTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

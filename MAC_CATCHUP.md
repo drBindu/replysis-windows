@@ -4481,3 +4481,8 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 - A fatal crash on a background thread now waits up to 2 s for its crash report (it was fire and forget, so it was nearly always lost), and writes crash.flag.
 - On the next launch, if crash.flag exists, the app reports Problem "previous-run-crashed" once and deletes the flag. Before, crash.flag was written but never read.
 - Mac: check whether a crash on the Mac app reaches the diagnostics endpoint before the process exits, and whether anything reads a crash marker on the next launch.
+
+## 2026-11-07: bug round 40, freeze watchdog and close wait (Windows, local, not released)
+
+- CloudSessionSync.SyncTurnAsync: every await is ConfigureAwait(false). Closing waits on its gate from the UI thread, and the sync needed the UI thread to continue, so close always burned its 3 s and the last turn never synced. Mac: check any close-path wait on a task that resumes on the main thread.
+- New FreezeWatchdog: background thread posts a no-op to the dispatcher every 2 s; over 10 s unanswered logs once (last log source tag only) and writes freeze.flag; on recovery reports ui-freeze-10s-minor / ui-freeze-30s / ui-freeze-60s; next launch reports previous-run-froze if the flag is still there. DebugWindow.LastSource holds the last log tag. Mac could do the same with a main-queue ping.

@@ -248,8 +248,12 @@ namespace InterviewCopilot
             try { this.Close(); } catch { }
         }
 
+        /// <summary>The source tag of the last line logged, never its text: what a freeze report says the app was doing.</summary>
+        internal static volatile string LastSource = "";
+
         public static void Log(string source, string message)
         {
+            if (source != "FREEZE") LastSource = source.Length > 24 ? source[..24] : source;
             string line = $"[{DateTime.Now:HH:mm:ss.fff}] [{source}] {message}";
 
             try

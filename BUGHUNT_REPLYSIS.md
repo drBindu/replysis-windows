@@ -885,3 +885,12 @@ Checked and fine:
 Not covered: a hard UI freeze (the window stops responding but nothing throws) has no watchdog and no report. Adding one is a larger change for a later round.
 
 Ships with the next Windows version.
+
+## Round 40: a window that stops responding (2026-11-07)
+
+Found and fixed (Windows):
+- Closing the app always waited 3 seconds and lost the last answer's cloud copy when a cloud sync was still going. The close waits on the sync from the window's own thread, and the sync needed that same thread to carry on, so neither could move until the 3 second limit. Every step of the sync now carries on without the window's thread, so the wait ends as soon as the sync does. Nothing in the sync touches the window.
+- A hard freeze was invisible. Nothing throws, so no crash handler saw it. Now a small background watchdog sends an empty job to the window every 2 seconds. If one waits more than 10 seconds, the debug log says so once with the tag of the last thing logged (never any text), and a freeze.flag is written. When the window answers again the flag goes and one quiet report is sent: under 30 seconds is "ui-freeze-10s-minor" (shows in admin, never in the outage email), 30 seconds or more is "ui-freeze-30s" or "ui-freeze-60s" (counts, still needs two computers). If the app is closed while frozen, the next launch reports "previous-run-froze" once. No popup, no change to the look, one empty job every 2 seconds.
+- Tests: section 34 in CleanerTests (kinds, the freeze decision on a fake clock, the flag, launch wiring, every cloud sync await free of the window thread).
+
+Checked and fine: the other waits on the window's thread are bounded and only on the way out (presence goodbye 1.8 s, session file drain 5 s, recording save) or at start before the window exists (waiting for a closing copy, 8 s). Screen reading's text recognition runs off the window's thread. No backend change was needed: the server already treats a new kind as real and needs two computers, and "-minor" keeps short stalls out of the email.
