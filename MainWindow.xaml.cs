@@ -2681,6 +2681,9 @@ namespace InterviewCopilot
         private DateTime _listeningSinceUtc = DateTime.MinValue;
         private DateTime _lastSpeechHeardUtc = DateTime.MinValue;
         private double _unreportedListeningSeconds;
+        // The account the unreported seconds belong to. Kept minutes ride along with the next report, and a 401 often comes
+        // just before a sign out or a guest switch, so seconds from one account must never be sent with another's token.
+        private string _listeningSecondsOwner = "";
         private int _audioMinutesRemaining = -1;   // -1 = unknown or unlimited
         // Bought interview minutes (India, Rs 5 a minute). While any are left the badge shows them, not answers.
         private int _minutesBalance;
@@ -2706,6 +2709,7 @@ namespace InterviewCopilot
             _listeningMeterTimer?.Stop();
             if (_listeningSinceUtc != DateTime.MinValue)
             {
+                ClaimListeningSeconds();
                 _unreportedListeningSeconds += ListeningBilling.CountableSeconds(
                     _listeningSinceUtc, DateTime.UtcNow, _lastWordsReceivedUtc);
                 _listeningSinceUtc = DateTime.MinValue;
@@ -2835,6 +2839,7 @@ namespace InterviewCopilot
 
             if (_listeningSinceUtc != DateTime.MinValue)
             {
+                ClaimListeningSeconds();
                 _unreportedListeningSeconds += ListeningBilling.CountableSeconds(
                     _listeningSinceUtc, now, _lastWordsReceivedUtc);
                 _listeningSinceUtc = now;
@@ -3124,6 +3129,7 @@ namespace InterviewCopilot
             {
                 if (_listeningSinceUtc != DateTime.MinValue)
                 {
+                    ClaimListeningSeconds();
                     _unreportedListeningSeconds += ListeningBilling.CountableSeconds(
                         _listeningSinceUtc, DateTime.UtcNow, _lastWordsReceivedUtc);
                     _listeningSinceUtc = DateTime.MinValue;
@@ -3234,10 +3240,24 @@ namespace InterviewCopilot
             catch (Exception ex) { DebugWindow.Log("METER", $"Report error: {ex.Message}"); }
         }
 
+        /// <summary>Seconds left over from another account (or from before a sign in) are dropped, never sent with this one.</summary>
+        private void ClaimListeningSeconds()
+        {
+            string who = UserSession.UserId ?? "";
+            double kept = ListeningBilling.SecondsForOwner(_unreportedListeningSeconds, _listeningSecondsOwner, who);
+            if (kept != _unreportedListeningSeconds)
+                DebugWindow.Log("METER", $"Dropped {_unreportedListeningSeconds:0} s kept for another account.");
+            _unreportedListeningSeconds = kept;
+            _listeningSecondsOwner = who;
+        }
+
         /// <summary>Minutes the server cannot have counted go back into the meter and ride along with the next report.</summary>
         private void KeepUnreportedMinutes(int minutes, int? status, Exception? error)
         {
             if (!ListeningBilling.KeepFailedReport(status, error)) return;
+            // The account changed while the report was out (a 401 is often followed by a sign out): those minutes were
+            // heard under the old account and are not added to the new one.
+            if (!string.Equals(UserSession.UserId ?? "", _listeningSecondsOwner, StringComparison.Ordinal)) return;
             _unreportedListeningSeconds = Math.Min(ListeningBilling.MaxKeptSeconds, _unreportedListeningSeconds + minutes * 60.0);
             DebugWindow.Log("METER", $"Kept {minutes} min to send with the next report.");
         }
@@ -10609,6 +10629,8 @@ namespace InterviewCopilot
 
         protected override void OnClosed(EventArgs e)
         {
+            // First: the bounded waits below are a slow close, never a freeze to report next launch.
+            FreezeWatchdog.Stop(CrashMarker.DefaultFolder);
             _windowClosed = true;
             try { _aiCts?.Cancel(); } catch { }
             _aiCts = null;

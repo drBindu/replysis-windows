@@ -76,16 +76,24 @@ namespace InterviewCopilot
         ///
         /// A failed report used to drop its minutes for good: an expired sign-in (401), the server restarting during a
         /// deploy (502 to 504) or a busy answer (429) meant that time was never counted. Kept only when the server cannot
-        /// have counted them: those answers, or a connection that never opened. A timeout or a dropped reply is not kept,
-        /// because the server may already have counted it, and charging twice is worse than missing a minute.
+        /// have counted them: those answers, or a connection that never opened. A timeout, a dropped reply or a reset
+        /// after the request went out is not kept, because the server may already have counted it, and charging twice is
+        /// worse than missing a minute. A 504 is not kept either: the proxy gave up waiting, but the server may still have
+        /// finished and counted the minutes.
         /// </summary>
         internal static bool KeepFailedReport(int? status, Exception? error)
         {
-            if (status is 401 or 429 or 502 or 503 or 504) return true;
+            if (status is 401 or 429 or 502 or 503) return true;
             for (Exception? e = error; e != null; e = e.InnerException)
-                if (e is System.Net.Sockets.SocketException) return true;
+                if (e is System.Net.Http.HttpRequestException h)
+                    return h.HttpRequestError is System.Net.Http.HttpRequestError.ConnectionError
+                        or System.Net.Http.HttpRequestError.NameResolutionError;
             return false;
         }
+
+        /// <summary>Unreported seconds count only for the account they were heard under; another account starts at zero.</summary>
+        internal static double SecondsForOwner(double seconds, string owner, string current) =>
+            string.Equals(owner ?? "", current ?? "", StringComparison.Ordinal) ? seconds : 0;
 
         /// <summary>Kept minutes never pile up past an hour: a server that refuses for days must not bill it all at once.</summary>
         internal const double MaxKeptSeconds = 3600;

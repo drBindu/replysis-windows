@@ -1099,3 +1099,16 @@ Noted, not changed: the server lets the model end the interview before two warni
 **Checked and fine:** English goes to Deepgram and the other listed languages to Speechmatics; the browser interview listens in English only and offers no picker, so it can not disagree; Hindi and Hinglish speech arrive as text and the answer is written in English.
 
 **Your decision:** answers are always written in English, whatever language the interviewer speaks ("Answer ... using natural spoken English" in PromptBuilder). If you want answers in the interviewer's language when Spanish, French or German is picked, say so; it is a one line rule.
+
+## Round 55: fixes from the independent review of all unreleased Windows changes (2026-11-07)
+
+An outside reviewer read every unreleased Windows change (round 54) and found four real problems. All four are fixed.
+
+1. Listening minutes could be charged twice. A failed listening report kept its minutes for the next report when the connection reset after the report had already gone out, and on a 504. In both cases the server may already have counted them. Now minutes are kept only when the connection never opened (or the server name could not be found), or on 401, 429, 502 and 503. Bought minutes cost Rs 5 each, so charging twice was worse than missing one.
+2. A slow close could send you a false outage email. Closing the app waits for a few things (last listening report, saving, the cloud copy, the speech engine), which can add up past 10 seconds. The freeze watchdog counted that as a freeze and the next launch reported "previous run froze". Closing now stops the watchdog and removes the freeze flag first.
+3. The last answer's cloud copy could still be lost on close. Round 40's fix only worked when the sync had to wait. The cloud sync now always starts in the background, and the sign in refresh it may run no longer needs the window's thread.
+4. Listening minutes could go to the wrong account. Kept minutes were sent with whoever was signed in next, for example after a 401 and a sign out, or as a guest. Unreported seconds now belong to the account they were heard under, and another account starts at zero.
+
+Left as is: the test that copies the server's alert rule by hand (ListeningProblemTests.ServerCountsAsError) still does not read the server file; the server repo sits next door but the Java rule is not simple to parse safely, so it stays a known gap.
+
+Checks: app build 0 errors (6 warnings, as before), CleanerTests all passed with 11 new checks. No app was opened. Ships with the next Windows version.

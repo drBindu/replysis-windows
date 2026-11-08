@@ -159,8 +159,26 @@ internal static class BillingTests
         Keep("server error 500 (may have counted)", ListeningBilling.KeepFailedReport(500, null), false);
         Keep("bad request 400", ListeningBilling.KeepFailedReport(400, null), false);
         Keep("connection never opened",
+             ListeningBilling.KeepFailedReport(null, new System.Net.Http.HttpRequestException(
+                 System.Net.Http.HttpRequestError.ConnectionError, "x", new System.Net.Sockets.SocketException(10061))), true);
+        Keep("server name not found",
+             ListeningBilling.KeepFailedReport(null, new System.Net.Http.HttpRequestException(
+                 System.Net.Http.HttpRequestError.NameResolutionError, "x", new System.Net.Sockets.SocketException(11001))), true);
+        // Round 55: a reset after the request went out (10054 inside an IOException) and a 504 may already be counted.
+        Keep("reset after sending (may have counted)",
+             ListeningBilling.KeepFailedReport(null, new System.Net.Http.HttpRequestException(
+                 System.Net.Http.HttpRequestError.ResponseEnded, "x",
+                 new System.IO.IOException("reset", new System.Net.Sockets.SocketException(10054)))), false);
+        Keep("reset with no error kind (may have counted)",
              ListeningBilling.KeepFailedReport(null, new System.Net.Http.HttpRequestException("x",
-                 new System.Net.Sockets.SocketException(10061))), true);
+                 new System.IO.IOException("reset", new System.Net.Sockets.SocketException(10054)))), false);
+        Keep("proxy gave up 504 (may have counted)", ListeningBilling.KeepFailedReport(504, null), false);
+
+        // Round 55: unreported seconds belong to the account they were heard under.
+        Keep("same account keeps its seconds", ListeningBilling.SecondsForOwner(90, "uidA", "uidA") == 90, true);
+        Keep("another account starts at zero", ListeningBilling.SecondsForOwner(90, "uidA", "uidB") == 0, true);
+        Keep("signed out after a 401 starts at zero", ListeningBilling.SecondsForOwner(90, "uidA", "") == 0, true);
+        Keep("guest seconds never go to a new sign in", ListeningBilling.SecondsForOwner(90, "", "uidA") == 0, true);
         Keep("timeout (may have counted)",
              ListeningBilling.KeepFailedReport(null, new TaskCanceledException()), false);
 

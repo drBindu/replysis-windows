@@ -425,6 +425,7 @@ namespace InterviewCopilot
             // take the answer with it. The log survives the next launch now, so
             // this is readable after the fact rather than only in the moment.
             DebugWindow.Log("EXIT", $"Process exiting, code {e.ApplicationExitCode}");
+            FreezeWatchdog.Stop(CrashMarker.DefaultFolder);
 
             DispatcherUnhandledException -= OnDispatcherUnhandledException;
             TaskScheduler.UnobservedTaskException -= OnUnobservedTaskException;

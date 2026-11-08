@@ -98,6 +98,31 @@ internal static class FreezeWatchdogTests
 
         string debug = File.ReadAllText(Path.Combine(root, "DebugWindow.cs"));
         Check(debug.Contains("LastSource = source"), "the freeze line names the last thing logged, its tag only");
+
+        // Round 55: a slow close is not a freeze. Closing stops the watchdog and removes any flag first.
+        string closeFolder = Path.Combine(Path.GetTempPath(), "replysis-freeze-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            FreezeWatchdog.WriteFlag(closeFolder, t0);
+            FreezeWatchdog.Stop(closeFolder);
+            Check(FreezeWatchdog.TakeFlag(closeFolder) == null, "closing removes a freeze flag, so the next launch reports nothing");
+        }
+        finally { try { Directory.Delete(closeFolder, true); } catch { } }
+        string main = File.ReadAllText(Path.Combine(root, "MainWindow.xaml.cs"));
+        int closed = main.IndexOf("protected override void OnClosed(EventArgs e)", StringComparison.Ordinal);
+        Check(closed > 0 && main.IndexOf("FreezeWatchdog.Stop(", closed, StringComparison.Ordinal) is int stopAt && stopAt > 0
+              && stopAt < main.IndexOf("FlushListeningMeterOnExit();", closed, StringComparison.Ordinal),
+            "the main window stops the watchdog before its slow close steps");
+        Check(app.Contains("FreezeWatchdog.Stop(CrashMarker.DefaultFolder)"), "the app's exit stops the watchdog too");
+
+        // Round 55: the sync starts on the thread pool, and the token refresh it may run needs no window thread.
+        Check(sync.Contains("Task.Run(() => SyncTurnCoreAsync("), "a cloud sync never starts on the window's thread");
+        string session = File.ReadAllText(Path.Combine(root, "UserSession.cs"));
+        int refresh = session.IndexOf("internal static async Task<RefreshOutcome> RefreshAsync", StringComparison.Ordinal);
+        int refreshEnd = session.IndexOf("private class SessionData", refresh, StringComparison.Ordinal);
+        var refreshAwaits = Regex.Matches(session[refresh..refreshEnd], @"await [^;]*;").Select(m => m.Value).ToList();
+        Check(refreshAwaits.Count >= 3 && refreshAwaits.All(a => a.Contains("ConfigureAwait(false)")),
+            "every await in the token refresh is free of the window thread");
         return failed;
     }
 }

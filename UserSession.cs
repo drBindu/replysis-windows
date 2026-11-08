@@ -768,14 +768,16 @@ namespace InterviewCopilot
         }
 
         public static async Task<bool> TryRefreshAsync(bool force = false) =>
-            await RefreshAsync(force) == RefreshOutcome.Refreshed;
+            await RefreshAsync(force).ConfigureAwait(false) == RefreshOutcome.Refreshed;
 
         internal static async Task<RefreshOutcome> RefreshAsync(bool force = false)
         {
             long identity = Identity.Current;
             if (string.IsNullOrEmpty(RefreshToken)) return RefreshOutcome.Refused;
             if (!force && !IsTokenExpired()) return RefreshOutcome.Refreshed;
-            await _refreshSem.WaitAsync();
+            // ConfigureAwait(false) throughout (bug round 55): nothing here needs the window, and a caller that waits on a
+            // sync from the window's thread while closing must not deadlock with it.
+            await _refreshSem.WaitAsync().ConfigureAwait(false);
             try
             {
                 // Re-check after acquiring: a concurrent caller may have already refreshed
@@ -795,8 +797,8 @@ namespace InterviewCopilot
                     new System.Collections.Generic.KeyValuePair<string,string>("grant_type",    "refresh_token"),
                     new System.Collections.Generic.KeyValuePair<string,string>("refresh_token", snapshot.Value),
                 });
-                using var res = await _http.PostAsync(url, content);
-                string body = await res.Content.ReadAsStringAsync();
+                using var res = await _http.PostAsync(url, content).ConfigureAwait(false);
+                string body = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
                 if (!res.IsSuccessStatusCode)
                 {
                     // Logged because this failing silently is what made a 401 look

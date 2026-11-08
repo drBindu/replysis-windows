@@ -83,6 +83,19 @@ namespace InterviewCopilot
         // ── The thread ──
 
         private static Thread? _thread;
+        private static volatile bool _stopped;
+
+        /// <summary>
+        /// Closing: the watchdog stops and any freeze.flag goes (bug round 55). Closing blocks the window's thread with
+        /// bounded waits (meter flush, session and cloud drains, recording save, engine close) that can add up past 10 s,
+        /// and that is a slow close, not a freeze. Without this the flag could outlive the process and the next launch
+        /// reported previous-run-froze, which counts toward the outage email.
+        /// </summary>
+        internal static void Stop(string folder)
+        {
+            _stopped = true;
+            TakeFlag(folder);
+        }
 
         /// <summary>Starts watching the app's main dispatcher. Safe to call once; later calls do nothing.</summary>
         internal static void Start(Dispatcher dispatcher, string folder)
@@ -101,14 +114,14 @@ namespace InterviewCopilot
         private void Run(Dispatcher dispatcher, string folder)
         {
             object gate = new();
-            while (!dispatcher.HasShutdownStarted)
+            while (!dispatcher.HasShutdownStarted && !_stopped)
             {
                 try
                 {
                     DateTime posted = DateTime.UtcNow;
                     Step step;
                     lock (gate) step = Tick(posted);
-                    if (step == Step.FreezeStarted)
+                    if (step == Step.FreezeStarted && !_stopped)
                     {
                         DebugWindow.Log("FREEZE", $"the window has not responded for over {FrozenAfter.TotalSeconds:0} s; last activity: {DebugWindow.LastSource}");
                         WriteFlag(folder, posted);

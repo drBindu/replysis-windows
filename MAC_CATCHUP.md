@@ -4504,3 +4504,10 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 ## 2026-11-07 round 53: Telugu in the language picker could never listen (Windows, local, not released)
 
 - Settings offered "Telugu (Sarvam AI)", which needs a Sarvam key that no customer can enter, so the engine exited at once and the app blamed the antivirus. Removed from the picker; a saved Sarvam language with no key now starts the engine in English (LanguageRules.EngineLanguage). Mac: check whether its picker offers Telugu or another Sarvam language and whether a key can be entered.
+
+## 2026-11-07: round 55 fixes from the independent review (Windows, local, not released)
+
+- Listening report kept for next time only when the connection never opened (or DNS failed), or on 401, 429, 502, 503. Not on a reset after sending and not on 504: the server may have counted them already (double charge). Check the Mac's kept-minutes rule.
+- Closing stops the freeze watchdog and deletes freeze.flag first, so a slow close is never reported as previous-run-froze.
+- The cloud session sync always starts on a background thread, and the token refresh has ConfigureAwait(false) on every await, so closing never waits the full timeout for it.
+- Unreported listening seconds are tagged with the account they were heard under; another account (or a guest) starts at zero and kept minutes are dropped if the account changed while the report was out.

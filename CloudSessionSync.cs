@@ -68,7 +68,13 @@ namespace InterviewCopilot
         // Appends the new turn pair to the in-memory list, then POSTs the full
         // session to /api/sessions.  On the first call the server creates a
         // Firestore doc and returns its ID; subsequent calls update the same doc.
-        public static async Task SyncTurnAsync(string q, string a, string resume, int durationSecs)
+        // Started on the thread pool (bug round 55). ConfigureAwait(false) alone was not enough: when the gate below was
+        // free its wait finished at once and the sync carried on on the window's thread, into a token refresh whose own
+        // awaits then needed that thread, so a close that waited for the sync still waited its full 3 s.
+        public static Task SyncTurnAsync(string q, string a, string resume, int durationSecs) =>
+            Task.Run(() => SyncTurnCoreAsync(q, a, resume, durationSecs));
+
+        private static async Task SyncTurnCoreAsync(string q, string a, string resume, int durationSecs)
         {
             if (!UserSession.IsLoggedIn || !SettingsWindow.IsCloudSyncEnabled()) return;
             long identity = UserSession.Identity.Current;
