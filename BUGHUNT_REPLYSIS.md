@@ -1044,3 +1044,16 @@ Noted, not changed:
 - Sessions are keyed by email, not account id. Safe today because Firebase allows one account per email; worth moving to account id one day.
 
 Corners read and fine: referral (capped at 10 rewards, one claim per new account, transaction), geo, download telemetry, billing portal ownership check, browser listening minutes, presence controller, server activity and usage writes (update only, never recreate a record), checkout stale customer clean up (only the signed in buyer).
+
+## Round 50: unreviewed corners of the server (2026-11-07)
+
+Found and fixed one cost hole.
+
+**The listening limit stopped counting after the monthly reset date passed.** The monthly reset date only moves when someone asks for an answer. Until then, every listening report (server and website) saw that the date had passed and set the counter back to zero before adding the new minutes. Someone who only listened and never asked for an answer kept the counter at one report's minutes for as long as they liked, so the hidden fair use limit never applied to them, and every minute was paid speech. Now the counter is zeroed once for each passed reset date (remembered in a new field, audioMinutesPeriodMs) and then counts up normally. The same rule is on the server and the website, for signed in people and for guests.
+- Server: FirestoreCreditsService.listeningPeriod, ListeningPeriodTests (5 tests). Server commit 9b4984c.
+- Website: app/lib/listening-period.ts, app/api/usage/listening/route.ts, scripts/check-listening-period.mjs. Website commit 6ae18d2b.
+- Needs a server and website deploy.
+
+Read and fine: the paused phone call code (switched off on the live server, and every call needs Twilio's signature), Google sign in exchange (only a 127.0.0.1 return address, rate limited, no personal data logged), the rate limiter (cleans itself, and behind nginx it uses the real visitor address, which nginx overwrites so it cannot be faked), the resume store (only Spring's own queries, every read checks the owner), the CORS list, the health page (nothing about customers), question sets, feedback and scripts (charge once, refund on failure), listening and presence reports (the mock flag cannot dodge the limit, it only keeps bought minutes for real interviews), the signup alert and welcome email (each sent once, the "User" placeholder is skipped).
+
+Checks: server tests 186 run, 0 failed. Website type check clean apart from the known stale popup entries, sync check all in sync, every script check passes.
