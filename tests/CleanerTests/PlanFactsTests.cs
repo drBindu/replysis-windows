@@ -115,6 +115,11 @@ internal static class PlanFactsTests
         Check(PlanFacts.OutOfAnswersMessage.Contains("answers badge") && !PlanFacts.OutOfAnswersMessage.Contains("credit", StringComparison.OrdinalIgnoreCase),
             "the app says out of answers the same way whichever path the server used");
 
+        string userSession = System.IO.File.ReadAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "UserSession.cs"));
+        int clear = userSession.IndexOf("public static void Clear()", StringComparison.Ordinal);
+        Check(clear > 0 && userSession.IndexOf("RefreshesAt      = null", clear, StringComparison.Ordinal) > clear,
+            "signing out forgets the refill date, so the next account never sees it (round 41)");
+
         Console.WriteLine();
         Console.WriteLine(failed == 0 ? "plan facts: all passed" : $"plan facts: {failed} FAILED");
         return failed;

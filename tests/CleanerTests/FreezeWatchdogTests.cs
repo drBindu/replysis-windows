@@ -50,6 +50,30 @@ internal static class FreezeWatchdogTests
             "the posts queued behind it answering do not report it again");
         Check(w.Tick(stuck.AddSeconds(26)) == FreezeWatchdog.Step.Nothing, "after it recovers the next post starts a fresh wait");
 
+        // Sleep is not a freeze (bug round 41): the watchdog thread stops too, and the clock jumps on waking.
+        var night = new DateTime(2026, 11, 7, 23, 0, 0, DateTimeKind.Utc);
+        var s1 = new FreezeWatchdog();
+        s1.Tick(night);                                   // job posted, then the lid closes
+        var wake = night.AddHours(8);
+        Check(s1.Tick(wake) == FreezeWatchdog.Step.Nothing, "the first tick after a night's sleep is not a freeze");
+        Check(s1.Answered(night, wake.AddMilliseconds(30), out _) == FreezeWatchdog.Step.Nothing,
+            "the job posted before the sleep answering is not reported as a freeze ending");
+        Check(s1.Answered(wake, wake.AddMilliseconds(40), out _) == FreezeWatchdog.Step.Nothing, "and the next job answers normally");
+        bool noticedAfterWake = false;
+        for (int s = 2; s <= 30; s += 2)
+            if (s1.Tick(wake.AddSeconds(s)) == FreezeWatchdog.Step.FreezeStarted) noticedAfterWake = true;
+        Check(noticedAfterWake, "a real freeze after waking is still noticed");
+
+        var s2 = new FreezeWatchdog();
+        var f0 = new DateTime(2026, 11, 7, 12, 0, 0, DateTimeKind.Utc);
+        bool noticed = false;
+        for (int s = 0; s <= 14; s += 2) if (s2.Tick(f0.AddSeconds(s)) == FreezeWatchdog.Step.FreezeStarted) noticed = true;
+        Check(noticed && s2.Tick(f0.AddHours(3)) == FreezeWatchdog.Step.Discarded,
+            "a freeze already noticed when the computer slept is dropped, so its flag is removed, not reported next launch");
+
+        string wd = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "FreezeWatchdog.cs"));
+        Check(wd.Contains("step == Step.Discarded") && wd.Contains("TakeFlag(folder);"), "a discarded freeze removes its flag");
+
         // The flag, for a freeze the app is closed in.
         string folder = Path.Combine(Path.GetTempPath(), "replysis-freeze-" + Guid.NewGuid().ToString("N"));
         try

@@ -548,6 +548,7 @@ namespace InterviewCopilot
             PhotoUrl         = "";
             Credits          = 0;
             Plan             = "free";
+            RefreshesAt      = null;   // the next account must not be shown this one's refill date (round 41)
             IsUnlimited      = false;
             lock (_smKeyLock)
             {

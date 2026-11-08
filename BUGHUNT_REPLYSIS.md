@@ -894,3 +894,28 @@ Found and fixed (Windows):
 - Tests: section 34 in CleanerTests (kinds, the freeze decision on a fake clock, the flag, launch wiring, every cloud sync await free of the window thread).
 
 Checked and fine: the other waits on the window's thread are bounded and only on the way out (presence goodbye 1.8 s, session file drain 5 s, recording save) or at start before the window exists (waiting for a closing copy, 8 s). Screen reading's text recognition runs off the window's thread. No backend change was needed: the server already treats a new kind as real and needs two computers, and "-minor" keeps short stalls out of the email.
+
+## Round 41: second regression review of the Windows app (2026-11-07)
+
+Read everything committed since round 22 together (rounds 32, 33, 38, 39, 40). Two real problems, both fixed:
+
+1. **Sleep looked like a freeze.** The new freeze watchdog measured time with the clock, and sleep stops the app and the watchdog together. After a night's sleep the first check saw a job "waiting" for hours and would have sent a 60 second freeze report, which counts toward the outage email: two laptops waking within ten minutes would have emailed the owner. A long gap between the watchdog's own checks now means the computer slept, and that wait is dropped. A freeze already noticed when the computer slept is dropped too, and its freeze.flag is removed, so the next launch does not report it.
+2. **Sign out kept the refresh date.** The refill date added in round 38 was not cleared on sign out, so a second account signed in on the same PC was shown the first account's date until its own balance loaded. Now cleared.
+
+Also tidied a doc comment that round 38 split in PlanFacts.cs. Checked and fine: the cloud sync change (nothing it touches belongs to the window), crash marker and freeze flag on the next launch (each reported once, only by the copy that owns the lock), account tags on session files (untagged older files still show, a file is tagged with the account that started it), the refresh date when today's live server sends none (falls back to the 1st), sign in screen reader names, and every new report kind against the server's alert rule (ui-freeze-10s-minor never alerts; previous-run-crashed and previous-run-froze need two computers).
+
+Checks: app and all 3 tracked test projects build with 0 errors; CleanerTests all passed (5 new checks); engine test files pass except the same 3 old failures in test_line_resilience.py.
+
+### What the next Windows version contains (everything since 1.0.52, in plain words)
+
+- **Listening:** the start of a question is kept when the connection drops, no repeated words after a reconnect, faster recovery after sleep, listening time is kept when a report fails, and other languages recover from a speech service error.
+- **Answers:** no sign out on a slow sign in refresh, a 20 second limit when no words come, Thinking never sticks, a trial that runs out gets the Upgrade button, Auto no longer slows down in long interviews.
+- **Auto and keyboard:** Auto does not restart after Finish and New session resumes it; spaces work in every text box; indenting code in another app does not send answers; code keeps its indentation in the small answer window.
+- **Screen share:** the black box stays during screen reads, and the right monitor is read on two screens.
+- **Settings:** Save does not reset other settings, and an unplugged microphone is remembered.
+- **Plans:** the trial shows as Free trial with the right numbers; paying customers see their real refill day.
+- **First run:** clear advice when antivirus removes the speech engine or the Store microphone switch is off; Store package asks for the microphone; Thai and other calendars send correct dates.
+- **Updates:** update notices never stick and never show during an interview.
+- **Privacy and safety:** the audio pipes are readable by this Windows user only; past interviews show only for the account that recorded them; opening Replysis again brings back a hidden window; screen readers can read the sign in window.
+- **Owner visibility:** no false outage emails from customers running out, wrong passwords, failed updates, information banners or sleep; serious crashes and freezes now reach admin.
+- **Before release:** rebuild engine-dist, one try each on a black box laptop, a second monitor, a Store install's microphone switch and Swathi's laptop, then the owner's yes.

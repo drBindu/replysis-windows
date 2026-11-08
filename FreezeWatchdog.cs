@@ -32,11 +32,16 @@ namespace InterviewCopilot
 
         // ── The decision, kept apart from the thread so it can be tested with a fake clock ──
 
-        /// <summary>What the watchdog should do at one tick.</summary>
-        internal enum Step { Nothing, FreezeStarted, FreezeEnded }
+        /// <summary>What the watchdog should do at one tick. Discarded: the wait was the computer sleeping, so a freeze already
+        /// noticed is dropped (its flag removed) rather than reported.</summary>
+        internal enum Step { Nothing, FreezeStarted, FreezeEnded, Discarded }
+
+        /// <summary>A gap between ticks this much longer than PostEvery means the watchdog itself was stopped: the computer slept.</summary>
+        internal static readonly TimeSpan SuspendedAfter = TimeSpan.FromSeconds(5);
 
         private DateTime? _waitingSince;   // when the oldest unanswered job was posted
         private bool _reported;            // FreezeStarted already returned for this freeze
+        private DateTime? _lastTick;       // when Tick last ran
 
         /// <summary>The window answered the job posted at <paramref name="postedAt"/>.</summary>
         internal Step Answered(DateTime postedAt, DateTime now, out TimeSpan frozenFor)
@@ -53,6 +58,19 @@ namespace InterviewCopilot
         /// <summary>A job is about to be posted at <paramref name="now"/>; says whether the oldest one has waited too long.</summary>
         internal Step Tick(DateTime now)
         {
+            // Sleep and hibernate stop this thread and the window together, and the clock jumps on waking (bug round 41):
+            // without this the first tick after a night's sleep saw a job "waiting" for hours, reported ui-freeze-60s, which
+            // counts toward the outage email, and two laptops waking within ten minutes would have sent it.
+            bool slept = _lastTick != null && now - _lastTick.Value > PostEvery + SuspendedAfter;
+            _lastTick = now;
+            if (slept)
+            {
+                bool wasReported = _reported;
+                _waitingSince = now;
+                _reported = false;
+                return wasReported ? Step.Discarded : Step.Nothing;
+            }
+
             _waitingSince ??= now;
             if (!_reported && now - _waitingSince.Value > FrozenAfter)
             {
@@ -94,6 +112,11 @@ namespace InterviewCopilot
                     {
                         DebugWindow.Log("FREEZE", $"the window has not responded for over {FrozenAfter.TotalSeconds:0} s; last activity: {DebugWindow.LastSource}");
                         WriteFlag(folder, posted);
+                    }
+                    else if (step == Step.Discarded)
+                    {
+                        DebugWindow.Log("FREEZE", "the computer slept; the wait was not the window");
+                        TakeFlag(folder);
                     }
 
                     dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>

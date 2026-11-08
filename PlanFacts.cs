@@ -51,10 +51,6 @@ namespace InterviewCopilot
         internal static bool IsFreeTrial(string? plan, bool signedIn) =>
             !signedIn || Normal(plan) == "trial" || MonthlyCredits(plan) == FreeCredits;
 
-        /// <summary>
-        /// The plan as the server's credits reply should be read: the trial runs on "pro" but is "trial", and Practice sits
-        /// on "free" but is "practice".
-        /// </summary>
         /// <summary>The server's refreshesAt (ISO, UTC), or null when missing or unreadable.</summary>
         internal static DateTime? ParseRefreshesAt(string? text) =>
             DateTimeOffset.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
@@ -71,6 +67,10 @@ namespace InterviewCopilot
             return new DateTime(nowLocal.Year, nowLocal.Month, 1).AddMonths(1);
         }
 
+        /// <summary>
+        /// The plan as the server's credits reply should be read: the trial runs on "pro" but is "trial", and Practice sits
+        /// on "free" but is "practice".
+        /// </summary>
         internal static string PlanFromReply(string? plan, bool trial, bool practice)
         {
             string p = Normal(plan);

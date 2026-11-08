@@ -4486,3 +4486,8 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 
 - CloudSessionSync.SyncTurnAsync: every await is ConfigureAwait(false). Closing waits on its gate from the UI thread, and the sync needed the UI thread to continue, so close always burned its 3 s and the last turn never synced. Mac: check any close-path wait on a task that resumes on the main thread.
 - New FreezeWatchdog: background thread posts a no-op to the dispatcher every 2 s; over 10 s unanswered logs once (last log source tag only) and writes freeze.flag; on recovery reports ui-freeze-10s-minor / ui-freeze-30s / ui-freeze-60s; next launch reports previous-run-froze if the flag is still there. DebugWindow.LastSource holds the last log tag. Mac could do the same with a main-queue ping.
+
+## 2026-11-07: round 41 regression review fixes (Windows, local, not released)
+
+- Freeze watchdog: a laptop sleeping with Replysis open was reported as a 60 s+ freeze on waking (counts toward the outage email). The watchdog now treats a long gap between its own ticks as sleep and drops that wait; a freeze already noticed when the computer slept is dropped and its freeze.flag removed. Mac: if you add a freeze watchdog, use the same gap rule.
+- Sign out now also forgets the server's refresh date (UserSession.RefreshesAt), so the next account never sees the previous one's refill date.
