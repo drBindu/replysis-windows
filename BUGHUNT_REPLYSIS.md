@@ -1155,3 +1155,16 @@ Checked about 12 minutes after the website, server and stricter database rules w
 - Not observable from the server: a browser or app write refused by the new rules shows only on the client. The Windows and Mac apps write only lastActive and lastLogin, which pass; the website writes only allowed fields.
 
 Verdict: healthy, no legitimate traffic blocked so far, but too little traffic to be sure. Check again after the next real interview (the admin Live panel and a fresh look at the logs). Rollback for the rules if needed: ruleset 9b86bcef-5312-47d6-98a5-e6aae2172b9f.
+
+## Round 61: production watch after the deploy and Windows 1.0.53 (2026-11-08 03:46 UTC, read only)
+
+Healthy. About one hour after the website and server deploy and the stricter database rules, and 37 minutes after 1.0.53 was published:
+- No errors or exceptions in either server copy or either website copy.
+- API traffic since the deploy: 27 presence pings (all 204), 4 live answers (200), 1 speech key (200). No 402, 403, 413, 429 or 5xx on any watched route.
+- Answers are being recorded: 5 usage events since the deploy (4 answers, 1 screen read) against 1 in the 24 hours before; the active app was the iPhone app 1.0.0.
+- The new rules block nothing legitimate: activity (lastActive) was written by 2 accounts after the rules went live.
+- No problem reports and no alert emails since the deploy (none in the 24 hours before either).
+- Nobody has hit the new limits yet (no free interview step count, no listening period field set).
+- 1.0.53 downloads so far: Setup 2, full package 1, update delta 1 (some of these are the release check itself). No failed update reports.
+
+Action: none. Look again after the first Windows user updates to 1.0.53. Rollback if needed: rules ruleset 9b86bcef-5312-47d6-98a5-e6aae2172b9f; the previous backend and website images are kept.
