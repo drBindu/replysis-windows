@@ -6221,6 +6221,12 @@ namespace InterviewCopilot
                         requestTimer.Restart();
                         response = await _backendClient.SendAsync(
                             plain, HttpCompletionOption.ResponseHeadersRead, ct);
+                        if (!RequestCompression.CompressionWasTheCause((int)response.StatusCode))
+                        {
+                            _serverRefusedCompression = false;
+                            DebugWindow.Log("AI",
+                                $"The plain copy was refused too (HTTP {(int)response.StatusCode}), so compression was not the cause; keeping it on.");
+                        }
                     }
                     DebugWindow.Log("AI", $"Backend headers in {requestTimer.ElapsedMilliseconds}ms (HTTP {(int)response.StatusCode}).");
                     return response;

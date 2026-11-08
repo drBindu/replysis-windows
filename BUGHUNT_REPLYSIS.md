@@ -996,3 +996,12 @@ Check on a real Store install before release (one short session):
 2. Google sign in completes.
 3. Start, ask one question, get an answer; Finish; reopen the app and the past interview is listed.
 4. If anything fails, the debug log is at %LOCALAPPDATA%\Packages\Varoxel.Replysis_<id>\LocalCache\Local\InterviewCopilot\debug.log, not the usual folder.
+
+## Round 46: corners of the Windows app no round had read (2026-11-07)
+
+Found and fixed one bug:
+- One question the server refused for size switched answer compression off for the rest of the session. The app sends each question compressed, and when the server refuses a compressed request it sends it once plain and stops compressing. The server also refuses an oversized question the same way (before any charge), and the plain copy is refused too, so compression went off for nothing and every later question uploaded about twice the bytes, which is slower on a weak line. Compression now stays off only when the plain copy actually got through. Test in CleanerTests (InstantResponseTests).
+
+Corners read and found fine, so later rounds can skip them: AnswerHistory (back and forward through answers), UplinkGovernor and PacedUpload (screenshot sent ahead, line test, pacing behind the voice), OAuthCallbackReader (Google sign in answer: state check, size cap, silent connections), UserProfileSync, AlwaysReady (keep awake: every call is on the window's thread, so the hold is released), RecoveryPolicy, StoreUpdateRules, ResumeFileSafety (size and expanded size caps), DeviceIdentity, ResumeParser contact detail removal.
+
+Not read this round (for later): PromptBuilder (2,141 lines), StoreUpdateService, AppUpdates, StealthDialog, ScreenOcr and ScreenOcrLayout, CompanionLink, UpdateRequiredWindow, UpdateDownloadGuard, RegionCaptureWindow, AnswerClosers, StealthSelfTest, AudioSourceRules, RemoteAppConfig, EngineWarmup, SttRenewalRules.

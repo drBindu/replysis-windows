@@ -48,5 +48,13 @@ namespace InterviewCopilot
         /// type, not implemented. All of them come before the handler, so before any charge.
         /// </summary>
         internal static bool ServerRefusedCompression(int status) => status is 400 or 415 or 501;
+
+        /// <summary>
+        /// Whether compression was really what the server refused, judged by the plain retry. The server also
+        /// answers 400 when it rejects the request itself (a question or resume over its size limit), and then
+        /// the plain copy is refused the same way. Turning compression off for the rest of the run on that would
+        /// make every later question upload twice the bytes, for a refusal that had nothing to do with it.
+        /// </summary>
+        internal static bool CompressionWasTheCause(int plainStatus) => !ServerRefusedCompression(plainStatus);
     }
 }

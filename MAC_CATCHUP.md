@@ -4491,3 +4491,8 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 
 - Freeze watchdog: a laptop sleeping with Replysis open was reported as a 60 s+ freeze on waking (counts toward the outage email). The watchdog now treats a long gap between its own ticks as sleep and drops that wait; a freeze already noticed when the computer slept is dropped and its freeze.flag removed. Mac: if you add a freeze watchdog, use the same gap rule.
 - Sign out now also forgets the server's refresh date (UserSession.RefreshesAt), so the next account never sees the previous one's refill date.
+
+## 2026-11-07: a size refusal no longer switches answer compression off (Windows, local, not released)
+
+- The app gzips the answer request and, if the server answers 400, 415 or 501, sends it once plain and turned compression off for the rest of the run. But the server also answers 400 when it rejects the question itself (over its size limit), before any charge, and then the plain copy is refused too. One oversized question therefore made every later question upload twice the bytes for the whole session.
+- Now compression stays off only if the plain copy got through (RequestCompression.CompressionWasTheCause). Mac: check whether the Mac app compresses requests and has the same fallback.

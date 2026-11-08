@@ -208,6 +208,10 @@ internal static class InstantResponseTests
               !RequestCompression.ServerRefusedCompression(402) && !RequestCompression.ServerRefusedCompression(429) &&
               !RequestCompression.ServerRefusedCompression(500) && !RequestCompression.ServerRefusedCompression(503),
             "and nothing else is ever repeated: not a sign-in, not credits, not a rate limit, not a failure that may have charged");
+        Check(RequestCompression.CompressionWasTheCause(200) && RequestCompression.CompressionWasTheCause(402),
+            "compression stays off only when the plain copy got through where the compressed one did not");
+        Check(!RequestCompression.CompressionWasTheCause(400) && !RequestCompression.CompressionWasTheCause(415),
+            "a question over the size limit is refused plain too, so it does not turn compression off for the whole run");
 
         // ── The transcript types in ──────────────────────────────────────────────────
         const double Frame = 1.0 / 60;
