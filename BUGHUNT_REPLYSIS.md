@@ -1144,3 +1144,14 @@ From the round 58 attacker review. All live today, all fixed locally; they reach
 Checks: website type check clean (apart from the known stale popup entries), production build passes from a separate copy, sync check all in sync, all 19 script checks pass (new: check-cost-holes), server tests 196 run, 0 failed (new: AskLimitsTests, TasteStepsTests, ResumeImportLimitTests).
 
 Commits: website 69f08b16, server 7f68bdc. firestore.rules is not in git (changed locally, not published).
+
+## Round 60: watch after the 2026-11-08 02:34 to 02:45 UTC deploy (read only)
+
+Checked about 12 minutes after the website, server and stricter database rules went live, a quiet Saturday night.
+- Both server copies and both website copies are up. No errors or exceptions in their logs since the deploy.
+- nginx: since the deploy only scanner noise (phpinfo, .env, bedrock paths, all 404) and 3 normal website sign in checks. One "connection refused" at 02:44:39 from the server itself during the website copy swap, which is expected.
+- No problem reports, no alert events, no usage events yet after the deploy (one usage event in the 24 hours before, so traffic is simply very low). The one account active since the deploy is the test account used to prove the new rules (activity save allowed, used answers change and self made account refused).
+- Nobody has hit the new free Maya or listening limits yet (no account has the new fields).
+- Not observable from the server: a browser or app write refused by the new rules shows only on the client. The Windows and Mac apps write only lastActive and lastLogin, which pass; the website writes only allowed fields.
+
+Verdict: healthy, no legitimate traffic blocked so far, but too little traffic to be sure. Check again after the next real interview (the admin Live panel and a fresh look at the logs). Rollback for the rules if needed: ruleset 9b86bcef-5312-47d6-98a5-e6aae2172b9f.
