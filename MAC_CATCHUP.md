@@ -4496,3 +4496,7 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 
 - The app gzips the answer request and, if the server answers 400, 415 or 501, sends it once plain and turned compression off for the rest of the run. But the server also answers 400 when it rejects the question itself (over its size limit), before any charge, and then the plain copy is refused too. One oversized question therefore made every later question upload twice the bytes for the whole session.
 - Now compression stays off only if the plain copy got through (RequestCompression.CompressionWasTheCause). Mac: check whether the Mac app compresses requests and has the same fallback.
+
+## 2026-11-07: a long question keeps its end (Windows, local, not released)
+
+- PromptBuilder caps the question at 4,000 characters. It kept the start and cut the end, so a long brief read out by the interviewer reached the model without its final sentence, the actual question. It now keeps the end, marked "[earlier part cut]", for the question sent and the history. Mac: check how the Mac app caps a long question.

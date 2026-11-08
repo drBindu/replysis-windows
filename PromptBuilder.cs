@@ -185,7 +185,7 @@ namespace InterviewCopilot
 
         public static void AddToHistory(string question, string answer)
         {
-            question = Truncate(question, MaxHistoryQuestionChars);
+            question = TruncateKeepingEnd(question, MaxHistoryQuestionChars);
             answer = Truncate(answer, MaxHistoryAnswerChars);
 
             // The turn that was most recent becomes an older turn now, so its
@@ -1974,7 +1974,7 @@ namespace InterviewCopilot
             string resumeFacts, string currentQuestion, bool lowLatency = false)
         {
             resumeFacts = Truncate(resumeFacts, 12_000);
-            currentQuestion = Truncate(currentQuestion, MaxHistoryQuestionChars);
+            currentQuestion = TruncateKeepingEnd(currentQuestion, MaxHistoryQuestionChars);
             var messages    = new List<object>();
             var qType       = DetectType(currentQuestion);
             bool drillDown  = IsDrillDown(currentQuestion);
@@ -2077,6 +2077,21 @@ namespace InterviewCopilot
 
         private static string Truncate(string value, int maxChars) =>
             value.Length <= maxChars ? value : value[..maxChars] + "\n[truncated]";
+
+        /// <summary>
+        /// A question over the cap keeps its end. An interviewer who reads out a long brief asks the actual question
+        /// last ("...so design the backend for that"), and when no piece of it looks like a question the whole run
+        /// reaches here. Cutting the end sent the brief and dropped the question (bug round 47).
+        /// </summary>
+        internal static string TruncateKeepingEnd(string value, int maxChars)
+        {
+            if (value.Length <= maxChars) return value;
+            int start = value.Length - maxChars;
+            // Start on a word, so the first thing the model reads is not half of one.
+            int space = value.IndexOf(' ', start);
+            if (space >= 0 && space < start + 40) start = space + 1;
+            return "[earlier part cut]\n" + value[start..];
+        }
 
         /// <summary>
         /// What the last Screen Analyze read, for questions that refer to it.
