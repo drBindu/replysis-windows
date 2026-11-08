@@ -1168,3 +1168,20 @@ Healthy. About one hour after the website and server deploy and the stricter dat
 - 1.0.53 downloads so far: Setup 2, full package 1, update delta 1 (some of these are the release check itself). No failed update reports.
 
 Action: none. Look again after the first Windows user updates to 1.0.53. Rollback if needed: rules ruleset 9b86bcef-5312-47d6-98a5-e6aae2172b9f; the previous backend and website images are kept.
+
+## Round 62, 2026-11-08: screen answers made faster (owner: "screen answers are very slow")
+
+Where the time went, from the server's own timing lines after the Nov 7 deploy (read only): an F8 on an ordinary screen took 2.07 s to first words. The charge took 0.14 s, then the screen read ran to its end, 1.9 s and 470 characters describing the screen, only to say "none: not a coding screen". The picture answer had already been started beside the read (round 15), but nothing was sent until the read finished, so the read decided the wait.
+
+Measured on two made up screens (an ordinary meeting slide and a coding problem, 3 runs each, 12 small calls): the read's verdict arrives with its first words, 0.7 to 0.96 s, and the picture answer's first words arrive in 0.74 to 1.03 s. A real screen's full read is 1.4 to 3 s.
+
+Fixed (backend):
+1. The screen read stops at its verdict. "none: not a coding screen" is the first thing the read writes, so the server now stops reading and closes the model's stream the moment it appears, instead of waiting for the description nobody uses. A coding read is still read to the end. This also applies to the read made ahead while listening.
+2. The read and the picture answer now start beside the charge instead of after it, as spoken answers already do (saves about 0.1 to 0.15 s). Nothing reaches the person before the charge succeeds; a refused charge closes the picture answer, and the account is remembered for 20 s so a repeat press is refused before any model call.
+3. The picture answer now also starts at once when the question is not about code at all, and when a read made ahead already said there is no code. Only a read made ahead that found code skips it (the coding model answers).
+
+Expected: an F8 on an ordinary screen from about 2.1 s to about 1.0 to 1.2 s to first words at the server. Coding screens: about 0.1 s faster (the charge). Spoken screen questions that use the read made ahead: about 0.1 s faster. Voice answers: unchanged. Billing, refunds, the refusal hold and capture while listening are unchanged.
+
+Not changed on purpose: the Windows app sends F8 as a fresh capture. Reusing the screenshot already sent ahead would skip the upload, but the app only knows the two look alike at 16 by 16 pixels, so a just typed line of code could be missed. Not worth a stale answer.
+
+Tests: ScreenReadVerdictTests (stops at the verdict and closes the stream, reads a coding read to the end, ignores "ERROR: none", only looks in the opening, when the picture answer starts early). Backend 201 tests pass. Needs a server deploy; no Windows release.
