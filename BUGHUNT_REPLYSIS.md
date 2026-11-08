@@ -1080,3 +1080,14 @@ Checks: type check clean and a full production build passes from a separate copy
 - Phone and cleanup: sign in box and first run guide fit a phone, old unused code removed.
 
 Go/no-go: GO. Deploy the server first, then the website. No Firestore index or Stripe change is needed. After deploy, about 10 minutes of clicking on the live site with a real test account covers what was never tried in a browser (browser interview Space and End session, resume preview, pricing buy button, phone size sign in box, unsubscribe page).
+
+## Round 52: Maya's interview logic on the website (2026-11-07)
+
+Found and fixed (website, needs a deploy):
+1. Asking Maya to repeat a question cost an answer and pulled the score down. With feedback "at the end" (the default), every finished answer bought feedback at once, before Maya's reply was known. So "sorry, can you repeat that?", "I'm nervous" or noise she did not catch was charged as a feedback (for accounts without Maya on their plan), counted as a completed question, and added a score of 0 to the average. Now the website waits for her reply (already being made, so no delay) and skips feedback when she asks the same question again and the answer was under 12 words, the same rule the phone app uses.
+2. She could ask the same question again forever. With steady background noise every turn was "I didn't catch that" and the interview never moved on. Now one question is asked again at most twice, like the phone, then the next question is asked as written.
+Check: scripts/check-maya-repeat.mjs (fails on the old code).
+
+Checked and fine: her voice tones are all ones the voice accepts; a model reply that is not JSON falls back to the plain next question; the monthly Maya count ignores a second begin for the same interview; the phone app's response shape is unchanged (no server code changed).
+
+Noted, not changed: the server lets the model end the interview before two warnings. The prompt forbids it and nothing shows it happening, and changing the reply after the fact would leave her goodbye followed by more questions.
