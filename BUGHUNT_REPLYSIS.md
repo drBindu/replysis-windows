@@ -1013,3 +1013,19 @@ Fixed: a long question lost its actual question. The prompt caps the question at
 Read and found fine: PromptBuilder (history cap of 20 turns with 4 sent, code in older turns collapsed, screen context only for 10 minutes), StoreUpdateService and AppUpdates (the launch gate is switched off, the Store notice opens the Store page, nothing installs during a session), UpdateRequiredWindow, UpdateDownloadGuard (stall retry), ScreenOcrLayout, CompanionLink (phone Stop and Answer run on the window's thread), AnswerClosers, AudioSourceRules, RemoteAppConfig (only whole number REPLYSIS_ engine settings are taken), EngineWarmup, SttRenewalRules. Not read in depth this round: StealthDialog, StealthSelfTest, RegionCaptureWindow (small, screen only), ScreenOcr.
 
 Small notes, not changed: LastEntryWasScreenAnalysis is no longer called by anything, and a spoken question containing the word "screen" skips the personal fact lock for that turn only.
+
+## Round 48: stealth dialog, stealth self-test, area picker, screen text reader (2026-11-07)
+
+No real bug found; no code changed.
+
+Read end to end: StealthDialog.cs, StealthSelfTest.cs, RegionCaptureWindow.xaml.cs, ScreenOcr.cs (with the callers in MainWindow and ScreenAnalyzer).
+
+Checked and fine:
+- Every dialog and the area picker get the same hiding as the other windows, applied when the window is created, so they are never in a screen share while hiding works.
+- The self-test hides its test square first and gives up ("unknown", then the answer window's own setting decides) when the square itself cannot be hidden, so it does not report "hidden" for a window Windows refused. A visible or black box result only changes the quiet Screen share row and sends one report, never a popup.
+- The area picker turns the picked corners into real screen pixels, so the captured part matches what was drawn on any scaling.
+- The screen text reader sends only the words of the area that was captured, logs only lengths and error types (never screen words), and on this laptop reports a maximum image side of 10,000 pixels, so a 1.5x enlarged 4K screen is still read. On a Windows language with no text reader it quietly falls back to English, and if that is missing too it sends pictures as before.
+
+Needs a real laptop try (cannot be proven from code):
+- The area picker on two monitors with different scaling (100% beside 150%). Windows may resize the picker when it lands across both, which would leave a strip that cannot be picked.
+- The self-test on a slow laptop: it waits a fixed 350 ms for the test square to be drawn; if drawing takes longer, the result is "hidden" without proof.
