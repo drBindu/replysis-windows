@@ -1029,3 +1029,18 @@ Checked and fine:
 Needs a real laptop try (cannot be proven from code):
 - The area picker on two monitors with different scaling (100% beside 150%). Windows may resize the picker when it lands across both, which would leave a strip that cannot be picked.
 - The self-test on a slow laptop: it waits a fixed 350 ms for the test square to be drawn; if drawing takes longer, the result is "hidden" without proof.
+
+## Round 49: unreviewed website and server corners (2026-11-07)
+
+Fixed (website, needs a deploy):
+1. Unsubscribe links unsubscribed people who never asked. Opening the link opted out at once, and mail scanners (Outlook Safe Links, company filters) open every link in an email before the person does. Opening the link now only asks, with a "Stop these emails" button. Mail apps' own unsubscribe button (one click POST) still works in one step.
+2. An old unsubscribe link brought back a deleted account. It wrote the account record with set and merge, so for an account deleted in admin it created a new bare record (the case round 31 closed for Stripe). It now only updates an existing record; a deleted account just sees the done page. The private key line in that route also used the wrong pattern for "\n", now the same as every other route.
+3. Past interviews on the website dropped the newest ones once someone had more than 50. The list read 50 in Firestore's random id order and then sorted them. It now reads up to 500, sorts newest first and shows 50.
+Check: scripts/check-unsubscribe-and-history.mjs (fails on the old code).
+
+Noted, not changed:
+- Listening minutes after the monthly date passes: the website and server both count only the latest report until something else moves the date (the next answer does). Small under count, fair use only.
+- /api/start-link says "verified address" in its comment but does not check verification; sign up already sends a verification mail to the same address, so it adds no new way to mail strangers.
+- Sessions are keyed by email, not account id. Safe today because Firebase allows one account per email; worth moving to account id one day.
+
+Corners read and fine: referral (capped at 10 rewards, one claim per new account, transaction), geo, download telemetry, billing portal ownership check, browser listening minutes, presence controller, server activity and usage writes (update only, never recreate a record), checkout stale customer clean up (only the signed in buyer).
