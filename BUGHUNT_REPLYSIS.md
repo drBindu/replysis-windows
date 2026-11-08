@@ -1185,3 +1185,19 @@ Expected: an F8 on an ordinary screen from about 2.1 s to about 1.0 to 1.2 s to 
 Not changed on purpose: the Windows app sends F8 as a fresh capture. Reusing the screenshot already sent ahead would skip the upload, but the app only knows the two look alike at 16 by 16 pixels, so a just typed line of code could be missed. Not worth a stale answer.
 
 Tests: ScreenReadVerdictTests (stops at the verdict and closes the stream, reads a coding read to the end, ignores "ERROR: none", only looks in the opening, when the picture answer starts early). Backend 201 tests pass. Needs a server deploy; no Windows release.
+
+## Round 63: screen answers, second speed pass (2026-11-08, server only)
+
+Measured from the server with the app's real screen prompt on made-up screens (a few cents of calls):
+- The screen model's own first words: typical 0.7 to 0.85 s. That is the floor for a screen answer.
+- Racing the two Gemini models and taking the first: no gain (both slow down together).
+- A smaller picture (1024 wide instead of 1600): the same number of model tokens, no reliable gain.
+- Turning model thinking off: refused by Google for this model.
+- A cold connection to Google or Cerebras: 25 to 40 ms, and a keep-warm already runs every 5 s. Nothing to gain.
+- gemini-3.1-flash-lite vs the current 3.5: 3.5 is faster (0.80 vs 0.97 s typical on the slide and code screens). Kept.
+
+Found and fixed: the screen read put its "coding or not" verdict inside the PROBLEM line, and it was often wrong. A case-study slide was called a coding problem 4 times of 4, so it went the slow two-stage way (whole read, then the coding model: about 1.3 to 3 s or more). A Python traceback was called not coding 4 times of 4. The read now writes KIND first. On six screens, five runs each, all 30 were right, and the verdict arrives with the first words (0.72 to 0.83 s), at the same moment the picture answer starts speaking, so an ordinary screen no longer waits on the read at all.
+
+Expected now: ordinary screens about 0.9 to 1.1 s to first words on the server (plus the upload when the screen was not already sent while listening); case-study and question slides drop from 1.3 to 3 s to the same 0.9 to 1.1 s; coding screens unchanged (the whole read is needed for code). Needs a server deploy only; no Windows release. Backend commit with ScreenReadVerdictTests (203 tests, 0 failed).
+
+Not done, on purpose: an on device "looks like code" hint from the app (the verdict now arrives as fast as the answer, so it would save under 0.05 s and need a Windows release), reusing the screenshot already sent (F8 while listening already does), and any change to the 64 character hold (owner decision).
