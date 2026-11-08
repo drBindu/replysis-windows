@@ -4511,3 +4511,7 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 - Closing stops the freeze watchdog and deletes freeze.flag first, so a slow close is never reported as previous-run-froze.
 - The cloud session sync always starts on a background thread, and the token refresh has ConfigureAwait(false) on every await, so closing never waits the full timeout for it.
 - Unreported listening seconds are tagged with the account they were heard under; another account (or a guest) starts at zero and kept minutes are dropped if the account changed while the report was out.
+
+## 2026-11-08: engine pipe test fits the GitHub build machine (Windows test only, no app change)
+
+- The 1.0.53 build stopped at the pipe access test: on GitHub's build machine (an administrator account) Windows also lists SYSTEM, Administrators or the logon session on a current-user-only pipe. The test now accepts those and still fails on any other ordinary account or on Everyone and Anonymous. No app or engine code changed. Nothing for Mac.

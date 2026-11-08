@@ -31,7 +31,15 @@ internal static class EnginePipeSecurityTests
         var anonymous = new SecurityIdentifier(WellKnownSidType.AnonymousSid, null);
 
         Check(rules.Count > 0, "engine pipe has an access list");
-        Check(rules.All(r => r.IdentityReference.Equals(me)), "engine pipe allows only this Windows user");
+        // Only this user, plus what Windows itself always adds on some machines (the GitHub build machine runs as an
+        // administrator, where SYSTEM, Administrators or the logon session also appear). No other ordinary account.
+        var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+        var admins = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+        bool AllowedOwner(SecurityIdentifier sid) =>
+            sid.Equals(me) || sid.Equals(system) || sid.Equals(admins) || sid.Value.StartsWith("S-1-5-5-");
+        var others = rules.Where(r => !AllowedOwner((SecurityIdentifier)r.IdentityReference)).ToList();
+        foreach (var r in others) Console.WriteLine($"      unexpected access for {r.IdentityReference.Value}");
+        Check(others.Count == 0, "engine pipe allows only this Windows user");
         Check(!rules.Any(r => r.IdentityReference.Equals(everyone) || r.IdentityReference.Equals(anonymous)),
               "engine pipe gives Everyone and Anonymous nothing");
 
