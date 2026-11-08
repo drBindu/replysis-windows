@@ -960,3 +960,20 @@ Left as is:
 - A customer who once had a subscription in one currency and later buys from another country (a US subscriber who moves to the UK) is refused by Stripe, because a Stripe customer keeps one currency. Rare; the checkout shows "Could not start checkout". Fixing it means a second Stripe customer, which the 2026-11-04 fixes deliberately avoid.
 - The page shows a local currency when both its Pro and Max prices exist; the Maya and Practice prices in that currency are checked separately at checkout. Today all are set, so nothing differs.
 - The Windows app opens replysis.com/pricing with no country in the link; the site decides from the address, which is right.
+
+## Round 44: deploy, rollback and backup scripts (2026-11-08)
+
+Read the live deploy scripts, timers and backup jobs on the server without changing anything, and fixed the laptop backup copy.
+
+Fixed on this laptop (C:\Users\krish\Desktop\replysis-backups\pull-postgres.ps1, not in git):
+1. A cut-off copy was kept as a backup forever. If the copy from the server broke half way, the partial file stayed under the final name, so the next day's run saw it, skipped the copy, and the folder held a broken backup. Copies are now written as .part, checked as a whole gzip file, and only then given their name; leftovers are removed.
+2. A stopped server backup looked fine. If the server's daily backup stopped, the laptop kept copying the same old file and logging "ok". It now logs STALE when the newest dump is over two days old.
+Tested with a dry run against a temp folder and against the real folder (nothing written).
+
+Proposed for the server, waiting for the owner's yes, in docs/SERVER_SCRIPT_FIXES.md:
+1. A failed git pull (backend) or fetch (website) still builds the old code and reports the deploy as done.
+2. The website keeps no rollback image (the backend does).
+3. An aborted deploy leaves the standby copy on the broken build with nothing behind the primary.
+4. No free disk check before a build (71% used).
+
+Checked and fine: all seven containers come back after a reboot (restart always plus podman-restart with linger), certificate renewal, postgres backup and follow-up timers are running, the backend rollback image exists, build failures touch nothing.
