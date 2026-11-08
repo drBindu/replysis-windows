@@ -868,3 +868,20 @@ Found and fixed: paying customers were told the wrong refresh date.
 Checked and fine: month rollover from the 29th to the 31st and February (both sides set the date to the 1st first), trial and India month end dates are stored the same way on both sides and compared as times, Stripe period ends are seconds on both sides, Windows speech key expiry counts from the moment it arrives so a PC with the wrong clock still renews it, and free accounts are never promised a refill.
 
 Checks: server tests 181 run, 0 failed (1 new). Website type check clean apart from the known stale popup page entries, sync check ALL IN SYNC, all 13 script checks pass (1 new). Windows build 0 errors, CleanerTests all passed (5 new). Needs a server and website deploy, and the next Windows version.
+
+## Round 39: crashes and what the owner sees (2026-11-07)
+
+Found and fixed (Windows):
+- The worst crash never reached admin. A crash on a background thread ends the app the moment its handler returns, and the report to the server was sent in the background without waiting, so it almost never got out. The owner only ever saw crashes the app survived. Now that path waits up to two seconds for the report.
+- The crash marker was written but never read. The app wrote crash.flag when it had to close, but nothing looked at it again, so if the report did not get out (offline, or the process died first) nobody ever knew. Now a background crash writes the marker too, and the next launch reports "previous run crashed" once, quietly, and removes it. It counts as a real error for the outage email (which still needs two different computers in ten minutes).
+- Tests: section 33 in CleanerTests (marker written, read once, cut short if damaged, never throws; launch reports it; fatal path waits).
+
+Checked and fine:
+- Crashes the app can carry on from are logged and reported without a dialog; only memory exhaustion and broken installs close it, with a plain message.
+- The debug log is written straight to disk on every line, rotates at 20 MB, and the previous run's log is kept as the old log, so a crash can still be read after a restart.
+- The engine exiting with any code other than 1 or 2 is treated as a crash and restarted (round 1.0.52 and the 11-02 audit).
+- The website never returns a stack trace: API routes answer with fixed messages, and the server has error messages and stack traces switched off.
+
+Not covered: a hard UI freeze (the window stops responding but nothing throws) has no watchdog and no report. Adding one is a larger change for a later round.
+
+Ships with the next Windows version.

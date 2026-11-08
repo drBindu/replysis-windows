@@ -4475,3 +4475,9 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 ## 2026-11-07: refresh date from the server (Windows, local, not released)
 
 - The credits reply now carries "refreshesAt" (ISO UTC) once the server is deployed. Windows shows it in the answers window instead of guessing the 1st of next month (a monthly subscription refills on its renewal day). Mac should do the same if it shows a refresh date; fall back to the old guess when the field is missing.
+
+## 2026-11-07: a crash reaches admin even when the app dies first (Windows, local, not released, bug round 39)
+
+- A fatal crash on a background thread now waits up to 2 s for its crash report (it was fire and forget, so it was nearly always lost), and writes crash.flag.
+- On the next launch, if crash.flag exists, the app reports Problem "previous-run-crashed" once and deletes the flag. Before, crash.flag was written but never read.
+- Mac: check whether a crash on the Mac app reaches the diagnostics endpoint before the process exits, and whether anything reads a crash marker on the next launch.

@@ -66,6 +66,15 @@ namespace InterviewCopilot
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             ListenForShowRequests();
 
+            // The last run crashed (bug round 39): say so once, quietly, so a crash whose own report never got out still
+            // reaches admin. Only the copy that owns the lock gets here, so two copies never report it twice.
+            string? lastCrash = CrashMarker.TakePrevious(CrashMarker.DefaultFolder);
+            if (lastCrash != null)
+            {
+                DebugWindow.Log("CRASH", $"the previous run crashed ({lastCrash})");
+                ClientErrorReporter.ReportProblem("STARTUP", "previous-run-crashed", "The previous run ended in a crash at " + lastCrash);
+            }
+
             // Load the speech engine's files now, while the person is signing in or filling in Setup, so the real
             // start does not pay for a new computer scanning them (see EngineWarmup).
             EngineWarmup.Start();
@@ -309,17 +318,7 @@ namespace InterviewCopilot
             // A crash flag is a single tiny write with no dependency on the
             // failing subsystem, so it is safe even now. Interview transcripts
             // are already streamed to disk as they arrive.
-            try
-            {
-                string folder = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "InterviewCopilot");
-                System.IO.Directory.CreateDirectory(folder);
-                System.IO.File.WriteAllText(
-                    System.IO.Path.Combine(folder, "crash.flag"),
-                    DateTime.UtcNow.ToString("o"));
-            }
-            catch { /* nothing further to do if even this fails */ }
+            CrashMarker.Write(CrashMarker.DefaultFolder, "UI", DateTime.UtcNow);
 
             try
             {
@@ -347,20 +346,27 @@ namespace InterviewCopilot
         // Not recoverable by contract; log so the cause is available afterwards.
         private void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            LogCrash("FATAL", e.ExceptionObject as Exception);
+            // The process ends as soon as this returns. Leave a marker so the next launch reports it even if the send
+            // below does not get out, and give the send up to two seconds (bug round 39: these reports were always lost).
+            if (e.IsTerminating) CrashMarker.Write(CrashMarker.DefaultFolder, "FATAL", DateTime.UtcNow);
+            Task sending = LogCrash("FATAL", e.ExceptionObject as Exception);
+            if (e.IsTerminating)
+            {
+                try { sending.Wait(TimeSpan.FromSeconds(2)); } catch { }
+            }
         }
 
         // Technical detail goes to the debug log for developers only; it is never
         // shown to the user.
-        private static void LogCrash(string source, Exception? ex)
+        private static Task LogCrash(string source, Exception? ex)
         {
             try
             {
                 DebugWindow.Log("CRASH", $"[{source}] {ex?.GetType().Name}: {ex?.Message}");
                 if (ex?.StackTrace != null) DebugWindow.Log("CRASH", ex.StackTrace);
-                ClientErrorReporter.Report(source, ex);
+                return ClientErrorReporter.Report(source, ex);
             }
-            catch { /* logging must never itself crash the handler */ }
+            catch { return Task.CompletedTask; /* logging must never itself crash the handler */ }
         }
 
         /// <summary>Tells the copy already running to bring its window back. False when it is an older copy that cannot.</summary>

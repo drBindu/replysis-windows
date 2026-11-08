@@ -178,15 +178,19 @@ namespace InterviewCopilot
             });
         }
 
-        internal static void Report(string source, Exception? ex)
+        /// <summary>
+        /// Sends a crash report in the background. The returned task finishes when the send does (at most 5 s), so the fatal
+        /// path, where the process ends as soon as its handler returns, can wait a moment for it (bug round 39).
+        /// </summary>
+        internal static Task Report(string source, Exception? ex)
         {
 #if DEBUG
-            return;   // a developer build does not report to the live server
+            return Task.CompletedTask;   // a developer build does not report to the live server
 #else
-            if (ex == null) return;
+            if (ex == null) return Task.CompletedTask;
             try
             {
-                if (!ShouldSend(Fingerprint(ex))) return;
+                if (!ShouldSend(Fingerprint(ex))) return Task.CompletedTask;
 
                 string version = "";
                 try { version = FileVersionInfo.GetVersionInfo(Environment.ProcessPath ?? "").ProductVersion ?? ""; } catch { }
@@ -202,7 +206,7 @@ namespace InterviewCopilot
                 };
                 string url = SettingsWindow.GetBackendUrl().TrimEnd('/') + "/api/v1/diagnostics/client-error";
 
-                _ = Task.Run(async () =>
+                return Task.Run(async () =>
                 {
                     try
                     {
@@ -217,6 +221,7 @@ namespace InterviewCopilot
                 });
             }
             catch { /* reporting must never itself crash the handler */ }
+            return Task.CompletedTask;
 #endif
         }
     }
