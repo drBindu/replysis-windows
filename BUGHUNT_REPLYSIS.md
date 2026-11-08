@@ -942,3 +942,21 @@ Waiting in the next website and server deploy (everything since the Nov 4 deploy
 - Phone layout: sign in box and first run guide fit small phones. Old unused code removed.
 
 Go or no go: GO. Server first, then website. Not yet tried for real: the browser interview fixes and the faster screen answers; a 10 minute click through on the live site after deploy covers them.
+
+## Round 43: local currency prices and country detection (2026-11-07)
+
+Every live Stripe price the website uses was read (read only) and compared with what the pages show. All 31 match, and every one is active:
+Pro USD 34.99, INR 699, GBP 27.99, CAD 47.99, AUD 52.99. Max USD 79.99, INR 1299, GBP 62.99, CAD 109.99, AUD 119.99.
+Maya add-on USD 10, INR 399 (monthly and once), GBP 7.99, CAD 13.99, AUD 14.99. Practice USD 14.99, INR 499 (monthly and once), GBP 11.99, CAD 19.99, AUD 21.99.
+Answer packs USD 9.99, 24.99, 69.99 and INR 149, 349, 899. India minutes are charged from the same table the page shows.
+The page and the checkout both decide the country from the same address (the server's country database), so a VPN or travel changes both together, never one.
+
+Found and fixed (website 06a7b15a):
+1. The pricing table's Maya row always said "Add for $10/month". A visitor in India was charged Rs 399, in the UK GBP 7.99, in Canada CA$13.99, in Australia A$14.99, while the same page's plan cards already showed their own currency. The row now shows the add-on in the visitor's currency.
+2. The home page's plan facts always said $14.99, $34.99 and $79.99. India pays Rs 699 and Rs 1299 for one month, and the UK, Canada and Australia pay their own prices. They now show the visitor's currency, from the same country check as the pricing page.
+Both now read one helper (app/lib/display-prices.ts). The new check (scripts/check-display-prices.mjs) fails on the old code, and holds the shown prices to the live Stripe amounts above.
+
+Left as is:
+- A customer who once had a subscription in one currency and later buys from another country (a US subscriber who moves to the UK) is refused by Stripe, because a Stripe customer keeps one currency. Rare; the checkout shows "Could not start checkout". Fixing it means a second Stripe customer, which the 2026-11-04 fixes deliberately avoid.
+- The page shows a local currency when both its Pro and Max prices exist; the Maya and Practice prices in that currency are checked separately at checkout. Today all are set, so nothing differs.
+- The Windows app opens replysis.com/pricing with no country in the link; the site decides from the address, which is right.
