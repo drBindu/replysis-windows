@@ -853,3 +853,7 @@ Ran a separate copy of the website against local test databases (no live data, n
 Found and fixed: the name typed at sign up never reached the account record, so the account kept the "User" placeholder (and emails said "Hi User"). Sign up set the name and then sent the old sign in token, which has no name in it. The token is now refreshed after the name is set. Check: scripts/check-signup-name.mjs. Needs a website deploy.
 
 Not finished (the round ran too long and was stopped): pricing buy button in Stripe test mode, the browser interview Space and End session checks, resume PDF preview, admin deletion requests, the phone size sign in box. These still need a real browser try.
+
+## Round 37: browser checks stopped (2026-11-07)
+
+Stopped after its time box. The website's page guard checks sign in tokens against Google's real keys, and the local test database's tokens are not signed by Google, so signed in pages cannot be opened against the local test copy without changing the site. No code was changed and nothing was committed. The remaining browser checks (pricing buy button in Stripe test mode, phone size sign in box, resume preview, admin deletion requests, browser interview Space) are best done once on the live site after the next deploy with a real test account, about 10 minutes of clicking.
