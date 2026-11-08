@@ -48,6 +48,8 @@ namespace InterviewCopilot
         // ── Credits (refreshed from backend) ──
         public static int    Credits    { get; set; } = 0;
         public static string Plan       { get; set; } = "free";
+        /// <summary>When the answers refresh, as the server says (UTC), or null when it did not say.</summary>
+        public static DateTime? RefreshesAt { get; set; }
         public static bool   IsUnlimited { get; set; } = false;
 
         // ── Speechmatics key (fetched from backend; works for guests via X-Device-Id) ──

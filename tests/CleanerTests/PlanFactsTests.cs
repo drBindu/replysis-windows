@@ -22,6 +22,16 @@ internal static class PlanFactsTests
             if (!ok) failed++;
         }
 
+        // Round 38: the refresh date shown is the server's when it gave one still ahead, else the 1st of next month.
+        var now = new DateTime(2026, 11, 20, 12, 0, 0, DateTimeKind.Local);
+        var renewal = PlanFacts.ParseRefreshesAt("2026-12-15T10:00:00Z");
+        Check(renewal == new DateTime(2026, 12, 15, 10, 0, 0, DateTimeKind.Utc), "the server's refresh date is read as UTC");
+        Check(PlanFacts.RefreshDateShown(renewal, now) == renewal!.Value.ToLocalTime(), "a monthly renewal day is shown, not Dec 1");
+        Check(PlanFacts.RefreshDateShown(null, now) == new DateTime(2026, 12, 1), "no server date falls back to the 1st of next month");
+        Check(PlanFacts.RefreshDateShown(PlanFacts.ParseRefreshesAt("2026-11-01T00:00:00Z"), now) == new DateTime(2026, 12, 1),
+            "a date already past falls back");
+        Check(PlanFacts.ParseRefreshesAt("not a date") == null && PlanFacts.ParseRefreshesAt(null) == null, "an unreadable date is ignored");
+
         Check(PlanFacts.AnswerCost == 5 && MainWindow.AnswerCreditCost == PlanFacts.AnswerCost,
             "an answer costs 5 credits, in both places the app states it");
         Check(PlanFacts.Answers(PlanFacts.FreeCredits) == 5, "Free is 5 answers");

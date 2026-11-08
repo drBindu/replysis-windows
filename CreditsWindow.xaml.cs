@@ -37,17 +37,12 @@ namespace InterviewCopilot
                 bool freeTrial = PlanFacts.IsFreeTrial(UserSession.Plan, UserSession.IsLoggedIn);
                 AllowanceText.Text = PlanFacts.AllowanceText(UserSession.Plan, UserSession.IsLoggedIn);
                 // Free answers are given once. A refresh date would promise a refill that never comes.
-                ResetText.Text = freeTrial ? "Not refreshed" : NextMonthlyReset().ToString("MMM d, yyyy");
+                ResetText.Text = freeTrial ? "Not refreshed"
+                    : PlanFacts.RefreshDateShown(UserSession.RefreshesAt, DateTime.Now).ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture);
             }
 
             PlanText.Text = UserSession.IsLoggedIn ? planLabel : "Guest plan";
             DeviceNoteText.Visibility = UserSession.IsLoggedIn ? Visibility.Collapsed : Visibility.Visible;
-        }
-
-        private static DateTime NextMonthlyReset()
-        {
-            DateTime now = DateTime.Now;
-            return new DateTime(now.Year, now.Month, 1).AddMonths(1);
         }
 
         private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();

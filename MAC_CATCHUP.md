@@ -4471,3 +4471,7 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 
 - Local session files sat in one folder per OS user and Sessions listed all of them, so a second Replysis account on the same login saw the first account's transcripts.
 - New session headers end with ` | acct <16 hex>`, the first 8 bytes of SHA256("replysis-session:" + uid). Sessions lists a file only when its tag matches the signed-in account; untagged older files stay listed. Mac: check whether its local sessions folder has the same problem.
+
+## 2026-11-07: refresh date from the server (Windows, local, not released)
+
+- The credits reply now carries "refreshesAt" (ISO UTC) once the server is deployed. Windows shows it in the answers window instead of guessing the 1st of next month (a monthly subscription refills on its renewal day). Mac should do the same if it shows a refresh date; fall back to the old guess when the field is missing.

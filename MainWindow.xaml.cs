@@ -1115,6 +1115,9 @@ namespace InterviewCopilot
                 UserSession.Credits = credits;
                 UserSession.Plan = plan;
                 UserSession.IsUnlimited = isUnlimited;
+                // When the answers refresh, from the server (round 38): a monthly subscription refills on its own day.
+                UserSession.RefreshesAt = PlanFacts.ParseRefreshesAt(
+                    doc.RootElement.TryGetProperty("refreshesAt", out var ra) && ra.ValueKind == JsonValueKind.String ? ra.GetString() : null);
                 CLog($"Parsed: {credits} credits | {plan} | unlimited={isUnlimited}");
 
                 // A refusal for credits that the balance contradicts is stale: forget it and ask for the

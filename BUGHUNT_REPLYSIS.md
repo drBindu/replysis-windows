@@ -857,3 +857,14 @@ Not finished (the round ran too long and was stopped): pricing buy button in Str
 ## Round 37: browser checks stopped (2026-11-07)
 
 Stopped after its time box. The website's page guard checks sign in tokens against Google's real keys, and the local test database's tokens are not signed by Google, so signed in pages cannot be opened against the local test copy without changing the site. No code was changed and nothing was committed. The remaining browser checks (pricing buy button in Stripe test mode, phone size sign in box, resume preview, admin deletion requests, browser interview Space) are best done once on the live site after the next deploy with a real test account, about 10 minutes of clicking.
+
+## Round 38: dates and time edges (2026-11-07)
+
+Found and fixed: paying customers were told the wrong refresh date.
+- Windows: the answers window always said the 1st of next month. A monthly subscription refills on its own renewal day, so a customer who subscribed on the 15th was told "Dec 1" for a refill on Dec 15. The server now sends the date (refreshesAt) and the app shows it in local time; with no date (older server) it still shows the 1st.
+- Website: the Account page said "Refreshes" with the stored safety date, three days after the real renewal ("Dec 18" for Dec 15). It now shows the renewal day for a monthly subscription. Annual plans, India months and everything else are unchanged.
+- The server and website use the same rule (FirestoreCreditsService.refreshShown and app/lib/refresh-date.ts).
+
+Checked and fine: month rollover from the 29th to the 31st and February (both sides set the date to the 1st first), trial and India month end dates are stored the same way on both sides and compared as times, Stripe period ends are seconds on both sides, Windows speech key expiry counts from the moment it arrives so a PC with the wrong clock still renews it, and free accounts are never promised a refill.
+
+Checks: server tests 181 run, 0 failed (1 new). Website type check clean apart from the known stale popup page entries, sync check ALL IN SYNC, all 13 script checks pass (1 new). Windows build 0 errors, CleanerTests all passed (5 new). Needs a server and website deploy, and the next Windows version.

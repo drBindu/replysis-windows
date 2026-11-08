@@ -55,6 +55,22 @@ namespace InterviewCopilot
         /// The plan as the server's credits reply should be read: the trial runs on "pro" but is "trial", and Practice sits
         /// on "free" but is "practice".
         /// </summary>
+        /// <summary>The server's refreshesAt (ISO, UTC), or null when missing or unreadable.</summary>
+        internal static DateTime? ParseRefreshesAt(string? text) =>
+            DateTimeOffset.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out var at) ? at.UtcDateTime : null;
+
+        /// <summary>
+        /// The refresh date to show (round 38, 2026-11-07): the server's, in local time, when it said one that is still
+        /// ahead; otherwise the 1st of next month, the old guess. A monthly subscription refills on its own renewal day, so
+        /// the guess told a customer who subscribed on the 15th "Dec 1" for a refill on Dec 15.
+        /// </summary>
+        internal static DateTime RefreshDateShown(DateTime? refreshesAtUtc, DateTime nowLocal)
+        {
+            if (refreshesAtUtc is DateTime at && at.ToLocalTime() > nowLocal) return at.ToLocalTime();
+            return new DateTime(nowLocal.Year, nowLocal.Month, 1).AddMonths(1);
+        }
+
         internal static string PlanFromReply(string? plan, bool trial, bool practice)
         {
             string p = Normal(plan);
