@@ -919,3 +919,26 @@ Checks: app and all 3 tracked test projects build with 0 errors; CleanerTests al
 - **Privacy and safety:** the audio pipes are readable by this Windows user only; past interviews show only for the account that recorded them; opening Replysis again brings back a hidden window; screen readers can read the sign in window.
 - **Owner visibility:** no false outage emails from customers running out, wrong passwords, failed updates, information banners or sleep; serious crashes and freezes now reach admin.
 - **Before release:** rebuild engine-dist, one try each on a black box laptop, a second monitor, a Store install's microphone switch and Swathi's laptop, then the owner's yes.
+
+## Round 42: website and server changes since round 35 (2026-11-07)
+
+Re-read the sign up name change (rounds 36), the refresh date (round 38) and everything else committed since round 35.
+
+Found and fixed: the round 36 sign up fix added a fresh sign in token request after the name is saved. If that request, or saving the name, failed (slow phone, a blip at Google), sign up showed an error even though the account had already been made and the person was signed in. The name step is now best effort: if it fails, sign up still finishes and the account keeps the "User" placeholder, which the emails already skip. Website commit 6a200125. Check: scripts/check-signup-name.mjs now fails on the old code.
+
+Checked and fine: Google sign in does not touch this code. The refresh date reply from the server: guests never reach it, an account with no reset date sends no date (older apps and the iPhone and Mac apps ignore the new field), the renewal day is stored in seconds and shown as a date. The Account page reads it the same way.
+
+Checks: type check and production build pass from a separate copy, sync check ALL IN SYNC, all 14 script checks pass, server tests 181 run, 0 failed.
+
+Waiting in the next website and server deploy (everything since the Nov 4 deploy):
+- Sign in: after sign in links stay on replysis.com; the name typed at sign up is saved, and a failed name step never blocks sign up.
+- Emails: trial ended wording, no "Hi User", at most one email in 12 hours, no Maya sales email to paying customers, failed sends retried, unsubscribed and test accounts skipped.
+- Resume PDF and browser interview: no lost text, mic turns off, no double listening, one save, whole resume and full instructions to the AI.
+- Payments and refunds: refunding Maya removes only Maya, bank approved top ups can be refunded, a charged top up always adds its minutes.
+- Account deletion: cancels the subscription first, removes leftover emails, waiting requests shown in admin.
+- Admin numbers: revenue, conversion, India sales and paying customers counted correctly.
+- Account page: monthly subscribers see their real renewal day.
+- Server: no paid screen read ahead for empty accounts, screen answers about 1 second faster on non code screens, voice timings record the app, older Windows apps stop false outage emails, a daily email if speech use passes 12 hours, the credits reply includes the refresh date.
+- Phone layout: sign in box and first run guide fit small phones. Old unused code removed.
+
+Go or no go: GO. Server first, then website. Not yet tried for real: the browser interview fixes and the faster screen answers; a 10 minute click through on the live site after deploy covers them.
