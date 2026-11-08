@@ -1112,3 +1112,17 @@ An outside reviewer read every unreleased Windows change (round 54) and found fo
 Left as is: the test that copies the server's alert rule by hand (ListeningProblemTests.ServerCountsAsError) still does not read the server file; the server repo sits next door but the Java rule is not simple to parse safely, so it stays a known gap.
 
 Checks: app build 0 errors (6 warnings, as before), CleanerTests all passed with 11 new checks. No app was opened. Ships with the next Windows version.
+
+## Round 57: fixes from the independent website and server review (2026-11-07)
+
+All six real findings from round 56 are fixed; one was a decision.
+
+1. The website's own listening check still let everyone through once the monthly reset date had passed, so someone who only listened on the website was never limited, even after round 50 fixed the counting. It now uses the same once per month rule as the reports and the server.
+2. One database hiccup turned the faster screen answers off for a paying customer for a minute, because a failed balance lookup looked like an empty account. A failed lookup now allows it and is not remembered.
+3. A late Stripe "subscription ended" or "Practice ended" message could bring back a deleted account as an empty record. Both now do nothing when the account is gone, checked inside the write itself.
+4. The admin monthly revenue took the owner's own India month test accounts off twice. Fixed.
+5. In Maya's report, a question she gave up repeating (after two tries she moves on) lost its answer and feedback. It now stays in the report.
+6. A welcome, trial reminder or owner notice that timed out after it was sent could go out twice. Only a definite refusal from the mail service now lets it be tried again.
+7. Decision: the early screen answer started alongside the coding check (round 15) stays. Since the Nov 4 deploy the server logged 3 screen answers and none were coding screens, so it only helps today; on a coding screen it costs a fraction of a cent.
+
+Checks: website type check clean (apart from the known stale popup entries), sync check all in sync, all 18 script checks pass, server tests 188 run and 0 failed. Commits: frontend 1d60a4d1, backend 3165265. Needs a website and server deploy.
