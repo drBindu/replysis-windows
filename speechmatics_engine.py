@@ -1775,6 +1775,27 @@ try:
                     buf += chunk
                 return buf
 
+            def get_read_available(self):
+                """Frames waiting in the FIFO right now, like PyAudio's call of the same name.
+
+                The mixing loop asks this before every read of the computer's sound (it reads
+                only what is already there, so a quiet source never delays the microphone).
+                Without it the call raised, the loop's except turned that into "no audio",
+                and on macOS the computer's sound never reached the recogniser in "both"
+                mode: the interviewer was heard only through the microphone (Mac, 2026-11-13).
+                """
+                if self._fd is None:
+                    self._open()
+                    if self._fd is None:
+                        return 0
+                try:
+                    import fcntl, termios, struct
+                    raw = fcntl.ioctl(self._fd, termios.FIONREAD, b"\0\0\0\0")
+                    return max(0, struct.unpack("i", raw)[0] // 2)
+                except Exception as e:
+                    self._complain(f"could not ask how much is waiting ({e})")
+                    return 0
+
             def stop_stream(self):
                 pass
 
