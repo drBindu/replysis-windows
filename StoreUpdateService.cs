@@ -159,14 +159,20 @@ namespace InterviewCopilot
                 using var timeout = new CancellationTokenSource(StoreUpdateRules.LaunchCheckTimeout);
                 IReadOnlyList<StorePackageUpdate> updates =
                     await ctx.GetAppAndOptionalStorePackageUpdatesAsync().AsTask(timeout.Token).ConfigureAwait(false);
-                if (updates == null || updates.Count == 0) return null;
+                if (updates == null || updates.Count == 0)
+                {
+                    ActivityDiary.Track("update_checked", ("result", "none"));
+                    return null;
+                }
                 _pending = updates;
                 PendingVersion = DescribeVersion(updates);
+                ActivityDiary.Track("update_checked", ("result", "found"), ("to_version", PendingVersion));
                 return PendingVersion ?? "a new version";
             }
             catch (Exception ex)
             {
                 DebugWindow.Log("UPDATE", $"Store check failed: {ex.GetType().Name} 0x{ex.HResult:X8}");
+                ActivityDiary.Track("update_checked", ("result", "failed"));
                 return null;
             }
         }

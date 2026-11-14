@@ -213,6 +213,40 @@ namespace InterviewCopilot
             catch { return null; }
         }
 
+        // Windows' own description of an endpoint: its form factor, and which bus enumerated it (BTHENUM, BTHHFENUM and
+        // BTHLEDEVICE are Bluetooth).
+        private static readonly PropertyKey FormFactorKey = new(new Guid("1da5d803-d492-4edd-8c23-e0c0ffee7f0e"), 0);
+        private static readonly PropertyKey EnumeratorKey = new(new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), 24);
+
+        /// <summary>speakers, headphones, bluetooth or other, from Windows' form factor and bus. Never the device name.</summary>
+        internal static string DeviceType(int? formFactor, string? enumerator)
+        {
+            if (!string.IsNullOrEmpty(enumerator) && enumerator.StartsWith("BTH", StringComparison.OrdinalIgnoreCase)) return "bluetooth";
+            return formFactor switch
+            {
+                1 => "speakers",
+                3 or 5 or 6 => "headphones",   // headphones, headset, handset
+                _ => "other",
+            };
+        }
+
+        private string CurrentDeviceType()
+        {
+            try
+            {
+                MMDevice? d;
+                lock (_lock) d = _device;
+                if (d == null) return "other";
+                int? ff = null;
+                string? en = null;
+                var props = d.Properties;
+                try { if (props.Contains(FormFactorKey)) ff = System.Convert.ToInt32(props[FormFactorKey].Value); } catch { }
+                try { if (props.Contains(EnumeratorKey)) en = props[EnumeratorKey].Value as string; } catch { }
+                return DeviceType(ff, en);
+            }
+            catch { return "other"; }
+        }
+
         // ── Capture ─────────────────────────────────────────────────────────────────────────────────
 
         private void StartCapture()
@@ -341,7 +375,13 @@ namespace InterviewCopilot
                 {
                     if (moved) Note($">>> NATIVE {_label}: Windows default changed; moving to it.");
                     else if (silentDeath) Note($">>> NATIVE {_label}: no sound packets for 5 s; reopening the device.");
-                    try { StartCapture(); }
+                    try
+                    {
+                        StartCapture();
+                        // The activity diary hears the KIND of device only (speakers, headphones, Bluetooth), never its name.
+                        if (moved)
+                            ActivityDiary.Track(_loopback ? "audio_output_changed" : "audio_input_changed", ("type", CurrentDeviceType()));
+                    }
                     catch (Exception ex)
                     {
                         _lastRestartUtc = DateTime.UtcNow;

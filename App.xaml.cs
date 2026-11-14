@@ -84,6 +84,10 @@ namespace InterviewCopilot
             }
             FreezeWatchdog.Start(Dispatcher, CrashMarker.DefaultFolder);
 
+            // The activity diary (2026-11-14): app_opened, and app_crashed_previous_run when the last run never reached a
+            // clean exit. Its sender runs in the background and sends only while someone is signed in (see ActivityDiary).
+            ActivityDiary.Start(CrashMarker.DefaultFolder);
+
             // Load the speech engine's files now, while the person is signing in or filling in Setup, so the real
             // start does not pay for a new computer scanning them (see EngineWarmup).
             EngineWarmup.Start();
@@ -430,6 +434,15 @@ namespace InterviewCopilot
             DispatcherUnhandledException -= OnDispatcherUnhandledException;
             TaskScheduler.UnobservedTaskException -= OnUnobservedTaskException;
             AppDomain.CurrentDomain.UnhandledException -= OnAppDomainUnhandledException;
+
+            // The diary's last word, before the lock is let go so a new copy never reads its file mid-write. At most
+            // 1.5 s, and it removes this run's marker: only a run that gets here counts as having closed cleanly.
+            if (_ownsSingleInstanceMutex)
+            {
+                bool updating = false;
+                try { updating = AppUpdates.Current == AppUpdates.Channel.DirectDownload && UpdateService.HasStagedUpdate; } catch { }
+                ActivityDiary.Quit(updating ? "update" : "quit");
+            }
 
             if (_ownsSingleInstanceMutex)
                 _singleInstanceMutex?.ReleaseMutex();

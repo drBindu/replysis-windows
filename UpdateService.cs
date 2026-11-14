@@ -132,12 +132,21 @@ namespace InterviewCopilot
                 // No update source means the check could not run, not that the
                 // app is current.
                 UpdateManager? mgr = Manager;
-                if (mgr == null) return (UpdateCheckOutcome.Failed, null);
+                if (mgr == null)
+                {
+                    ActivityDiary.Track("update_checked", ("result", "failed"));
+                    return (UpdateCheckOutcome.Failed, null);
+                }
 
                 UpdateInfo? update = await mgr.CheckForUpdatesAsync().ConfigureAwait(false);
-                if (update == null) return (UpdateCheckOutcome.UpToDate, null);
+                if (update == null)
+                {
+                    ActivityDiary.Track("update_checked", ("result", "none"));
+                    return (UpdateCheckOutcome.UpToDate, null);
+                }
 
                 string version = update.TargetFullRelease.Version.ToString();
+                ActivityDiary.Track("update_checked", ("result", "found"), ("to_version", version));
                 // Said the moment it is found, before the download: the notice waited for the whole download (21 s on
                 // the owner's line, minutes on a slow one) and people never saw it (2026-10-22).
                 try { UpdateFound?.Invoke(version); } catch { }
@@ -157,22 +166,26 @@ namespace InterviewCopilot
                 {
                     DebugWindow.Log("UPDATE", $"{version} could not be downloaded; will try again at the next check.");
                     ClientErrorReporter.ReportProblem("update", UpdatePolicy.DownloadFailedKind, $"Update {version} could not be downloaded");
+                    ActivityDiary.Track("update_checked", ("result", "failed"), ("to_version", version));
                     return (UpdateCheckOutcome.Failed, null);
                 }
 
                 _staged = update;
                 PendingVersion = version;
+                ActivityDiary.Track("update_checked", ("result", "downloaded"), ("to_version", version));
                 DebugWindow.Log("UPDATE", $"{version} staged, will install on next restart");
                 return (UpdateCheckOutcome.Staged, version);
             }
             catch (OperationCanceledException)
             {
                 // A timeout arrives this way too, so it did not complete.
+                ActivityDiary.Track("update_checked", ("result", "failed"));
                 return (UpdateCheckOutcome.Failed, null);
             }
             catch (Exception ex)
             {
                 DebugWindow.Log("UPDATE", $"Update check failed: {ex.GetType().Name}: {ex.Message}");
+                ActivityDiary.Track("update_checked", ("result", "failed"));
                 return (UpdateCheckOutcome.Failed, null);
             }
             finally
