@@ -31,7 +31,8 @@ CONSTS = {"_MULAW_TABLE", "_SLOW_LINE_FLAG", "_SLOW_LINE_FRESH_SECONDS", "_DEEPG
           "_DEEPGRAM_LINE_PROBLEMS_NEVER_HEARD", "_DEEPGRAM_REPLAY_CHUNKS", "_DEEPGRAM_REACH_EVERY",
           "_DEEPGRAM_REACH_UP_TO", "_DEEPGRAM_PING_EVERY", "_DEEPGRAM_PING_ALLOWED", "_DEEPGRAM_FIRST_ANSWER_SECONDS",
           "_DEEPGRAM_FIRST_ANSWER_WINDOW", "SAMPLE_RATE", "LAG_FILE",
-          "_FLUX_QUIET_REFRESH_SECONDS", "_FLUX_SILENT_SECONDS", "_flux_given_up", "_flux_server_errors"}
+          "_FLUX_QUIET_REFRESH_SECONDS", "_FLUX_SILENT_SECONDS", "_flux_given_up", "_flux_server_errors",
+          "_SPEECH_LEVEL", "_WATCHDOG_VOICE_LEVEL", "_WATCHDOG_SECONDS", "_pending_levels", "_chunk_levels", "_chunk_order"}
 
 
 def engine_scope(app, url, buffered_class, printed, deepgram_only=False):
@@ -43,6 +44,9 @@ def engine_scope(app, url, buffered_class, printed, deepgram_only=False):
              "_deepgram_url": lambda slow_line=False: url,
              "_deepgram_host_reachable": lambda timeout=1.5: True,   # the local server is always "reachable"
              "print": lambda *a, **k: printed.append(" ".join(str(x) for x in a))}
+    for node in TREE.body:   # the tuning constants are read through _env_int, so it comes first
+        if isinstance(node, ast.FunctionDef) and node.name == "_env_int":
+            exec(compile(ast.Module(body=[node], type_ignores=[]), str(SOURCE), "exec"), scope)
     for node in TREE.body:
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id in CONSTS for t in node.targets):
             exec(compile(ast.Module(body=[node], type_ignores=[]), str(SOURCE), "exec"), scope)
@@ -53,6 +57,11 @@ def engine_scope(app, url, buffered_class, printed, deepgram_only=False):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in FUNCS:
             exec(compile(ast.Module(body=[node], type_ignores=[]), str(SOURCE), "exec"), scope)
     return scope
+
+
+# Speech-loud audio: since 2026-10-22 the engine only calls a line dead when voice above _WATCHDOG_VOICE_LEVEL goes unanswered,
+# so silent chunks would never test the dead-line paths.
+VOICE_CHUNK = struct.pack("<1600h", *([6000, -6000] * 800))
 
 
 class FakeBuffered:
@@ -73,7 +82,7 @@ class FakeBuffered:
             raise RuntimeError("test finished")
         if self.pushed:
             return self.pushed.pop()
-        return bytes(3200)
+        return VOICE_CHUNK
 
     def push_front(self, chunk):
         self.pushed.append(chunk)
