@@ -141,7 +141,7 @@ namespace InterviewCopilot
                 if (string.IsNullOrEmpty(UserName) || UserName == UserEmail)
                     UserName = email.Contains('@') ? email.Split('@')[0] : email; // guard: no crash on malformed email
 
-                await CompleteSignIn(IdToken, refreshToken, UserEmail, UserName, UserId);
+                await CompleteSignIn(IdToken, refreshToken, UserEmail, UserName, UserId, method: "email");
             }
             catch (Exception ex)
             {
@@ -514,12 +514,14 @@ namespace InterviewCopilot
             await CompleteSignIn(idToken, refreshToken, email, name, uid, photoUrl);
         }
 
-        private async Task CompleteSignIn(string idToken, string refreshToken, string email, string name, string uid, string photoUrl = "")
+        private async Task CompleteSignIn(string idToken, string refreshToken, string email, string name, string uid, string photoUrl = "",
+                                          string method = "google")
         {
             _windowToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(idToken) || string.IsNullOrWhiteSpace(uid) || string.IsNullOrWhiteSpace(email))
                 throw new InvalidOperationException("The sign-in response is missing account information.");
             UserSession.SetSession(idToken, email, name, uid, refreshToken, photoUrl);
+            ActivityDiary.Track("signed_in", ("method", method));
             // Warm speech credentials during the success transition, while the
             // welcome state is already on screen. By the time MainWindow exists,
             // the engine can start without a cold network round-trip.
@@ -623,6 +625,25 @@ namespace InterviewCopilot
             "EMAIL_NOT_FOUND", "EMAIL_EXISTS", "WEAK_PASSWORD", "INVALID_PASSWORD", "INVALID_EMAIL", "INVALID_LOGIN_CREDENTIALS",
         };
 
+        /// <summary>
+        /// A fixed label for a sign-in failure, for the activity diary: the Google step code ("google-e6-500"), the
+        /// Firebase code ("invalid_login_credentials"), or one of a few buckets. Never the message, never the address.
+        /// </summary>
+        internal static string SignInFailKind(string message)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(message ?? "", @"\((E[0-9A-Za-z-]{1,12})\)\s*$");
+            if (m.Success) return "google-" + m.Groups[1].Value.ToLowerInvariant();
+            foreach (string code in new[] { "EMAIL_NOT_FOUND", "EMAIL_EXISTS", "WEAK_PASSWORD", "INVALID_PASSWORD", "INVALID_EMAIL",
+                                            "USER_DISABLED", "TOO_MANY_ATTEMPTS_TRY_LATER", "INVALID_LOGIN_CREDENTIALS" })
+                if (FirebaseErrorMessage(code) == message) return code.ToLowerInvariant();
+            string msg = message ?? "";
+            if (msg.StartsWith("Login failed", StringComparison.Ordinal)) return "login_failed";
+            if (msg.StartsWith("Could not create your account", StringComparison.Ordinal)) return "signup_failed";
+            if (msg.StartsWith("Could not sign in just now", StringComparison.Ordinal)) return "signin_error";
+            if (msg.StartsWith("Could not send", StringComparison.Ordinal)) return "reset_failed";
+            return "other";
+        }
+
         private static string GetStr(JsonDocument doc, string key) =>
             doc.RootElement.TryGetProperty(key, out var p) ? p.GetString() ?? "" : "";
 
@@ -681,8 +702,11 @@ namespace InterviewCopilot
             // Sign-in problems reach admin like every other problem; empty fields do not (2026-10-19), and typing
             // mistakes are marked minor so they never raise an alert.
             if (!msg.StartsWith("Please enter", StringComparison.Ordinal) && !msg.StartsWith("Enter your email", StringComparison.Ordinal))
+            {
                 ClientErrorReporter.ReportProblem("signin",
                     "signin-" + ClientErrorReporter.Slug(msg) + (IsTypingMistake(msg) ? "-minor" : ""), msg);
+                ActivityDiary.Track("sign_in_failed", ("kind", SignInFailKind(msg)));
+            }
             ErrorText.Text = msg;
             HideBanner(SuccessBanner);
             AnimateBannerIn(ErrorBanner, ErrorBannerShift);

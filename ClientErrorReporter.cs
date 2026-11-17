@@ -130,6 +130,8 @@ namespace InterviewCopilot
 
         internal static void ReportProblem(string source, string kind, string message)
         {
+            // The diary gets the kind only, never the message (see ActivityDiary).
+            ActivityDiary.ProblemShown(kind);
 #if DEBUG
             return;
 #else

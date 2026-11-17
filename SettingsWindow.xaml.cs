@@ -704,6 +704,7 @@ namespace InterviewCopilot
                         throw new InvalidDataException("Could not decrypt settings file.");
                     _cachedConfig = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
                     _cacheTime    = DateTime.UtcNow;
+                    _diarySettings ??= DiarySettings(_cachedConfig);
                     bool movedOpacity = MoveOldOpacityDefault(_cachedConfig);
                     if (!isProtected || movedOpacity)
                         SaveConfig(_cachedConfig);
@@ -715,7 +716,48 @@ namespace InterviewCopilot
             // First run / missing file — cache defaults too so getters don't keep hitting disk
             _cachedConfig = FreshConfig();
             _cacheTime    = DateTime.UtcNow;
+            _diarySettings ??= DiarySettings(_cachedConfig);
             return _cachedConfig;
+        }
+
+        // The settings as last saved, for the activity diary's setting_changed. Values, not the object: callers change the
+        // cached object in place before saving it, so comparing with it would never see a change.
+        private static Dictionary<string, object>? _diarySettings;
+
+        /// <summary>
+        /// The settings the activity diary may name: true/false switches and fixed choices only. Never the opacity slider
+        /// (a drag would be dozens of events), never a device name, an address, a key or an email.
+        /// </summary>
+        internal static Dictionary<string, object> DiarySettings(AppConfig c) => new()
+        {
+            ["watch_screen"] = c.WatchScreenEnabled,
+            ["detailed_answers"] = c.DetailedAnswers,
+            ["save_session_audio"] = c.SaveSessionAudio,
+            ["screen_keys_everywhere"] = c.ScreenKeysEverywhere,
+            ["keep_on_top"] = c.KeepOnTop,
+            ["practice_audio"] = c.MicCaptureEnabled,
+            ["cloud_sync"] = c.CloudSyncEnabled,
+            ["plain_space_everywhere"] = c.PlainSpaceEverywhere,
+            ["phone_only"] = c.PhoneOnly,
+            ["system_proxy"] = c.UseSystemProxy,
+            ["stealth"] = c.StealthMode,
+            ["language"] = c.TranscriptLanguage ?? "",
+            ["model"] = c.ModelIndex,
+        };
+
+        private static void NoteSettingChanges(AppConfig saved)
+        {
+            try
+            {
+                var now = DiarySettings(saved);
+                var before = _diarySettings;
+                _diarySettings = now;
+                if (before == null) return;
+                foreach (var (name, value) in now)
+                    if (!before.TryGetValue(name, out var old) || !Equals(old, value))
+                        ActivityDiary.Track("setting_changed", ("name", name), ("value", value));
+            }
+            catch { }
         }
 
         /// <summary>A separate copy of the settings, so changing it does not change the ones in use until it is saved.</summary>
@@ -742,6 +784,7 @@ namespace InterviewCopilot
                 // gets the new values without a disk round-trip.
                 _cachedConfig = cfg;
                 _cacheTime    = DateTime.UtcNow;
+                NoteSettingChanges(cfg);
                 return true;
             }
             catch (Exception ex)

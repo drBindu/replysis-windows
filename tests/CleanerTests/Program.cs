@@ -252,6 +252,8 @@ internal static class Program
         Console.WriteLine("\n36. Every language a customer can pick starts listening");
         _failed += LanguageRulesTests.Run();
 
+        _failed += ActivityDiaryTests.Run();
+
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine(_failed == 0 ? "all passed" : $"{_failed} FAILED");
         return _failed == 0 ? 0 : 1;

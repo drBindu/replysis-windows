@@ -339,6 +339,9 @@ namespace InterviewCopilot
                 // Report presence to Firestore so the admin dashboard shows
                 // accurate Live/last-seen (self-guards while logged out)
                 PresenceTracker.Start();
+                // The activity diary notes that an answer was scrolled (once per answer); the wheel's own handling is untouched.
+                AiAnswerBox.AddHandler(UIElement.PreviewMouseWheelEvent,
+                    new System.Windows.Input.MouseWheelEventHandler(DiaryAnswerScrolled), handledEventsToo: true);
                 // The phone app's Companion screen: what this laptop hears, and its Stop button.
                 CompanionLink.OnStopRequested = () => Dispatcher.BeginInvoke(new Action(StopFromPhone));
                 CompanionLink.OnAnswerRequested = () => Dispatcher.BeginInvoke(new Action(() => HandleSpacePress("PHONE")));
@@ -388,9 +391,13 @@ namespace InterviewCopilot
                     // back on — had no way to actually read the screen. Pressing
                     // it silently changed a preference instead.
                     answerWindow.ModeMenuRequested += rows => Dispatcher.Invoke(() =>
-                        BuildModeMenuInto(rows, () => answerWindow?.CloseModeMenu(), compact: true));
+                    {
+                        BuildModeMenuInto(rows, () => answerWindow?.CloseModeMenu(), compact: true);
+                        ActivityDiary.Track("menu_opened", ("which", "compact_mode"));
+                    });
                     answerWindow.AnalyzeRequested += () => Dispatcher.Invoke(() =>
                     {
+                        ActivityDiary.Track("screen_read_requested", ("via", "button"));
                         _ = HandleScreenAnalysisAsync().ContinueWith(t =>
                         {
                             if (t.IsFaulted)
@@ -446,16 +453,19 @@ namespace InterviewCopilot
                             onKillPressed:                  () => Dispatcher.BeginInvoke(() => Close()),
                             onScreenAnalysisPressed:        () => _ = Dispatcher.InvokeAsync(async () =>
                             {
+                                ActivityDiary.Track("screen_read_requested", ("via", "f8"));
                                 try { await HandleScreenAnalysisAsync(); }
                                 catch (Exception ex) { DebugWindow.Log("SCREEN_ERR", ex.Message); StopThinkingUi(); }
                             }),
                             onPrimaryScreenAnalysisPressed: () => _ = Dispatcher.InvokeAsync(async () =>
                             {
+                                ActivityDiary.Track("screen_read_requested", ("via", "f9"));
                                 try { await HandlePrimaryScreenAnalysisAsync(); }
                                 catch (Exception ex) { DebugWindow.Log("SCREEN_ERR", ex.Message); StopThinkingUi(); }
                             }),
                             onRegionAnalysisPressed:        () => _ = Dispatcher.InvokeAsync(async () =>
                             {
+                                ActivityDiary.Track("screen_read_requested", ("via", "f7"));
                                 try { await HandleRegionScreenAnalysisAsync(); }
                                 catch (Exception ex) { DebugWindow.Log("SCREEN_ERR", ex.Message); StopThinkingUi(); }
                             })
@@ -678,6 +688,7 @@ namespace InterviewCopilot
                 ProfileDropdownPopup.PlacementTarget = anchor;
             UpdateProfileDropdown();
             ProfileDropdownPopup.IsOpen = true;
+            ActivityDiary.Track("menu_opened", ("which", "profile"));
         }
 
         // Popups are their own top-level windows, so the main window's stealth doesn't cover
@@ -851,6 +862,7 @@ namespace InterviewCopilot
             ProfileDropdownPopup.IsOpen = false;
             if (isRecording)
                 await FinalizeSessionAsync();
+            ActivityDiary.SignedOut("user");   // before Clear: sent with this account's own token
             UserSession.Clear();
             _creditsFetched = false;
             SetLoggedOutUI();
@@ -866,6 +878,7 @@ namespace InterviewCopilot
             {
                 if (isRecording)
                     await FinalizeSessionAsync();
+                ActivityDiary.SignedOut("refused");
                 UserSession.Clear();
                 _creditsFetched = false;
                 SetLoggedOutUI();
@@ -1461,7 +1474,9 @@ namespace InterviewCopilot
 
         // CAMERA MODE
         // ══════════════════════════════════════════════════════════════════════
-        private void CameraMode_Click(object sender, RoutedEventArgs e)
+        private void CameraMode_Click(object sender, RoutedEventArgs e) => EnterCompactMode("menu");
+
+        private void EnterCompactMode(string via)
         {
             UpdateModeMenuPill();   // the compact bar's pill shows the current choice from the start
             if (answerWindow == null)
@@ -1470,6 +1485,7 @@ namespace InterviewCopilot
                 return;
             }
 
+            if (!_isCameraMode) ActivityDiary.Track("window_changed", ("to", "compact"), ("via", via));
             _isCameraMode = true;
             NormalModeGrid.Visibility = Visibility.Collapsed;
             answerWindow.ToggleCameraMode(true);
@@ -1490,6 +1506,8 @@ namespace InterviewCopilot
 
         private void ExitCameraMode()
         {
+            // The compact bar's own button and its menu's "Full window" both arrive here.
+            if (_isCameraMode) ActivityDiary.Track("window_changed", ("to", "full"), ("via", "menu"));
             _isCameraMode = false;
             this.Show();
             RestoreMainWindowFrame();
@@ -1550,6 +1568,8 @@ namespace InterviewCopilot
             if (!isUpdate && report)
                 ReportProblem("alert", "alert-" + ClientErrorReporter.Slug(title),
                               title + ": " + (message.Length > 120 ? message[..120] : message));
+            else
+                ActivityDiary.NoticeShown(isUpdate ? "update" : "alert-" + ClientErrorReporter.Slug(title));
             _bannerIsProblem = false;
             _engineStartNoticeUp = false;
             _updateComingNoticeFor = null;
@@ -2273,6 +2293,7 @@ namespace InterviewCopilot
             BuildModeMenu();
             ModeMenuPopup.PlacementTarget = ModeMenuPill;
             ModeMenuPopup.IsOpen = true;
+            ActivityDiary.Track("menu_opened", ("which", "mode"));
             if (!_modeMenuClosersHooked)
             {
                 // StaysOpen=False closed it a second after opening (owner, 2026-10-19). It now stays until a choice,
@@ -2371,13 +2392,16 @@ namespace InterviewCopilot
 
 
 
-        private void SelectListeningMode(ListeningMode mode)
+        private void SelectListeningMode(ListeningMode mode, string via = "menu")
         {
             if (_listeningMode == mode)
             {
                 if (AutoModeEnabled) StartAutoListeningIfReady();
                 return;
             }
+
+            ActivityDiary.Track("mode_changed", ("to", mode == ListeningMode.Auto ? "auto" : "manual"), ("via", via));
+            DiaryListeningStopped("user");   // a mode change ends the listening it interrupts
 
             // Switching Auto/Manual cannot change the audio source any more, so
             // it never needs to restart the engine. Kept as a comparison rather
@@ -2530,7 +2554,7 @@ namespace InterviewCopilot
         // just reached from where a candidate is reading what each choice
         // does instead of from a tooltip.
         private void SetupTrigger_Requested(object? sender, int index) =>
-            SelectListeningMode(index == 0 ? ListeningMode.Auto : ListeningMode.Manual);
+            SelectListeningMode(index == 0 ? ListeningMode.Auto : ListeningMode.Manual, via: "setup");
         private void SetupSource_Requested(object? sender, int index) => SelectAudioSource(practice: index == 1);
         private void SetupLength_Requested(object? sender, int index) => SelectAnswerLength(detailed: index == 1);
 
@@ -2562,6 +2586,8 @@ namespace InterviewCopilot
             if (System.Text.RegularExpressions.Regex.IsMatch(message ?? "",
                     @"(?i)could not|couldn't|failed|nothing heard|no microphone|not available|unavailable|blocked|silent|retry"))
                 ReportProblem("notice", "notice-" + ClientErrorReporter.Slug(message!), message!);
+            else
+                ActivityDiary.NoticeShown(ClientErrorReporter.Slug(message ?? ""));   // the kind only, from the app's own fixed wording
             if (ModeSegments == null) return;
 
             // The message REPLACES the switch for a few seconds, the way it used
@@ -2585,6 +2611,48 @@ namespace InterviewCopilot
                 UpdateListeningModeUi();
             };
             _autoModeNoticeTimer.Start();
+        }
+
+        // ── Activity diary (2026-11-14) ─────────────────────────────────────────────────────────────────
+        // A listening session in the diary's sense: from the first listen to a real stop (the person, the idle timeout,
+        // Finish, or a fault). Auto's own pauses between questions are inside one session, or Auto would log a start and
+        // a stop for every question.
+        private bool _diaryListening;
+        private DateTime _diaryPhonePressUtc = DateTime.MinValue;
+        private bool _diaryScrolledThisAnswer;
+        private bool _diarySpeechDropped;
+
+        private void DiaryListeningStarted()
+        {
+            if (_diaryListening) return;
+            _diaryListening = true;
+            ActivityDiary.Track("listening_started", ("mode", AutoModeEnabled ? "auto" : "manual"));
+        }
+
+        private void DiaryListeningStopped(string why)
+        {
+            if (!_diaryListening) return;
+            _diaryListening = false;
+            ActivityDiary.Track("listening_stopped", ("why", why));
+        }
+
+        /// <summary>An answer finished on screen: timings and a word count, never the words.</summary>
+        private void DiaryAnswerShown(string source, long msToFirstWords, long msTotal, string answer)
+        {
+            _diaryScrolledThisAnswer = false;
+            int words = 0;
+            try { words = Regex.Matches(answer ?? "", @"[\p{L}\p{N}']+").Count; } catch { }
+            ActivityDiary.Track("answer_shown",
+                ("ms_to_first_words", Math.Max(0, msToFirstWords)), ("ms_total", Math.Max(0, msTotal)),
+                ("source", source), ("words", words));
+        }
+
+        /// <summary>The person scrolled an answer with the wheel: once per answer.</summary>
+        private void DiaryAnswerScrolled(object? sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            if (_diaryScrolledThisAnswer) return;
+            _diaryScrolledThisAnswer = true;
+            ActivityDiary.Track("answer_scrolled");
         }
 
         private void StartAutoListeningIfReady()
@@ -2955,6 +3023,7 @@ namespace InterviewCopilot
         /// </summary>
         private void StopForIdle()
         {
+            DiaryListeningStopped("idle");
             StopListeningMeter();
             isListening = false;
             isMuted = true;
@@ -3731,6 +3800,8 @@ namespace InterviewCopilot
                 if (!isCompleteQuestion && providerConfirmedEnd && boundaryTicks != _lastAutoIgnoredBoundaryTicks)
                 {
                     _lastAutoIgnoredBoundaryTicks = boundaryTicks;
+                    ActivityDiary.Track("turn_ignored", ("why",
+                        PromptBuilder.IsGreeting(candidateQuestion) || PromptBuilder.IsSmallTalk(candidateQuestion) ? "greeting" : "filler"));
                     DebugWindow.Log("AUTO", $"Completed utterance not submitted ({candidateQuestion.Length} chars; " +
                         $"{AutoTurnRules.IncompleteQuestionReason(candidateQuestion)}); transcript omitted.");
                 }
@@ -3767,6 +3838,7 @@ namespace InterviewCopilot
                 if (!string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
                 {
                     _lastAutoRejectedTranscript = question;
+                    ActivityDiary.Track("turn_ignored", ("why", "echo"));
                     DebugWindow.Log("AUTO",
                         "That is our own answer being read aloud, not a new question. Ignored.");
                 }
@@ -3782,6 +3854,7 @@ namespace InterviewCopilot
                 if (!string.Equals(question, _lastAutoRejectedTranscript, StringComparison.Ordinal))
                 {
                     _lastAutoRejectedTranscript = question;
+                    ActivityDiary.Track("turn_ignored", ("why", "candidate"));
                     DebugWindow.Log("AUTO", "The candidate is speaking (mic only) with an interviewer present. Not answered.");
                 }
                 return;
@@ -4119,6 +4192,7 @@ namespace InterviewCopilot
                 BeginInterviewPresentation();
                 _listeningStartTicks = Environment.TickCount64;
                 isMuted = false; isListening = true;
+                DiaryListeningStarted();
                 _audioListeningStartedUtc = DateTime.UtcNow;
                 SetResumePanelCollapsed(true, animate: true);
                 string latestPath = Path.Combine(AppDataFolder, "latest.txt");
@@ -4211,6 +4285,7 @@ namespace InterviewCopilot
                 if (heldMs < 200)
                 {
                     DebugWindow.Log("MIC", $"[{source}] Quick space tap ignored ({heldMs}ms) — re-muting");
+                    if (source != "AUTO") DiaryListeningStopped("user");
                     StopListeningMeter();
                     isListening = false; WritePauseFlag(); isMuted = true;
                     ReleaseAutoLatch();
@@ -4226,6 +4301,8 @@ namespace InterviewCopilot
             // The clock the user actually experiences starts here, when they
             // stop speaking, not when the request is sent.
             _turnStopwatch = Stopwatch.StartNew();
+            // Manual: the press that ends listening. Auto keeps listening between turns, so its own turn ends are not stops.
+            if (source != "AUTO") DiaryListeningStopped("user");
             StopListeningMeter();
             isListening = false; isMuted = true; _flushing = true;
             try { _aiCts?.Dispose(); } catch { }
@@ -4447,6 +4524,7 @@ namespace InterviewCopilot
         //   LISTENING  -> stop and fire the AI
         private void HandleSpacePress(string source)
         {
+            if (source == "PHONE") _diaryPhonePressUtc = DateTime.UtcNow;   // so the answer it asks for is counted as "phone"
             // A space typed into one of the app's own fields is text. The Auto branches below used to run first and
             // resumed a paused Auto or answered from it while the candidate was typing.
             if (source == "GLOBAL" && IsTypingInTextField()) return;
@@ -4558,13 +4636,18 @@ namespace InterviewCopilot
             HandleSpaceDown(source);
         }
 
-        private void MicBtn_Click(object sender, RoutedEventArgs e) => HandleSpacePress("BUTTON");
+        private void MicBtn_Click(object sender, RoutedEventArgs e)
+        {
+            ActivityDiary.Track("button_clicked", ("id", "mic"));
+            HandleSpacePress("BUTTON");
+        }
 
         // ══════════════════════════════════════════════════════════════════════
         // AI requests route through the secured backend, where credits are deducted.
         // ══════════════════════════════════════════════════════════════════════
         private async Task AskAiAsync(string? customQuestion = null,
-                                      System.Threading.CancellationToken externalCt = default)
+                                      System.Threading.CancellationToken externalCt = default,
+                                      string diarySource = "voice")
         {
             if (isProcessing) return;
             isProcessing = true; // guard: set before any await so no second call can sneak through
@@ -4603,6 +4686,14 @@ namespace InterviewCopilot
                 if (!string.Equals(rawQuestion, q, StringComparison.Ordinal))
                     DebugWindow.Log("AI", $"Ignored opening transcript filler: {rawQuestion.Length - q.Length} chars");
                 var answerTimer = System.Diagnostics.Stopwatch.StartNew();
+                // The diary's clock: from the press that ended listening on a spoken turn, from here otherwise.
+                Stopwatch? diaryClock = externalCt.CanBeCanceled ? _turnStopwatch : null;
+                long diaryFirstMs = 0;
+                if (diarySource == "voice" && DateTime.UtcNow - _diaryPhonePressUtc < TimeSpan.FromSeconds(8))
+                {
+                    diarySource = "phone";
+                    _diaryPhonePressUtc = DateTime.MinValue;
+                }
 
                 await UserSession.FreshEnoughForAnswerAsync(capMs: 3000);
                 aiCt.ThrowIfCancellationRequested();
@@ -4677,6 +4768,7 @@ namespace InterviewCopilot
                             ThinkingPanel.Visibility = Visibility.Collapsed;
                             long total = _turnStopwatch?.ElapsedMilliseconds ?? 0;
                             long model = answerTimer.ElapsedMilliseconds;
+                            diaryFirstMs = diaryClock?.ElapsedMilliseconds ?? model;
                             if (isLocalReply)
                                 DebugWindow.Log("SPEED", $"Local canned reply in {total}ms; no backend/model request.");
                             else
@@ -4719,6 +4811,7 @@ namespace InterviewCopilot
                 UpdateHistoryNav();
                 PromptBuilder.AddToHistory(q, final);
                 AppendToSessionLog(q, final);
+                DiaryAnswerShown(diarySource, diaryFirstMs, diaryClock?.ElapsedMilliseconds ?? answerTimer.ElapsedMilliseconds, final);
                 DebugWindow.Log("AI", $"Done — {tokenCount} tokens");
 #if DEBUG
                 if (_autoTestHarness)
@@ -5814,7 +5907,7 @@ namespace InterviewCopilot
             string question = _rescanQuestion;
             _rescanQuestion = "";
             DebugWindow.Log("SCREEN", "Screen changed; answering the same question with the rest of the page.");
-            _ = AskAiAsync(question);
+            _ = AskAiAsync(question, diarySource: "screen");
         }
 
         private async Task<byte[]?> CaptureScreenUnseenAsync(Func<string, bool>? skipEncodeIfUnchanged = null)
@@ -7788,6 +7881,8 @@ namespace InterviewCopilot
                                 // from the start, any drop in a session older than 25 s was already "stalled" the
                                 // instant it happened and showed "Cannot reach the speech service" for a hiccup.
                                 _engineOfflineSinceUtc = DateTime.UtcNow;
+                                _diarySpeechDropped = true;
+                                ActivityDiary.Track("speech_dropped", ("why", "offline"));
                                 DebugWindow.Log("ENGINE", "Speech connection lost; reconnecting.");
                                 lock (_connectionDropsUtc)
                                 {
@@ -7872,6 +7967,14 @@ namespace InterviewCopilot
                             if (!_engineOnline && line.Contains("STATUS: ONLINE"))
                             {
                                 _engineOnline = true;
+                                // How long the connection took: after a drop, from the drop; otherwise from the engine's start.
+                                if (_diarySpeechDropped && _engineOfflineSinceUtc != DateTime.MinValue)
+                                    ActivityDiary.Track("speech_reconnected",
+                                        ("ms", (long)Math.Clamp((DateTime.UtcNow - _engineOfflineSinceUtc).TotalMilliseconds, 0, 3_600_000)));
+                                else if (_engineStartedUtc != DateTime.MinValue)
+                                    ActivityDiary.Track("speech_connected",
+                                        ("ms", (long)Math.Clamp((DateTime.UtcNow - _engineStartedUtc).TotalMilliseconds, 0, 3_600_000)));
+                                _diarySpeechDropped = false;
                                 _engineRestartCount = 0;
                                 _nextEngineRestartUtc = DateTime.MinValue;
                                 _authRecoveryAttempts = 0;
@@ -8288,6 +8391,7 @@ namespace InterviewCopilot
                 // make the failure visible instead of silently losing the question.
                 isListening = false;
                 isMuted = true;
+                DiaryListeningStopped("error");
                 StopListeningMeter();
                 UpdateMicUi();
                 ShowListeningModeNotice("Microphone could not start. Press Space to retry.");
@@ -8599,6 +8703,8 @@ namespace InterviewCopilot
                 {
                     _engineOnline = false;
                     _engineOfflineSinceUtc = DateTime.UtcNow;   // the wait for a connection starts now (see the STATUS: OFFLINE handler)
+                    _diarySpeechDropped = true;
+                    ActivityDiary.Track("speech_dropped", ("why", "engine_exit"));
                     Dispatcher.Invoke(UpdateMicUi);
                 }
 
@@ -8690,6 +8796,7 @@ namespace InterviewCopilot
                     try { File.WriteAllText(Path.Combine(AppDataFolder, "latest.txt"), ""); } catch { }
                     Dispatcher.Invoke(() =>
                     {
+                        DiaryListeningStopped("error");
                         StopListeningMeter();
                         if (AutoModeEnabled) ResetAutoTurnDetection();
                         UpdateMicUi();
@@ -8772,6 +8879,7 @@ namespace InterviewCopilot
             // service from Settings" is an instruction to an operator, and the
             // person reading it cannot do either. It is our capacity, not theirs.
             const string message = "Speech is temporarily unavailable on our side, and nothing is wrong with your account or your answers. It usually clears within a few minutes. If it does not, please contact support.";
+            DiaryListeningStopped("error");
             isListening = false;
             isMuted = true;
             MicIndicator.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF6B73"));
@@ -8792,8 +8900,8 @@ namespace InterviewCopilot
             var mods = System.Windows.Input.Keyboard.Modifiers;
             if (mods == (System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift))
             {
-                if (e.Key == System.Windows.Input.Key.A) { e.Handled = true; SelectListeningMode(AutoModeEnabled ? ListeningMode.Manual : ListeningMode.Auto); return; }
-                if (e.Key == System.Windows.Input.Key.C) { e.Handled = true; CameraMode_Click(this, new RoutedEventArgs()); return; }
+                if (e.Key == System.Windows.Input.Key.A) { e.Handled = true; SelectListeningMode(AutoModeEnabled ? ListeningMode.Manual : ListeningMode.Auto, via: "shortcut"); return; }
+                if (e.Key == System.Windows.Input.Key.C) { e.Handled = true; EnterCompactMode("shortcut"); return; }
             }
 
             // Esc leaves the sessions view. Handled only while that view is up,
@@ -8811,6 +8919,7 @@ namespace InterviewCopilot
             if (e.Key == System.Windows.Input.Key.F8)
             {
                 e.Handled = true;
+                ActivityDiary.Track("screen_read_requested", ("via", "f8"));
                 _ = HandleScreenAnalysisAsync().ContinueWith(t =>
                 {
                     if (t.IsFaulted)
@@ -8821,6 +8930,7 @@ namespace InterviewCopilot
             if (e.Key == System.Windows.Input.Key.F9)
             {
                 e.Handled = true;
+                ActivityDiary.Track("screen_read_requested", ("via", "f9"));
                 _ = HandlePrimaryScreenAnalysisAsync().ContinueWith(t =>
                 {
                     if (t.IsFaulted)
@@ -8981,7 +9091,7 @@ namespace InterviewCopilot
                     Hide();
                     // Nobody can press Space on a hidden window, so it answers each question by itself (owner, 2026-10-25:
                     // "it has to give answers, not only show what the laptop hears"). The phone's Answer button is the Space.
-                    if (!AutoModeEnabled) SelectListeningMode(ListeningMode.Auto);
+                    if (!AutoModeEnabled) SelectListeningMode(ListeningMode.Auto, via: "phone_only");
                 }
                 else BringToFront();
                 DebugWindow.Log("PHONE_ONLY", $"{(hide ? "Hidden on this laptop" : "Shown again")} ({why})");
@@ -8991,6 +9101,7 @@ namespace InterviewCopilot
 
         private void SettingsBtn_Click(object sender, RoutedEventArgs e)
         {
+            ActivityDiary.Track("button_clicked", ("id", "settings"));
             // Auto no longer overrides the audio source, so Settings no longer
             // needs to know whether Auto is on in order to grey the cards out.
             var sw = new SettingsWindow(_audioDeviceId);
@@ -9045,18 +9156,24 @@ namespace InterviewCopilot
             }
         }
 
-        private void Copy_Click(object sender, RoutedEventArgs e) => TryCopyToClipboard(AiAnswerBox.Text);
+        private void Copy_Click(object sender, RoutedEventArgs e)
+        {
+            ActivityDiary.Track("button_clicked", ("id", "copy"));
+            if (TryCopyToClipboard(AiAnswerBox.Text)) ActivityDiary.Track("answer_copied");
+        }
 
         // ── Toolbar: Copy answer ──────────────────────────────────────────────
         private void CopyAnswerBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (!string.IsNullOrWhiteSpace(AiAnswerBox.Text))
-                TryCopyToClipboard(AiAnswerBox.Text);
+            ActivityDiary.Track("button_clicked", ("id", "copy"));
+            if (!string.IsNullOrWhiteSpace(AiAnswerBox.Text) && TryCopyToClipboard(AiAnswerBox.Text))
+                ActivityDiary.Track("answer_copied");
         }
 
         // ── Toolbar: Clear transcript + answer ───────────────────────────────
         private void ClearAnswerBtn_Click(object sender, RoutedEventArgs e)
         {
+            ActivityDiary.Track("button_clicked", ("id", "clear"));
             SetTranscript("");
             TranscriptHint.Visibility = Visibility.Visible;
             ClearAnswer();
@@ -9314,6 +9431,8 @@ namespace InterviewCopilot
             // the first attempt then fails with "Clipboard can't open". The button used to log that and stay silent, so
             // the candidate pasted old text into the editor. SetDataObject retries, and the label says if it still failed.
             bool copied = TryCopyToClipboard(_currentAnswerCode);
+            ActivityDiary.Track("button_clicked", ("id", "copy_code"));
+            if (copied) ActivityDiary.Track("answer_copied", ("what", "code"));
             CopyCodeBtn.Content = copied ? "Copied" : "Copy failed, try again";
             var revert = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             revert.Tick += (_, _) => { revert.Stop(); CopyCodeBtn.Content = "Copy code"; };
@@ -9360,6 +9479,7 @@ namespace InterviewCopilot
                 // Finish pressed while an answer is still being written: it waits for that answer and then finishes, so
                 // the whole turn is saved. It used to stop with "Answer still finishing, choose Finish again", which a
                 // customer hit on 2026-10-25 (problem report from 1.0.51). Never longer than 30 s.
+                ActivityDiary.Track("button_clicked", ("id", "finish"));
                 for (int i = 0; i < 150 && (isProcessing || _flushing); i++) await Task.Delay(200);
                 if (isProcessing || _flushing)
                 {
@@ -9387,8 +9507,12 @@ namespace InterviewCopilot
                     WritePauseFlag();
                     UpdateMicUi();
                 }
+                DiaryListeningStopped("finish");
+                int diaryMinutes = (int)Math.Round(_sessionSeconds / 60.0);
+                int diaryAnswers = _answers.Count;
 
                 SessionFinalizationResult result = await FinalizeSessionAsync();
+                ActivityDiary.Track("interview_finished", ("minutes", diaryMinutes), ("answers", diaryAnswers));
                 if (!result.TranscriptSaved)
                 {
                     ShowInAppAlert(
@@ -9428,6 +9552,7 @@ namespace InterviewCopilot
         {
             if (isProcessing || _newSessionInProgress) return;
 
+            ActivityDiary.Track("button_clicked", ("id", "new_session"));
             _newSessionInProgress = true;
             var button = sender as System.Windows.Controls.Button;
             object? originalContent = button?.Content;
@@ -9516,10 +9641,18 @@ namespace InterviewCopilot
             => ResumeUploadBtn_Click(sender, e);
 
         private void ScreenAnalyzeBtn_Click(object sender, RoutedEventArgs e)
-            => _ = HandleScreenAnalysisAsync();
+        {
+            ActivityDiary.Track("button_clicked", ("id", "read_screen"));
+            ActivityDiary.Track("screen_read_requested", ("via", "button"));
+            _ = HandleScreenAnalysisAsync();
+        }
 
         private void RegionAnalyzeBtn_Click(object sender, RoutedEventArgs e)
-            => _ = HandleRegionScreenAnalysisAsync();
+        {
+            ActivityDiary.Track("button_clicked", ("id", "read_region"));
+            ActivityDiary.Track("screen_read_requested", ("via", "button"));
+            _ = HandleRegionScreenAnalysisAsync();
+        }
 
         // ── Resume: Upload button ─────────────────────────────────────────────
         private void ResumeUploadBtn_Click(object sender, RoutedEventArgs e)
@@ -9813,6 +9946,8 @@ namespace InterviewCopilot
         private void ReadScreenPill_Click(object sender, RoutedEventArgs e)
         {
             e.Handled = true;
+            ActivityDiary.Track("button_clicked", ("id", "read_screen"));
+            ActivityDiary.Track("screen_read_requested", ("via", "button"));
             _ = HandleScreenAnalysisAsync();
         }
 
@@ -9974,6 +10109,8 @@ namespace InterviewCopilot
 
             _isScreenAnalyzing = true;
             isProcessing       = true;
+            var diaryClock = Stopwatch.StartNew();
+            long diaryFirstMs = 0;
             try { _aiCts?.Cancel(); } catch { }
             using var screenOwner = new CancellationTokenSource();
             _aiCts = screenOwner;
@@ -10135,7 +10272,10 @@ namespace InterviewCopilot
 
                         // First token → hide the "analyzing..." indicator
                         if (tokenCount == 1)
+                        {
                             ThinkingPanel.Visibility = Visibility.Collapsed;
+                            diaryFirstMs = diaryClock.ElapsedMilliseconds;
+                        }
 
                         // Paint the first few tokens the moment they land, then
                         // settle into batches of three. Batching from the start
@@ -10192,6 +10332,7 @@ namespace InterviewCopilot
                 // header goes in front of that prose.
                 ShowScreenAnswer(finalResult, scrollToEnd: false);
                 AiAnswerBox.ScrollToHome();
+                DiaryAnswerShown("screen", diaryFirstMs, diaryClock.ElapsedMilliseconds, finalResult);
 #if DEBUG
                 // Developer builds only: write down exactly what the screen answer shows, to read it back.
                 try
@@ -10334,6 +10475,8 @@ namespace InterviewCopilot
         // both tried to.
         private void EnterInterviewStep(bool animate, bool collapseResumeColumn = true)
         {
+            // Start Interview, or Space / the mic straight from Setup: both begin the interview.
+            if (_inSetupStep) ActivityDiary.Track("interview_started");
             _inSetupStep = false;
             _problemsShown.Clear();
             _autoPausedForIdle = false;
@@ -10501,12 +10644,15 @@ namespace InterviewCopilot
                     return;
                 }
             }
+            ActivityDiary.Track("button_clicked", ("id", "start"));
             EnterInterviewStep(animate: true);
         }
 
         private void BackToSetupStep_Click(object sender, RoutedEventArgs e)
         {
             if (_inSetupStep) return;
+            ActivityDiary.Track("button_clicked", ("id", "setup"));
+            ActivityDiary.Track("back_to_setup");
             EnterSetupStep(animate: true);
         }
 
@@ -11071,7 +11217,7 @@ namespace InterviewCopilot
                  == System.Windows.Input.ModifierKeys.Control)
             {
                 e.Handled = true;
-                _ = AskAiAsync(AskBox.Text);
+                _ = AskAiAsync(AskBox.Text, diarySource: "typed");
             }
         }
 
@@ -11098,7 +11244,7 @@ namespace InterviewCopilot
         {
             string question = AskBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(question)) return;
-            _ = AskAiAsync(question);
+            _ = AskAiAsync(question, diarySource: "typed");
         }
 
         private void UpdatePinnedHintsDisplay()
@@ -11124,6 +11270,7 @@ namespace InterviewCopilot
             SavedResumesPopup.PlacementTarget = SavedResumesBtn;
             PopulateSavedResumesPopup();
             SavedResumesPopup.IsOpen = true;
+            ActivityDiary.Track("menu_opened", ("which", "saved_resumes"));
         }
 
         private void PopulateSavedResumesPopup()
