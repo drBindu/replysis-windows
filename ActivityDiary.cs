@@ -66,6 +66,12 @@ namespace InterviewCopilot
         private static readonly SemaphoreSlim _sending = new(1, 1);
         private static int _batchSize = MaxBatch;
         private static DateTime _lastFailureLogUtc = DateTime.MinValue;
+        /// <summary>
+        /// After the sign-in is refused (a revoked account, or the server refusing a fresh token) the diary stays quiet for
+        /// a while, instead of asking the token service twice every 10 s for as long as the app is open (review 2026-11-16).
+        /// </summary>
+        private static DateTime _pauseUntilUtc = DateTime.MinValue;
+        internal static readonly TimeSpan RefusedPause = TimeSpan.FromMinutes(10);
         private static readonly Dictionary<string, DateTime> _lastByKey = new();
 
         private static readonly Regex SafeName = new("^[a-z][a-z0-9_]{0,39}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -466,7 +472,13 @@ namespace InterviewCopilot
         internal static async Task SendPendingAsync(string? tokenOverride, int maxBatches, CancellationToken ct)
         {
             if (!SendingAllowed()) return;
-            if (!await _sending.WaitAsync(0, ct).ConfigureAwait(false)) return;
+            if (tokenOverride == null && DateTime.UtcNow < _pauseUntilUtc) return;
+            // Signing out waits its turn (up to 5 s): returning at once while the 10 s loop was mid-send left this
+            // account's events to go out under the next sign-in.
+            bool got;
+            try { got = await _sending.WaitAsync(tokenOverride != null ? TimeSpan.FromSeconds(5) : TimeSpan.Zero, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return; }
+            if (!got) return;
             try
             {
                 for (int round = 0; round < maxBatches && !ct.IsCancellationRequested; round++)
@@ -475,7 +487,12 @@ namespace InterviewCopilot
                     if (tokenOverride == null)
                     {
                         if (!UserSession.IsLoggedIn || UserSession.IsGuestSession) return;
-                        if (UserSession.IsTokenExpired()) await UserSession.TryRefreshAsync().ConfigureAwait(false);
+                        if (UserSession.IsTokenExpired() && !await UserSession.TryRefreshAsync().ConfigureAwait(false))
+                        {
+                            _pauseUntilUtc = DateTime.UtcNow + RefusedPause;
+                            LogFailure("sign-in could not be refreshed; paused 10 minutes");
+                            return;
+                        }
                         token = UserSession.IdToken;
                     }
                     if (string.IsNullOrEmpty(token)) return;
@@ -495,6 +512,12 @@ namespace InterviewCopilot
                         // Once: a token the server refuses after a refresh is not fixed by a second.
                         if (await UserSession.TryRefreshAsync(force: true).ConfigureAwait(false))
                             outcome = await PostAsync(backend, UserSession.IdToken, body, ct).ConfigureAwait(false);
+                        if (outcome == Outcome.Unauthorized)
+                        {
+                            _pauseUntilUtc = DateTime.UtcNow + RefusedPause;
+                            LogFailure("sign-in refused after a refresh; paused 10 minutes");
+                            return;
+                        }
                     }
 
                     switch (outcome)
@@ -560,13 +583,28 @@ namespace InterviewCopilot
             {
                 Track("signed_out", ("why", why));
                 string token = UserSession.IdToken;
-                if (string.IsNullOrEmpty(token)) return;
+                // Everything up to now belongs to this account. Whatever is not sent with its token is dropped, never
+                // sent later under the next person's sign-in (review 2026-11-16).
+                HashSet<DiaryEvent> mine;
+                lock (_lock) mine = new HashSet<DiaryEvent>(_queue, ReferenceEqualityComparer.Instance);
+                _pauseUntilUtc = DateTime.MinValue;   // the next sign-in starts fresh
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                        await SendPendingAsync(token, maxBatches: 3, cts.Token).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(token))
+                        {
+                            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                            await SendPendingAsync(token, maxBatches: 3, cts.Token).ConfigureAwait(false);
+                        }
+                    }
+                    catch { }
+                    try
+                    {
+                        lock (_lock)
+                        {
+                            if (_queue.RemoveAll(e => mine.Contains(e)) > 0) _dirty = true;
+                        }
                     }
                     catch { }
                     SaveIfDirty();

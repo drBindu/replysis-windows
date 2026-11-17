@@ -139,6 +139,19 @@ internal static class ActivityDiaryTests
               NativeAudioFeed.DeviceType(1, "HDAUDIO") == "speakers" && NativeAudioFeed.DeviceType(null, null) == "other",
             "an audio device is described by kind, never by name");
 
+        // ── Review 2026-11-16: refused sign-in, sign-out, reconnect storms ──
+        {
+            string src = File.ReadAllText(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "ActivityDiary.cs")));
+            Check(ActivityDiary.RefusedPause >= TimeSpan.FromMinutes(5) && src.Contains("DateTime.UtcNow < _pauseUntilUtc) return;") &&
+                  src.Split("_pauseUntilUtc = DateTime.UtcNow + RefusedPause;").Length == 3,
+                "a refused sign-in pauses sending instead of asking the token service every 10 s");
+            Check(src.Contains("TimeSpan.FromSeconds(5) : TimeSpan.Zero") && src.Contains("_queue.RemoveAll(e => mine.Contains(e))"),
+                "signing out waits its turn to send, and what is left is dropped, never sent under the next sign-in");
+            string main = File.ReadAllText(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "MainWindow.xaml.cs")));
+            Check(!main.Contains("ActivityDiary.Track(\"speech_dropped\"") && !main.Contains("ActivityDiary.Track(\"speech_reconnected\""),
+                "speech drops and reconnects are recorded at most once a minute");
+        }
+
         // ── Every call in the app ──
         string root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
         var call = new Regex(@"ActivityDiary\.Track(?:Throttled)?\((?:[^;""]*?,\s*)?""([^""]+)""");

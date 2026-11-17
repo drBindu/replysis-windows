@@ -7882,7 +7882,7 @@ namespace InterviewCopilot
                                 // instant it happened and showed "Cannot reach the speech service" for a hiccup.
                                 _engineOfflineSinceUtc = DateTime.UtcNow;
                                 _diarySpeechDropped = true;
-                                ActivityDiary.Track("speech_dropped", ("why", "offline"));
+                                ActivityDiary.TrackThrottled(TimeSpan.FromMinutes(1), "speech_dropped", "speech_dropped:offline", ("why", "offline"));
                                 DebugWindow.Log("ENGINE", "Speech connection lost; reconnecting.");
                                 lock (_connectionDropsUtc)
                                 {
@@ -7969,7 +7969,7 @@ namespace InterviewCopilot
                                 _engineOnline = true;
                                 // How long the connection took: after a drop, from the drop; otherwise from the engine's start.
                                 if (_diarySpeechDropped && _engineOfflineSinceUtc != DateTime.MinValue)
-                                    ActivityDiary.Track("speech_reconnected",
+                                    ActivityDiary.TrackThrottled(TimeSpan.FromMinutes(1), "speech_reconnected", "speech_reconnected",
                                         ("ms", (long)Math.Clamp((DateTime.UtcNow - _engineOfflineSinceUtc).TotalMilliseconds, 0, 3_600_000)));
                                 else if (_engineStartedUtc != DateTime.MinValue)
                                     ActivityDiary.Track("speech_connected",
@@ -8704,7 +8704,7 @@ namespace InterviewCopilot
                     _engineOnline = false;
                     _engineOfflineSinceUtc = DateTime.UtcNow;   // the wait for a connection starts now (see the STATUS: OFFLINE handler)
                     _diarySpeechDropped = true;
-                    ActivityDiary.Track("speech_dropped", ("why", "engine_exit"));
+                    ActivityDiary.TrackThrottled(TimeSpan.FromMinutes(1), "speech_dropped", "speech_dropped:engine_exit", ("why", "engine_exit"));
                     Dispatcher.Invoke(UpdateMicUi);
                 }
 
