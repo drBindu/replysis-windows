@@ -4515,3 +4515,12 @@ Practice customer "5 answers, one time" or free-trial upgrade prompts. Older app
 ## 2026-11-08: engine pipe test fits the GitHub build machine (Windows test only, no app change)
 
 - The 1.0.53 build stopped at the pipe access test: on GitHub's build machine (an administrator account) Windows also lists SYSTEM, Administrators or the logon session on a current-user-only pipe. The test now accepts those and still fails on any other ordinary account or on Everyone and Anonymous. No app or engine code changed. Nothing for Mac.
+
+## 2026-11-16: the no microphone report says which inputs the computer had (Windows engine, local, not released)
+
+Office desktops reported "No microphone on this computer" and nobody could tell whether the computer really had none
+or a real microphone was skipped by the filter (loopbacks, Stereo Mix, mappers, DirectSound). When no microphone is
+found the engine now prints one line, ">>> INPUT device list: <name> (<api>, <why>); ...", where why is mic, loopback,
+mapper, not a mic or directsound. It goes in the problem report's detail, so admin shows it. Device names only, cut
+to 175 characters. Mac: when the Mac finds no microphone, put the input names it saw (and why each was skipped) in
+the same report.

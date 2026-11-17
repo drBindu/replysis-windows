@@ -288,6 +288,35 @@ check("no microphone: Interview carries on with computer sound",
 check("no microphone: Practice waits and starts when one is plugged in",
       "NO_MICROPHONE_WAITING" in SOURCE and "MICROPHONE CONNECTED" in SOURCE)
 
+# Office desktops said "no microphone" and nobody could tell if a real mic was skipped (2026-11-16): the report now
+# carries every input seen and why it was not used.
+check("no microphone: the inputs seen go in the report",
+      '">>> INPUT device list: {_input_devices_seen(p)' in SOURCE and '"device"' in open(
+          os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ClientErrorReporter.cs"), encoding="utf-8").read())
+
+def _seen_with(devices):
+    import ast
+    tree = ast.parse(SOURCE)
+    wanted = [n for n in tree.body if (isinstance(n, ast.FunctionDef) and n.name == "_input_devices_seen")
+              or (isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "_NOT_A_MIC" for t in n.targets))]
+    ns = {}
+    exec(compile(ast.Module(body=wanted, type_ignores=[]), "engine", "exec"), ns)
+
+    class FakeAudio:
+        def get_device_count(self): return len(devices)
+        def get_device_info_by_index(self, i): return devices[i][0]
+        def get_host_api_info_by_index(self, h): return {"name": devices[h][1]}
+    return ns["_input_devices_seen"](FakeAudio())
+
+_seen = _seen_with([
+    ({"name": "Speakers (Realtek) [Loopback]", "maxInputChannels": 2, "hostApi": 0}, "Windows WASAPI"),
+    ({"name": "Stereo Mix (Realtek)", "maxInputChannels": 2, "hostApi": 1}, "MME"),
+    ({"name": "Speakers (Realtek)", "maxInputChannels": 0, "hostApi": 2}, "MME"),
+])
+check("no microphone: each input says why it was skipped",
+      "loopback)" in _seen and "not a mic)" in _seen and _seen.count("; ") == 1, _seen)
+check("no microphone: nothing listed says none", _seen_with([]) == "none")
+
 check("a speaker skipped on purpose is not reported as new headphones",
       "_all_loopback_names.append" in SOURCE and "is skipped on purpose; " in SOURCE)
 

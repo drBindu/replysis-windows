@@ -1311,6 +1311,43 @@ def _real_input_devices(audio, exclude_index=None):
     return out
 
 
+def _input_devices_seen(audio):
+    """Every input Windows listed and why it was not taken as a microphone, for the no microphone report.
+
+    Office desktops reported "No microphone on this computer" and nobody could tell whether the computer had none or
+    a real one was skipped here (owner, 2026-11-16). Device names only, cut short; the line goes in the problem report.
+    """
+    parts = []
+    try:
+        for i in range(audio.get_device_count()):
+            try:
+                info = audio.get_device_info_by_index(i)
+            except Exception:
+                continue
+            if int(info.get("maxInputChannels", 0)) <= 0:
+                continue
+            name = str(info.get("name", ""))
+            low = name.lower()
+            try:
+                api = str(audio.get_host_api_info_by_index(info.get("hostApi", -1)).get("name", ""))
+            except Exception:
+                api = ""
+            if "[loopback]" in low:
+                why = "loopback"
+            elif "sound mapper" in low or "primary sound capture" in low:
+                why = "mapper"
+            elif any(w in low for w in _NOT_A_MIC):
+                why = "not a mic"
+            elif "directsound" in api.lower():
+                why = "directsound"
+            else:
+                why = "mic"
+            parts.append(f"{name[:40]} ({api.replace('Windows ', '')[:12]}, {why})")
+    except Exception as ex:
+        return f"could not list: {type(ex).__name__}"
+    return "; ".join(parts) if parts else "none"
+
+
 def _find_a_microphone_that_hears(audio, exclude_index, sample_secs=0.4):
     """The loudest input device that is picking up sound right now.
 
@@ -1358,6 +1395,8 @@ try:
     # Interview mode only needs the computer's sound, so it carries on with that. Practice mode needs a voice:
     # it says so and waits, checking every few seconds, so plugging in earphones is all it takes.
     if args.mode in ("both", "mic") and not _real_input_devices(p):
+        # "device" keeps it in the app's problem report tail (ClientErrorReporter.TechWords).
+        print(f">>> INPUT device list: {_input_devices_seen(p)[:175]}", flush=True)
         if args.mode == "both":
             print(">>> NO_MICROPHONE: this computer has no microphone; listening to the computer's sound only.",
                   flush=True)
